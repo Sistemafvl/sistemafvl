@@ -1,4 +1,6 @@
+import { useState, useEffect } from "react";
 import { LayoutDashboard, Users, Car, BarChart3, User, Star, Settings, LogOut } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -29,12 +31,22 @@ const driverMenuItems = [
 const DriverSidebar = () => {
   const { logout, unitSession } = useAuthStore();
   const driverName = unitSession?.user_name ?? "Motorista";
+  const driverId = unitSession?.user_profile_id;
+  const [avatarUrl, setAvatarUrl] = useState("");
   const initials = driverName
     .split(" ")
     .map((n) => n[0])
     .join("")
     .slice(0, 2)
     .toUpperCase();
+
+  useEffect(() => {
+    if (!driverId) return;
+    supabase.from("drivers").select("avatar_url").eq("id", driverId).single()
+      .then(({ data }) => {
+        if (data && (data as any).avatar_url) setAvatarUrl((data as any).avatar_url);
+      });
+  }, [driverId]);
 
   return (
     <Sidebar collapsible="icon">
@@ -45,7 +57,7 @@ const DriverSidebar = () => {
 
         <div className="px-3 pb-4 flex flex-col items-center gap-2">
           <Avatar className="h-16 w-16">
-            <AvatarImage src="" alt={driverName} />
+            <AvatarImage src={avatarUrl} alt={driverName} />
             <AvatarFallback className="text-lg font-bold bg-primary/10 text-primary">
               {initials}
             </AvatarFallback>
