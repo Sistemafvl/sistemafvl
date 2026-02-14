@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
 import { supabase } from "@/integrations/supabase/client";
+import DriverRegistrationModal from "@/components/DriverRegistrationModal";
+import ConferenteRegistrationModal from "@/components/dashboard/ConferenteRegistrationModal";
 import {
   Sidebar,
   SidebarContent,
@@ -43,8 +45,12 @@ const menuItems = [
 const managerMenuItems = [
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
-  { title: "Cadastro de Motorista", url: "/dashboard/motoristas", icon: Truck },
-  { title: "Cadastro de Conferente", url: "/dashboard/conferentes", icon: ClipboardCheck },
+  { title: "Motoristas Parceiros", url: "/dashboard/motoristas-parceiros", icon: Users },
+];
+
+const managerModalItems = [
+  { title: "Cadastro de Motorista", key: "driver" as const, icon: Truck },
+  { title: "Cadastro de Conferente", key: "conferente" as const, icon: ClipboardCheck },
 ];
 
 const DashboardSidebar = () => {
@@ -55,6 +61,8 @@ const DashboardSidebar = () => {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [driverModalOpen, setDriverModalOpen] = useState(false);
+  const [conferenteModalOpen, setConferenteModalOpen] = useState(false);
 
   const handleManagerLogin = async () => {
     const cleanCnpj = cnpj.replace(/\D/g, "");
@@ -159,6 +167,17 @@ const DashboardSidebar = () => {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+                  {managerModalItems.map((item) => (
+                    <SidebarMenuItem key={item.key}>
+                      <SidebarMenuButton
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50 cursor-pointer"
+                        onClick={() => item.key === "driver" ? setDriverModalOpen(true) : setConferenteModalOpen(true)}
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -220,6 +239,12 @@ const DashboardSidebar = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Driver Registration Modal */}
+      <DriverRegistrationModal open={driverModalOpen} onOpenChange={setDriverModalOpen} />
+
+      {/* Conferente Registration Modal */}
+      <ConferenteRegistrationModal open={conferenteModalOpen} onOpenChange={setConferenteModalOpen} />
     </>
   );
 };
