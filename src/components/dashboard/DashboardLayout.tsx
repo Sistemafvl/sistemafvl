@@ -1,0 +1,31 @@
+import { useAuthStore } from "@/stores/auth-store";
+import { Navigate, Outlet } from "react-router-dom";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import DashboardSidebar from "./DashboardSidebar";
+
+const DashboardLayout = () => {
+  const { unitSession } = useAuthStore();
+
+  if (!unitSession) return <Navigate to="/" replace />;
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full">
+        <DashboardSidebar />
+        <main className="flex-1 flex flex-col">
+          <header className="h-12 flex items-center border-b border-border px-4 bg-card">
+            <SidebarTrigger className="mr-3" />
+            <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
+              Dashboard
+            </span>
+          </header>
+          <div className="flex-1 p-4 sm:p-6">
+            <Outlet />
+          </div>
+        </main>
+      </div>
+    </SidebarProvider>
+  );
+};
+
+export default DashboardLayout;
