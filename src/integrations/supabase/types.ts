@@ -133,6 +133,51 @@ export type Database = {
           },
         ]
       }
+      queue_entries: {
+        Row: {
+          called_at: string | null
+          completed_at: string | null
+          driver_id: string
+          id: string
+          joined_at: string
+          status: string
+          unit_id: string
+        }
+        Insert: {
+          called_at?: string | null
+          completed_at?: string | null
+          driver_id: string
+          id?: string
+          joined_at?: string
+          status?: string
+          unit_id: string
+        }
+        Update: {
+          called_at?: string | null
+          completed_at?: string | null
+          driver_id?: string
+          id?: string
+          joined_at?: string
+          status?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "queue_entries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "queue_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           active: boolean

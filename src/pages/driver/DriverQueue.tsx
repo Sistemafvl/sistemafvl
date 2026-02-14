@@ -1,15 +1,272 @@
-import { Users } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Users, Clock, Hash, Timer } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuthStore } from "@/stores/auth-store";
 
-const DriverQueue = () => (
-  <div className="space-y-6">
-    <div className="flex items-center gap-3">
-      <Users className="h-7 w-7 text-primary" />
-      <h1 className="text-2xl font-bold tracking-tight text-foreground">Entrar na Fila</h1>
+interface QueueEntry {
+  id: string;
+  driver_id: string;
+  unit_id: string;
+  status: string;
+  joined_at: string;
+  called_at: string | null;
+  completed_at: string | null;
+}
+
+const formatElapsed = (totalSeconds: number) => {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+};
+
+const DriverQueue = () => {
+  const { unitSession } = useAuthStore();
+  const { toast } = useToast();
+
+  const [loading, setLoading] = useState(false);
+  const [queueCount, setQueueCount] = useState(0);
+  const [myEntry, setMyEntry] = useState<QueueEntry | null>(null);
+  const [position, setPosition] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
+
+  const driverId = unitSession?.user_profile_id;
+  const unitId = unitSession?.id;
+  const domainName = unitSession?.domain_name ?? "—";
+  const unitName = unitSession?.name ?? "—";
+
+  const inQueue = !!myEntry;
+
+  // Fetch queue state
+  const fetchQueue = useCallback(async () => {
+    if (!unitId || !driverId) return;
+
+    const { data: waiting } = await supabase
+      .from("queue_entries")
+      .select("*")
+      .eq("unit_id", unitId)
+      .eq("status", "waiting")
+      .order("joined_at", { ascending: true });
+
+    const entries = (waiting ?? []) as QueueEntry[];
+    setQueueCount(entries.length);
+
+    const mine = entries.find((e) => e.driver_id === driverId);
+    setMyEntry(mine ?? null);
+
+    if (mine) {
+      const pos = entries.filter((e) => e.joined_at <= mine.joined_at).length;
+      setPosition(pos);
+    }
+
+    // Avg wait from completed entries (last 24h)
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const { data: completed } = await supabase
+      .from("queue_entries")
+      .select("joined_at, completed_at")
+      .eq("unit_id", unitId)
+      .eq("status", "completed")
+      .gte("completed_at", since);
+
+    if (completed && completed.length > 0) {
+      const totalMs = completed.reduce((sum, e) => {
+        return sum + (new Date(e.completed_at!).getTime() - new Date(e.joined_at).getTime());
+      }, 0);
+      setAvgWaitMinutes(Math.round(totalMs / completed.length / 60000));
+    } else {
+      setAvgWaitMinutes(5); // default fallback
+    }
+  }, [unitId, driverId]);
+
+  // Initial fetch
+  useEffect(() => {
+    fetchQueue();
+  }, [fetchQueue]);
+
+  // Realtime subscription
+  useEffect(() => {
+    if (!unitId) return;
+
+    const channel = supabase
+      .channel(`queue-${unitId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "queue_entries",
+          filter: `unit_id=eq.${unitId}`,
+        },
+        () => {
+          fetchQueue();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [unitId, fetchQueue]);
+
+  // Elapsed timer
+  useEffect(() => {
+    if (!myEntry) {
+      setElapsedSeconds(0);
+      return;
+    }
+
+    const joinedAt = new Date(myEntry.joined_at).getTime();
+    const update = () => setElapsedSeconds(Math.floor((Date.now() - joinedAt) / 1000));
+    update();
+
+    const interval = setInterval(update, 1000);
+    return () => clearInterval(interval);
+  }, [myEntry]);
+
+  const joinQueue = async () => {
+    if (!unitId || !driverId) return;
+    setLoading(true);
+
+    const { error } = await supabase.from("queue_entries").insert({
+      driver_id: driverId,
+      unit_id: unitId,
+      status: "waiting",
+    });
+
+    setLoading(false);
+    if (error) {
+      toast({ title: "Erro ao entrar na fila", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Você entrou na fila!" });
+    }
+  };
+
+  const leaveQueue = async () => {
+    if (!myEntry) return;
+    setLoading(true);
+
+    const { error } = await supabase
+      .from("queue_entries")
+      .update({ status: "cancelled" })
+      .eq("id", myEntry.id);
+
+    setLoading(false);
+    if (error) {
+      toast({ title: "Erro ao sair da fila", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Você saiu da fila" });
+      setMyEntry(null);
+    }
+  };
+
+  const estimatedMinutes = position * avgWaitMinutes;
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3">
+        <Users className="h-7 w-7 text-primary" />
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Entrar na Fila</h1>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Domínio</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-semibold">{domainName}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Unidade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg font-semibold">{unitName}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {!inQueue ? (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <Card>
+              <CardContent className="flex items-center gap-3 pt-6">
+                <Users className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Motoristas na fila</p>
+                  <p className="text-2xl font-bold">{queueCount}</p>
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="flex items-center gap-3 pt-6">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Tempo médio de espera</p>
+                  <p className="text-2xl font-bold">~{queueCount * avgWaitMinutes} min</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <Button
+            onClick={joinQueue}
+            disabled={loading}
+            className="w-full h-14 text-lg font-bold"
+            size="lg"
+          >
+            {loading ? "Entrando..." : "ENTRAR NA FILA"}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Card className="border-primary">
+            <CardHeader>
+              <CardTitle className="text-primary">Você está na fila!</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Hash className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Sua posição</p>
+                  <p className="text-3xl font-bold">{position}º</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Tempo estimado</p>
+                  <p className="text-2xl font-bold">~{estimatedMinutes} min</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Timer className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Tempo na fila</p>
+                  <p className="text-2xl font-bold font-mono">{formatElapsed(elapsedSeconds)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Button
+            onClick={leaveQueue}
+            disabled={loading}
+            variant="destructive"
+            className="w-full h-14 text-lg font-bold"
+            size="lg"
+          >
+            {loading ? "Saindo..." : "SAIR DA FILA"}
+          </Button>
+        </>
+      )}
     </div>
-    <p className="text-muted-foreground">
-      Em breve você poderá selecionar um domínio e unidade para entrar na fila de carregamento.
-    </p>
-  </div>
-);
+  );
+};
 
 export default DriverQueue;
