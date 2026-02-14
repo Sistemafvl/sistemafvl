@@ -1,28 +1,23 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import DashboardSidebar from "./DashboardSidebar";
+import DriverSidebar from "./DriverSidebar";
 
-const DashboardLayout = () => {
+const DriverLayout = () => {
   const { unitSession } = useAuthStore();
-  
 
   if (!unitSession) return <Navigate to="/" replace />;
-
-  // Redirect drivers to their dedicated panel
-  if (unitSession.sessionType === "driver") {
-    return <Navigate to="/motorista" replace />;
-  }
+  if (unitSession.sessionType !== "driver") return <Navigate to="/dashboard" replace />;
 
   return (
     <SidebarProvider>
       <div className="min-h-screen flex w-full">
-        <DashboardSidebar />
+        <DriverSidebar />
         <main className="flex-1 flex flex-col">
           <header className="h-12 flex items-center border-b border-border px-4 bg-card">
             <SidebarTrigger className="mr-3" />
             <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
-              Dashboard
+              Motorista Parceiro
             </span>
           </header>
           <div className="flex-1 p-4 sm:p-6">
@@ -34,4 +29,4 @@ const DashboardLayout = () => {
   );
 };
 
-export default DashboardLayout;
+export default DriverLayout;
