@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock } from "lucide-react";
+import { format } from "date-fns";
 
 interface RideWithDriver {
   id: string;
@@ -23,6 +24,8 @@ interface RideWithDriver {
   car_model?: string;
   car_plate?: string;
   car_color?: string;
+  started_at?: string | null;
+  finished_at?: string | null;
 }
 
 interface Conferente {
@@ -127,18 +130,22 @@ const ConferenciaCarregamentoPage = () => {
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
     await supabase.from("driver_rides").update({ conferente_id: conferenteId } as any).eq("id", rideId);
+    await fetchRides();
   };
 
   const handleIniciar = async (rideId: string) => {
-    await supabase.from("driver_rides").update({ loading_status: "loading" } as any).eq("id", rideId);
+    await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
+    await fetchRides();
   };
 
   const handleFinalizar = async (rideId: string) => {
-    await supabase.from("driver_rides").update({ loading_status: "finished" } as any).eq("id", rideId);
+    await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
+    await fetchRides();
   };
 
   const handleRetornar = async (rideId: string) => {
-    await supabase.from("driver_rides").update({ loading_status: "loading" } as any).eq("id", rideId);
+    await supabase.from("driver_rides").update({ loading_status: "loading", finished_at: null } as any).eq("id", rideId);
+    await fetchRides();
   };
 
   const handleTbrSubmit = async (rideId: string) => {
@@ -146,6 +153,7 @@ const ConferenciaCarregamentoPage = () => {
     if (!code) return;
     await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
     setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+    await fetchRides();
   };
 
   return (
@@ -191,6 +199,18 @@ const ConferenciaCarregamentoPage = () => {
                     {ride.car_plate && (
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold">{ride.car_plate}</span>
+                      </div>
+                    )}
+                    {(ride as any).started_at && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-4 w-4 shrink-0 text-green-600" />
+                        <span className="text-xs"><strong>Início:</strong> {format(new Date((ride as any).started_at), "dd/MM/yyyy HH:mm")}</span>
+                      </div>
+                    )}
+                    {(ride as any).finished_at && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Clock className="h-4 w-4 shrink-0 text-red-600" />
+                        <span className="text-xs"><strong>Término:</strong> {format(new Date((ride as any).finished_at), "dd/MM/yyyy HH:mm")}</span>
                       </div>
                     )}
                     {ride.route && (
