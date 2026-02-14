@@ -39,6 +39,23 @@ const maskWhatsApp = (v: string) => {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
 
+const maskPlate = (v: string) => {
+  const raw = v.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 7);
+  let result = "";
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if (i < 3) { if (/[A-Z]/.test(ch)) result += ch; else break; }
+    else if (i === 3) { if (/[0-9]/.test(ch)) result += ch; else break; }
+    else if (i === 4) { if (/[A-Z]/.test(ch)) result += ch; else break; }
+    else { if (/[A-Z0-9]/.test(ch)) result += ch; else break; }
+  }
+  if (result.length > 3) return result.slice(0, 3) + "-" + result.slice(3);
+  return result;
+};
+
+const capitalize = (v: string) =>
+  v.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
+
 const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -55,6 +72,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     state: "",
     car_plate: "",
     car_model: "",
+    car_color: "",
     email: "",
     whatsapp: "",
     password: "",
@@ -107,8 +125,9 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       neighborhood: form.neighborhood || null,
       city: form.city || null,
       state: form.state || null,
-      car_plate: form.car_plate.trim().toUpperCase(),
+      car_plate: form.car_plate.replace("-", "").trim().toUpperCase(),
       car_model: form.car_model.trim(),
+      car_color: form.car_color.trim() || null,
       email: form.email.trim() || null,
       whatsapp: form.whatsapp.replace(/\D/g, "") || null,
       password: form.password,
@@ -126,7 +145,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     toast({ title: "Cadastro realizado com sucesso!" });
     setForm({
       name: "", cpf: "", cep: "", address: "", neighborhood: "",
-      city: "", state: "", car_plate: "", car_model: "",
+      city: "", state: "", car_plate: "", car_model: "", car_color: "",
       email: "", whatsapp: "", password: "",
     });
     onOpenChange(false);
@@ -148,7 +167,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
           {/* Nome */}
           <div className="space-y-1">
             <Label htmlFor="dr-name">Nome completo *</Label>
-            <Input id="dr-name" value={form.name} onChange={(e) => set("name", e.target.value)} required />
+            <Input id="dr-name" value={form.name} onChange={(e) => set("name", capitalize(e.target.value))} required />
           </div>
 
           {/* CPF */}
@@ -170,15 +189,15 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1">
               <Label htmlFor="dr-address">Endereço</Label>
-              <Input id="dr-address" value={form.address} onChange={(e) => set("address", e.target.value)} />
+              <Input id="dr-address" value={form.address} onChange={(e) => set("address", capitalize(e.target.value))} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="dr-neighborhood">Bairro</Label>
-              <Input id="dr-neighborhood" value={form.neighborhood} onChange={(e) => set("neighborhood", e.target.value)} />
+              <Input id="dr-neighborhood" value={form.neighborhood} onChange={(e) => set("neighborhood", capitalize(e.target.value))} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="dr-city">Cidade</Label>
-              <Input id="dr-city" value={form.city} onChange={(e) => set("city", e.target.value)} />
+              <Input id="dr-city" value={form.city} onChange={(e) => set("city", capitalize(e.target.value))} />
             </div>
             <div className="space-y-1">
               <Label htmlFor="dr-state">Estado</Label>
@@ -187,14 +206,18 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
           </div>
 
           {/* Veículo */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="dr-plate">Placa do carro *</Label>
-              <Input id="dr-plate" value={form.car_plate} onChange={(e) => set("car_plate", e.target.value)} required />
+              <Input id="dr-plate" value={form.car_plate} onChange={(e) => set("car_plate", maskPlate(e.target.value))} placeholder="AAA-0AAA" required />
             </div>
             <div className="space-y-1">
               <Label htmlFor="dr-model">Modelo do carro *</Label>
-              <Input id="dr-model" value={form.car_model} onChange={(e) => set("car_model", e.target.value)} required />
+              <Input id="dr-model" value={form.car_model} onChange={(e) => set("car_model", capitalize(e.target.value))} required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="dr-color">Cor do carro</Label>
+              <Input id="dr-color" value={form.car_color} onChange={(e) => set("car_color", capitalize(e.target.value))} />
             </div>
           </div>
 
