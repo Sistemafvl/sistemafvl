@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/auth-store";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, KeyRound, LogIn } from "lucide-react";
+import { Building2, KeyRound, LogIn, User } from "lucide-react";
 
 interface Domain {
   id: string;
@@ -24,6 +24,7 @@ const UnitLoginForm = () => {
   const [units, setUnits] = useState<Unit[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
+  const [cpf, setCpf] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const setUnitSession = useAuthStore((s) => s.setUnitSession);
@@ -56,13 +57,13 @@ const UnitLoginForm = () => {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedUnit || !password) return;
+    if (!selectedUnit || !cpf || !password) return;
 
     setLoading(true);
 
     try {
       const { data, error } = await supabase.functions.invoke("authenticate-unit", {
-        body: { unit_id: selectedUnit, password },
+        body: { unit_id: selectedUnit, cpf, password },
       });
 
       if (error || !data?.success) {
@@ -125,6 +126,27 @@ const UnitLoginForm = () => {
 
       <div className="space-y-2">
         <Label className="font-semibold italic flex items-center gap-2">
+          <User className="h-4 w-4 text-primary" />
+          CPF
+        </Label>
+        <Input
+          type="text"
+          value={cpf}
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, "").slice(0, 11);
+            const formatted = v
+              .replace(/(\d{3})(\d)/, "$1.$2")
+              .replace(/(\d{3})(\d)/, "$1.$2")
+              .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+            setCpf(formatted);
+          }}
+          placeholder="000.000.000-00"
+          disabled={!selectedUnit}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label className="font-semibold italic flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" />
           Senha
         </Label>
@@ -137,7 +159,7 @@ const UnitLoginForm = () => {
         />
       </div>
 
-      <Button type="submit" className="w-full font-bold italic text-base" disabled={loading || !selectedUnit || !password}>
+      <Button type="submit" className="w-full font-bold italic text-base" disabled={loading || !selectedUnit || !cpf || !password}>
         <LogIn className="mr-2 h-4 w-4" />
         {loading ? "Entrando..." : "ENTRAR"}
       </Button>
