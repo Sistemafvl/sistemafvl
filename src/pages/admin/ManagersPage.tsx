@@ -6,12 +6,20 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Users, Building2, Building } from "lucide-react";
+import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; }
-interface Manager { id: string; name: string; cnpj: string; active: boolean; unit_id: string; }
+interface Manager { id: string; name: string; cnpj: string; password: string; active: boolean; unit_id: string; created_at: string; }
 
 const formatCnpj = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -31,6 +39,13 @@ const ManagersPage = () => {
   const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "" });
   const { toast } = useToast();
 
+  // Modal states
+  const [viewManager, setViewManager] = useState<Manager | null>(null);
+  const [editManager, setEditManager] = useState<Manager | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", cnpj: "", password: "" });
+  const [credManager, setCredManager] = useState<Manager | null>(null);
+  const [credForm, setCredForm] = useState({ cnpj: "", password: "" });
+
   useEffect(() => {
     supabase.from("domains").select("id, name").eq("active", true).order("name").then(({ data }) => {
       if (data) setDomains(data);
@@ -46,10 +61,15 @@ const ManagersPage = () => {
 
   useEffect(() => {
     if (!selectedUnit) { setManagers([]); return; }
+    refreshManagers();
+  }, [selectedUnit]);
+
+  const refreshManagers = () => {
+    if (!selectedUnit) return;
     supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => {
       if (data) setManagers(data);
     });
-  }, [selectedUnit]);
+  };
 
   const addManager = async () => {
     const cleanCnpj = newManager.cnpj.replace(/\D/g, "");
@@ -64,20 +84,65 @@ const ManagersPage = () => {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
       setNewManager({ name: "", cnpj: "", password: "" });
-      supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
+      refreshManagers();
       toast({ title: "Gerenciador criado" });
     }
   };
 
   const toggleManager = async (id: string, active: boolean) => {
     await supabase.from("managers").update({ active: !active }).eq("id", id);
-    if (selectedUnit) supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
+    refreshManagers();
   };
 
   const deleteManager = async (id: string) => {
     await supabase.from("managers").delete().eq("id", id);
-    if (selectedUnit) supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
+    refreshManagers();
     toast({ title: "Gerenciador excluído" });
+  };
+
+  const openEdit = (m: Manager) => {
+    setEditManager(m);
+    setEditForm({ name: m.name, cnpj: formatCnpj(m.cnpj), password: m.password });
+  };
+
+  const saveEdit = async () => {
+    if (!editManager) return;
+    const cleanCnpj = editForm.cnpj.replace(/\D/g, "");
+    if (!editForm.name.trim() || cleanCnpj.length !== 14 || !editForm.password) return;
+    const { error } = await supabase.from("managers").update({
+      name: editForm.name.trim().toUpperCase(),
+      cnpj: cleanCnpj,
+      password: editForm.password,
+    }).eq("id", editManager.id);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      setEditManager(null);
+      refreshManagers();
+      toast({ title: "Gerenciador atualizado" });
+    }
+  };
+
+  const openCred = (m: Manager) => {
+    setCredManager(m);
+    setCredForm({ cnpj: formatCnpj(m.cnpj), password: m.password });
+  };
+
+  const saveCred = async () => {
+    if (!credManager) return;
+    const cleanCnpj = credForm.cnpj.replace(/\D/g, "");
+    if (cleanCnpj.length !== 14 || !credForm.password) return;
+    const { error } = await supabase.from("managers").update({
+      cnpj: cleanCnpj,
+      password: credForm.password,
+    }).eq("id", credManager.id);
+    if (error) {
+      toast({ title: "Erro", description: error.message, variant: "destructive" });
+    } else {
+      setCredManager(null);
+      refreshManagers();
+      toast({ title: "Credenciais atualizadas" });
+    }
   };
 
   return (
@@ -154,7 +219,16 @@ const ManagersPage = () => {
                       <p className="font-bold italic text-sm">{m.name}</p>
                       <p className="text-xs text-muted-foreground">{formatCnpj(m.cnpj)}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewManager(m)}>
+                        <Eye className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(m)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openCred(m)}>
+                        <UserCog className="h-3.5 w-3.5" />
+                      </Button>
                       <Switch checked={m.active} onCheckedChange={() => toggleManager(m.id, m.active)} />
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteManager(m.id)}>
                         <Trash2 className="h-3.5 w-3.5" />
@@ -174,6 +248,82 @@ const ManagersPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Modal Visualizar */}
+      <Dialog open={!!viewManager} onOpenChange={(open) => !open && setViewManager(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <Eye className="h-5 w-5 text-primary" /> Detalhes do Gerenciador
+            </DialogTitle>
+            <DialogDescription>Informações completas do gerenciador.</DialogDescription>
+          </DialogHeader>
+          {viewManager && (
+            <div className="space-y-3 text-sm">
+              <div><span className="font-semibold text-muted-foreground">Nome:</span> <span className="font-bold">{viewManager.name}</span></div>
+              <div><span className="font-semibold text-muted-foreground">CNPJ:</span> {formatCnpj(viewManager.cnpj)}</div>
+              <div><span className="font-semibold text-muted-foreground">Senha:</span> {viewManager.password}</div>
+              <div><span className="font-semibold text-muted-foreground">Status:</span> {viewManager.active ? "Ativo" : "Inativo"}</div>
+              <div><span className="font-semibold text-muted-foreground">Criado em:</span> {new Date(viewManager.created_at).toLocaleString("pt-BR")}</div>
+              <div><span className="font-semibold text-muted-foreground">ID Unidade:</span> <span className="text-xs">{viewManager.unit_id}</span></div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Editar */}
+      <Dialog open={!!editManager} onOpenChange={(open) => !open && setEditManager(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <Pencil className="h-5 w-5 text-primary" /> Editar Gerenciador
+            </DialogTitle>
+            <DialogDescription>Altere os dados do gerenciador.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nome</Label>
+              <Input value={editForm.name} onChange={(e) => setEditForm((p) => ({ ...p, name: e.target.value }))} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">CNPJ</Label>
+              <Input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }))} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Senha</Label>
+              <Input value={editForm.password} onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))} className="h-11" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={saveEdit}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Credenciais Gerente */}
+      <Dialog open={!!credManager} onOpenChange={(open) => !open && setCredManager(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <UserCog className="h-5 w-5 text-primary" /> Credenciais do Gerente
+            </DialogTitle>
+            <DialogDescription>Login e senha que o gerente usará para acessar o painel.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Login (CNPJ)</Label>
+              <Input value={credForm.cnpj} onChange={(e) => setCredForm((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }))} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Senha</Label>
+              <Input value={credForm.password} onChange={(e) => setCredForm((p) => ({ ...p, password: e.target.value }))} className="h-11" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={saveCred}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

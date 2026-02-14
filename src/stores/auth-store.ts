@@ -14,6 +14,12 @@ interface UnitSession {
   sessionType: SessionType;
 }
 
+interface ManagerSession {
+  id: string;
+  name: string;
+  cnpj: string;
+}
+
 interface AuthState {
   // Master admin
   isMasterAdmin: boolean;
@@ -22,6 +28,10 @@ interface AuthState {
   // Unit session
   unitSession: UnitSession | null;
   setUnitSession: (session: UnitSession | null) => void;
+
+  // Manager session
+  managerSession: ManagerSession | null;
+  setManagerSession: (session: ManagerSession | null) => void;
 
   // Logout
   logout: () => void;
@@ -34,7 +44,9 @@ export const useAuthStore = create<AuthState>()(
       setMasterAdmin: (value) => set({ isMasterAdmin: value }),
       unitSession: null,
       setUnitSession: (session) => set({ unitSession: session }),
-      logout: () => set({ isMasterAdmin: false, unitSession: null }),
+      managerSession: null,
+      setManagerSession: (session) => set({ managerSession: session }),
+      logout: () => set({ isMasterAdmin: false, unitSession: null, managerSession: null }),
     }),
     {
       name: "fvl-auth",
