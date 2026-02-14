@@ -15,7 +15,7 @@ const Index = () => {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
       <div className="w-full max-w-sm space-y-6 sm:space-y-8">
-        <LogoHeader onTripleClick={() => setShowAdminModal(true)} size="lg" />
+        <LogoHeader onTripleClick={() => setShowAdminModal(true)} size="xl" />
 
         <div className="text-center">
           <h1 className="text-xl font-bold italic text-foreground tracking-tight">

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/auth-store";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, KeyRound, LogIn, User } from "lucide-react";
+import { Building2, Eye, EyeOff, KeyRound, LogIn, User } from "lucide-react";
 
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; domain_id: string; }
@@ -25,6 +25,7 @@ const UnitLoginForm = () => {
   const [document, setDocument] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const setUnitSession = useAuthStore((s) => s.setUnitSession);
   const { toast } = useToast();
 
@@ -115,14 +116,24 @@ const UnitLoginForm = () => {
         <Label className="font-semibold italic flex items-center gap-2">
           <KeyRound className="h-4 w-4 text-primary" /> Senha
         </Label>
-        <Input
-          className="h-11"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
-          disabled={!selectedUnit}
-        />
+        <div className="relative">
+          <Input
+            className="h-11 pr-10"
+            type={showPassword ? "text" : "password"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            disabled={!selectedUnit}
+          />
+          <button
+            type="button"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setShowPassword(!showPassword)}
+            tabIndex={-1}
+          >
+            {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+          </button>
+        </div>
       </div>
 
       <Button type="submit" className="w-full font-bold italic text-base h-12 mt-2" disabled={loading || !selectedUnit || !document || !password}>
