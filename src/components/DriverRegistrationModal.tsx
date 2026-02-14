@@ -41,16 +41,8 @@ const maskWhatsApp = (v: string) => {
 
 const maskPlate = (v: string) => {
   const raw = v.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 7);
-  let result = "";
-  for (let i = 0; i < raw.length; i++) {
-    const ch = raw[i];
-    if (i < 3) { if (/[A-Z]/.test(ch)) result += ch; else break; }
-    else if (i === 3) { if (/[0-9]/.test(ch)) result += ch; else break; }
-    else if (i === 4) { if (/[A-Z]/.test(ch)) result += ch; else break; }
-    else { if (/[A-Z0-9]/.test(ch)) result += ch; else break; }
-  }
-  if (result.length > 3) return result.slice(0, 3) + "-" + result.slice(3);
-  return result;
+  if (raw.length > 3) return raw.slice(0, 3) + "-" + raw.slice(3);
+  return raw;
 };
 
 const capitalize = (v: string) =>
