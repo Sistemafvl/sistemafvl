@@ -1,13 +1,31 @@
 
 
-# Aumentar o logotipo no sidebar
+# Aumentar logo na tela de login (desktop) e adicionar olho no campo senha
 
-Alterar o tamanho do logo no componente `AdminSidebar.tsx`. Atualmente ele usa `size="sm"` (`h-10 sm:h-12`), que fica muito pequeno na sidebar.
+## 1. Aumentar o logo na pagina de login (desktop)
 
-## Alteracao
+**Arquivo:** `src/components/LogoHeader.tsx`
 
-**Arquivo:** `src/components/admin/AdminSidebar.tsx`
+Adicionar um tamanho extra `xl` para uso na tela de login desktop, com classes responsivas maiores:
 
-- Trocar `<LogoHeader size="sm" />` para `<LogoHeader size="md" />`, que usa `h-16 sm:h-20` — um tamanho mais visivel e proporcional ao sidebar.
-- Ajustar o padding do container de `p-4` para `p-4 py-5` para dar mais respiro vertical ao logo.
+```
+xl: "h-24 sm:h-40"
+```
 
+**Arquivo:** `src/pages/Index.tsx`
+
+Trocar `<LogoHeader ... size="lg" />` para `size="xl"` para que no desktop o logo fique visivelmente maior.
+
+## 2. Adicionar icone de olho para mostrar/esconder senha
+
+**Arquivo:** `src/components/UnitLoginForm.tsx`
+
+- Adicionar estado `showPassword` (boolean).
+- Envolver o Input de senha em um `div relative`.
+- Adicionar um botao com icone `Eye` / `EyeOff` do lucide-react posicionado dentro do campo (absolute right).
+- Alternar o `type` do input entre `"password"` e `"text"` conforme o estado.
+
+## Detalhes tecnicos
+
+- Nenhuma dependencia nova necessaria (lucide-react ja tem `Eye` e `EyeOff`).
+- Dois arquivos editados: `LogoHeader.tsx`, `UnitLoginForm.tsx`, e `Index.tsx`.
