@@ -97,7 +97,7 @@ const DashboardSidebar = () => {
             ) : (
               <Button
                 variant="outline"
-                className="w-full justify-start font-semibold italic gap-2"
+                className="w-full justify-start font-semibold italic gap-2 bg-accent text-accent-foreground hover:bg-background hover:text-foreground"
                 onClick={() => setLoginOpen(true)}
               >
                 <UserCog className="h-4 w-4" />
