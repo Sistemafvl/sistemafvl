@@ -1,52 +1,45 @@
 
 
-# Visao Geral - Menu e Layout do Dashboard
+# Campo de Busca TBR - Visao Geral
 
 ## Resumo
 
-Duas alteracoes: (1) adicionar item "Visao Geral" no menu do sidebar como primeira opcao, apontando para `/dashboard`; (2) reorganizar o layout da pagina inicial para colocar data/hora ao lado do "Bem-vindo" na mesma linha, liberando espaco para futuros cards de indicadores.
+Adicionar um campo de busca de TBR (codigo de pacotes Amazon) na pagina Visao Geral do dashboard, posicionado abaixo do bloco "Bem-vindo" / data-hora. O campo tera um icone de lupa e ao pressionar Enter abrira um modal informando que a funcionalidade sera implementada em breve (pois a tabela de TBR ainda nao existe no sistema).
 
 ## Alteracoes
 
-### 1. Sidebar - Novo item "Visao Geral"
+### Arquivo: `src/pages/dashboard/DashboardHome.tsx`
 
-No arquivo `src/components/dashboard/DashboardSidebar.tsx`, adicionar "Visao Geral" como primeiro item do `menuItems`, com icone `LayoutDashboard` e url `/dashboard`.
+1. **Campo de busca TBR**
+   - Input com placeholder "Buscar TBR..." posicionado logo abaixo da linha do "Bem-vindo"
+   - Icone `Search` (lupa) do lucide-react ao lado esquerdo do campo
+   - O campo aceita digitacao manual e leitura de QR Code / codigo de barras (leitores externos enviam texto + Enter automaticamente)
+   - Ao pressionar Enter, abre um modal (Dialog) com as informacoes do TBR
 
-```text
-menuItems:
-  - Visao Geral        -> /dashboard          (LayoutDashboard)
-  - Conferencia Carregamento -> /dashboard/conferencia (Truck)
-```
+2. **Modal de resultado**
+   - Ao dar Enter no campo, abre um Dialog informando que o rastreamento TBR sera implementado em breve
+   - Estrutura do modal ja preparada para exibir: codigo TBR, status, historico passo a passo e demais dados
+   - Quando a tabela de TBR for criada futuramente, bastara conectar a busca ao banco de dados
 
-### 2. DashboardHome - Reorganizar layout
-
-No arquivo `src/pages/dashboard/DashboardHome.tsx`:
-
-- Colocar o bloco "Bem-vindo" e o card de data/hora lado a lado usando `flex` ou `grid`
-- O "Bem-vindo" fica a esquerda, o card de data/hora fica a direita, na mesma linha
-- Abaixo, manter espaco livre para futuros cards de indicadores e insights
-
-Layout proposto:
+## Layout
 
 ```text
 +----------------------------------+-----------------------------+
 | Bem-vindo                        |  [relogio] sabado, 14 de    |
 | ABC-AMZL -- UNIDADE 1            |  fevereiro de 2026  18:05   |
 +----------------------------------+-----------------------------+
+| [lupa] Buscar TBR...                                           |
++----------------------------------------------------------------+
 |                                                                |
-|  (espaco para futuros cards de indicadores)                    |
-|                                                                |
+|  (espaco para futuros cards)                                   |
 +----------------------------------------------------------------+
 ```
 
-## Arquivos afetados
-
-- `src/components/dashboard/DashboardSidebar.tsx` - adicionar item no menu
-- `src/pages/dashboard/DashboardHome.tsx` - reorganizar layout
-
 ## Detalhes tecnicos
 
-- Importar `LayoutDashboard` do lucide-react no sidebar
-- No DashboardHome, usar `flex justify-between items-start` para alinhar bem-vindo e relogio na mesma linha
-- Nenhuma alteracao de banco de dados necessaria
-
+- Importar `Search` do lucide-react
+- Importar componentes `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` de `@/components/ui/dialog`
+- Estado local: `tbrSearch` (string) e `showTbrModal` (boolean)
+- `onKeyDown` no input: ao detectar Enter e campo nao vazio, setar `showTbrModal = true`
+- O campo tera largura total (`w-full`) com o icone posicionado dentro usando `relative` + `absolute`
+- Nenhuma alteracao de banco de dados necessaria neste momento
