@@ -40,14 +40,15 @@ Deno.serve(async (req) => {
     if (!unit.active) {
       return new Response(JSON.stringify({ error: "Unit is inactive" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
-    if (unit.password !== password) {
-      return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
 
     const isCnpj = rawDocument.length > 11;
 
     if (isCnpj) {
-      // CNPJ -> manager access
+      // CNPJ -> manager access — requires unit password
+      if (unit.password !== password) {
+        return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
       const { data: manager, error: mErr } = await supabase
         .from("managers")
         .select("id, name, cnpj")
@@ -80,8 +81,8 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      // CPF -> user access
-      const { data: userProfile, error: profileError } = await supabase
+      // CPF -> check user_profiles first (requires unit password), then drivers (uses own password)
+      const { data: userProfile } = await supabase
         .from("user_profiles")
         .select("id, name, cpf")
         .eq("unit_id", unit_id)
@@ -89,9 +90,48 @@ Deno.serve(async (req) => {
         .ilike("cpf", rawDocument)
         .single();
 
-      if (profileError || !userProfile) {
+      if (userProfile) {
+        // Regular user — validate unit password
+        if (unit.password !== password) {
+          return new Response(JSON.stringify({ error: "Senha inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
         return new Response(
-          JSON.stringify({ error: "CPF não encontrado nesta unidade" }),
+          JSON.stringify({
+            success: true,
+            unit: {
+              id: unit.id,
+              name: unit.name,
+              domain_id: unit.domain_id,
+              domain_name: (unit as any).domains?.name || "",
+              user_profile_id: userProfile.id,
+              user_name: userProfile.name,
+              user_cpf: userProfile.cpf,
+              sessionType: "user",
+            },
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Not found in user_profiles — check drivers table
+      const { data: driver, error: driverError } = await supabase
+        .from("drivers")
+        .select("id, name, cpf, password")
+        .eq("cpf", rawDocument)
+        .eq("active", true)
+        .single();
+
+      if (driverError || !driver) {
+        return new Response(
+          JSON.stringify({ error: "CPF não encontrado" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Driver uses their own password
+      if (driver.password !== password) {
+        return new Response(
+          JSON.stringify({ error: "Senha inválida" }),
           { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -104,10 +144,10 @@ Deno.serve(async (req) => {
             name: unit.name,
             domain_id: unit.domain_id,
             domain_name: (unit as any).domains?.name || "",
-            user_profile_id: userProfile.id,
-            user_name: userProfile.name,
-            user_cpf: userProfile.cpf,
-            sessionType: "user",
+            user_profile_id: driver.id,
+            user_name: driver.name,
+            user_cpf: driver.cpf,
+            sessionType: "driver",
           },
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
