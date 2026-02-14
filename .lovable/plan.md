@@ -1,65 +1,66 @@
 
 
-# Transformar Dashboard em layout com sidebar e aumentar logotipo
+# Adicionar acoes nos gerenciadores (Admin) e botao de login gerente (Dashboard)
 
-## Resumo
+## Parte 1 — Icones de acao na lista de gerenciadores (ManagersPage)
 
-Substituir o layout atual do Dashboard (header + cards centrais) por um layout com menu lateral (sidebar), movendo as opcoes relevantes para o sidebar. Tambem aumentar o tamanho do logotipo no sidebar.
+**Arquivo:** `src/pages/admin/ManagersPage.tsx`
 
-## Alteracoes
+Adicionar 3 icones em cada linha de gerenciador, ao lado do Switch e do botao de excluir:
 
-### 1. Criar componente `DashboardSidebar.tsx`
+1. **Olho (`Eye`)** — Abre um modal (Dialog) exibindo todas as informacoes do gerenciador:
+   - Nome
+   - CNPJ (formatado)
+   - Senha (visivel)
+   - Status (ativo/inativo)
+   - Data de criacao
+   - ID da unidade
 
-**Arquivo novo:** `src/components/dashboard/DashboardSidebar.tsx`
+2. **Lapis (`Pencil`)** — Abre um modal de edicao com campos editaveis:
+   - Nome
+   - CNPJ
+   - Senha
+   - Botao "Salvar" que faz update no banco
 
-Sidebar usando os componentes `Sidebar` do shadcn, contendo:
-- Logo no topo com `size="lg"` (maior e mais visivel)
-- Informacoes da unidade/dominio e relogio
-- Itens de menu (apenas os que ficam):
-  - **Conferencia Carregamento** (antigo "Saida de Mercadoria") — icone `Truck`
-  - **Relatorios** — icone `BarChart3`
-  - **Configuracoes** — icone `Settings`
-- Botao "Sair" no rodape do sidebar
-- Itens removidos dos cards: "Entrada de Mercadoria" e "Scanner QR / Codigo de Barras"
+3. **Icone de gerente (`UserCog`)** — Abre um modal para configurar login e senha exclusivos do gerente. Esses campos sao o proprio CNPJ + senha que o gerente ja possui na tabela `managers`. O modal permite visualizar e alterar essas credenciais de acesso que o gerente usara no botao do Dashboard.
 
-### 2. Criar componente `DashboardLayout.tsx`
+### Modais a criar (dentro do mesmo arquivo ou como componentes separados):
 
-**Arquivo novo:** `src/components/dashboard/DashboardLayout.tsx`
+- **Modal Visualizar**: Dialog read-only com todos os campos
+- **Modal Editar**: Dialog com formulario para editar nome, CNPJ, senha
+- **Modal Credenciais Gerente**: Dialog focado em mostrar/editar login (CNPJ) e senha de acesso
 
-Layout wrapper com `SidebarProvider`, similar ao `AdminLayout`:
-- Verifica autenticacao (`unitSession`)
-- Renderiza `DashboardSidebar` + area principal com `Outlet`
-- Header com `SidebarTrigger`
+## Parte 2 — Botao de login do gerente no Dashboard
 
-### 3. Criar pagina inicial do dashboard
+**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
 
-**Arquivo novo:** `src/pages/dashboard/DashboardHome.tsx`
+Adicionar um botao logo abaixo do logo (onde o usuario sinalizou com o retangulo vermelho no Anexo 2). O botao tera um icone de gerente (`UserCog`) e texto "Gerente".
 
-Pagina de boas-vindas simples com informacoes da unidade (dominio, unidade, relogio) que aparece como conteudo principal.
+Ao clicar, abre um modal de login com:
+- Campo CNPJ (com mascara)
+- Campo Senha
+- Botao "Entrar"
 
-### 4. Atualizar rotas
+A autenticacao verifica na tabela `managers` se existe um gerenciador ativo com aquele CNPJ na unidade atual (obtida do `unitSession`) e se a senha confere. Em caso de sucesso, pode-se armazenar no `auth-store` que o gerente esta autenticado (adicionando um campo `managerSession` ao store).
 
-**Arquivo:** `src/App.tsx`
+**Arquivo:** `src/stores/auth-store.ts`
 
-Mudar de rota unica `/dashboard` para layout com sub-rotas:
-
-```text
-/dashboard          -> DashboardLayout
-  /dashboard        -> DashboardHome (index)
-  /dashboard/conferencia  -> (placeholder futuro)
-  /dashboard/relatorios   -> (placeholder futuro)
-  /dashboard/configuracoes -> (placeholder futuro)
-```
-
-### 5. Remover `DashboardPage.tsx` antigo
-
-O arquivo `src/pages/DashboardPage.tsx` sera substituido pelo novo layout.
+Adicionar ao store:
+- `managerSession: { id, name, cnpj } | null`
+- `setManagerSession`
+- Limpar no `logout`
 
 ## Detalhes tecnicos
 
-- Reutiliza os mesmos componentes de Sidebar do shadcn ja usados no admin
-- Reutiliza `LogoHeader`, `NavLink`, `useAuthStore`
-- Nenhuma dependencia nova necessaria
-- Os itens de menu ficam desabilitados (com visual "Em breve") ate serem implementados, exceto como links de navegacao no sidebar
-- O logotipo usara `size="lg"` (`h-24 sm:h-32`) no sidebar para ficar bem visivel
+- Nenhuma migracao de banco necessaria (tabela `managers` ja tem todos os campos)
+- Componentes Dialog do shadcn ja existem no projeto
+- Icones `Eye`, `Pencil`, `UserCog` do lucide-react
+- Validacao de CNPJ e senha no login do gerente
+- A verificacao de senha do gerente sera feita consultando diretamente a tabela `managers` (senha em texto plano, como ja funciona no sistema)
+
+## Arquivos afetados
+
+1. `src/pages/admin/ManagersPage.tsx` — adicionar 3 icones + 3 modais
+2. `src/components/dashboard/DashboardSidebar.tsx` — adicionar botao gerente + modal login
+3. `src/stores/auth-store.ts` — adicionar `managerSession`
 
