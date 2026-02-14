@@ -1,84 +1,68 @@
 
 
-## Fluxo "Programar" com Modal e Card de Confirmacao
+## Adicionar campo "Senha" ao modal e exibir cards na pagina "Conferencia Carregamento"
 
 ### Resumo
-Quando o gerente clicar em "Programar", em vez de finalizar diretamente, abrira um modal para preencher **Rota** e **Login**. Ao clicar em "Definir", o sistema registra a corrida com essas informacoes e exibe um card de confirmacao com foto do motorista, nome, carro, placa, rota, login e sequencia de carregamento.
+Duas mudancas principais:
+1. Adicionar campo **Senha** ao modal "Programar Carregamento" (junto com Rota e Login)
+2. Criar a pagina **Conferencia Carregamento** (`/dashboard/conferencia`) que exibe os cards de carregamentos programados do dia, em vez de mostrar o card de confirmacao como popup
 
 ---
 
 ### 1. Migracao de Banco de Dados
 
-Adicionar duas colunas na tabela `driver_rides`:
-- `route` (TEXT, nullable) -- informacao de rota
-- `login` (TEXT, nullable) -- login informado pelo gerente
+Adicionar coluna `password` (TEXT, nullable) na tabela `driver_rides` para armazenar a senha informada pelo gerente.
 
-Tambem adicionar `sequence_number` (INTEGER, nullable) para registrar a sequencia de carregamento.
+```sql
+ALTER TABLE public.driver_rides
+  ADD COLUMN IF NOT EXISTS password TEXT;
+```
 
 ---
 
 ### 2. Alteracoes no QueuePanel
 
-**Dados adicionais do motorista na fila:**
-- Ao buscar motoristas na fila, tambem carregar `avatar_url`, `car_model`, `car_plate` da tabela `drivers`.
+- Adicionar campo **Senha** (input de texto livre) ao modal "Programar Carregamento", entre Login e o botao Definir
+- Salvar o valor de `password` no insert de `driver_rides`
+- Remover o dialog de confirmacao (card popup) -- a confirmacao sera vista na pagina de Conferencia Carregamento
+- Apos clicar "Definir", redirecionar automaticamente para `/dashboard/conferencia` ou exibir um toast de sucesso
 
-**Modal de Programacao (Dialog):**
-- Ao clicar "Programar", armazena a entrada selecionada e abre um Dialog.
-- Campos do modal:
-  - **Rota** -- Input de texto livre
-  - **Login** -- Input de texto livre
-  - Botao **Definir**
+---
 
-**Acao "Definir":**
-1. Calcula o `sequence_number` (conta quantas rides ja existem para a unidade no dia + 1).
-2. Atualiza `queue_entries` com status `completed`.
-3. Insere em `driver_rides` com `route`, `login` e `sequence_number`.
-4. Fecha o modal e abre um card/dialog de confirmacao.
+### 3. Criar pagina Conferencia Carregamento
 
-**Card de Confirmacao (Dialog):**
-- Foto do motorista (avatar)
-- Nome do motorista
-- Carro (modelo + cor)
-- Placa
-- Rota e Login preenchidos pelo gerente
-- Sequencia de carregamento (ex: "#3")
-- Botao para fechar
+Nova pagina `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`:
+
+- Busca todos os registros de `driver_rides` do dia atual para a unidade logada
+- Para cada registro, exibe um **card** com:
+  - Foto do motorista (avatar)
+  - Nome do motorista
+  - Carro (modelo + cor)
+  - Placa
+  - Rota
+  - Login
+  - Senha
+  - Sequencia de carregamento (badge "#Xo Carregamento")
+- Cards organizados em grid responsivo
+- Realtime habilitado para atualizar quando novos carregamentos forem programados
+
+---
+
+### 4. Registrar rota no App.tsx
+
+Adicionar a rota `/dashboard/conferencia` apontando para o novo componente `ConferenciaCarregamentoPage`.
 
 ---
 
 ### Detalhes Tecnicos
 
-**SQL Migration:**
-```sql
-ALTER TABLE public.driver_rides
-  ADD COLUMN IF NOT EXISTS route TEXT,
-  ADD COLUMN IF NOT EXISTS login TEXT,
-  ADD COLUMN IF NOT EXISTS sequence_number INTEGER;
-```
-
 **Arquivos modificados:**
-- `src/components/dashboard/QueuePanel.tsx` -- adicionar modal de programacao, card de confirmacao, buscar dados completos do motorista
-- Nova migracao SQL
+- `src/components/dashboard/QueuePanel.tsx` -- adicionar campo Senha, remover dialog de confirmacao, salvar password no insert
+- Nova migracao SQL para coluna `password`
 
-**Interface QueueEntry atualizada:**
-```typescript
-interface QueueEntry {
-  id: string;
-  driver_id: string;
-  unit_id: string;
-  status: string;
-  joined_at: string;
-  driver_name?: string;
-  driver_avatar?: string;
-  car_model?: string;
-  car_plate?: string;
-  car_color?: string;
-}
-```
+**Arquivos criados:**
+- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` -- pagina com cards de carregamentos do dia
 
-**Fluxo de estados no componente:**
-1. `selectedEntry` -- a entrada selecionada para programar
-2. `showProgramModal` -- controla o modal com campos Rota/Login
-3. `showConfirmCard` -- controla o card de confirmacao pos-definicao
-4. `lastRideInfo` -- armazena dados da corrida recem-criada para exibir no card
+**Arquivos atualizados:**
+- `src/App.tsx` -- adicionar rota `/dashboard/conferencia`
 
