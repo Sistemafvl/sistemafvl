@@ -6,9 +6,15 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
-import DriverPanel from "./pages/dashboard/DriverPanel";
 import MotoristasParceirosPage from "./pages/dashboard/MotoristasParceirosPage";
 import ConferentesPage from "./pages/dashboard/ConferentesPage";
+import DriverLayout from "./components/dashboard/DriverLayout";
+import DriverHome from "./pages/driver/DriverHome";
+import DriverQueue from "./pages/driver/DriverQueue";
+import DriverStats from "./pages/driver/DriverStats";
+import DriverProfile from "./pages/driver/DriverProfile";
+import DriverReviews from "./pages/driver/DriverReviews";
+import DriverSettings from "./pages/driver/DriverSettings";
 import AdminLayout from "./components/admin/AdminLayout";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
@@ -25,9 +31,16 @@ const App = () => (
           <Route path="/" element={<Index />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
-            <Route path="motorista" element={<DriverPanel />} />
             <Route path="motoristas-parceiros" element={<MotoristasParceirosPage />} />
             <Route path="conferentes" element={<ConferentesPage />} />
+          </Route>
+          <Route path="/motorista" element={<DriverLayout />}>
+            <Route index element={<DriverHome />} />
+            <Route path="fila" element={<DriverQueue />} />
+            <Route path="indicadores" element={<DriverStats />} />
+            <Route path="perfil" element={<DriverProfile />} />
+            <Route path="avaliacoes" element={<DriverReviews />} />
+            <Route path="configuracoes" element={<DriverSettings />} />
           </Route>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<DomainsUnitsPage />} />

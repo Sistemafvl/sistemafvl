@@ -14,6 +14,7 @@ const Index = () => {
   const { isMasterAdmin, unitSession } = useAuthStore();
 
   if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
+  if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
 
   return (
