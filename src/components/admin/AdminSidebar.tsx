@@ -32,8 +32,8 @@ const AdminSidebar = () => {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <div className="p-4 py-5">
-          <LogoHeader size="md" />
+        <div className="p-4 py-6">
+          <LogoHeader size="lg" />
         </div>
         <SidebarGroup>
           <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
