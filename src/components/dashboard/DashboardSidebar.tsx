@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -38,6 +38,7 @@ const formatCnpj = (v: string) => {
 };
 
 const menuItems = [
+  { title: "Visão Geral", url: "/dashboard", icon: LayoutDashboard },
   { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
 ];
 
