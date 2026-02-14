@@ -1,82 +1,31 @@
 
 
-# Painel Exclusivo do Motorista Parceiro
+# Botao de Excluir Conferente
 
-## Problema atual
+## O que sera feito
 
-Quando um motorista faz login por CPF, ele e redirecionado para o mesmo layout do dashboard da unidade (apenas sem sidebar). O motorista precisa de uma experiencia completamente diferente, com seu proprio menu e funcionalidades.
+Adicionar um botao de excluir (icone de lixeira) na coluna "Acoes" da tabela de Conferentes, entre o badge de status e o botao de visualizar (olho). Ao clicar, um dialogo de confirmacao aparecera para evitar exclusoes acidentais. Confirmando, o registro sera removido permanentemente do banco de dados.
 
-## Nova estrutura
+## Alteracoes
 
-O motorista tera um layout dedicado com sidebar proprio e paginas exclusivas:
+### Arquivo: `src/pages/dashboard/ConferentesPage.tsx`
 
-```text
-+-------------------------------+------------------------------------------+
-| LOGO                          |  MOTORISTA PARCEIRO                      |
-|-------------------------------|------------------------------------------|
-| [foto perfil]                 |                                          |
-| Bem-vindo, [Nome]             |  (conteudo da pagina ativa)              |
-|-------------------------------|                                          |
-| MENU                          |                                          |
-|  > Visao Geral                |                                          |
-|  > Entrar na Fila             |                                          |
-|  > Indicadores                |                                          |
-|  > Perfil                     |                                          |
-|  > Avaliar Unidades           |                                          |
-|  > Configuracoes              |                                          |
-|-------------------------------|                                          |
-| [Sair]                        |                                          |
-+-------------------------------+------------------------------------------+
-```
+1. **Importar** o icone `Trash2` do lucide-react e os componentes `AlertDialog` (`AlertDialogAction`, `AlertDialogCancel`, `AlertDialogContent`, `AlertDialogDescription`, `AlertDialogFooter`, `AlertDialogHeader`, `AlertDialogTitle`)
 
-## Paginas do motorista
+2. **Novo estado** para controlar o conferente selecionado para exclusao:
+   - `deleteConferente` (tipo `Conferente | null`)
+   - `deleteLoading` (boolean)
 
-1. **Visao Geral** (`/dashboard/motorista`) - Pagina inicial com saudacao e resumo
-2. **Entrar na Fila** (`/dashboard/motorista/fila`) - Seleciona dominio/unidade e entra na fila com contador de posicao
-3. **Indicadores** (`/dashboard/motorista/indicadores`) - Estatisticas de corridas, entregas, devolucoes
-4. **Perfil** (`/dashboard/motorista/perfil`) - Upload de foto, edicao de dados cadastrais
-5. **Avaliar Unidades** (`/dashboard/motorista/avaliacoes`) - Avaliar unidades onde trabalhou
-6. **Configuracoes** (`/dashboard/motorista/configuracoes`) - Preferencias do motorista
+3. **Funcao `handleDelete`**: executa `supabase.from("user_profiles").delete().eq("id", conferente.id)`. Em caso de sucesso, remove o conferente da lista local e exibe toast de confirmacao. Em caso de erro, exibe toast de erro.
 
-## Alteracoes por arquivo
+4. **Botao na tabela**: adicionar um botao com icone `Trash2` (lixeira) na coluna de acoes, posicionado onde a seta vermelha indica na imagem (antes do botao de visualizar). Ao clicar, abre o AlertDialog de confirmacao.
 
-### 1. `src/components/dashboard/DriverSidebar.tsx` (novo)
-- Sidebar dedicado para motoristas
-- Exibe foto de perfil (placeholder inicial) e nome do motorista
-- Menu com as 6 opcoes listadas acima
-- Botao "Sair" no rodape
-- Icones: LayoutDashboard, Users, BarChart3, User, Star, Settings
-
-### 2. `src/components/dashboard/DriverLayout.tsx` (novo)
-- Layout exclusivo para motoristas (similar ao DashboardLayout mas usando DriverSidebar)
-- Verifica se `unitSession.sessionType === "driver"`, caso contrario redireciona
-- Header com label "MOTORISTA PARCEIRO"
-
-### 3. Paginas do motorista (novos arquivos)
-- `src/pages/driver/DriverHome.tsx` - Visao geral com "Bem-vindo, [nome]"
-- `src/pages/driver/DriverQueue.tsx` - Selecionar dominio/unidade e entrar na fila (placeholder)
-- `src/pages/driver/DriverStats.tsx` - Indicadores (placeholder)
-- `src/pages/driver/DriverProfile.tsx` - Perfil com upload de foto e edicao de dados (placeholder)
-- `src/pages/driver/DriverReviews.tsx` - Avaliacoes de unidades (placeholder)
-- `src/pages/driver/DriverSettings.tsx` - Configuracoes (placeholder)
-
-### 4. `src/components/dashboard/DashboardLayout.tsx` (editar)
-- Redirecionar motoristas para `/motorista` em vez de `/dashboard/motorista`
-
-### 5. `src/App.tsx` (editar)
-- Adicionar novo grupo de rotas `/motorista` com DriverLayout
-- Rotas: index, fila, indicadores, perfil, avaliacoes, configuracoes
-- Remover rota antiga `/dashboard/motorista`
-
-### 6. `src/pages/Index.tsx` (editar)
-- Atualizar redirect: se `unitSession.sessionType === "driver"`, redirecionar para `/motorista`
+5. **AlertDialog de confirmacao**: exibe o nome do conferente e pede confirmacao antes de excluir. Botoes "Cancelar" e "Excluir" (com variante destructive).
 
 ## Detalhes tecnicos
 
-- O login do motorista continua pelo formulario da pagina inicial (CPF + senha)
-- A edge function `authenticate-unit` ja retorna `sessionType: "driver"` corretamente
-- O `unitSession` armazena os dados do motorista (id, nome, cpf)
-- As paginas serao criadas como placeholders com estrutura preparada para funcionalidade futura
-- O DriverSidebar nao tera modal de gerente (exclusivo da visao da unidade)
-- Nenhuma alteracao de banco de dados necessaria neste momento
+- A exclusao e permanente (DELETE no banco), nao apenas desativacao
+- O AlertDialog evita exclusoes acidentais
+- Nenhuma alteracao de banco de dados necessaria -- a politica RLS "Authenticated can delete user_profiles" ja permite a operacao
+- O botao tera estilo `variant="ghost"` e cor vermelha no icone para indicar acao destrutiva
 
