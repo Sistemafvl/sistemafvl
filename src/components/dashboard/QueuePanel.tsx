@@ -2,10 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Clock, CalendarCheck } from "lucide-react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Users, Clock, CalendarCheck, Car, MapPin, User, Hash } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -14,12 +17,37 @@ interface QueueEntry {
   status: string;
   joined_at: string;
   driver_name?: string;
+  driver_avatar?: string;
+  car_model?: string;
+  car_plate?: string;
+  car_color?: string;
+}
+
+interface RideInfo {
+  driver_name: string;
+  driver_avatar?: string;
+  car_model?: string;
+  car_plate?: string;
+  car_color?: string;
+  route: string;
+  login: string;
+  sequence_number: number;
 }
 
 const QueuePanel = () => {
   const { unitSession } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
+
+  // Modal states
+  const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
+  const [showProgramModal, setShowProgramModal] = useState(false);
+  const [route, setRoute] = useState("");
+  const [login, setLogin] = useState("");
+
+  // Confirmation card
+  const [showConfirmCard, setShowConfirmCard] = useState(false);
+  const [lastRideInfo, setLastRideInfo] = useState<RideInfo | null>(null);
 
   const unitId = unitSession?.id;
 
@@ -34,22 +62,30 @@ const QueuePanel = () => {
 
     if (!data) { setEntries([]); return; }
 
-    // Fetch driver names
     const driverIds = data.map((e) => e.driver_id);
     const { data: drivers } = await supabase
       .from("drivers")
-      .select("id, name")
+      .select("id, name, avatar_url, car_model, car_plate, car_color")
       .in("id", driverIds);
 
-    const driverMap = new Map((drivers ?? []).map((d) => [d.id, d.name]));
+    const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
     setEntries(
-      data.map((e) => ({ ...e, driver_name: driverMap.get(e.driver_id) ?? "Motorista" }))
+      data.map((e) => {
+        const d = driverMap.get(e.driver_id);
+        return {
+          ...e,
+          driver_name: d?.name ?? "Motorista",
+          driver_avatar: d?.avatar_url ?? undefined,
+          car_model: d?.car_model ?? undefined,
+          car_plate: d?.car_plate ?? undefined,
+          car_color: d?.car_color ?? undefined,
+        };
+      })
     );
   }, [unitId]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
 
-  // Realtime subscription
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
@@ -69,20 +105,57 @@ const QueuePanel = () => {
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const handleProgramar = async (entry: QueueEntry) => {
+  const openProgramModal = (entry: QueueEntry) => {
+    setSelectedEntry(entry);
+    setRoute("");
+    setLogin("");
+    setShowProgramModal(true);
+  };
+
+  const handleDefinir = async () => {
+    if (!selectedEntry || !unitId) return;
+
+    // Calculate sequence number (rides today for this unit + 1)
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const { count } = await supabase
+      .from("driver_rides")
+      .select("*", { count: "exact", head: true })
+      .eq("unit_id", unitId)
+      .gte("completed_at", today.toISOString());
+
+    const sequenceNumber = (count ?? 0) + 1;
+
     // Mark queue entry as completed
     await supabase
       .from("queue_entries")
       .update({ status: "completed", called_at: new Date().toISOString(), completed_at: new Date().toISOString() })
-      .eq("id", entry.id);
+      .eq("id", selectedEntry.id);
 
-    // Register the ride
+    // Insert ride with route, login, sequence
     await supabase.from("driver_rides").insert({
-      driver_id: entry.driver_id,
-      unit_id: entry.unit_id,
-      queue_entry_id: entry.id,
+      driver_id: selectedEntry.driver_id,
+      unit_id: selectedEntry.unit_id,
+      queue_entry_id: selectedEntry.id,
+      route,
+      login,
+      sequence_number: sequenceNumber,
+    } as any);
+
+    // Set confirmation data
+    setLastRideInfo({
+      driver_name: selectedEntry.driver_name ?? "Motorista",
+      driver_avatar: selectedEntry.driver_avatar,
+      car_model: selectedEntry.car_model,
+      car_plate: selectedEntry.car_plate,
+      car_color: selectedEntry.car_color,
+      route,
+      login,
+      sequence_number: sequenceNumber,
     });
 
+    setShowProgramModal(false);
+    setShowConfirmCard(true);
     fetchQueue();
   };
 
@@ -128,6 +201,7 @@ const QueuePanel = () => {
                   className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card"
                 >
                   <Avatar className="h-10 w-10 shrink-0">
+                    {entry.driver_avatar && <AvatarImage src={entry.driver_avatar} />}
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
                       {(entry.driver_name ?? "M")[0].toUpperCase()}
                     </AvatarFallback>
@@ -145,7 +219,7 @@ const QueuePanel = () => {
                     size="sm"
                     variant="default"
                     className="shrink-0 font-bold italic text-xs"
-                    onClick={() => handleProgramar(entry)}
+                    onClick={() => openProgramModal(entry)}
                   >
                     <CalendarCheck className="h-3.5 w-3.5 mr-1" />
                     Programar
@@ -156,6 +230,98 @@ const QueuePanel = () => {
           </div>
         </SheetContent>
       </Sheet>
+
+      {/* Modal de Programação */}
+      <Dialog open={showProgramModal} onOpenChange={setShowProgramModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic">Programar Carregamento</DialogTitle>
+            <DialogDescription>
+              {selectedEntry?.driver_name} — Preencha as informações abaixo
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="route" className="font-semibold">Rota</Label>
+              <Input
+                id="route"
+                placeholder="Informe a rota..."
+                value={route}
+                onChange={(e) => setRoute(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="login" className="font-semibold">Login</Label>
+              <Input
+                id="login"
+                placeholder="Informe o login..."
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+              />
+            </div>
+            <Button onClick={handleDefinir} className="w-full font-bold italic">
+              Definir
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Card de Confirmação */}
+      <Dialog open={showConfirmCard} onOpenChange={setShowConfirmCard}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic text-center">Carregamento Programado</DialogTitle>
+            <DialogDescription className="sr-only">Detalhes do carregamento</DialogDescription>
+          </DialogHeader>
+          {lastRideInfo && (
+            <div className="flex flex-col items-center gap-4 pt-2">
+              <Avatar className="h-20 w-20">
+                {lastRideInfo.driver_avatar && <AvatarImage src={lastRideInfo.driver_avatar} />}
+                <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
+                  {lastRideInfo.driver_name[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+
+              <h3 className="text-lg font-bold">{lastRideInfo.driver_name}</h3>
+
+              <div className="w-full space-y-2 text-sm">
+                {(lastRideInfo.car_model || lastRideInfo.car_color) && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Car className="h-4 w-4 shrink-0" />
+                    <span>{[lastRideInfo.car_model, lastRideInfo.car_color].filter(Boolean).join(" — ")}</span>
+                  </div>
+                )}
+                {lastRideInfo.car_plate && (
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <span className="font-mono font-bold text-foreground">{lastRideInfo.car_plate}</span>
+                  </div>
+                )}
+                {lastRideInfo.route && (
+                  <div className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                    <span><strong>Rota:</strong> {lastRideInfo.route}</span>
+                  </div>
+                )}
+                {lastRideInfo.login && (
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 shrink-0 text-primary" />
+                    <span><strong>Login:</strong> {lastRideInfo.login}</span>
+                  </div>
+                )}
+              </div>
+
+              <Badge variant="default" className="text-lg px-4 py-1 font-bold">
+                <Hash className="h-4 w-4 mr-1" />
+                {lastRideInfo.sequence_number}º Carregamento
+              </Badge>
+
+              <Button variant="outline" className="w-full mt-2" onClick={() => setShowConfirmCard(false)}>
+                Fechar
+              </Button>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

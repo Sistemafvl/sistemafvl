@@ -40,24 +40,33 @@ export type Database = {
           completed_at: string
           driver_id: string
           id: string
+          login: string | null
           notes: string | null
           queue_entry_id: string | null
+          route: string | null
+          sequence_number: number | null
           unit_id: string
         }
         Insert: {
           completed_at?: string
           driver_id: string
           id?: string
+          login?: string | null
           notes?: string | null
           queue_entry_id?: string | null
+          route?: string | null
+          sequence_number?: number | null
           unit_id: string
         }
         Update: {
           completed_at?: string
           driver_id?: string
           id?: string
+          login?: string | null
           notes?: string | null
           queue_entry_id?: string | null
+          route?: string | null
+          sequence_number?: number | null
           unit_id?: string
         }
         Relationships: [
