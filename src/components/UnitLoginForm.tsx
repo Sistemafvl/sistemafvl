@@ -89,7 +89,7 @@ const UnitLoginForm = () => {
   };
 
   return (
-    <form onSubmit={handleLogin} className="space-y-5 w-full max-w-sm animate-slide-up">
+    <form onSubmit={handleLogin} className="space-y-4 sm:space-y-5 w-full max-w-sm animate-slide-up">
       <div className="space-y-2">
         <Label className="font-semibold italic flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" />
@@ -130,6 +130,7 @@ const UnitLoginForm = () => {
           CPF
         </Label>
         <Input
+          className="h-11"
           type="text"
           value={cpf}
           onChange={(e) => {
@@ -151,6 +152,7 @@ const UnitLoginForm = () => {
           Senha
         </Label>
         <Input
+          className="h-11"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
@@ -159,7 +161,7 @@ const UnitLoginForm = () => {
         />
       </div>
 
-      <Button type="submit" className="w-full font-bold italic text-base" disabled={loading || !selectedUnit || !cpf || !password}>
+      <Button type="submit" className="w-full font-bold italic text-base h-12 mt-2" disabled={loading || !selectedUnit || !cpf || !password}>
         <LogIn className="mr-2 h-4 w-4" />
         {loading ? "Entrando..." : "ENTRAR"}
       </Button>

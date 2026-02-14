@@ -13,8 +13,8 @@ const Index = () => {
   if (unitSession) return <Navigate to="/dashboard" replace />;
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4">
-      <div className="w-full max-w-sm space-y-8">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
+      <div className="w-full max-w-sm space-y-6 sm:space-y-8">
         <LogoHeader onTripleClick={() => setShowAdminModal(true)} size="lg" />
 
         <div className="text-center">
