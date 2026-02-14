@@ -1,50 +1,50 @@
 
-# Separar Senhas do Gerenciador: Acesso vs Painel
 
-## Problema Atual
+# Cadastro de Conferentes - Pagina Completa
 
-O gerenciador tem apenas uma senha (`password`) na tabela `managers`. Porem, existem dois momentos de autenticacao distintos:
+## Resumo
 
-1. **Tela de login principal** (Anexo 1): CNPJ + senha para entrar no dashboard - atualmente usa a senha da unidade
-2. **Modal "Login Gerente"** (Anexo 2): CNPJ + senha pessoal para acessar funcoes de gerente - usa `managers.password`
-
-## Solucao
-
-Adicionar uma segunda coluna de senha na tabela `managers`, separando:
-- `password` (existente) - senha de **acesso** ao sistema (usada na tela de login, Anexo 1)
-- `manager_password` (nova) - senha **pessoal do gerente** (usada no modal "Login Gerente", Anexo 2)
+Transformar o "Cadastro de Conferente" de um modal simples para uma pagina completa com lista, cadastro e acoes de gerenciamento.
 
 ## Alteracoes
 
-### 1. Migracao de banco
+### 1. Nova rota e pagina
 
-Adicionar coluna `manager_password` (text) na tabela `managers`.
+- Criar `/dashboard/conferentes` com a pagina `src/pages/dashboard/ConferentesPage.tsx`
+- Adicionar rota no `App.tsx` dentro do layout do dashboard
+- Alterar o sidebar: "Cadastro de Conferente" passa a ser um link de navegacao (como "Motoristas Parceiros") em vez de abrir um modal
 
-### 2. Edge Function `authenticate-unit`
+### 2. Pagina ConferentesPage
 
-Quando o login for por CNPJ, ao inves de verificar `unit.password`, verificar `manager.password` (a senha de acesso do gerenciador).
+Layout semelhante ao `MotoristasParceirosPage`:
 
-### 3. Dashboard Sidebar - Modal "Login Gerente"
+- **Cabecalho**: Titulo "Conferentes" com icone e botao "+" para abrir modal de cadastro
+- **Tabela**: Colunas Nome, CPF, Status (Ativo/Inativo), Acoes
+- **Busca**: Campo de pesquisa por nome ou CPF
+- **Dados**: Carrega `user_profiles` filtrados pelo `unit_id` da sessao atual
 
-Alterar a query do `handleManagerLogin` para usar `manager_password` ao inves de `password`.
+### 3. Acoes por conferente
 
-### 4. Admin - Pagina de Gerenciadores (`ManagersPage.tsx`)
+- **Olho (Eye)**: Modal com dados completos do conferente (nome, CPF, unidade, data de cadastro)
+- **Ativar/Inativar (Switch)**: Toggle do campo `active` na tabela `user_profiles`
+- **Transferencia de unidade (ArrowRightLeft)**: Modal com select de unidades para transferir o conferente, atualizando o `unit_id`
 
-- **Formulario de adicao**: campo "Senha" permanece (senha de acesso), adicionar campo "Senha Gerente" (senha pessoal)
-- **Pencil (editar)**: edita nome, CNPJ e `password` (senha de acesso, Anexo 1)
-- **UserCog (credenciais)**: edita CNPJ e `manager_password` (senha pessoal do gerente, Anexo 2)
-- **Modal Visualizar**: mostrar ambas as senhas com labels claros
+### 4. Modal de cadastro (botao +)
 
-### 5. Resumo das senhas
+Reaproveita a logica do `ConferenteRegistrationModal` existente:
+- Campos: Nome completo e CPF
+- Ao salvar, adiciona na lista e fecha o modal
 
-| Contexto | Campo no banco | Onde e usada |
-|---|---|---|
-| Login principal (CNPJ) | `managers.password` | Tela de login (Anexo 1) |
-| Login Gerente (painel) | `managers.manager_password` | Modal no dashboard (Anexo 2) |
+### 5. Limpeza
+
+- Remover o import e uso do `ConferenteRegistrationModal` no `DashboardSidebar` (o modal de cadastro sera usado internamente na nova pagina)
+- O arquivo `ConferenteRegistrationModal.tsx` pode ser mantido e reutilizado dentro da pagina, ou o modal pode ser inline na pagina
 
 ## Detalhes tecnicos
 
-- A coluna `manager_password` sera nullable inicialmente para nao quebrar registros existentes
-- Gerenciadores existentes precisarao ter a `manager_password` definida pelo admin
-- O modal "Login Gerente" so validara se `manager_password` estiver preenchida
-- A edge function passara a validar `manager.password` ao inves de `unit.password` para login CNPJ
+- A tabela `user_profiles` ja possui os campos necessarios: `name`, `cpf`, `unit_id`, `active`
+- Para a transferencia de unidade, sera feito um `UPDATE` no `unit_id` do conferente
+- Para carregar as unidades no modal de transferencia, buscar todas as unidades ativas da tabela `units`
+- A busca de conferentes filtra por `unit_id` igual ao `unitSession.id` do auth store
+- Nenhuma alteracao de banco de dados e necessaria
+
