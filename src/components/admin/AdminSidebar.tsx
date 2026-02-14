@@ -1,4 +1,4 @@
-import { Building2, Users, LogOut } from "lucide-react";
+import { Building2, Users, Truck, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 const menuItems = [
   { title: "Domínios e Unidades", url: "/admin/domains", icon: Building2 },
   { title: "Gerenciadores", url: "/admin/managers", icon: Users },
+  { title: "Gerenciamento de Motoristas", url: "/admin/drivers", icon: Truck },
 ];
 
 const AdminSidebar = () => {
