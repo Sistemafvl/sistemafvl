@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
@@ -14,6 +15,15 @@ interface QueueEntry {
   joined_at: string;
   called_at: string | null;
   completed_at: string | null;
+}
+
+interface ActiveRide {
+  id: string;
+  route: string | null;
+  login: string | null;
+  password: string | null;
+  sequence_number: number | null;
+  loading_status: string | null;
 }
 
 const formatElapsed = (totalSeconds: number) => {
@@ -33,6 +43,7 @@ const DriverQueue = () => {
   const [position, setPosition] = useState(0);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
+  const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -40,6 +51,25 @@ const DriverQueue = () => {
   const unitName = unitSession?.name ?? "—";
 
   const inQueue = !!myEntry;
+
+  // Fetch active ride (pending or loading)
+  const fetchActiveRide = useCallback(async () => {
+    if (!driverId) return;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const { data } = await supabase
+      .from("driver_rides")
+      .select("id, route, login, password, sequence_number, loading_status")
+      .eq("driver_id", driverId)
+      .in("loading_status", ["pending", "loading"])
+      .gte("completed_at", today.toISOString())
+      .order("completed_at", { ascending: false })
+      .limit(1);
+
+    setActiveRide(data && data.length > 0 ? data[0] as ActiveRide : null);
+  }, [driverId]);
 
   // Fetch queue state
   const fetchQueue = useCallback(async () => {
@@ -63,7 +93,6 @@ const DriverQueue = () => {
       setPosition(pos);
     }
 
-    // Avg wait from completed entries (last 24h)
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data: completed } = await supabase
       .from("queue_entries")
@@ -78,39 +107,54 @@ const DriverQueue = () => {
       }, 0);
       setAvgWaitMinutes(Math.round(totalMs / completed.length / 60000));
     } else {
-      setAvgWaitMinutes(5); // default fallback
+      setAvgWaitMinutes(5);
     }
   }, [unitId, driverId]);
 
   // Initial fetch
   useEffect(() => {
     fetchQueue();
-  }, [fetchQueue]);
+    fetchActiveRide();
+  }, [fetchQueue, fetchActiveRide]);
 
-  // Realtime subscription
+  // Realtime for queue_entries
   useEffect(() => {
     if (!unitId) return;
 
     const channel = supabase
       .channel(`queue-${unitId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "queue_entries",
-          filter: `unit_id=eq.${unitId}`,
-        },
-        () => {
-          fetchQueue();
-        }
-      )
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "queue_entries",
+        filter: `unit_id=eq.${unitId}`,
+      }, () => {
+        fetchQueue();
+        fetchActiveRide();
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [unitId, fetchQueue]);
+    return () => { supabase.removeChannel(channel); };
+  }, [unitId, fetchQueue, fetchActiveRide]);
+
+  // Realtime for driver_rides (to detect when ride is created or finished)
+  useEffect(() => {
+    if (!driverId) return;
+
+    const channel = supabase
+      .channel(`driver-rides-${driverId}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "driver_rides",
+        filter: `driver_id=eq.${driverId}`,
+      }, () => {
+        fetchActiveRide();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [driverId, fetchActiveRide]);
 
   // Elapsed timer
   useEffect(() => {
@@ -164,6 +208,91 @@ const DriverQueue = () => {
   };
 
   const estimatedMinutes = position * avgWaitMinutes;
+
+  const statusLabel = activeRide?.loading_status === "loading" ? "Carregando" : "Aguardando Carregamento";
+
+  // If driver has an active ride, show "Em Carregamento" state
+  if (activeRide) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center gap-3">
+          <Truck className="h-7 w-7 text-primary" />
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">Em Carregamento</h1>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Domínio</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-semibold">{domainName}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">Unidade</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-lg font-semibold">{unitName}</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card className="border-primary">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-primary flex items-center gap-2">
+                <Truck className="h-5 w-5" />
+                Carregamento Ativo
+              </CardTitle>
+              <Badge variant={activeRide.loading_status === "loading" ? "default" : "secondary"}>
+                {statusLabel}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {activeRide.sequence_number && (
+              <div className="flex items-center gap-3">
+                <Hash className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Sequência</p>
+                  <p className="text-2xl font-bold">{activeRide.sequence_number}º</p>
+                </div>
+              </div>
+            )}
+            {activeRide.route && (
+              <div className="flex items-center gap-3">
+                <MapPin className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Rota</p>
+                  <p className="text-lg font-semibold">{activeRide.route}</p>
+                </div>
+              </div>
+            )}
+            {activeRide.login && (
+              <div className="flex items-center gap-3">
+                <LogIn className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Login</p>
+                  <p className="text-lg font-semibold">{activeRide.login}</p>
+                </div>
+              </div>
+            )}
+            {activeRide.password && (
+              <div className="flex items-center gap-3">
+                <KeyRound className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm text-muted-foreground">Senha</p>
+                  <p className="text-lg font-semibold">{activeRide.password}</p>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
