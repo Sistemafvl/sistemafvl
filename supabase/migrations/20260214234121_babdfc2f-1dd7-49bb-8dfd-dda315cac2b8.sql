@@ -1,0 +1,3 @@
+ALTER TABLE public.driver_rides
+  ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;

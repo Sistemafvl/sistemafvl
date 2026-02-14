@@ -40,6 +40,7 @@ export type Database = {
           completed_at: string
           conferente_id: string | null
           driver_id: string
+          finished_at: string | null
           id: string
           loading_status: string | null
           login: string | null
@@ -48,12 +49,14 @@ export type Database = {
           queue_entry_id: string | null
           route: string | null
           sequence_number: number | null
+          started_at: string | null
           unit_id: string
         }
         Insert: {
           completed_at?: string
           conferente_id?: string | null
           driver_id: string
+          finished_at?: string | null
           id?: string
           loading_status?: string | null
           login?: string | null
@@ -62,12 +65,14 @@ export type Database = {
           queue_entry_id?: string | null
           route?: string | null
           sequence_number?: number | null
+          started_at?: string | null
           unit_id: string
         }
         Update: {
           completed_at?: string
           conferente_id?: string | null
           driver_id?: string
+          finished_at?: string | null
           id?: string
           loading_status?: string | null
           login?: string | null
@@ -76,6 +81,7 @@ export type Database = {
           queue_entry_id?: string | null
           route?: string | null
           sequence_number?: number | null
+          started_at?: string | null
           unit_id?: string
         }
         Relationships: [
