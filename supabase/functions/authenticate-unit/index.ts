@@ -44,18 +44,25 @@ Deno.serve(async (req) => {
     const isCnpj = rawDocument.length > 11;
 
     if (isCnpj) {
-      // CNPJ -> manager access — requires unit password
-      if (unit.password !== password) {
-        return new Response(JSON.stringify({ error: "Invalid password" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-
+      // CNPJ -> manager access — validate manager's own access password
       const { data: manager, error: mErr } = await supabase
         .from("managers")
-        .select("id, name, cnpj")
+        .select("id, name, cnpj, password")
         .eq("unit_id", unit_id)
         .eq("active", true)
         .eq("cnpj", rawDocument)
         .single();
+
+      if (mErr || !manager) {
+        return new Response(
+          JSON.stringify({ error: "CNPJ não encontrado nesta unidade" }),
+          { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      if (manager.password !== password) {
+        return new Response(JSON.stringify({ error: "Senha inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
 
       if (mErr || !manager) {
         return new Response(
