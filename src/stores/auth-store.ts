@@ -6,6 +6,9 @@ interface UnitSession {
   name: string;
   domain_id: string;
   domain_name: string;
+  user_profile_id: string;
+  user_name: string;
+  user_cpf: string;
 }
 
 interface AuthState {

@@ -70,6 +70,44 @@ export type Database = {
           },
         ]
       }
+      user_profiles: {
+        Row: {
+          active: boolean
+          cpf: string
+          created_at: string
+          id: string
+          name: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          cpf: string
+          created_at?: string
+          id?: string
+          name: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          cpf?: string
+          created_at?: string
+          id?: string
+          name?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_profiles_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
