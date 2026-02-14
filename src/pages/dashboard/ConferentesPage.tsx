@@ -6,7 +6,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { ClipboardCheck, Eye, Search, Plus, ArrowRightLeft, Loader2 } from "lucide-react";
+import { ClipboardCheck, Eye, Search, Plus, ArrowRightLeft, Loader2, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -68,6 +78,8 @@ const ConferentesPage = () => {
   const [viewConferente, setViewConferente] = useState<Conferente | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [transferConferente, setTransferConferente] = useState<Conferente | null>(null);
+  const [deleteConferente, setDeleteConferente] = useState<Conferente | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Register form
   const [regName, setRegName] = useState("");
@@ -143,6 +155,25 @@ const ConferentesPage = () => {
     setConferentes((prev) =>
       prev.map((x) => (x.id === c.id ? { ...x, active: !x.active } : x))
     );
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConferente) return;
+    setDeleteLoading(true);
+    const { error } = await supabase
+      .from("user_profiles")
+      .delete()
+      .eq("id", deleteConferente.id);
+    setDeleteLoading(false);
+
+    if (error) {
+      toast({ title: "Erro ao excluir conferente", variant: "destructive" });
+      return;
+    }
+
+    toast({ title: "Conferente excluído com sucesso!" });
+    setConferentes((prev) => prev.filter((x) => x.id !== deleteConferente.id));
+    setDeleteConferente(null);
   };
 
   const openTransfer = async (c: Conferente) => {
@@ -241,6 +272,9 @@ const ConferentesPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteConferente(c)} title="Excluir">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewConferente(c)} title="Visualizar">
                             <Eye className="h-4 w-4" />
                           </Button>
@@ -358,6 +392,29 @@ const ConferentesPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation */}
+      <AlertDialog open={!!deleteConferente} onOpenChange={(open) => !open && setDeleteConferente(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conferente?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir <strong>{deleteConferente?.name}</strong>? Esta ação é permanente e não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteLoading}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleteLoading}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
