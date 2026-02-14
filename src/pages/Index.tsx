@@ -9,7 +9,7 @@ const Index = () => {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const { isMasterAdmin, unitSession } = useAuthStore();
 
-  if (isMasterAdmin) return <Navigate to="/admin" replace />;
+  if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
 
   return (

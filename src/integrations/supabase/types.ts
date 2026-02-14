@@ -35,6 +35,44 @@ export type Database = {
         }
         Relationships: []
       }
+      managers: {
+        Row: {
+          active: boolean
+          cnpj: string
+          created_at: string
+          id: string
+          name: string
+          password: string
+          unit_id: string
+        }
+        Insert: {
+          active?: boolean
+          cnpj: string
+          created_at?: string
+          id?: string
+          name: string
+          password: string
+          unit_id: string
+        }
+        Update: {
+          active?: boolean
+          cnpj?: string
+          created_at?: string
+          id?: string
+          name?: string
+          password?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "managers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       units: {
         Row: {
           active: boolean

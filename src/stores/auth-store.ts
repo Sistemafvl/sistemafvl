@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+type SessionType = "user" | "manager";
+
 interface UnitSession {
   id: string;
   name: string;
@@ -9,6 +11,7 @@ interface UnitSession {
   user_profile_id: string;
   user_name: string;
   user_cpf: string;
+  sessionType: SessionType;
 }
 
 interface AuthState {
