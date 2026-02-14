@@ -1,0 +1,4 @@
+ALTER TABLE public.driver_rides
+  ADD COLUMN IF NOT EXISTS route TEXT,
+  ADD COLUMN IF NOT EXISTS login TEXT,
+  ADD COLUMN IF NOT EXISTS sequence_number INTEGER;
