@@ -42,6 +42,7 @@ export type Database = {
           id: string
           login: string | null
           notes: string | null
+          password: string | null
           queue_entry_id: string | null
           route: string | null
           sequence_number: number | null
@@ -53,6 +54,7 @@ export type Database = {
           id?: string
           login?: string | null
           notes?: string | null
+          password?: string | null
           queue_entry_id?: string | null
           route?: string | null
           sequence_number?: number | null
@@ -64,6 +66,7 @@ export type Database = {
           id?: string
           login?: string | null
           notes?: string | null
+          password?: string | null
           queue_entry_id?: string | null
           route?: string | null
           sequence_number?: number | null

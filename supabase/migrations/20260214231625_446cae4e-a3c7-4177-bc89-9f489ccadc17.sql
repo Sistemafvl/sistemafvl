@@ -1,0 +1,1 @@
+ALTER TABLE public.driver_rides ADD COLUMN IF NOT EXISTS password TEXT;

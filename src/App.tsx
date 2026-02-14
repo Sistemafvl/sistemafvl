@@ -8,6 +8,7 @@ import DashboardLayout from "./components/dashboard/DashboardLayout";
 import DashboardHome from "./pages/dashboard/DashboardHome";
 import MotoristasParceirosPage from "./pages/dashboard/MotoristasParceirosPage";
 import ConferentesPage from "./pages/dashboard/ConferentesPage";
+import ConferenciaCarregamentoPage from "./pages/dashboard/ConferenciaCarregamentoPage";
 import DriverLayout from "./components/dashboard/DriverLayout";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverQueue from "./pages/driver/DriverQueue";
@@ -35,6 +36,7 @@ const App = () => (
             <Route index element={<DashboardHome />} />
             <Route path="motoristas-parceiros" element={<MotoristasParceirosPage />} />
             <Route path="conferentes" element={<ConferentesPage />} />
+            <Route path="conferencia" element={<ConferenciaCarregamentoPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
