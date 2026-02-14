@@ -65,7 +65,7 @@ const DashboardSidebar = () => {
       .select("id, name, cnpj")
       .eq("unit_id", unitSession.id)
       .eq("cnpj", cleanCnpj)
-      .eq("password", password)
+      .eq("manager_password", password)
       .eq("active", true)
       .maybeSingle();
     setLoading(false);

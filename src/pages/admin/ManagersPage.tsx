@@ -19,7 +19,7 @@ import {
 
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; }
-interface Manager { id: string; name: string; cnpj: string; password: string; active: boolean; unit_id: string; created_at: string; }
+interface Manager { id: string; name: string; cnpj: string; password: string; manager_password: string | null; active: boolean; unit_id: string; created_at: string; }
 
 const formatCnpj = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -36,7 +36,7 @@ const ManagersPage = () => {
   const [managers, setManagers] = useState<Manager[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
-  const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "" });
+  const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
   const { toast } = useToast();
 
   // Modal states
@@ -44,7 +44,7 @@ const ManagersPage = () => {
   const [editManager, setEditManager] = useState<Manager | null>(null);
   const [editForm, setEditForm] = useState({ name: "", cnpj: "", password: "" });
   const [credManager, setCredManager] = useState<Manager | null>(null);
-  const [credForm, setCredForm] = useState({ cnpj: "", password: "" });
+  const [credForm, setCredForm] = useState({ cnpj: "", manager_password: "" });
 
   useEffect(() => {
     supabase.from("domains").select("id, name").eq("active", true).order("name").then(({ data }) => {
@@ -78,12 +78,13 @@ const ManagersPage = () => {
       name: newManager.name.trim().toUpperCase(),
       cnpj: cleanCnpj,
       password: newManager.password,
+      manager_password: newManager.manager_password || null,
       unit_id: selectedUnit,
-    });
+    } as any);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
-      setNewManager({ name: "", cnpj: "", password: "" });
+      setNewManager({ name: "", cnpj: "", password: "", manager_password: "" });
       refreshManagers();
       toast({ title: "Gerenciador criado" });
     }
@@ -125,17 +126,17 @@ const ManagersPage = () => {
 
   const openCred = (m: Manager) => {
     setCredManager(m);
-    setCredForm({ cnpj: formatCnpj(m.cnpj), password: m.password });
+    setCredForm({ cnpj: formatCnpj(m.cnpj), manager_password: (m as any).manager_password || "" });
   };
 
   const saveCred = async () => {
     if (!credManager) return;
     const cleanCnpj = credForm.cnpj.replace(/\D/g, "");
-    if (cleanCnpj.length !== 14 || !credForm.password) return;
+    if (cleanCnpj.length !== 14 || !credForm.manager_password) return;
     const { error } = await supabase.from("managers").update({
       cnpj: cleanCnpj,
-      password: credForm.password,
-    }).eq("id", credManager.id);
+      manager_password: credForm.manager_password,
+    } as any).eq("id", credManager.id);
     if (error) {
       toast({ title: "Erro", description: error.message, variant: "destructive" });
     } else {
@@ -201,7 +202,14 @@ const ManagersPage = () => {
                   <Input
                     value={newManager.password}
                     onChange={(e) => setNewManager((p) => ({ ...p, password: e.target.value }))}
-                    placeholder="Senha"
+                    placeholder="Senha Acesso"
+                    type="password"
+                    className="h-11"
+                  />
+                  <Input
+                    value={newManager.manager_password}
+                    onChange={(e) => setNewManager((p) => ({ ...p, manager_password: e.target.value }))}
+                    placeholder="Senha Gerente"
                     type="password"
                     className="h-11"
                   />
@@ -262,7 +270,8 @@ const ManagersPage = () => {
             <div className="space-y-3 text-sm">
               <div><span className="font-semibold text-muted-foreground">Nome:</span> <span className="font-bold">{viewManager.name}</span></div>
               <div><span className="font-semibold text-muted-foreground">CNPJ:</span> {formatCnpj(viewManager.cnpj)}</div>
-              <div><span className="font-semibold text-muted-foreground">Senha:</span> {viewManager.password}</div>
+              <div><span className="font-semibold text-muted-foreground">Senha de Acesso:</span> {viewManager.password}</div>
+              <div><span className="font-semibold text-muted-foreground">Senha Gerente:</span> {(viewManager as any).manager_password || <span className="italic text-muted-foreground">Não definida</span>}</div>
               <div><span className="font-semibold text-muted-foreground">Status:</span> {viewManager.active ? "Ativo" : "Inativo"}</div>
               <div><span className="font-semibold text-muted-foreground">Criado em:</span> {new Date(viewManager.created_at).toLocaleString("pt-BR")}</div>
               <div><span className="font-semibold text-muted-foreground">ID Unidade:</span> <span className="text-xs">{viewManager.unit_id}</span></div>
@@ -290,7 +299,7 @@ const ManagersPage = () => {
               <Input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }))} className="h-11" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Senha</Label>
+              <Label className="text-xs font-semibold">Senha de Acesso</Label>
               <Input value={editForm.password} onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))} className="h-11" />
             </div>
           </div>
@@ -307,7 +316,7 @@ const ManagersPage = () => {
             <DialogTitle className="flex items-center gap-2 font-bold italic">
               <UserCog className="h-5 w-5 text-primary" /> Credenciais do Gerente
             </DialogTitle>
-            <DialogDescription>Login e senha que o gerente usará para acessar o painel.</DialogDescription>
+            <DialogDescription>CNPJ e senha pessoal do gerente (usada no painel).</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -315,8 +324,8 @@ const ManagersPage = () => {
               <Input value={credForm.cnpj} onChange={(e) => setCredForm((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }))} className="h-11" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Senha</Label>
-              <Input value={credForm.password} onChange={(e) => setCredForm((p) => ({ ...p, password: e.target.value }))} className="h-11" />
+              <Label className="text-xs font-semibold">Senha Gerente</Label>
+              <Input value={credForm.manager_password} onChange={(e) => setCredForm((p) => ({ ...p, manager_password: e.target.value }))} className="h-11" />
             </div>
           </div>
           <DialogFooter>

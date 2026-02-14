@@ -98,6 +98,7 @@ export type Database = {
           cnpj: string
           created_at: string
           id: string
+          manager_password: string | null
           name: string
           password: string
           unit_id: string
@@ -107,6 +108,7 @@ export type Database = {
           cnpj: string
           created_at?: string
           id?: string
+          manager_password?: string | null
           name: string
           password: string
           unit_id: string
@@ -116,6 +118,7 @@ export type Database = {
           cnpj?: string
           created_at?: string
           id?: string
+          manager_password?: string | null
           name?: string
           password?: string
           unit_id?: string
