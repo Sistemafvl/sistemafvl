@@ -15,6 +15,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,7 @@ const managerModalItems = [
 
 const DashboardSidebar = () => {
   const { logout, unitSession, managerSession, setManagerSession } = useAuthStore();
+  const { setOpenMobile } = useSidebar();
   const { toast } = useToast();
   const [loginOpen, setLoginOpen] = useState(false);
   const [cnpj, setCnpj] = useState("");
@@ -134,6 +136,7 @@ const DashboardSidebar = () => {
                         end
                         className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
                         activeClassName="bg-primary/10 text-primary"
+                        onClick={() => setOpenMobile(false)}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
                         <span>{item.title}</span>
@@ -160,6 +163,7 @@ const DashboardSidebar = () => {
                           end
                           className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
                           activeClassName="bg-primary/10 text-primary"
+                          onClick={() => setOpenMobile(false)}
                         >
                           <item.icon className="h-4 w-4 shrink-0" />
                           <span>{item.title}</span>

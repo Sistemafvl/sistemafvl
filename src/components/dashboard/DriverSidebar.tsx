@@ -14,6 +14,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,6 +31,7 @@ const driverMenuItems = [
 
 const DriverSidebar = () => {
   const { logout, unitSession } = useAuthStore();
+  const { setOpenMobile } = useSidebar();
   const driverName = unitSession?.user_name ?? "Motorista";
   const driverId = unitSession?.user_profile_id;
   const [avatarUrl, setAvatarUrl] = useState("");
@@ -82,6 +84,7 @@ const DriverSidebar = () => {
                       end={item.url === "/motorista"}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
                       activeClassName="bg-primary/10 text-primary"
+                      onClick={() => setOpenMobile(false)}
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span>{item.title}</span>
