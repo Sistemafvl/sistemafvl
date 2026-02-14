@@ -1,36 +1,50 @@
 
+# Separar Senhas do Gerenciador: Acesso vs Painel
 
-# Melhorias no Cadastro de Motorista
+## Problema Atual
 
-## Alteracoes no arquivo `src/components/DriverRegistrationModal.tsx`
+O gerenciador tem apenas uma senha (`password`) na tabela `managers`. Porem, existem dois momentos de autenticacao distintos:
 
-### 1. Mascara para Placa do Carro (formato AAA-0AAA)
+1. **Tela de login principal** (Anexo 1): CNPJ + senha para entrar no dashboard - atualmente usa a senha da unidade
+2. **Modal "Login Gerente"** (Anexo 2): CNPJ + senha pessoal para acessar funcoes de gerente - usa `managers.password`
 
-Criar uma funcao `maskPlate` que formata automaticamente a placa no padrao Mercosul:
-- Aceita letras nas posicoes 1-3, digito na posicao 4, letra na posicao 5, e alfanumerico nas posicoes 6-7
-- Insere o hifen automaticamente apos o terceiro caractere
-- Converte tudo para maiusculo
-- Exemplo: digitando "fag6e14" resulta em "FAG-6E14"
+## Solucao
 
-### 2. Novo campo "Cor do carro"
+Adicionar uma segunda coluna de senha na tabela `managers`, separando:
+- `password` (existente) - senha de **acesso** ao sistema (usada na tela de login, Anexo 1)
+- `manager_password` (nova) - senha **pessoal do gerente** (usada no modal "Login Gerente", Anexo 2)
 
-Adicionar campo `car_color` ao formulario, posicionado junto aos campos de veiculo (Placa e Modelo), formando uma grade de 3 campos.
+## Alteracoes
 
-### 3. Auto-correcao de primeira letra maiuscula (capitalize)
+### 1. Migracao de banco
 
-Criar funcao `capitalize` que converte a primeira letra de cada palavra para maiuscula. Aplicar nos campos:
-- Modelo do carro (ex: "cobalt" vira "Cobalt")
-- Cor do carro (ex: "prata" vira "Prata")
-- Nome completo (ex: "joao silva" vira "Joao Silva")
-- Endereco, Bairro, Cidade
+Adicionar coluna `manager_password` (text) na tabela `managers`.
 
-### 4. Migracao de banco
+### 2. Edge Function `authenticate-unit`
 
-Adicionar coluna `car_color` (text, nullable) na tabela `drivers`.
+Quando o login for por CNPJ, ao inves de verificar `unit.password`, verificar `manager.password` (a senha de acesso do gerenciador).
 
-### Detalhes tecnicos
+### 3. Dashboard Sidebar - Modal "Login Gerente"
 
-- A funcao `maskPlate` usa regex para aceitar apenas caracteres validos em cada posicao e forca maiusculas
-- A funcao `capitalize` e aplicada no `onChange` de cada campo relevante, usando `word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()`
-- O campo `car_color` nao sera obrigatorio
+Alterar a query do `handleManagerLogin` para usar `manager_password` ao inves de `password`.
 
+### 4. Admin - Pagina de Gerenciadores (`ManagersPage.tsx`)
+
+- **Formulario de adicao**: campo "Senha" permanece (senha de acesso), adicionar campo "Senha Gerente" (senha pessoal)
+- **Pencil (editar)**: edita nome, CNPJ e `password` (senha de acesso, Anexo 1)
+- **UserCog (credenciais)**: edita CNPJ e `manager_password` (senha pessoal do gerente, Anexo 2)
+- **Modal Visualizar**: mostrar ambas as senhas com labels claros
+
+### 5. Resumo das senhas
+
+| Contexto | Campo no banco | Onde e usada |
+|---|---|---|
+| Login principal (CNPJ) | `managers.password` | Tela de login (Anexo 1) |
+| Login Gerente (painel) | `managers.manager_password` | Modal no dashboard (Anexo 2) |
+
+## Detalhes tecnicos
+
+- A coluna `manager_password` sera nullable inicialmente para nao quebrar registros existentes
+- Gerenciadores existentes precisarao ter a `manager_password` definida pelo admin
+- O modal "Login Gerente" so validara se `manager_password` estiver preenchida
+- A edge function passara a validar `manager.password` ao inves de `unit.password` para login CNPJ
