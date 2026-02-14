@@ -88,6 +88,8 @@ export type Database = {
         Row: {
           active: boolean
           address: string | null
+          avatar_url: string | null
+          bio: string | null
           car_color: string | null
           car_model: string
           car_plate: string
@@ -106,6 +108,8 @@ export type Database = {
         Insert: {
           active?: boolean
           address?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           car_color?: string | null
           car_model: string
           car_plate: string
@@ -124,6 +128,8 @@ export type Database = {
         Update: {
           active?: boolean
           address?: string | null
+          avatar_url?: string | null
+          bio?: string | null
           car_color?: string | null
           car_model?: string
           car_plate?: string
