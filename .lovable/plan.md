@@ -1,50 +1,52 @@
 
 
-# Cadastro de Conferentes - Pagina Completa
+# Visao Geral - Menu e Layout do Dashboard
 
 ## Resumo
 
-Transformar o "Cadastro de Conferente" de um modal simples para uma pagina completa com lista, cadastro e acoes de gerenciamento.
+Duas alteracoes: (1) adicionar item "Visao Geral" no menu do sidebar como primeira opcao, apontando para `/dashboard`; (2) reorganizar o layout da pagina inicial para colocar data/hora ao lado do "Bem-vindo" na mesma linha, liberando espaco para futuros cards de indicadores.
 
 ## Alteracoes
 
-### 1. Nova rota e pagina
+### 1. Sidebar - Novo item "Visao Geral"
 
-- Criar `/dashboard/conferentes` com a pagina `src/pages/dashboard/ConferentesPage.tsx`
-- Adicionar rota no `App.tsx` dentro do layout do dashboard
-- Alterar o sidebar: "Cadastro de Conferente" passa a ser um link de navegacao (como "Motoristas Parceiros") em vez de abrir um modal
+No arquivo `src/components/dashboard/DashboardSidebar.tsx`, adicionar "Visao Geral" como primeiro item do `menuItems`, com icone `LayoutDashboard` e url `/dashboard`.
 
-### 2. Pagina ConferentesPage
+```text
+menuItems:
+  - Visao Geral        -> /dashboard          (LayoutDashboard)
+  - Conferencia Carregamento -> /dashboard/conferencia (Truck)
+```
 
-Layout semelhante ao `MotoristasParceirosPage`:
+### 2. DashboardHome - Reorganizar layout
 
-- **Cabecalho**: Titulo "Conferentes" com icone e botao "+" para abrir modal de cadastro
-- **Tabela**: Colunas Nome, CPF, Status (Ativo/Inativo), Acoes
-- **Busca**: Campo de pesquisa por nome ou CPF
-- **Dados**: Carrega `user_profiles` filtrados pelo `unit_id` da sessao atual
+No arquivo `src/pages/dashboard/DashboardHome.tsx`:
 
-### 3. Acoes por conferente
+- Colocar o bloco "Bem-vindo" e o card de data/hora lado a lado usando `flex` ou `grid`
+- O "Bem-vindo" fica a esquerda, o card de data/hora fica a direita, na mesma linha
+- Abaixo, manter espaco livre para futuros cards de indicadores e insights
 
-- **Olho (Eye)**: Modal com dados completos do conferente (nome, CPF, unidade, data de cadastro)
-- **Ativar/Inativar (Switch)**: Toggle do campo `active` na tabela `user_profiles`
-- **Transferencia de unidade (ArrowRightLeft)**: Modal com select de unidades para transferir o conferente, atualizando o `unit_id`
+Layout proposto:
 
-### 4. Modal de cadastro (botao +)
+```text
++----------------------------------+-----------------------------+
+| Bem-vindo                        |  [relogio] sabado, 14 de    |
+| ABC-AMZL -- UNIDADE 1            |  fevereiro de 2026  18:05   |
++----------------------------------+-----------------------------+
+|                                                                |
+|  (espaco para futuros cards de indicadores)                    |
+|                                                                |
++----------------------------------------------------------------+
+```
 
-Reaproveita a logica do `ConferenteRegistrationModal` existente:
-- Campos: Nome completo e CPF
-- Ao salvar, adiciona na lista e fecha o modal
+## Arquivos afetados
 
-### 5. Limpeza
-
-- Remover o import e uso do `ConferenteRegistrationModal` no `DashboardSidebar` (o modal de cadastro sera usado internamente na nova pagina)
-- O arquivo `ConferenteRegistrationModal.tsx` pode ser mantido e reutilizado dentro da pagina, ou o modal pode ser inline na pagina
+- `src/components/dashboard/DashboardSidebar.tsx` - adicionar item no menu
+- `src/pages/dashboard/DashboardHome.tsx` - reorganizar layout
 
 ## Detalhes tecnicos
 
-- A tabela `user_profiles` ja possui os campos necessarios: `name`, `cpf`, `unit_id`, `active`
-- Para a transferencia de unidade, sera feito um `UPDATE` no `unit_id` do conferente
-- Para carregar as unidades no modal de transferencia, buscar todas as unidades ativas da tabela `units`
-- A busca de conferentes filtra por `unit_id` igual ao `unitSession.id` do auth store
-- Nenhuma alteracao de banco de dados e necessaria
+- Importar `LayoutDashboard` do lucide-react no sidebar
+- No DashboardHome, usar `flex justify-between items-start` para alinhar bem-vindo e relogio na mesma linha
+- Nenhuma alteracao de banco de dados necessaria
 
