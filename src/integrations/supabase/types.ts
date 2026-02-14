@@ -38,8 +38,10 @@ export type Database = {
       driver_rides: {
         Row: {
           completed_at: string
+          conferente_id: string | null
           driver_id: string
           id: string
+          loading_status: string | null
           login: string | null
           notes: string | null
           password: string | null
@@ -50,8 +52,10 @@ export type Database = {
         }
         Insert: {
           completed_at?: string
+          conferente_id?: string | null
           driver_id: string
           id?: string
+          loading_status?: string | null
           login?: string | null
           notes?: string | null
           password?: string | null
@@ -62,8 +66,10 @@ export type Database = {
         }
         Update: {
           completed_at?: string
+          conferente_id?: string | null
           driver_id?: string
           id?: string
+          loading_status?: string | null
           login?: string | null
           notes?: string | null
           password?: string | null
@@ -73,6 +79,13 @@ export type Database = {
           unit_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "driver_rides_conferente_id_fkey"
+            columns: ["conferente_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "driver_rides_driver_id_fkey"
             columns: ["driver_id"]
@@ -241,6 +254,35 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ride_tbrs: {
+        Row: {
+          code: string
+          id: string
+          ride_id: string
+          scanned_at: string | null
+        }
+        Insert: {
+          code: string
+          id?: string
+          ride_id: string
+          scanned_at?: string | null
+        }
+        Update: {
+          code?: string
+          id?: string
+          ride_id?: string
+          scanned_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_tbrs_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "driver_rides"
             referencedColumns: ["id"]
           },
         ]

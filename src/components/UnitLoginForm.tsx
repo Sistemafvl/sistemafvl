@@ -28,6 +28,8 @@ const UnitLoginForm = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [domainOpen, setDomainOpen] = useState(false);
+  const [unitOpen, setUnitOpen] = useState(false);
   const setUnitSession = useAuthStore((s) => s.setUnitSession);
   const { toast } = useToast();
 
@@ -78,7 +80,7 @@ const UnitLoginForm = () => {
         <Label className="font-semibold italic flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" /> Domínio
         </Label>
-        <Popover>
+        <Popover open={domainOpen} onOpenChange={setDomainOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" role="combobox" className="w-full h-11 justify-between font-normal">
               {selectedDomain ? domains.find((d) => d.id === selectedDomain)?.name : "Selecione o domínio"}
@@ -92,7 +94,7 @@ const UnitLoginForm = () => {
                 <CommandEmpty>Nenhum domínio encontrado.</CommandEmpty>
                 <CommandGroup>
                   {domains.map((d) => (
-                    <CommandItem key={d.id} value={d.name} onSelect={() => { setSelectedDomain(d.id); setSelectedUnit(""); }}>
+                    <CommandItem key={d.id} value={d.name} onSelect={() => { setSelectedDomain(d.id); setSelectedUnit(""); setDomainOpen(false); }}>
                       <Check className={cn("mr-2 h-4 w-4", selectedDomain === d.id ? "opacity-100" : "opacity-0")} />
                       {d.name}
                     </CommandItem>
@@ -108,7 +110,7 @@ const UnitLoginForm = () => {
         <Label className="font-semibold italic flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" /> Unidade
         </Label>
-        <Popover>
+        <Popover open={unitOpen} onOpenChange={setUnitOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline" role="combobox" className="w-full h-11 justify-between font-normal" disabled={!selectedDomain}>
               {selectedUnit ? units.find((u) => u.id === selectedUnit)?.name : "Selecione a unidade"}
@@ -122,7 +124,7 @@ const UnitLoginForm = () => {
                 <CommandEmpty>Nenhuma unidade encontrada.</CommandEmpty>
                 <CommandGroup>
                   {units.map((u) => (
-                    <CommandItem key={u.id} value={u.name} onSelect={() => setSelectedUnit(u.id)}>
+                    <CommandItem key={u.id} value={u.name} onSelect={() => { setSelectedUnit(u.id); setUnitOpen(false); }}>
                       <Check className={cn("mr-2 h-4 w-4", selectedUnit === u.id ? "opacity-100" : "opacity-0")} />
                       {u.name}
                     </CommandItem>

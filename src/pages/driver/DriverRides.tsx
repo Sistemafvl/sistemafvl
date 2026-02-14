@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Car, MapPin, Clock, Calendar } from "lucide-react";
+import { Car, MapPin, Clock, Calendar, User, KeyRound, Route } from "lucide-react";
 
 interface Ride {
   id: string;
@@ -11,6 +11,9 @@ interface Ride {
   unit_id: string;
   completed_at: string;
   notes: string | null;
+  route: string | null;
+  login: string | null;
+  password: string | null;
   unit_name?: string;
 }
 
@@ -97,11 +100,28 @@ const DriverRides = () => {
                       {formatTime(ride.completed_at)}
                     </span>
                   </p>
+                  {ride.route && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <Route className="h-3 w-3 text-primary" />
+                      <strong>Rota:</strong> {ride.route}
+                    </p>
+                  )}
+                  {ride.login && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <User className="h-3 w-3 text-primary" />
+                      <strong>Login:</strong> {ride.login}
+                    </p>
+                  )}
+                  {ride.password && (
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <KeyRound className="h-3 w-3 text-primary" />
+                      <strong>Senha:</strong> {ride.password}
+                    </p>
+                  )}
                   {ride.notes && (
                     <p className="text-xs text-muted-foreground mt-1 italic truncate">{ride.notes}</p>
                   )}
                 </div>
-                <Badge variant="default" className="shrink-0 text-xs">Concluída</Badge>
               </div>
             ))
           )}
