@@ -1,15 +1,15 @@
 
+## Diretriz Global: Mobile-First
 
-## Aumentar o logotipo na tela de login
+**TODAS** as telas, componentes e layouts deste sistema DEVEM ser:
+- Totalmente responsivos e otimizados para dispositivos móveis (mobile-first)
+- Auto-ajustáveis em qualquer tamanho de tela (celular, tablet, desktop)
+- Testados visualmente em viewport mobile antes de finalizar
 
-Alterar o tamanho `lg` no componente `LogoHeader.tsx` de `h-28` (112px) para `h-48` (192px).
-
-### Detalhes tecnicos
-
-**Arquivo:** `src/components/LogoHeader.tsx` (linha 10)
-
-Alterar o mapa de tamanhos:
-- `lg: "h-28"` passa a ser `lg: "h-48"`
-
-Isso afeta a tela de login (Index), que usa `size="lg"`.
-
+Padrões obrigatórios:
+- Usar classes responsivas do Tailwind (`sm:`, `md:`, `lg:`)
+- Inputs e botões com tamanhos touch-friendly (min 44px de altura)
+- Espaçamentos adequados para toque (sem elementos muito próximos)
+- Textos legíveis sem zoom em telas pequenas
+- `viewport` meta tag configurada corretamente
+- Safe area insets considerados para dispositivos com notch
