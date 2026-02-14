@@ -1,7 +1,9 @@
-import { Truck, BarChart3, Settings, LogOut } from "lucide-react";
+import { useState } from "react";
+import { Truck, BarChart3, Settings, LogOut, UserCog } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
   SidebarContent,
@@ -14,6 +16,25 @@ import {
   SidebarFooter,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+
+const formatCnpj = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 14);
+  return d
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+};
 
 const menuItems = [
   { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
@@ -22,51 +43,142 @@ const menuItems = [
 ];
 
 const DashboardSidebar = () => {
-  const { logout } = useAuthStore();
+  const { logout, unitSession, managerSession, setManagerSession } = useAuthStore();
+  const { toast } = useToast();
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [cnpj, setCnpj] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const handleManagerLogin = async () => {
+    const cleanCnpj = cnpj.replace(/\D/g, "");
+    if (cleanCnpj.length !== 14 || !password || !unitSession) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("managers")
+      .select("id, name, cnpj")
+      .eq("unit_id", unitSession.id)
+      .eq("cnpj", cleanCnpj)
+      .eq("password", password)
+      .eq("active", true)
+      .maybeSingle();
+    setLoading(false);
+    if (error || !data) {
+      toast({ title: "Erro", description: "CNPJ ou senha inválidos", variant: "destructive" });
+      return;
+    }
+    setManagerSession({ id: data.id, name: data.name, cnpj: data.cnpj });
+    setLoginOpen(false);
+    setCnpj("");
+    setPassword("");
+    toast({ title: `Bem-vindo, ${data.name}` });
+  };
 
   return (
-    <Sidebar collapsible="icon">
-      <SidebarContent>
-        <div className="p-4 py-6">
-          <LogoHeader size="lg" />
-        </div>
+    <>
+      <Sidebar collapsible="icon">
+        <SidebarContent>
+          <div className="p-4 py-6">
+            <LogoHeader size="lg" />
+          </div>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
-            Menu
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {menuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink
-                      to={item.url}
-                      end
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
-                      activeClassName="bg-primary/10 text-primary"
-                    >
-                      <item.icon className="h-4 w-4 shrink-0" />
-                      <span>{item.title}</span>
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-      </SidebarContent>
-      <SidebarFooter className="p-3">
-        <Button
-          variant="ghost"
-          className="w-full justify-start font-semibold italic text-muted-foreground"
-          onClick={logout}
-        >
-          <LogOut className="h-4 w-4 mr-2" />
-          Sair
-        </Button>
-      </SidebarFooter>
-    </Sidebar>
+          <div className="px-3 pb-2">
+            {managerSession ? (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
+                <UserCog className="h-4 w-4 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold italic truncate">{managerSession.name}</p>
+                  <p className="text-[10px] text-muted-foreground">Gerente</p>
+                </div>
+                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setManagerSession(null)}>
+                  Sair
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="outline"
+                className="w-full justify-start font-semibold italic gap-2"
+                onClick={() => setLoginOpen(true)}
+              >
+                <UserCog className="h-4 w-4" />
+                Gerente
+              </Button>
+            )}
+          </div>
+
+          <SidebarGroup>
+            <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
+              Menu
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton asChild>
+                      <NavLink
+                        to={item.url}
+                        end
+                        className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
+                        activeClassName="bg-primary/10 text-primary"
+                      >
+                        <item.icon className="h-4 w-4 shrink-0" />
+                        <span>{item.title}</span>
+                      </NavLink>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter className="p-3">
+          <Button
+            variant="ghost"
+            className="w-full justify-start font-semibold italic text-muted-foreground"
+            onClick={logout}
+          >
+            <LogOut className="h-4 w-4 mr-2" />
+            Sair
+          </Button>
+        </SidebarFooter>
+      </Sidebar>
+
+      {/* Manager Login Modal */}
+      <Dialog open={loginOpen} onOpenChange={setLoginOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <UserCog className="h-5 w-5 text-primary" /> Login Gerente
+            </DialogTitle>
+            <DialogDescription>Entre com suas credenciais de gerente.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">CNPJ</Label>
+              <Input
+                value={cnpj}
+                onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                placeholder="00.000.000/0000-00"
+                className="h-11"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Senha</Label>
+              <Input
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Senha"
+                type="password"
+                className="h-11"
+              />
+            </div>
+            <Button className="w-full" onClick={handleManagerLogin} disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
