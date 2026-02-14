@@ -1,52 +1,51 @@
 
 
-## Correcoes na Conferencia Carregamento
+## Correcoes - Card Instantaneo e Status "Em Carregamento"
 
-### Problema 1: Acoes nao sao instantaneas
+### Problema 1: Card nao aparece instantaneamente na Conferencia
 
-Atualmente, ao clicar em Iniciar, Finalizar, Retornar ou escanear um TBR, o codigo salva no banco mas **nao atualiza a tela imediatamente** -- depende do realtime que tem atraso. A solucao e chamar `fetchRides()` logo apos cada mutacao, garantindo atualizacao instantanea.
+A tabela `driver_rides` nao tem Realtime habilitado. Quando o gerente programa um carregamento, o card so aparece apos recarregar a pagina manualmente.
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+**Solucao:** Criar uma migracao SQL para habilitar Realtime na tabela `driver_rides`:
 
-Funcoes afetadas:
-- `handleIniciar` -- adicionar `await fetchRides()` apos o update
-- `handleFinalizar` -- adicionar `await fetchRides()` apos o update
-- `handleRetornar` -- adicionar `await fetchRides()` apos o update
-- `handleSelectConferente` -- adicionar `await fetchRides()` apos o update
-- `handleTbrSubmit` -- adicionar `await fetchRides()` apos o insert (alem de limpar o input)
+```sql
+ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_rides;
+```
+
+A pagina `ConferenciaCarregamentoPage.tsx` ja escuta mudancas via `postgres_changes` na tabela `driver_rides`, entao basta habilitar a publicacao no banco.
 
 ---
 
-### Problema 2: Gravar e exibir data/hora de inicio e termino
+### Problema 2: Botao do motorista deve mostrar "Em Carregamento"
 
-Adicionar duas colunas na tabela `driver_rides`:
-- `started_at` (TIMESTAMPTZ, nullable) -- gravado ao clicar Iniciar
-- `finished_at` (TIMESTAMPTZ, nullable) -- gravado ao clicar Finalizar
+Atualmente, quando o gerente programa o motorista, o status da fila muda para "completed" e o motorista volta a ver "Entrar na Fila". O correto e:
+
+- Apos o gerente programar, o motorista deve ver **"Em Carregamento"** com informacoes da rota/login
+- O botao so volta para "Entrar na Fila" quando o conferente clicar em **Finalizar** no card de conferencia
+
+**Arquivo:** `src/pages/driver/DriverQueue.tsx`
+
+Logica nova:
+1. Ao carregar a pagina, verificar se o motorista tem uma ride ativa hoje (`loading_status` = 'pending' ou 'loading') na tabela `driver_rides`
+2. Se tiver, exibir um card "Em Carregamento" com informacoes de rota, login, numero de sequencia e status
+3. Escutar Realtime na tabela `driver_rides` para atualizar instantaneamente quando o conferente finalizar
+4. Quando `loading_status` mudar para 'finished', voltar a mostrar o botao "Entrar na Fila"
+
+---
+
+### Detalhes Tecnicos
 
 **Migracao SQL:**
 ```sql
-ALTER TABLE public.driver_rides
-  ADD COLUMN IF NOT EXISTS started_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS finished_at TIMESTAMPTZ;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.driver_rides;
 ```
 
-**Logica atualizada:**
-- `handleIniciar`: salva `loading_status: 'loading'` **e** `started_at: new Date().toISOString()`
-- `handleFinalizar`: salva `loading_status: 'finished'` **e** `finished_at: new Date().toISOString()`
-- `handleRetornar`: salva `loading_status: 'loading'` **e** `finished_at: null` (limpa o termino)
+**Arquivos modificados:**
+- `src/pages/driver/DriverQueue.tsx` -- adicionar verificacao de ride ativa e exibir estado "Em Carregamento"
 
-**Exibicao no card:**
-- Logo apos a placa, exibir "Inicio: DD/MM/YYYY HH:MM" quando `started_at` existir
-- Logo apos o inicio, exibir "Termino: DD/MM/YYYY HH:MM" quando `finished_at` existir
-- Usar icones de relogio para diferenciar visualmente
-
----
-
-### Resumo dos arquivos
-
-**Migracao de banco:** nova migracao para `started_at` e `finished_at`
-
-**Arquivo modificado:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-- Adicionar `await fetchRides()` em todas as funcoes de mutacao
-- Adicionar campos `started_at` e `finished_at` na interface e nas acoes
-- Exibir as datas formatadas no card, logo apos a placa
+**Fluxo do motorista:**
+1. Motorista entra na fila (botao "Entrar na Fila")
+2. Gerente programa (modal Rota/Login/Senha) -- ride criada com `loading_status: 'pending'`
+3. Motorista ve instantaneamente: tela muda para "Em Carregamento" com info da rota
+4. Conferente clica Iniciar -> status muda para 'loading' (motorista continua vendo "Em Carregamento")
+5. Conferente clica Finalizar -> status muda para 'finished' -> motorista volta a ver "Entrar na Fila"
