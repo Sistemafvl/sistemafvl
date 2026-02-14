@@ -1,45 +1,82 @@
 
 
-# Campo de Busca TBR - Visao Geral
+# Painel Exclusivo do Motorista Parceiro
 
-## Resumo
+## Problema atual
 
-Adicionar um campo de busca de TBR (codigo de pacotes Amazon) na pagina Visao Geral do dashboard, posicionado abaixo do bloco "Bem-vindo" / data-hora. O campo tera um icone de lupa e ao pressionar Enter abrira um modal informando que a funcionalidade sera implementada em breve (pois a tabela de TBR ainda nao existe no sistema).
+Quando um motorista faz login por CPF, ele e redirecionado para o mesmo layout do dashboard da unidade (apenas sem sidebar). O motorista precisa de uma experiencia completamente diferente, com seu proprio menu e funcionalidades.
 
-## Alteracoes
+## Nova estrutura
 
-### Arquivo: `src/pages/dashboard/DashboardHome.tsx`
-
-1. **Campo de busca TBR**
-   - Input com placeholder "Buscar TBR..." posicionado logo abaixo da linha do "Bem-vindo"
-   - Icone `Search` (lupa) do lucide-react ao lado esquerdo do campo
-   - O campo aceita digitacao manual e leitura de QR Code / codigo de barras (leitores externos enviam texto + Enter automaticamente)
-   - Ao pressionar Enter, abre um modal (Dialog) com as informacoes do TBR
-
-2. **Modal de resultado**
-   - Ao dar Enter no campo, abre um Dialog informando que o rastreamento TBR sera implementado em breve
-   - Estrutura do modal ja preparada para exibir: codigo TBR, status, historico passo a passo e demais dados
-   - Quando a tabela de TBR for criada futuramente, bastara conectar a busca ao banco de dados
-
-## Layout
+O motorista tera um layout dedicado com sidebar proprio e paginas exclusivas:
 
 ```text
-+----------------------------------+-----------------------------+
-| Bem-vindo                        |  [relogio] sabado, 14 de    |
-| ABC-AMZL -- UNIDADE 1            |  fevereiro de 2026  18:05   |
-+----------------------------------+-----------------------------+
-| [lupa] Buscar TBR...                                           |
-+----------------------------------------------------------------+
-|                                                                |
-|  (espaco para futuros cards)                                   |
-+----------------------------------------------------------------+
++-------------------------------+------------------------------------------+
+| LOGO                          |  MOTORISTA PARCEIRO                      |
+|-------------------------------|------------------------------------------|
+| [foto perfil]                 |                                          |
+| Bem-vindo, [Nome]             |  (conteudo da pagina ativa)              |
+|-------------------------------|                                          |
+| MENU                          |                                          |
+|  > Visao Geral                |                                          |
+|  > Entrar na Fila             |                                          |
+|  > Indicadores                |                                          |
+|  > Perfil                     |                                          |
+|  > Avaliar Unidades           |                                          |
+|  > Configuracoes              |                                          |
+|-------------------------------|                                          |
+| [Sair]                        |                                          |
++-------------------------------+------------------------------------------+
 ```
+
+## Paginas do motorista
+
+1. **Visao Geral** (`/dashboard/motorista`) - Pagina inicial com saudacao e resumo
+2. **Entrar na Fila** (`/dashboard/motorista/fila`) - Seleciona dominio/unidade e entra na fila com contador de posicao
+3. **Indicadores** (`/dashboard/motorista/indicadores`) - Estatisticas de corridas, entregas, devolucoes
+4. **Perfil** (`/dashboard/motorista/perfil`) - Upload de foto, edicao de dados cadastrais
+5. **Avaliar Unidades** (`/dashboard/motorista/avaliacoes`) - Avaliar unidades onde trabalhou
+6. **Configuracoes** (`/dashboard/motorista/configuracoes`) - Preferencias do motorista
+
+## Alteracoes por arquivo
+
+### 1. `src/components/dashboard/DriverSidebar.tsx` (novo)
+- Sidebar dedicado para motoristas
+- Exibe foto de perfil (placeholder inicial) e nome do motorista
+- Menu com as 6 opcoes listadas acima
+- Botao "Sair" no rodape
+- Icones: LayoutDashboard, Users, BarChart3, User, Star, Settings
+
+### 2. `src/components/dashboard/DriverLayout.tsx` (novo)
+- Layout exclusivo para motoristas (similar ao DashboardLayout mas usando DriverSidebar)
+- Verifica se `unitSession.sessionType === "driver"`, caso contrario redireciona
+- Header com label "MOTORISTA PARCEIRO"
+
+### 3. Paginas do motorista (novos arquivos)
+- `src/pages/driver/DriverHome.tsx` - Visao geral com "Bem-vindo, [nome]"
+- `src/pages/driver/DriverQueue.tsx` - Selecionar dominio/unidade e entrar na fila (placeholder)
+- `src/pages/driver/DriverStats.tsx` - Indicadores (placeholder)
+- `src/pages/driver/DriverProfile.tsx` - Perfil com upload de foto e edicao de dados (placeholder)
+- `src/pages/driver/DriverReviews.tsx` - Avaliacoes de unidades (placeholder)
+- `src/pages/driver/DriverSettings.tsx` - Configuracoes (placeholder)
+
+### 4. `src/components/dashboard/DashboardLayout.tsx` (editar)
+- Redirecionar motoristas para `/motorista` em vez de `/dashboard/motorista`
+
+### 5. `src/App.tsx` (editar)
+- Adicionar novo grupo de rotas `/motorista` com DriverLayout
+- Rotas: index, fila, indicadores, perfil, avaliacoes, configuracoes
+- Remover rota antiga `/dashboard/motorista`
+
+### 6. `src/pages/Index.tsx` (editar)
+- Atualizar redirect: se `unitSession.sessionType === "driver"`, redirecionar para `/motorista`
 
 ## Detalhes tecnicos
 
-- Importar `Search` do lucide-react
-- Importar componentes `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, `DialogDescription` de `@/components/ui/dialog`
-- Estado local: `tbrSearch` (string) e `showTbrModal` (boolean)
-- `onKeyDown` no input: ao detectar Enter e campo nao vazio, setar `showTbrModal = true`
-- O campo tera largura total (`w-full`) com o icone posicionado dentro usando `relative` + `absolute`
+- O login do motorista continua pelo formulario da pagina inicial (CPF + senha)
+- A edge function `authenticate-unit` ja retorna `sessionType: "driver"` corretamente
+- O `unitSession` armazena os dados do motorista (id, nome, cpf)
+- As paginas serao criadas como placeholders com estrutura preparada para funcionalidade futura
+- O DriverSidebar nao tera modal de gerente (exclusivo da visao da unidade)
 - Nenhuma alteracao de banco de dados necessaria neste momento
+
