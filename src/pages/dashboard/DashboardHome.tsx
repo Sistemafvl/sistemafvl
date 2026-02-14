@@ -1,15 +1,33 @@
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock } from "lucide-react";
+import { Clock, Search } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const DashboardHome = () => {
   const { unitSession } = useAuthStore();
   const [dateTime, setDateTime] = useState(new Date());
+  const [tbrSearch, setTbrSearch] = useState("");
+  const [showTbrModal, setShowTbrModal] = useState(false);
+  const [searchedTbr, setSearchedTbr] = useState("");
 
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  const handleTbrKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && tbrSearch.trim()) {
+      setSearchedTbr(tbrSearch.trim());
+      setShowTbrModal(true);
+    }
+  };
 
   if (!unitSession) return null;
 
@@ -35,6 +53,35 @@ const DashboardHome = () => {
           </div>
         </div>
       </div>
+
+      {/* Campo de busca TBR */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+        <Input
+          value={tbrSearch}
+          onChange={(e) => setTbrSearch(e.target.value)}
+          onKeyDown={handleTbrKeyDown}
+          placeholder="Buscar TBR..."
+          className="pl-10 h-12 text-base"
+        />
+      </div>
+
+      {/* Modal de resultado TBR */}
+      <Dialog open={showTbrModal} onOpenChange={setShowTbrModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-bold italic">Rastreamento TBR</DialogTitle>
+            <DialogDescription>
+              Código pesquisado: <span className="font-semibold text-foreground">{searchedTbr}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground italic">
+              A funcionalidade de rastreamento de TBR será implementada em breve. Quando disponível, aqui serão exibidos o status, histórico e todos os dados do pacote.
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
