@@ -12,6 +12,7 @@ import DriverLayout from "./components/dashboard/DriverLayout";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverQueue from "./pages/driver/DriverQueue";
 import DriverStats from "./pages/driver/DriverStats";
+import DriverRides from "./pages/driver/DriverRides";
 import DriverProfile from "./pages/driver/DriverProfile";
 import DriverReviews from "./pages/driver/DriverReviews";
 import DriverSettings from "./pages/driver/DriverSettings";
@@ -38,6 +39,7 @@ const App = () => (
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
             <Route path="fila" element={<DriverQueue />} />
+            <Route path="corridas" element={<DriverRides />} />
             <Route path="indicadores" element={<DriverStats />} />
             <Route path="perfil" element={<DriverProfile />} />
             <Route path="avaliacoes" element={<DriverReviews />} />

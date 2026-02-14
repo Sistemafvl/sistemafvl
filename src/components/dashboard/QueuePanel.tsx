@@ -69,11 +69,20 @@ const QueuePanel = () => {
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const handleProgramar = async (entryId: string) => {
+  const handleProgramar = async (entry: QueueEntry) => {
+    // Mark queue entry as completed
     await supabase
       .from("queue_entries")
-      .update({ status: "called", called_at: new Date().toISOString() })
-      .eq("id", entryId);
+      .update({ status: "completed", called_at: new Date().toISOString(), completed_at: new Date().toISOString() })
+      .eq("id", entry.id);
+
+    // Register the ride
+    await supabase.from("driver_rides").insert({
+      driver_id: entry.driver_id,
+      unit_id: entry.unit_id,
+      queue_entry_id: entry.id,
+    });
+
     fetchQueue();
   };
 
@@ -136,7 +145,7 @@ const QueuePanel = () => {
                     size="sm"
                     variant="default"
                     className="shrink-0 font-bold italic text-xs"
-                    onClick={() => handleProgramar(entry.id)}
+                    onClick={() => handleProgramar(entry)}
                   >
                     <CalendarCheck className="h-3.5 w-3.5 mr-1" />
                     Programar

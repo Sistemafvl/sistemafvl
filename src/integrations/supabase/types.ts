@@ -35,6 +35,55 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_rides: {
+        Row: {
+          completed_at: string
+          driver_id: string
+          id: string
+          notes: string | null
+          queue_entry_id: string | null
+          unit_id: string
+        }
+        Insert: {
+          completed_at?: string
+          driver_id: string
+          id?: string
+          notes?: string | null
+          queue_entry_id?: string | null
+          unit_id: string
+        }
+        Update: {
+          completed_at?: string
+          driver_id?: string
+          id?: string
+          notes?: string | null
+          queue_entry_id?: string | null
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_rides_queue_entry_id_fkey"
+            columns: ["queue_entry_id"]
+            isOneToOne: false
+            referencedRelation: "queue_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_rides_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers: {
         Row: {
           active: boolean
