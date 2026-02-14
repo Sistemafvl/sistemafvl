@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Users, Clock, CalendarCheck, Car, MapPin, User, Hash } from "lucide-react";
+import { Users, Clock, CalendarCheck } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -23,16 +24,6 @@ interface QueueEntry {
   car_color?: string;
 }
 
-interface RideInfo {
-  driver_name: string;
-  driver_avatar?: string;
-  car_model?: string;
-  car_plate?: string;
-  car_color?: string;
-  route: string;
-  login: string;
-  sequence_number: number;
-}
 
 const QueuePanel = () => {
   const { unitSession } = useAuthStore();
@@ -44,10 +35,8 @@ const QueuePanel = () => {
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [route, setRoute] = useState("");
   const [login, setLogin] = useState("");
+  const [password, setPassword] = useState("");
 
-  // Confirmation card
-  const [showConfirmCard, setShowConfirmCard] = useState(false);
-  const [lastRideInfo, setLastRideInfo] = useState<RideInfo | null>(null);
 
   const unitId = unitSession?.id;
 
@@ -109,6 +98,7 @@ const QueuePanel = () => {
     setSelectedEntry(entry);
     setRoute("");
     setLogin("");
+    setPassword("");
     setShowProgramModal(true);
   };
 
@@ -139,23 +129,11 @@ const QueuePanel = () => {
       queue_entry_id: selectedEntry.id,
       route,
       login,
+      password,
       sequence_number: sequenceNumber,
     } as any);
 
-    // Set confirmation data
-    setLastRideInfo({
-      driver_name: selectedEntry.driver_name ?? "Motorista",
-      driver_avatar: selectedEntry.driver_avatar,
-      car_model: selectedEntry.car_model,
-      car_plate: selectedEntry.car_plate,
-      car_color: selectedEntry.car_color,
-      route,
-      login,
-      sequence_number: sequenceNumber,
-    });
-
     setShowProgramModal(false);
-    setShowConfirmCard(true);
     fetchQueue();
   };
 
@@ -259,6 +237,15 @@ const QueuePanel = () => {
                 onChange={(e) => setLogin(e.target.value)}
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="font-semibold">Senha</Label>
+              <Input
+                id="password"
+                placeholder="Informe a senha..."
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+              />
+            </div>
             <Button onClick={handleDefinir} className="w-full font-bold italic">
               Definir
             </Button>
@@ -266,62 +253,6 @@ const QueuePanel = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Card de Confirmação */}
-      <Dialog open={showConfirmCard} onOpenChange={setShowConfirmCard}>
-        <DialogContent className="sm:max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="font-bold italic text-center">Carregamento Programado</DialogTitle>
-            <DialogDescription className="sr-only">Detalhes do carregamento</DialogDescription>
-          </DialogHeader>
-          {lastRideInfo && (
-            <div className="flex flex-col items-center gap-4 pt-2">
-              <Avatar className="h-20 w-20">
-                {lastRideInfo.driver_avatar && <AvatarImage src={lastRideInfo.driver_avatar} />}
-                <AvatarFallback className="bg-primary/10 text-primary font-bold text-2xl">
-                  {lastRideInfo.driver_name[0].toUpperCase()}
-                </AvatarFallback>
-              </Avatar>
-
-              <h3 className="text-lg font-bold">{lastRideInfo.driver_name}</h3>
-
-              <div className="w-full space-y-2 text-sm">
-                {(lastRideInfo.car_model || lastRideInfo.car_color) && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <Car className="h-4 w-4 shrink-0" />
-                    <span>{[lastRideInfo.car_model, lastRideInfo.car_color].filter(Boolean).join(" — ")}</span>
-                  </div>
-                )}
-                {lastRideInfo.car_plate && (
-                  <div className="flex items-center gap-2 text-muted-foreground">
-                    <span className="font-mono font-bold text-foreground">{lastRideInfo.car_plate}</span>
-                  </div>
-                )}
-                {lastRideInfo.route && (
-                  <div className="flex items-center gap-2">
-                    <MapPin className="h-4 w-4 shrink-0 text-primary" />
-                    <span><strong>Rota:</strong> {lastRideInfo.route}</span>
-                  </div>
-                )}
-                {lastRideInfo.login && (
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4 shrink-0 text-primary" />
-                    <span><strong>Login:</strong> {lastRideInfo.login}</span>
-                  </div>
-                )}
-              </div>
-
-              <Badge variant="default" className="text-lg px-4 py-1 font-bold">
-                <Hash className="h-4 w-4 mr-1" />
-                {lastRideInfo.sequence_number}º Carregamento
-              </Badge>
-
-              <Button variant="outline" className="w-full mt-2" onClick={() => setShowConfirmCard(false)}>
-                Fechar
-              </Button>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
