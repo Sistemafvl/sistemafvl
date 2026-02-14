@@ -35,6 +35,60 @@ export type Database = {
         }
         Relationships: []
       }
+      drivers: {
+        Row: {
+          active: boolean
+          address: string | null
+          car_model: string
+          car_plate: string
+          cep: string | null
+          city: string | null
+          cpf: string
+          created_at: string
+          email: string | null
+          id: string
+          name: string
+          neighborhood: string | null
+          password: string
+          state: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          active?: boolean
+          address?: string | null
+          car_model: string
+          car_plate: string
+          cep?: string | null
+          city?: string | null
+          cpf: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name: string
+          neighborhood?: string | null
+          password: string
+          state?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          active?: boolean
+          address?: string | null
+          car_model?: string
+          car_plate?: string
+          cep?: string | null
+          city?: string | null
+          cpf?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          name?: string
+          neighborhood?: string | null
+          password?: string
+          state?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
       managers: {
         Row: {
           active: boolean

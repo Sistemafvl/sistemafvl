@@ -2,11 +2,15 @@ import { useState } from "react";
 import LogoHeader from "@/components/LogoHeader";
 import AdminLoginModal from "@/components/AdminLoginModal";
 import UnitLoginForm from "@/components/UnitLoginForm";
+import DriverRegistrationModal from "@/components/DriverRegistrationModal";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Truck } from "lucide-react";
 
 const Index = () => {
   const [showAdminModal, setShowAdminModal] = useState(false);
+  const [showDriverModal, setShowDriverModal] = useState(false);
   const { isMasterAdmin, unitSession } = useAuthStore();
 
   if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
@@ -27,9 +31,21 @@ const Index = () => {
         </div>
 
         <UnitLoginForm />
+
+        <div className="text-center">
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => setShowDriverModal(true)}
+          >
+            <Truck className="mr-2 h-4 w-4" />
+            Cadastro Motorista
+          </Button>
+        </div>
       </div>
 
       <AdminLoginModal open={showAdminModal} onOpenChange={setShowAdminModal} />
+      <DriverRegistrationModal open={showDriverModal} onOpenChange={setShowDriverModal} />
     </div>
   );
 };
