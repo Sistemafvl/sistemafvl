@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/auth-store";
 import { useToast } from "@/hooks/use-toast";
-import { Building2, Eye, EyeOff, KeyRound, LogIn, User } from "lucide-react";
+import { Building2, Eye, EyeOff, KeyRound, LogIn, User, Check, ChevronsUpDown } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { cn } from "@/lib/utils";
 
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; domain_id: string; }
@@ -76,20 +78,60 @@ const UnitLoginForm = () => {
         <Label className="font-semibold italic flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" /> Domínio
         </Label>
-        <Select value={selectedDomain} onValueChange={(v) => { setSelectedDomain(v); setSelectedUnit(""); }}>
-          <SelectTrigger className="h-11"><SelectValue placeholder="Selecione o domínio" /></SelectTrigger>
-          <SelectContent>{domains.map((d) => <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>)}</SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" className="w-full h-11 justify-between font-normal">
+              {selectedDomain ? domains.find((d) => d.id === selectedDomain)?.name : "Selecione o domínio"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar domínio..." />
+              <CommandList>
+                <CommandEmpty>Nenhum domínio encontrado.</CommandEmpty>
+                <CommandGroup>
+                  {domains.map((d) => (
+                    <CommandItem key={d.id} value={d.name} onSelect={() => { setSelectedDomain(d.id); setSelectedUnit(""); }}>
+                      <Check className={cn("mr-2 h-4 w-4", selectedDomain === d.id ? "opacity-100" : "opacity-0")} />
+                      {d.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="space-y-2">
         <Label className="font-semibold italic flex items-center gap-2">
           <Building2 className="h-4 w-4 text-primary" /> Unidade
         </Label>
-        <Select value={selectedUnit} onValueChange={setSelectedUnit} disabled={!selectedDomain}>
-          <SelectTrigger className="h-11"><SelectValue placeholder="Selecione a unidade" /></SelectTrigger>
-          <SelectContent>{units.map((u) => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" role="combobox" className="w-full h-11 justify-between font-normal" disabled={!selectedDomain}>
+              {selectedUnit ? units.find((u) => u.id === selectedUnit)?.name : "Selecione a unidade"}
+              <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+            <Command>
+              <CommandInput placeholder="Buscar unidade..." />
+              <CommandList>
+                <CommandEmpty>Nenhuma unidade encontrada.</CommandEmpty>
+                <CommandGroup>
+                  {units.map((u) => (
+                    <CommandItem key={u.id} value={u.name} onSelect={() => setSelectedUnit(u.id)}>
+                      <Check className={cn("mr-2 h-4 w-4", selectedUnit === u.id ? "opacity-100" : "opacity-0")} />
+                      {u.name}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
       </div>
 
       <div className="space-y-2">

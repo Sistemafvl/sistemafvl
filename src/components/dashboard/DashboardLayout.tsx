@@ -2,9 +2,10 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import DashboardSidebar from "./DashboardSidebar";
+import QueuePanel from "./QueuePanel";
 
 const DashboardLayout = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, managerSession } = useAuthStore();
   
 
   if (!unitSession) return <Navigate to="/" replace />;
@@ -30,6 +31,7 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
+      {managerSession && <QueuePanel />}
     </SidebarProvider>
   );
 };
