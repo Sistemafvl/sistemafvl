@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -38,8 +38,13 @@ const formatCnpj = (v: string) => {
 
 const menuItems = [
   { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
+];
+
+const managerMenuItems = [
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
+  { title: "Cadastro de Motorista", url: "/dashboard/motoristas", icon: Truck },
+  { title: "Cadastro de Conferente", url: "/dashboard/conferentes", icon: ClipboardCheck },
 ];
 
 const DashboardSidebar = () => {
@@ -131,6 +136,33 @@ const DashboardSidebar = () => {
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
+
+          {managerSession && (
+            <SidebarGroup>
+              <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
+                Gerente
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {managerMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
+                          activeClassName="bg-primary/10 text-primary"
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span>{item.title}</span>
+                        </NavLink>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
         </SidebarContent>
         <SidebarFooter className="p-3">
           <Button

@@ -50,6 +50,10 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: "fvl-auth",
+      partialize: (state) => ({
+        isMasterAdmin: state.isMasterAdmin,
+        unitSession: state.unitSession,
+      }),
     }
   )
 );
