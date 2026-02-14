@@ -1,68 +1,87 @@
 
+## Plano de Implementacao - 4 Melhorias
 
-## Adicionar campo "Senha" ao modal e exibir cards na pagina "Conferencia Carregamento"
+### 1. Conferencia Carregamento - 3 Botoes no Card
 
-### Resumo
-Duas mudancas principais:
-1. Adicionar campo **Senha** ao modal "Programar Carregamento" (junto com Rota e Login)
-2. Criar a pagina **Conferencia Carregamento** (`/dashboard/conferencia`) que exibe os cards de carregamentos programados do dia, em vez de mostrar o card de confirmacao como popup
+Adicionar abaixo das informacoes de cada card na pagina `ConferenciaCarregamentoPage.tsx`:
 
----
+**Botao 1 - Selecionar Conferente:**
+- Caixa de selecao (Select/Combobox) listando os conferentes ativos cadastrados na unidade (tabela `user_profiles`, filtrado por `unit_id` e `active = true`)
+- Ao selecionar, salva o `conferente_id` no registro da ride
 
-### 1. Migracao de Banco de Dados
+**Botao 2 - Iniciar:**
+- Ao clicar, abre uma area de leitura de TBR dentro do card
+- Um campo de input para escanear/digitar o codigo TBR
+- Ao pressionar Enter, o TBR e registrado e um novo campo vazio aparece abaixo para o proximo TBR
+- Lista de TBRs lidos visivel no card
 
-Adicionar coluna `password` (TEXT, nullable) na tabela `driver_rides` para armazenar a senha informada pelo gerente.
+**Botao 3 - Finalizar / Retornar:**
+- Estado inicial: botao "Finalizar"
+- Ao clicar em Finalizar, encerra o carregamento (muda status para finalizado), e o botao muda para "Retornar"
+- Ao clicar em Retornar, reabre a area de leitura de TBR para adicionar novos codigos
 
-```sql
-ALTER TABLE public.driver_rides
-  ADD COLUMN IF NOT EXISTS password TEXT;
-```
-
----
-
-### 2. Alteracoes no QueuePanel
-
-- Adicionar campo **Senha** (input de texto livre) ao modal "Programar Carregamento", entre Login e o botao Definir
-- Salvar o valor de `password` no insert de `driver_rides`
-- Remover o dialog de confirmacao (card popup) -- a confirmacao sera vista na pagina de Conferencia Carregamento
-- Apos clicar "Definir", redirecionar automaticamente para `/dashboard/conferencia` ou exibir um toast de sucesso
+**Migracao de Banco necessaria:**
+- Nova tabela `ride_tbrs` com colunas: `id`, `ride_id` (FK para driver_rides), `code` (TEXT), `scanned_at` (TIMESTAMPTZ)
+- Adicionar colunas em `driver_rides`: `conferente_id` (UUID, nullable, FK para user_profiles), `loading_status` (TEXT, default 'pending' -- valores: pending, loading, finished)
+- Habilitar realtime para `ride_tbrs`
 
 ---
 
-### 3. Criar pagina Conferencia Carregamento
+### 2. Corridas do Motorista - Ajustes
 
-Nova pagina `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`:
-
-- Busca todos os registros de `driver_rides` do dia atual para a unidade logada
-- Para cada registro, exibe um **card** com:
-  - Foto do motorista (avatar)
-  - Nome do motorista
-  - Carro (modelo + cor)
-  - Placa
-  - Rota
-  - Login
-  - Senha
-  - Sequencia de carregamento (badge "#Xo Carregamento")
-- Cards organizados em grid responsivo
-- Realtime habilitado para atualizar quando novos carregamentos forem programados
+No arquivo `src/pages/driver/DriverRides.tsx`:
+- Remover o badge "Concluida" de cada item da lista
+- Adicionar as informacoes de **Rota**, **Login** e **Senha** vindas do registro `driver_rides` (colunas `route`, `login`, `password`)
+- Exibir esses dados abaixo do nome da unidade/data, usando icones consistentes com a pagina de Conferencia
 
 ---
 
-### 4. Registrar rota no App.tsx
+### 3. Menu Lateral (Sidebar) - Fechar ao Clicar no Mobile
 
-Adicionar a rota `/dashboard/conferencia` apontando para o novo componente `ConferenciaCarregamentoPage`.
+Nos arquivos `src/components/dashboard/DriverSidebar.tsx` e `src/components/dashboard/DashboardSidebar.tsx`:
+- Importar o hook `useSidebar` do componente de sidebar
+- Ao clicar em um item do menu, chamar `setOpenMobile(false)` para fechar o menu no mobile
+- Isso resolve o problema do menu ficar na frente apos selecionar uma opcao
+
+---
+
+### 4. Login - Popover Fechar ao Selecionar
+
+No arquivo `src/components/UnitLoginForm.tsx`:
+- Controlar o estado `open` dos Popovers de Dominio e Unidade manualmente
+- Ao selecionar um item no CommandItem (`onSelect`), fechar o Popover correspondente setando `open = false`
+- Isso resolve o problema da caixa de selecao continuar na frente apos escolher
 
 ---
 
 ### Detalhes Tecnicos
 
+**SQL Migration:**
+```sql
+-- Novas colunas em driver_rides
+ALTER TABLE public.driver_rides
+  ADD COLUMN IF NOT EXISTS conferente_id UUID REFERENCES public.user_profiles(id),
+  ADD COLUMN IF NOT EXISTS loading_status TEXT DEFAULT 'pending';
+
+-- Nova tabela para TBRs escaneados
+CREATE TABLE public.ride_tbrs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  ride_id UUID NOT NULL REFERENCES public.driver_rides(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  scanned_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.ride_tbrs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all for ride_tbrs"
+  ON public.ride_tbrs FOR ALL USING (true) WITH CHECK (true);
+
+ALTER PUBLICATION supabase_realtime ADD TABLE public.ride_tbrs;
+```
+
 **Arquivos modificados:**
-- `src/components/dashboard/QueuePanel.tsx` -- adicionar campo Senha, remover dialog de confirmacao, salvar password no insert
-- Nova migracao SQL para coluna `password`
-
-**Arquivos criados:**
-- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` -- pagina com cards de carregamentos do dia
-
-**Arquivos atualizados:**
-- `src/App.tsx` -- adicionar rota `/dashboard/conferencia`
-
+- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` -- adicionar 3 botoes, logica de TBR, selecao de conferente
+- `src/pages/driver/DriverRides.tsx` -- remover badge, adicionar rota/login/senha
+- `src/components/dashboard/DriverSidebar.tsx` -- fechar sidebar mobile ao clicar
+- `src/components/dashboard/DashboardSidebar.tsx` -- fechar sidebar mobile ao clicar
+- `src/components/UnitLoginForm.tsx` -- controlar estado open dos Popovers
