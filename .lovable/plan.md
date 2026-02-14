@@ -1,93 +1,36 @@
 
-# Cadastro de Motorista Parceiro
 
-## Resumo
+# Melhorias no Cadastro de Motorista
 
-Adicionar um botao "Cadastro Motorista" abaixo do botao "ENTRAR" na tela inicial. Ao clicar, abre um modal de cadastro. Apos o cadastro, o motorista faz login pela tela normal (dominio, unidade, CPF, senha) e acessa um "Painel do Motorista Parceiro". O motorista nao fica vinculado a nenhuma unidade especifica (acesso livre).
+## Alteracoes no arquivo `src/components/DriverRegistrationModal.tsx`
 
-## Alteracoes
+### 1. Mascara para Placa do Carro (formato AAA-0AAA)
 
-### 1. Criar tabela `drivers` no banco
+Criar uma funcao `maskPlate` que formata automaticamente a placa no padrao Mercosul:
+- Aceita letras nas posicoes 1-3, digito na posicao 4, letra na posicao 5, e alfanumerico nas posicoes 6-7
+- Insere o hifen automaticamente apos o terceiro caractere
+- Converte tudo para maiusculo
+- Exemplo: digitando "fag6e14" resulta em "FAG-6E14"
 
-Nova tabela com os campos:
-- `id` (uuid, PK)
-- `name` (text) — Nome completo
-- `cpf` (text, unique) — CPF do motorista
-- `cep` (text)
-- `address` (text) — Endereco (preenchido via CEP)
-- `neighborhood` (text) — Bairro
-- `city` (text) — Cidade
-- `state` (text) — Estado
-- `car_plate` (text) — Placa do carro
-- `car_model` (text) — Modelo do carro
-- `email` (text)
-- `whatsapp` (text)
-- `password` (text)
-- `active` (boolean, default true)
-- `created_at` (timestamptz, default now())
+### 2. Novo campo "Cor do carro"
 
-RLS: permitir INSERT para anon (cadastro publico) e SELECT para anon com filtro por CPF (para login).
+Adicionar campo `car_color` ao formulario, posicionado junto aos campos de veiculo (Placa e Modelo), formando uma grade de 3 campos.
 
-### 2. Criar componente `DriverRegistrationModal`
+### 3. Auto-correcao de primeira letra maiuscula (capitalize)
 
-**Arquivo:** `src/components/DriverRegistrationModal.tsx`
+Criar funcao `capitalize` que converte a primeira letra de cada palavra para maiuscula. Aplicar nos campos:
+- Modelo do carro (ex: "cobalt" vira "Cobalt")
+- Cor do carro (ex: "prata" vira "Prata")
+- Nome completo (ex: "joao silva" vira "Joao Silva")
+- Endereco, Bairro, Cidade
 
-Modal (Dialog) com formulario contendo todos os campos:
-- Nome completo, CPF (com mascara), CEP (com mascara e busca automatica)
-- Endereco, Bairro, Cidade, Estado (preenchidos automaticamente via API ViaCEP)
-- Placa do carro, Modelo do carro
-- Email, WhatsApp (com mascara)
-- Senha (com icone de olho para mostrar/ocultar)
-- Botao "Cadastrar"
+### 4. Migracao de banco
 
-Ao preencher o CEP (8 digitos), faz fetch em `https://viacep.com.br/ws/{cep}/json/` e preenche endereco, bairro, cidade e estado automaticamente.
+Adicionar coluna `car_color` (text, nullable) na tabela `drivers`.
 
-Apos cadastro com sucesso, fecha o modal e exibe toast de confirmacao.
+### Detalhes tecnicos
 
-### 3. Adicionar botao na tela inicial
+- A funcao `maskPlate` usa regex para aceitar apenas caracteres validos em cada posicao e forca maiusculas
+- A funcao `capitalize` e aplicada no `onChange` de cada campo relevante, usando `word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()`
+- O campo `car_color` nao sera obrigatorio
 
-**Arquivo:** `src/pages/Index.tsx`
-
-Adicionar abaixo do componente `UnitLoginForm` um botao "Cadastro Motorista" com icone `Truck`. Ao clicar, abre o `DriverRegistrationModal`.
-
-### 4. Atualizar Edge Function `authenticate-unit`
-
-**Arquivo:** `supabase/functions/authenticate-unit/index.ts`
-
-Alem de verificar `user_profiles` e `managers`, adicionar verificacao na tabela `drivers`:
-- Se o CPF informado nao for encontrado em `user_profiles`, buscar em `drivers`
-- Se encontrado em `drivers`, verificar a senha do motorista (nao a da unidade)
-- Retornar `sessionType: "driver"` no payload
-
-Isso permite que o motorista faca login em qualquer unidade usando seu CPF e sua propria senha.
-
-### 5. Atualizar auth-store
-
-**Arquivo:** `src/stores/auth-store.ts`
-
-Adicionar `"driver"` ao tipo `SessionType`.
-
-### 6. Criar pagina "Painel do Motorista Parceiro"
-
-**Arquivo:** `src/pages/dashboard/DriverPanel.tsx`
-
-Pagina simples com titulo "Painel do Motorista Parceiro" e mensagem de boas-vindas. Funcionalidades serao adicionadas posteriormente.
-
-### 7. Adicionar rota e condicional no dashboard
-
-**Arquivo:** `src/App.tsx`
-
-Adicionar rota `/dashboard/motorista` dentro do layout do dashboard.
-
-**Arquivo:** `src/components/dashboard/DashboardLayout.tsx` ou redirecionamento
-
-Quando `unitSession.sessionType === "driver"`, redirecionar automaticamente para o painel do motorista e ocultar o sidebar padrao (ou mostrar um sidebar simplificado).
-
-## Detalhes tecnicos
-
-- API ViaCEP e publica e gratuita, sem necessidade de chave
-- Mascaras: CPF (000.000.000-00), CEP (00000-000), WhatsApp ((00) 00000-0000)
-- Campo de senha com icone de olho (padrao do projeto)
-- A senha do motorista e independente da senha da unidade — na edge function, quando for driver, valida a senha do driver e nao da unidade
-- RLS da tabela drivers permite INSERT sem autenticacao (cadastro publico) e SELECT filtrado por CPF
-- Layout existente nao sera alterado, apenas adicionado o botao abaixo do formulario
