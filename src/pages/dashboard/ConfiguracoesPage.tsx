@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, KeyRound, Trash2, Plus, Loader2 } from "lucide-react";
+import { MapPin, KeyRound, Trash2, Plus, Loader2, Save } from "lucide-react";
 
 const ConfiguracoesPage = () => {
   const { unitSession } = useAuthStore();
@@ -18,6 +18,10 @@ const ConfiguracoesPage = () => {
   const [currentGeo, setCurrentGeo] = useState<{ address: string | null; radius: number | null; lat: number | null; lng: number | null }>({ address: null, radius: null, lat: null, lng: null });
   const [geoLoading, setGeoLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
+  const [geoError, setGeoError] = useState("");
+  const [pinMoved, setPinMoved] = useState(false);
+  const [savingPin, setSavingPin] = useState(false);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Logins
   const [logins, setLogins] = useState<{ id: string; login: string; password: string }[]>([]);
@@ -30,6 +34,7 @@ const ConfiguracoesPage = () => {
     const { data } = await supabase.from("units").select("geofence_address, geofence_radius_meters, geofence_lat, geofence_lng").eq("id", unitId).maybeSingle();
     if (data) {
       setCurrentGeo({ address: data.geofence_address, radius: data.geofence_radius_meters, lat: data.geofence_lat, lng: data.geofence_lng });
+      if (data.geofence_radius_meters) setGeoRadius(data.geofence_radius_meters);
     }
   }, [unitId]);
 
@@ -41,6 +46,25 @@ const ConfiguracoesPage = () => {
 
   useEffect(() => { fetchUnit(); fetchLogins(); }, [fetchUnit, fetchLogins]);
 
+  // Listen for marker-moved postMessage from iframe
+  useEffect(() => {
+    const handler = (e: MessageEvent) => {
+      if (e.data?.type === "marker-moved") {
+        setCurrentGeo(prev => ({ ...prev, lat: e.data.lat, lng: e.data.lng }));
+        setPinMoved(true);
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  // Send radius updates to iframe
+  useEffect(() => {
+    if (iframeRef.current?.contentWindow && currentGeo.lat && currentGeo.lng) {
+      iframeRef.current.contentWindow.postMessage({ type: "update-radius", radius: geoRadius }, "*");
+    }
+  }, [geoRadius, currentGeo.lat, currentGeo.lng]);
+
   // CEP lookup
   const handleCepChange = async (value: string) => {
     const digits = value.replace(/\D/g, "");
@@ -50,20 +74,14 @@ const ConfiguracoesPage = () => {
       try {
         const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
         const data = await res.json();
-        if (data.erro) {
-          // CEP not found
-        } else {
-          const addr = [data.logradouro, data.bairro, `${data.localidade} - ${data.uf}`].filter(Boolean).join(", ");
+        if (!data.erro) {
+          const addr = data.logradouro || "";
           setGeoAddress(addr);
         }
-      } catch {
-        // Error fetching CEP
-      }
+      } catch { /* ignore */ }
       setCepLoading(false);
     }
   };
-
-  const [geoError, setGeoError] = useState("");
 
   const handleSetGeofence = async () => {
     if (!unitId || !geoAddress.trim()) return;
@@ -76,7 +94,6 @@ const ConfiguracoesPage = () => {
         try { geoData = JSON.parse(geoData); } catch { geoData = null; }
       }
       if (res.error) {
-        // Try to extract message from error context
         let msg = "Erro ao chamar serviço de geocodificação. Tente novamente.";
         try {
           const parsed = JSON.parse((res.error as any)?.context?.body || "{}");
@@ -105,11 +122,64 @@ const ConfiguracoesPage = () => {
       setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: geoData.lat, lng: geoData.lng });
       setGeoAddress("");
       setGeoCep("");
-    } catch (err) {
+      setPinMoved(false);
+    } catch {
       setGeoError("Erro de rede ao definir perímetro. Verifique sua conexão.");
     }
     setGeoLoading(false);
   };
+
+  const handleSavePin = async () => {
+    if (!unitId || !currentGeo.lat || !currentGeo.lng) return;
+    setSavingPin(true);
+    await supabase.from("units").update({
+      geofence_lat: currentGeo.lat,
+      geofence_lng: currentGeo.lng,
+      geofence_radius_meters: geoRadius,
+    } as any).eq("id", unitId);
+    setCurrentGeo(prev => ({ ...prev, radius: geoRadius }));
+    setPinMoved(false);
+    setSavingPin(false);
+  };
+
+  // Leaflet map HTML
+  const mapBlobUrl = useMemo(() => {
+    if (!currentGeo.lat || !currentGeo.lng) return null;
+    const html = `<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;width:100%;height:100%}</style>
+</head><body>
+<div id="map"></div>
+<script>
+var map=L.map('map');
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+var marker=L.marker([${currentGeo.lat},${currentGeo.lng}],{draggable:true}).addTo(map);
+var circle=L.circle([${currentGeo.lat},${currentGeo.lng}],{radius:${geoRadius},color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);
+map.fitBounds(circle.getBounds());
+marker.on('dragend',function(e){
+  var p=e.target.getLatLng();
+  circle.setLatLng(p);
+  parent.postMessage({type:'marker-moved',lat:p.lat,lng:p.lng},'*');
+});
+window.addEventListener('message',function(e){
+  if(e.data&&e.data.type==='update-radius'){
+    circle.setRadius(e.data.radius);
+    map.fitBounds(circle.getBounds());
+  }
+});
+<\/script>
+</body></html>`;
+    return URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  }, [currentGeo.lat, currentGeo.lng]);
+
+  // Cleanup blob URL
+  useEffect(() => {
+    return () => { if (mapBlobUrl) URL.revokeObjectURL(mapBlobUrl); };
+  }, [mapBlobUrl]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -124,13 +194,6 @@ const ConfiguracoesPage = () => {
   const handleDeleteLogin = async (id: string) => {
     await supabase.from("unit_logins").delete().eq("id", id);
     await fetchLogins();
-  };
-
-  // Build map iframe URL
-  const getMapUrl = (lat: number, lng: number, radius: number) => {
-    const delta = (radius / 111320) * 1.5; // rough degrees for bbox
-    const bbox = `${lng - delta},${lat - delta},${lng + delta},${lat + delta}`;
-    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
   };
 
   if (!unitId) return null;
@@ -155,29 +218,33 @@ const ConfiguracoesPage = () => {
             </div>
           )}
 
-          {/* Map */}
-          {currentGeo.lat && currentGeo.lng && currentGeo.radius && (
+          {/* Leaflet Map */}
+          {mapBlobUrl && (
             <div className="rounded-md overflow-hidden border border-border">
               <iframe
-                src={getMapUrl(currentGeo.lat, currentGeo.lng, currentGeo.radius)}
+                ref={iframeRef}
+                src={mapBlobUrl}
                 width="100%"
-                height="300"
+                height="350"
                 className="border-0"
                 title="Mapa do perímetro"
+                sandbox="allow-scripts"
               />
             </div>
+          )}
+
+          {pinMoved && (
+            <Button onClick={handleSavePin} disabled={savingPin} variant="outline" className="font-bold italic gap-2">
+              {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar Posição
+            </Button>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label className="font-semibold">CEP</Label>
               <div className="relative">
-                <Input
-                  placeholder="00000-000"
-                  value={geoCep}
-                  onChange={(e) => handleCepChange(e.target.value)}
-                  maxLength={8}
-                />
+                <Input placeholder="00000-000" value={geoCep} onChange={(e) => handleCepChange(e.target.value)} maxLength={8} />
                 {cepLoading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
             </div>
@@ -190,9 +257,7 @@ const ConfiguracoesPage = () => {
             <Label className="font-semibold">Endereço completo</Label>
             <Input placeholder="Ex: Rua Example, 123, Bairro, Cidade - UF" value={geoAddress} onChange={(e) => setGeoAddress(e.target.value)} />
           </div>
-          {geoError && (
-            <p className="text-sm text-destructive font-semibold">{geoError}</p>
-          )}
+          {geoError && <p className="text-sm text-destructive font-semibold">{geoError}</p>}
           <Button onClick={handleSetGeofence} disabled={geoLoading || !geoAddress.trim()} className="font-bold italic">
             {geoLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Definir Perímetro
