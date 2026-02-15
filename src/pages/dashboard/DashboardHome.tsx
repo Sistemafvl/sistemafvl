@@ -171,8 +171,8 @@ const DashboardHome = () => {
       </div>
 
       {/* Modal de resultado TBR */}
-      <Dialog open={showTbrModal} onOpenChange={setShowTbrModal}>
-        <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()}>
+      <Dialog open={showTbrModal} onOpenChange={(open) => { if (!open) setShowTbrModal(false); }}>
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="font-bold italic">Rastreamento TBR</DialogTitle>
             <DialogDescription>

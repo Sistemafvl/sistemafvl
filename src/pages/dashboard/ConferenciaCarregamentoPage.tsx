@@ -190,7 +190,16 @@ const ConferenciaCarregamentoPage = () => {
         if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
         grouped[t.ride_id].push(t);
       });
-      setTbrs(grouped);
+      // Preserve _yellowHighlight flags from current state
+      setTbrs((prev) => {
+        const yellowIds = new Set<string>();
+        Object.values(prev).flat().forEach(t => { if (t._yellowHighlight) yellowIds.add(t.id); });
+        const result: Record<string, Tbr[]> = {};
+        for (const [rideId, list] of Object.entries(grouped)) {
+          result[rideId] = list.map(t => yellowIds.has(t.id) ? { ...t, _yellowHighlight: true } : t);
+        }
+        return result;
+      });
     } else {
       setTbrs({});
     }
@@ -346,13 +355,17 @@ const ConferenciaCarregamentoPage = () => {
         const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
 
         if (count === 0) {
-          // Normal insert
+          // Normal insert — add to state + DB
           setTbrs((prev) => ({
             ...prev,
             [rideId]: [...(prev[rideId] ?? []), newTbr],
           }));
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+          await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
+          fetchRides();
         } else if (count === 1) {
-          // Duplicate (2nd read) — mark both red
+          // Duplicate (2nd read) — LOCAL ONLY, do NOT insert in DB
           newTbr._duplicate = true;
           setTbrs((prev) => {
             const updated = (prev[rideId] ?? []).map(t =>
@@ -360,8 +373,9 @@ const ConferenciaCarregamentoPage = () => {
             );
             return { ...prev, [rideId]: [...updated, newTbr] };
           });
+          playErrorBeep();
 
-          // Auto-delete 2nd after 1s
+          // Auto-remove 2nd from state after 1s, clear duplicate flag on 1st
           setTimeout(() => {
             setTbrs((prev) => {
               const list = prev[rideId] ?? [];
@@ -370,10 +384,11 @@ const ConferenciaCarregamentoPage = () => {
                 .map(t => t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: false } : t);
               return { ...prev, [rideId]: filtered };
             });
-            supabase.from("ride_tbrs").delete().eq("id", tempId);
           }, 1000);
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
         } else if (count >= 2) {
-          // Triplicate (3rd read) — mark all red, then remove last 2
+          // Triplicate (3rd read) — LOCAL ONLY, do NOT insert in DB
           newTbr._triplicate = true;
           setTbrs((prev) => {
             const updated = (prev[rideId] ?? []).map(t =>
@@ -381,8 +396,9 @@ const ConferenciaCarregamentoPage = () => {
             );
             return { ...prev, [rideId]: [...updated, newTbr] };
           });
+          playErrorBeep();
 
-          // After 1s: delete 2nd and 3rd, highlight 1st yellow permanently
+          // After 1s: remove 2nd and 3rd from state, highlight 1st yellow permanently
           const secondId = occurrences[1]?.id;
           setTimeout(() => {
             setTbrs((prev) => {
@@ -395,17 +411,10 @@ const ConferenciaCarregamentoPage = () => {
                 .map(t => t.id === first?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
               return { ...prev, [rideId]: filtered };
             });
-            if (secondId) supabase.from("ride_tbrs").delete().eq("id", secondId);
-            supabase.from("ride_tbrs").delete().eq("id", tempId);
           }, 1000);
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
         }
-
-        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-
-        // Insert in DB
-        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
-        if (count === 0) fetchRides();
       } else {
         playErrorBeep();
         toast.error("Código inválido! Deve iniciar com TBR");
