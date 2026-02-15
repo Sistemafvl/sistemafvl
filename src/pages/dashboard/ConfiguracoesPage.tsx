@@ -63,17 +63,30 @@ const ConfiguracoesPage = () => {
     }
   };
 
+  const [geoError, setGeoError] = useState("");
+
   const handleSetGeofence = async () => {
     if (!unitId || !geoAddress.trim()) return;
     setGeoLoading(true);
+    setGeoError("");
     try {
       const res = await supabase.functions.invoke("geocode-address", { body: { address: geoAddress.trim() } });
-      // Handle response - data may come as string or object
       let geoData = res.data;
       if (typeof geoData === "string") {
         try { geoData = JSON.parse(geoData); } catch { geoData = null; }
       }
-      if (res.error || !geoData?.lat) {
+      if (res.error) {
+        setGeoError("Erro ao chamar serviço de geocodificação. Tente novamente.");
+        setGeoLoading(false);
+        return;
+      }
+      if (!geoData || geoData.error) {
+        setGeoError(geoData?.error || "Endereço não encontrado. Verifique e tente novamente.");
+        setGeoLoading(false);
+        return;
+      }
+      if (!geoData.lat || !geoData.lng) {
+        setGeoError("Não foi possível obter coordenadas para este endereço.");
         setGeoLoading(false);
         return;
       }
@@ -86,8 +99,8 @@ const ConfiguracoesPage = () => {
       setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: geoData.lat, lng: geoData.lng });
       setGeoAddress("");
       setGeoCep("");
-    } catch {
-      // Error setting geofence
+    } catch (err) {
+      setGeoError("Erro de rede ao definir perímetro. Verifique sua conexão.");
     }
     setGeoLoading(false);
   };
@@ -171,6 +184,9 @@ const ConfiguracoesPage = () => {
             <Label className="font-semibold">Endereço completo</Label>
             <Input placeholder="Ex: Rua Example, 123, Bairro, Cidade - UF" value={geoAddress} onChange={(e) => setGeoAddress(e.target.value)} />
           </div>
+          {geoError && (
+            <p className="text-sm text-destructive font-semibold">{geoError}</p>
+          )}
           <Button onClick={handleSetGeofence} disabled={geoLoading || !geoAddress.trim()} className="font-bold italic">
             {geoLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
             Definir Perímetro

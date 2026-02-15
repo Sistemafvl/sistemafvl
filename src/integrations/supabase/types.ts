@@ -219,6 +219,69 @@ export type Database = {
           },
         ]
       }
+      piso_entries: {
+        Row: {
+          closed_at: string | null
+          conferente_id: string | null
+          created_at: string
+          driver_name: string | null
+          id: string
+          reason: string
+          ride_id: string | null
+          route: string | null
+          status: string
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          driver_name?: string | null
+          id?: string
+          reason: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          driver_name?: string | null
+          id?: string
+          reason?: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
+      piso_reasons: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       ps_entries: {
         Row: {
           closed_at: string | null

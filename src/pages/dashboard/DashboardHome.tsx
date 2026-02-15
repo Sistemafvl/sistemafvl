@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { Badge } from "@/components/ui/badge";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -20,6 +21,11 @@ interface TbrResult {
   finished_at: string | null;
   loading_status: string | null;
   sequence_number: number | null;
+  car_model: string | null;
+  car_plate: string | null;
+  car_color: string | null;
+  ps_status: { open: boolean; description: string } | null;
+  rto_status: { open: boolean; description: string } | null;
   all_scans: { code: string; scanned_at: string }[];
 }
 
@@ -60,7 +66,6 @@ const DashboardHome = () => {
       setTbrResult(null);
       setTbrNotFound(false);
 
-      // Search ride_tbrs
       const { data: tbrData } = await supabase
         .from("ride_tbrs")
         .select("*")
@@ -77,65 +82,49 @@ const DashboardHome = () => {
       const tbr = tbrData[0];
       const rideId = tbr.ride_id;
 
-      // Get all scans for this ride
-      const { data: allScans } = await supabase
-        .from("ride_tbrs")
-        .select("code, scanned_at")
-        .eq("ride_id", rideId)
-        .order("scanned_at", { ascending: true });
+      // Parallel fetches
+      const [scansRes, rideRes] = await Promise.all([
+        supabase.from("ride_tbrs").select("code, scanned_at").eq("ride_id", rideId).order("scanned_at", { ascending: true }),
+        supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle(),
+      ]);
 
-      // Get ride details
-      const { data: ride } = await supabase
-        .from("driver_rides")
-        .select("*")
-        .eq("id", rideId)
-        .maybeSingle();
-
+      const ride = rideRes.data;
       if (!ride) {
         setTbrNotFound(true);
         setTbrLoading(false);
         return;
       }
 
-      // Get driver
-      const { data: driver } = await supabase
-        .from("drivers")
-        .select("name")
-        .eq("id", ride.driver_id)
-        .maybeSingle();
-
-      // Get unit
-      const { data: unit } = await supabase
-        .from("units")
-        .select("name")
-        .eq("id", ride.unit_id)
-        .maybeSingle();
-
-      // Get conferente
-      let conferenteName: string | null = null;
-      if (ride.conferente_id) {
-        const { data: conf } = await supabase
-          .from("user_profiles")
-          .select("name")
-          .eq("id", ride.conferente_id)
-          .maybeSingle();
-        conferenteName = conf?.name ?? null;
-      }
+      // Parallel: driver, unit, conferente, ps, rto
+      const [driverRes, unitRes, confRes, psRes, rtoRes] = await Promise.all([
+        supabase.from("drivers").select("name, car_model, car_plate, car_color").eq("id", ride.driver_id).maybeSingle(),
+        supabase.from("units").select("name").eq("id", ride.unit_id).maybeSingle(),
+        ride.conferente_id
+          ? supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from("ps_entries").select("description, status").eq("tbr_code", code).eq("status", "open").maybeSingle(),
+        supabase.from("rto_entries").select("description, status").eq("tbr_code", code).eq("status", "open").maybeSingle(),
+      ]);
 
       setTbrResult({
         code: tbr.code,
         scanned_at: tbr.scanned_at ?? "",
         ride_id: rideId,
-        driver_name: driver?.name ?? "Desconhecido",
+        driver_name: driverRes.data?.name ?? "Desconhecido",
         route: ride.route,
         login: ride.login,
-        unit_name: unit?.name ?? "—",
-        conferente_name: conferenteName,
+        unit_name: unitRes.data?.name ?? "—",
+        conferente_name: confRes.data?.name ?? null,
         started_at: ride.started_at,
         finished_at: ride.finished_at,
         loading_status: ride.loading_status,
         sequence_number: ride.sequence_number,
-        all_scans: allScans ?? [],
+        car_model: driverRes.data?.car_model ?? null,
+        car_plate: driverRes.data?.car_plate ?? null,
+        car_color: driverRes.data?.car_color ?? null,
+        ps_status: psRes.data ? { open: true, description: psRes.data.description } : null,
+        rto_status: rtoRes.data ? { open: true, description: rtoRes.data.description } : null,
+        all_scans: scansRes.data ?? [],
       });
       setTbrLoading(false);
     }
@@ -172,12 +161,11 @@ const DashboardHome = () => {
         </div>
       </div>
 
-      {/* Campo de busca TBR */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
         <Input
           value={tbrSearch}
-          onChange={(e) => setTbrSearch(e.target.value)}
+          onChange={(e) => { if (e.target.value.length <= MAX_TBR_LENGTH) setTbrSearch(e.target.value); }}
           onKeyDown={handleTbrKeyDown}
           placeholder="Buscar TBR..."
           className="pl-10 h-12 text-base"
@@ -185,11 +173,10 @@ const DashboardHome = () => {
         />
       </div>
 
-      {/* Modal de resultado TBR — custom overlay, not Radix Dialog */}
       {showTbrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/80" onClick={closeModal} />
-          <div className="relative z-50 w-full max-w-lg border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
+          <div className="relative z-50 w-full max-w-lg border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95 max-h-[90vh] overflow-y-auto">
             <button
               onClick={closeModal}
               className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none z-10"
@@ -211,14 +198,29 @@ const DashboardHome = () => {
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : tbrNotFound ? (
-                <p className="text-sm text-muted-foreground italic text-center py-4">
-                  TBR não encontrado.
-                </p>
+                <p className="text-sm text-muted-foreground italic text-center py-4">TBR não encontrado.</p>
               ) : tbrResult ? (
                 <div className="space-y-3 text-sm">
+                  {/* Badges PS / RTO */}
+                  {(tbrResult.ps_status || tbrResult.rto_status) && (
+                    <div className="flex flex-wrap gap-2">
+                      {tbrResult.ps_status && (
+                        <Badge variant="destructive" className="text-xs">
+                          PS Aberto — {tbrResult.ps_status.description}
+                        </Badge>
+                      )}
+                      {tbrResult.rto_status && (
+                        <Badge className="bg-orange-600 text-white text-xs">
+                          RTO Aberto — {tbrResult.rto_status.description}
+                        </Badge>
+                      )}
+                    </div>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
                     <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>
+                    <div><strong>Carro:</strong> {[tbrResult.car_model, tbrResult.car_color].filter(Boolean).join(" • ") || "—"}</div>
+                    <div><strong>Placa:</strong> {tbrResult.car_plate || "—"}</div>
                     <div><strong>Login:</strong> {tbrResult.login || "—"}</div>
                     <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
                     <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
