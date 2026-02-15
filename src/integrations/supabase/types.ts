@@ -421,6 +421,33 @@ export type Database = {
           },
         ]
       }
+      unit_logins: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          login: string
+          password: string
+          unit_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          login: string
+          password: string
+          unit_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          login?: string
+          password?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       units: {
         Row: {
           active: boolean

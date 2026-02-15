@@ -11,6 +11,7 @@ import ConferentesPage from "./pages/dashboard/ConferentesPage";
 import ConferenciaCarregamentoPage from "./pages/dashboard/ConferenciaCarregamentoPage";
 import PSPage from "./pages/dashboard/PSPage";
 import RTOPage from "./pages/dashboard/RTOPage";
+import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import DriverLayout from "./components/dashboard/DriverLayout";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverQueue from "./pages/driver/DriverQueue";
@@ -41,6 +42,7 @@ const App = () => (
             <Route path="conferencia" element={<ConferenciaCarregamentoPage />} />
             <Route path="ps" element={<PSPage />} />
             <Route path="rto" element={<RTOPage />} />
+            <Route path="configuracoes" element={<ConfiguracoesPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
