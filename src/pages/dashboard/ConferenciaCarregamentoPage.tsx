@@ -392,14 +392,13 @@ const ConferenciaCarregamentoPage = () => {
           let tripNumber = 1;
 
           if (previousTbrs && previousTbrs.length > 0) {
-            // TBR existed before — check if it went through Retorno Piso
-            const { data: closedPiso } = await supabase
+            // TBR existed before — check if it was registered in Retorno Piso (any status)
+            const { data: pisoEntries } = await supabase
               .from("piso_entries")
-              .select("id")
-              .eq("tbr_code", code)
-              .eq("status", "closed");
+              .select("id, status")
+              .eq("tbr_code", code);
 
-            if (!closedPiso || closedPiso.length === 0) {
+            if (!pisoEntries || pisoEntries.length === 0) {
               // Block: TBR needs to go through Retorno Piso first
               playErrorBeep();
               const { toast } = await import("@/hooks/use-toast");
