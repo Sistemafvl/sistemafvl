@@ -113,12 +113,18 @@ const ConfiguracoesPage = () => {
         setGeoLoading(false);
         return;
       }
-      await supabase.from("units").update({
+      const { error: updateError } = await supabase.from("units").update({
         geofence_address: geoAddress.trim(),
         geofence_lat: geoData.lat,
         geofence_lng: geoData.lng,
         geofence_radius_meters: geoRadius,
       } as any).eq("id", unitId);
+      if (updateError) {
+        console.error("Update error:", updateError);
+        setGeoError("Erro ao salvar perímetro no banco.");
+        setGeoLoading(false);
+        return;
+      }
       setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: geoData.lat, lng: geoData.lng });
       setGeoAddress("");
       setGeoCep("");
@@ -142,21 +148,21 @@ const ConfiguracoesPage = () => {
     setSavingPin(false);
   };
 
-  // Leaflet map HTML
-  const mapBlobUrl = useMemo(() => {
+  // Leaflet map srcdoc HTML
+  const mapSrcdoc = useMemo(() => {
     if (!currentGeo.lat || !currentGeo.lng) return null;
-    const html = `<!DOCTYPE html>
+    return `<!DOCTYPE html>
 <html><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"><\/script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>html,body,#map{margin:0;padding:0;width:100%;height:100%}</style>
 </head><body>
 <div id="map"></div>
 <script>
 var map=L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OpenStreetMap'}).addTo(map);
 var marker=L.marker([${currentGeo.lat},${currentGeo.lng}],{draggable:true}).addTo(map);
 var circle=L.circle([${currentGeo.lat},${currentGeo.lng}],{radius:${geoRadius},color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);
 map.fitBounds(circle.getBounds());
@@ -171,15 +177,9 @@ window.addEventListener('message',function(e){
     map.fitBounds(circle.getBounds());
   }
 });
-<\/script>
+</script>
 </body></html>`;
-    return URL.createObjectURL(new Blob([html], { type: "text/html" }));
-  }, [currentGeo.lat, currentGeo.lng]);
-
-  // Cleanup blob URL
-  useEffect(() => {
-    return () => { if (mapBlobUrl) URL.revokeObjectURL(mapBlobUrl); };
-  }, [mapBlobUrl]);
+  }, [currentGeo.lat, currentGeo.lng, geoRadius]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -219,16 +219,15 @@ window.addEventListener('message',function(e){
           )}
 
           {/* Leaflet Map */}
-          {mapBlobUrl && (
+          {mapSrcdoc && (
             <div className="rounded-md overflow-hidden border border-border">
               <iframe
                 ref={iframeRef}
-                src={mapBlobUrl}
+                srcDoc={mapSrcdoc}
                 width="100%"
                 height="350"
                 className="border-0"
                 title="Mapa do perímetro"
-                sandbox="allow-scripts allow-same-origin"
               />
             </div>
           )}
