@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, RotateCcw } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, RotateCcw, MapPin } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -62,6 +62,12 @@ const RetornoPisoPage = () => {
   const [saving, setSaving] = useState(false);
   const [entries, setEntries] = useState<PisoEntry[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // RTO CEP Modal
+  const [rtoModalOpen, setRtoModalOpen] = useState(false);
+  const [rtoEntry, setRtoEntry] = useState<PisoEntry | null>(null);
+  const [rtoCep, setRtoCep] = useState("");
+  const [rtoSaving, setRtoSaving] = useState(false);
 
   useEffect(() => {
     if (unitSession) {
@@ -187,10 +193,9 @@ const RetornoPisoPage = () => {
     inputRef.current?.focus();
   };
 
-  const handleMigrate = async (entry: PisoEntry, target: "ps" | "rto") => {
+  const handleMigratePs = async (entry: PisoEntry) => {
     if (!unitSession) return;
-    const table = target === "ps" ? "ps_entries" : "rto_entries";
-    await supabase.from(table).insert({
+    await supabase.from("ps_entries").insert({
       tbr_code: entry.tbr_code,
       ride_id: entry.ride_id,
       unit_id: unitSession.id,
@@ -200,6 +205,40 @@ const RetornoPisoPage = () => {
     } as any);
     await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", entry.id);
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+  };
+
+  const handleOpenRtoModal = (entry: PisoEntry) => {
+    setRtoEntry(entry);
+    setRtoCep("");
+    setRtoModalOpen(true);
+  };
+
+  const handleCepChange = (value: string) => {
+    const digits = value.replace(/\D/g, "").slice(0, 8);
+    if (digits.length > 5) {
+      setRtoCep(`${digits.slice(0, 5)}-${digits.slice(5)}`);
+    } else {
+      setRtoCep(digits);
+    }
+  };
+
+  const handleConfirmRto = async () => {
+    if (!unitSession || !rtoEntry) return;
+    setRtoSaving(true);
+    await supabase.from("rto_entries").insert({
+      tbr_code: rtoEntry.tbr_code,
+      ride_id: rtoEntry.ride_id,
+      unit_id: unitSession.id,
+      driver_name: rtoEntry.driver_name,
+      route: rtoEntry.route,
+      description: rtoEntry.reason,
+      cep: rtoCep.replace("-", "") || null,
+    } as any);
+    await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", rtoEntry.id);
+    setEntries((prev) => prev.filter((e) => e.id !== rtoEntry.id));
+    setRtoModalOpen(false);
+    setRtoEntry(null);
+    setRtoSaving(false);
   };
 
   const allReasons = [...DEFAULT_REASONS, ...customReasons.map((r) => r.label)];
@@ -255,10 +294,10 @@ const RetornoPisoPage = () => {
                       <TableCell className="text-xs">{format(new Date(e.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex gap-1 justify-center">
-                          <Button variant="outline" size="sm" onClick={() => handleMigrate(e, "ps")}>
+                          <Button variant="outline" size="sm" onClick={() => handleMigratePs(e)}>
                             <AlertTriangle className="h-3 w-3 mr-1" /> PS
                           </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleMigrate(e, "rto")}>
+                          <Button variant="outline" size="sm" onClick={() => handleOpenRtoModal(e)}>
                             <RotateCcw className="h-3 w-3 mr-1" /> RTO
                           </Button>
                         </div>
@@ -329,6 +368,37 @@ const RetornoPisoPage = () => {
               <Button className="w-full" onClick={handleSave} disabled={saving || !selectedReason}>
                 {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Gravar
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RTO CEP Modal */}
+      {rtoModalOpen && rtoEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80" onClick={() => setRtoModalOpen(false)} />
+          <div className="relative z-50 w-full max-w-sm border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
+            <button onClick={() => setRtoModalOpen(false)} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+            <h2 className="text-lg font-bold italic mb-1 flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-primary" />
+              RTO — {rtoEntry.tbr_code}
+            </h2>
+            <p className="text-sm text-muted-foreground mb-4">Informe o CEP do RTO para incluí-lo na lista.</p>
+            <div className="space-y-3">
+              <Input
+                value={rtoCep}
+                onChange={(e) => handleCepChange(e.target.value)}
+                placeholder="00000-000"
+                className="text-center font-mono text-lg tracking-widest"
+                maxLength={9}
+                autoFocus
+              />
+              <Button className="w-full" onClick={handleConfirmRto} disabled={rtoSaving || rtoCep.replace(/\D/g, "").length < 8}>
+                {rtoSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1" />}
+                Incluir RTO
               </Button>
             </div>
           </div>
