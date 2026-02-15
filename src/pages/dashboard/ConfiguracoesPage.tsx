@@ -128,14 +128,14 @@ const ConfiguracoesPage = () => {
 <html><head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
 <style>html,body,#map{margin:0;padding:0;width:100%;height:100%}</style>
 </head><body>
 <div id="map"></div>
 <script>
-var map=L.map('map');
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OpenStreetMap'}).addTo(map);
+var map=L.map('map',{attributionControl:false});
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
 var marker=L.marker([${currentGeo.lat},${currentGeo.lng}]).addTo(map);
 var circle=L.circle([${currentGeo.lat},${currentGeo.lng}],{radius:${geoRadius},color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);
 map.fitBounds(circle.getBounds());
