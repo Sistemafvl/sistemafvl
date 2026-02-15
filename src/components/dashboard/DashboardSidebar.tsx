@@ -41,6 +41,8 @@ const formatCnpj = (v: string) => {
 const menuItems = [
   { title: "Visão Geral", url: "/dashboard", icon: LayoutDashboard },
   { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
+  { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
+  { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
 ];
 
 const managerMenuItems = [
@@ -48,8 +50,6 @@ const managerMenuItems = [
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Motoristas Parceiros", url: "/dashboard/motoristas-parceiros", icon: Users },
   { title: "Conferentes", url: "/dashboard/conferentes", icon: ClipboardCheck },
-  { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
-  { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
 ];
 
 const managerModalItems = [
