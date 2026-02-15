@@ -334,6 +334,7 @@ const ConferenciaCarregamentoPage = () => {
 
   // Auto-save TBR with debounce + optimistic insert + duplicate/triplicate detection
   const handleTbrInputChange = (rideId: string, value: string) => {
+    if (value.length > 15) return;
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
 
     if (debounceTimers.current[rideId]) {
