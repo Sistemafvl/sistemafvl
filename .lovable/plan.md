@@ -1,97 +1,105 @@
 
-# Ciclo de Vida do TBR e Cores de Reincidencia
+# Quatro Melhorias no Sistema FVL
 
-## Resumo
+## 1. Toast melhorado para TBR bloqueado na Conferencia
 
-Implementar rastreamento completo do ciclo de vida do TBR, com indicacao visual (roxo para 2a ida, laranja para 3a ida), som de beep, legenda e validacao de que o TBR passou pelo Retorno Piso antes de sair novamente.
-
-## Alteracoes no Banco de Dados
-
-Adicionar coluna `trip_number` na tabela `ride_tbrs` para armazenar em qual viagem o TBR esta (1 = primeira, 2 = segunda, 3 = terceira ou mais).
-
-```text
-ALTER TABLE ride_tbrs ADD COLUMN trip_number integer NOT NULL DEFAULT 1;
-```
-
-## Alteracoes na Conferencia de Carregamento
+Quando um TBR ja saiu para rota e nao passou pelo Retorno Piso, a mensagem de bloqueio sera mais clara e informativa.
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-### 1. Logica de escaneamento do TBR (handleTbrInputChange)
+- Alterar o texto do toast para: **"Este TBR encontra-se em viagem. Registre-o no Retorno Piso antes de escaneá-lo novamente no carregamento."**
+- Titulo: **"TBR em viagem"**
 
-Quando um TBR e escaneado pela primeira vez no carregamento (count === 0), antes de inserir, o sistema fara:
+---
 
-1. **Buscar se o TBR ja existe em outros carregamentos** (`ride_tbrs` com o mesmo `code` em outros `ride_id`)
-2. **Se existir em carregamento anterior:**
-   - Verificar se existe um `piso_entries` fechado (status = "closed") para esse TBR
-   - Se **NAO** existir entrada no Retorno Piso: exibir alerta bloqueando a insercao ("Este TBR precisa ser registrado no Retorno Piso antes de sair novamente")
-   - Se existir: calcular `trip_number` (contar quantas vezes o TBR aparece em `ride_tbrs` + 1), inserir com `trip_number`, fechar automaticamente o `piso_entries` aberto (se houver), e tocar beep
-3. **Se nao existir em nenhum carregamento anterior:** inserir normalmente com `trip_number = 1`
+## 2. Dashboard Visao Geral com metricas e graficos
 
-### 2. Cores na lista de TBRs lidos
+**Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
 
-Atualizar a interface `Tbr` para incluir `trip_number`:
+Abaixo do campo de busca TBR, adicionar uma secao completa de metricas operacionais:
 
-```text
-interface Tbr {
-  id: string;
-  code: string;
-  scanned_at: string;
-  trip_number?: number;  // NOVO
-  _duplicate?: boolean;
-  _triplicate?: boolean;
-  _yellowHighlight?: boolean;
-}
-```
+**Cards de resumo (grid 2x2 em mobile, 4 colunas em desktop):**
+- Total de carregamentos do dia (contagem de `driver_rides` com `completed_at` de hoje)
+- TBRs escaneados hoje (contagem de `ride_tbrs` com `scanned_at` de hoje)
+- PS abertos (contagem de `ps_entries` com `status = 'open'` da unidade)
+- RTO abertos (contagem de `rto_entries` com `status = 'open'` da unidade)
+- Retornos Piso abertos (contagem de `piso_entries` com `status = 'open'`)
+- Carregamentos em andamento (contagem de `driver_rides` com `loading_status = 'loading'`)
 
-Atualizar `getTbrItemClass` para considerar `trip_number`:
-- `trip_number === 2`: fundo roxo claro (`bg-purple-100 text-purple-700`)
-- `trip_number >= 3`: fundo laranja claro (`bg-orange-100 text-orange-700`)
+**Graficos (usando Recharts, ja instalado):**
+- Grafico de barras: carregamentos por dia (ultimos 7 dias)
+- Grafico de linha: TBRs escaneados por dia (ultimos 7 dias)
+- Grafico de pizza/donut: distribuicao de status dos carregamentos (pending/loading/finished)
 
-### 3. Legenda visual
+Todas as queries filtradas por `unit_id` da sessao atual.
 
-Adicionar ao lado dos botoes de navegacao (setas) uma legenda com quadrados coloridos:
+---
 
-```text
-[<] [>]   [ ] Branco = 1a viagem   [roxo] 2a viagem   [laranja] 3a+ viagem
-```
+## 3. Configuracao de valor por TBR
 
-Serao pequenos quadrados (12x12px) com as cores correspondentes e texto descritivo ao lado.
+**Banco de dados:** Criar tabela `unit_settings` com colunas:
+- `id` (uuid, PK)
+- `unit_id` (uuid, NOT NULL)
+- `tbr_value` (numeric, default 0)
+- `created_at` / `updated_at` (timestamps)
 
-### 4. Beep sonoro
+Politicas RLS abertas (mesmo padrao do projeto).
 
-Reutilizar a funcao `playErrorBeep` existente (ou criar variante com tom diferente) para tocar quando um TBR de reincidencia for escaneado.
+**Arquivo:** `src/pages/dashboard/ConfiguracoesPage.tsx`
 
-## Alteracoes no Retorno Piso
+Adicionar nova secao (Card) abaixo de "Logins e Senhas":
+- Titulo: "Valor por TBR"
+- Campo numerico com mascara de moeda (R$) para definir o valor que cada TBR entregue vale para o motorista
+- Botao "Salvar" que faz upsert na tabela `unit_settings`
+- Texto explicativo: "Valor pago por TBR entregue (exceto retornos piso)"
+
+---
+
+## 4. Modal de CEP no botao RTO do Retorno Piso
+
+**Banco de dados:** Adicionar coluna `cep` (text, nullable) na tabela `rto_entries`.
 
 **Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx`
 
-Quando um TBR e adicionado a um novo carregamento (detectado via realtime ou na proxima carga de dados), o sistema fechara automaticamente a entrada aberta no piso. Isso sera feito na logica de escaneamento da Conferencia, nao no RetornoPisoPage em si.
+Quando o usuario clicar no botao "RTO" na lista do Retorno Piso:
+1. Abrir um modal pedindo o CEP do RTO
+2. Campo de CEP com mascara (00000-000)
+3. Botao "Incluir RTO" que:
+   - Cria a entrada na tabela `rto_entries` com o CEP informado
+   - Fecha o `piso_entries` correspondente (status = 'closed')
+   - Remove da lista do Retorno Piso
+
+A funcionalidade futura de comparar rota com CEP para sugerir envio de RTO durante carregamentos sera preparada com o campo `cep` armazenado, mas a logica de matching sera implementada em uma proxima etapa.
+
+---
 
 ## Secao Tecnica
 
-**Fluxo de validacao no escaneamento (dentro do debounce de 300ms):**
+**Migracoes SQL necessarias:**
 
 ```text
-1. code = valor escaneado
-2. Buscar ride_tbrs WHERE code = code AND ride_id != rideId atual
-3. Se encontrou registros anteriores:
-   a. Buscar piso_entries WHERE tbr_code = code AND status = 'closed'
-   b. Se NAO encontrou piso_entry fechado:
-      -> Bloquear insercao, exibir toast de erro
-      -> "TBR precisa ser registrado no Retorno Piso"
-   c. Se encontrou:
-      -> trip_number = (total de ride_tbrs com esse code) + 1
-      -> Inserir ride_tbrs com trip_number
-      -> Fechar piso_entries abertos (UPDATE status='closed')
-      -> Tocar beep
-4. Se NAO encontrou registros anteriores:
-   -> Inserir normalmente com trip_number = 1
+-- Tabela unit_settings
+CREATE TABLE public.unit_settings (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  tbr_value numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.unit_settings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read unit_settings" ON public.unit_settings FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert unit_settings" ON public.unit_settings FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update unit_settings" ON public.unit_settings FOR UPDATE USING (true);
+-- Unique constraint para upsert
+CREATE UNIQUE INDEX unit_settings_unit_id_idx ON public.unit_settings (unit_id);
+
+-- Coluna CEP em rto_entries
+ALTER TABLE public.rto_entries ADD COLUMN cep text;
 ```
 
-**Mapeamento de cores na fetchRides:**
-- Ao buscar os TBRs, incluir `trip_number` no SELECT e mapear para o estado local
-
 **Arquivos modificados:**
-- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (logica + UI)
-- Migracao SQL (nova coluna `trip_number`)
+- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (texto do toast)
+- `src/pages/dashboard/DashboardHome.tsx` (metricas, graficos, cards BI)
+- `src/pages/dashboard/ConfiguracoesPage.tsx` (secao valor TBR)
+- `src/pages/dashboard/RetornoPisoPage.tsx` (modal CEP no botao RTO)
+- Migracoes SQL (nova tabela + nova coluna)
