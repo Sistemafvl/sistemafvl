@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2 } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -65,7 +65,7 @@ const QueuePanel = () => {
       .from("queue_entries")
       .select("*")
       .eq("unit_id", unitId)
-      .eq("status", "waiting")
+      .in("status", ["waiting", "approved"])
       .order("joined_at", { ascending: true });
 
     if (!data) { setEntries([]); return; }
@@ -117,6 +117,14 @@ const QueuePanel = () => {
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   };
 
+  const handleApprove = async (entry: QueueEntry) => {
+    await supabase
+      .from("queue_entries")
+      .update({ status: "approved" })
+      .eq("id", entry.id);
+    fetchQueue();
+  };
+
   const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
@@ -166,6 +174,21 @@ const QueuePanel = () => {
     fetchQueue();
   };
 
+  const handleMoveEntry = async (idx: number, direction: "up" | "down") => {
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= entries.length) return;
+
+    const current = entries[idx];
+    const neighbor = entries[targetIdx];
+
+    // Swap joined_at timestamps
+    await Promise.all([
+      supabase.from("queue_entries").update({ joined_at: neighbor.joined_at }).eq("id", current.id),
+      supabase.from("queue_entries").update({ joined_at: current.joined_at }).eq("id", neighbor.id),
+    ]);
+    fetchQueue();
+  };
+
   // Search driver by CPF
   const handleSearchDriver = async () => {
     const cpf = cpfSearch.replace(/\D/g, "");
@@ -197,13 +220,12 @@ const QueuePanel = () => {
     if (!foundDriver || !unitId) return;
     setAddingToQueue(true);
 
-    // Check if already in queue
     const { data: existing } = await supabase
       .from("queue_entries")
       .select("id")
       .eq("unit_id", unitId)
       .eq("driver_id", foundDriver.id)
-      .eq("status", "waiting")
+      .in("status", ["waiting", "approved"])
       .maybeSingle();
 
     if (existing) {
@@ -255,19 +277,19 @@ const QueuePanel = () => {
               <Button
                 size="icon"
                 variant="outline"
-                className="h-7 w-7 ml-auto"
+                className="h-7 w-7"
                 onClick={() => { setShowAddModal(true); setCpfSearch(""); setFoundDriver(null); setSearchError(""); }}
                 title="Adicionar motorista na fila"
               >
                 <Plus className="h-4 w-4" />
               </Button>
               {count > 0 && (
-                <Badge variant="default">{count} na fila</Badge>
+                <Badge variant="default" className="ml-auto">{count} na fila</Badge>
               )}
             </SheetTitle>
           </SheetHeader>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div className="flex-1 overflow-y-auto p-3 space-y-2">
             {entries.length === 0 ? (
               <div className="text-center text-muted-foreground italic py-12 text-sm">
                 Nenhum motorista na fila
@@ -276,32 +298,64 @@ const QueuePanel = () => {
               entries.map((entry, idx) => (
                 <div
                   key={entry.id}
-                  className="flex items-center gap-3 p-3 rounded-lg border border-border bg-card"
+                  className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card"
                 >
-                  <Avatar className="h-10 w-10 shrink-0">
+                  <Avatar className="h-8 w-8 shrink-0">
                     {entry.driver_avatar && <AvatarImage src={entry.driver_avatar} />}
-                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-sm">
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
                       {(entry.driver_name ?? "M")[0].toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">
+                    <p className="font-semibold text-xs truncate">
                       {idx + 1}º — {entry.driver_name}
                     </p>
-                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
-                      Entrada: {formatTime(entry.joined_at)}
+                      {formatTime(entry.joined_at)}
                     </p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="shrink-0 font-bold italic text-xs"
-                    onClick={() => openProgramModal(entry)}
-                  >
-                    <CalendarCheck className="h-3.5 w-3.5 mr-1" />
-                    Programar
-                  </Button>
+                  {entry.status === "waiting" ? (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="shrink-0 font-bold italic text-xs h-7 px-2"
+                      onClick={() => handleApprove(entry)}
+                    >
+                      <Check className="h-3 w-3 mr-1" />
+                      Aprovar
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="shrink-0 font-bold italic text-xs h-7 px-2"
+                      onClick={() => openProgramModal(entry)}
+                    >
+                      <CalendarCheck className="h-3 w-3 mr-1" />
+                      Programar
+                    </Button>
+                  )}
+                  <div className="flex flex-col gap-0.5 shrink-0">
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveEntry(idx, "up")}
+                    >
+                      <ChevronUp className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-6 w-6"
+                      disabled={idx === entries.length - 1}
+                      onClick={() => handleMoveEntry(idx, "down")}
+                    >
+                      <ChevronDown className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               ))
             )}
