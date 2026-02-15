@@ -49,6 +49,7 @@ const DriverQueue = () => {
   const unitName = unitSession?.name ?? "—";
 
   const inQueue = !!myEntry;
+  const isApproved = myEntry?.status === "approved";
 
   // Fetch TBR count for active ride
   useEffect(() => {
@@ -94,21 +95,25 @@ const DriverQueue = () => {
   const fetchQueue = useCallback(async () => {
     if (!unitId || !driverId) return;
 
-    const { data: waiting } = await supabase
+    // Fetch both waiting and approved entries
+    const { data: allEntries } = await supabase
       .from("queue_entries")
       .select("*")
       .eq("unit_id", unitId)
-      .eq("status", "waiting")
+      .in("status", ["waiting", "approved"])
       .order("joined_at", { ascending: true });
 
-    const entries = (waiting ?? []) as QueueEntry[];
-    setQueueCount(entries.length);
+    const entries = (allEntries ?? []) as QueueEntry[];
+    
+    // Count only approved for queue display
+    const approvedEntries = entries.filter((e) => e.status === "approved");
+    setQueueCount(approvedEntries.length);
 
     const mine = entries.find((e) => e.driver_id === driverId);
     setMyEntry(mine ?? null);
 
-    if (mine) {
-      const pos = entries.filter((e) => e.joined_at <= mine.joined_at).length;
+    if (mine && mine.status === "approved") {
+      const pos = approvedEntries.filter((e) => e.joined_at <= mine.joined_at).length;
       setPosition(pos);
     }
 
@@ -159,7 +164,7 @@ const DriverQueue = () => {
   }, [driverId, fetchActiveRide]);
 
   useEffect(() => {
-    if (!myEntry) { setElapsedSeconds(0); return; }
+    if (!myEntry || myEntry.status !== "approved") { setElapsedSeconds(0); return; }
     const joinedAt = new Date(myEntry.joined_at).getTime();
     const update = () => setElapsedSeconds(Math.floor((Date.now() - joinedAt) / 1000));
     update();
@@ -336,6 +341,27 @@ const DriverQueue = () => {
             size="lg"
           >
             {loading ? "Entrando..." : "ENTRAR NA FILA"}
+          </Button>
+        </>
+      ) : !isApproved ? (
+        <>
+          <Button
+            disabled
+            variant="outline"
+            className="w-full h-14 text-lg font-bold border-yellow-500 text-yellow-600 bg-yellow-50 dark:bg-yellow-950/20"
+            size="lg"
+          >
+            AGUARDANDO APROVAÇÃO
+          </Button>
+
+          <Button
+            onClick={leaveQueue}
+            disabled={loading}
+            variant="destructive"
+            className="w-full h-14 text-lg font-bold"
+            size="lg"
+          >
+            {loading ? "Saindo..." : "SAIR DA FILA"}
           </Button>
         </>
       ) : (
