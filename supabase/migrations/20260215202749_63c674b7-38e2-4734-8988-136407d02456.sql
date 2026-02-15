@@ -1,0 +1,1 @@
+ALTER TABLE public.ride_tbrs ADD COLUMN trip_number integer NOT NULL DEFAULT 1;

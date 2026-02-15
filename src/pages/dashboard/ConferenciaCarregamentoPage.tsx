@@ -49,6 +49,7 @@ interface Tbr {
   id: string;
   code: string;
   scanned_at: string;
+  trip_number?: number;
   _duplicate?: boolean;
   _triplicate?: boolean;
   _yellowHighlight?: boolean;
@@ -76,6 +77,32 @@ const playErrorBeep = () => {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+};
+
+const playReincidenceBeep = () => {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 800;
+    gain.gain.value = 0.4;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.15);
+    setTimeout(() => {
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.value = 1000;
+      gain2.gain.value = 0.4;
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start();
+      osc2.stop(ctx.currentTime + 0.15);
+    }, 200);
   } catch {}
 };
 
@@ -194,6 +221,7 @@ const ConferenciaCarregamentoPage = () => {
       for (const [rideId, list] of Object.entries(grouped)) {
         result[rideId] = list.map((t: any) => ({
           ...t,
+          trip_number: t.trip_number ?? 1,
           _yellowHighlight: t.highlight === "yellow",
         }));
       }
@@ -354,6 +382,51 @@ const ConferenciaCarregamentoPage = () => {
         const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
 
         if (count === 0) {
+          // Check lifecycle: does this TBR exist in other rides?
+          const { data: previousTbrs } = await supabase
+            .from("ride_tbrs")
+            .select("id")
+            .eq("code", code)
+            .neq("ride_id", rideId);
+
+          let tripNumber = 1;
+
+          if (previousTbrs && previousTbrs.length > 0) {
+            // TBR existed before — check if it went through Retorno Piso
+            const { data: closedPiso } = await supabase
+              .from("piso_entries")
+              .select("id")
+              .eq("tbr_code", code)
+              .eq("status", "closed");
+
+            if (!closedPiso || closedPiso.length === 0) {
+              // Block: TBR needs to go through Retorno Piso first
+              playErrorBeep();
+              const { toast } = await import("@/hooks/use-toast");
+              toast({
+                title: "TBR bloqueado",
+                description: "Este TBR precisa ser registrado no Retorno Piso antes de sair novamente.",
+                variant: "destructive",
+              });
+              setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+              setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+              return;
+            }
+
+            tripNumber = previousTbrs.length + 1;
+
+            // Close any open piso_entries for this TBR
+            await supabase
+              .from("piso_entries")
+              .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+              .eq("tbr_code", code)
+              .eq("status", "open");
+
+            playReincidenceBeep();
+          }
+
+          newTbr.trip_number = tripNumber;
+
           // Normal insert — add to state + DB
           setTbrs((prev) => ({
             ...prev,
@@ -361,7 +434,7 @@ const ConferenciaCarregamentoPage = () => {
           }));
           setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
           setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-          await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
+          await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber } as any);
           fetchRides();
         } else if (count === 1) {
           // Duplicate (2nd read) — LOCAL ONLY, do NOT insert in DB
@@ -542,6 +615,9 @@ const ConferenciaCarregamentoPage = () => {
     if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
       return "bg-green-100 border-green-400 text-green-800";
     }
+    // Reincidence colors
+    if (tbr.trip_number && tbr.trip_number >= 3) return "bg-orange-100 text-orange-700 border-orange-300";
+    if (tbr.trip_number === 2) return "bg-purple-100 text-purple-700 border-purple-300";
     return "bg-muted/50";
   };
 
@@ -617,7 +693,7 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           {/* Carousel navigation arrows - between filters and cards, right-aligned */}
-          <div className="flex items-center justify-start gap-2 mb-3">
+          <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
             <Button
               variant="outline"
               size="icon"
@@ -636,6 +712,22 @@ const ConferenciaCarregamentoPage = () => {
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
+
+            {/* Legend */}
+            <div className="flex items-center gap-3 ml-2 text-[10px] text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm border bg-white" />
+                <span>1ª viagem</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-purple-200 border border-purple-300" />
+                <span>2ª viagem</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-300" />
+                <span>3ª+ viagem</span>
+              </div>
+            </div>
           </div>
 
           <div ref={emblaRef} className="overflow-hidden">

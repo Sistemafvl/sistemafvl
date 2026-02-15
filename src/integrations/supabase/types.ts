@@ -398,6 +398,7 @@ export type Database = {
           id: string
           ride_id: string
           scanned_at: string | null
+          trip_number: number
         }
         Insert: {
           code: string
@@ -405,6 +406,7 @@ export type Database = {
           id?: string
           ride_id: string
           scanned_at?: string | null
+          trip_number?: number
         }
         Update: {
           code?: string
@@ -412,6 +414,7 @@ export type Database = {
           id?: string
           ride_id?: string
           scanned_at?: string | null
+          trip_number?: number
         }
         Relationships: [
           {
