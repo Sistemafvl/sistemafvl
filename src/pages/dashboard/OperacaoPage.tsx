@@ -69,13 +69,15 @@ const OperacaoPage = () => {
     const confIds = [...new Set(rides.filter((r) => r.conferente_id).map((r) => r.conferente_id!))];
     const rideIds = rides.map((r) => r.id);
 
-    const [driversRes, confsRes, tbrsRes, pisoRes] = await Promise.all([
+    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
       supabase.from("drivers").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
       supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
+      supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
+      supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
     ]);
 
     const driverMap = Object.fromEntries((driversRes.data ?? []).map((d) => [d.id, d]));
@@ -87,10 +89,10 @@ const OperacaoPage = () => {
       tbrCounts[t.ride_id] = (tbrCounts[t.ride_id] || 0) + 1;
     });
 
-    // Count piso returns per ride
-    const pisoCounts: Record<string, number> = {};
-    (pisoRes.data ?? []).forEach((p) => {
-      if (p.ride_id) pisoCounts[p.ride_id] = (pisoCounts[p.ride_id] || 0) + 1;
+    // Count all open issues per ride (piso + ps + rto)
+    const issueCounts: Record<string, number> = {};
+    [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((p) => {
+      if (p.ride_id) issueCounts[p.ride_id] = (issueCounts[p.ride_id] || 0) + 1;
     });
 
     const result: DriverCard[] = rides.map((r) => {
@@ -111,7 +113,7 @@ const OperacaoPage = () => {
         finished_at: r.finished_at,
         completed_at: r.completed_at,
         total_tbrs: tbrCounts[r.id] ?? 0,
-        piso_returns: pisoCounts[r.id] ?? 0,
+        piso_returns: issueCounts[r.id] ?? 0,
       };
     });
 

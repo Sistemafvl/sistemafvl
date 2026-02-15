@@ -87,7 +87,6 @@ const PSPage = () => {
       .from("ps_entries")
       .select("*")
       .eq("unit_id", unitSession.id)
-      .eq("status", "open")
       .order("created_at", { ascending: false });
     if (data) {
       const confIds = [...new Set(data.filter(e => e.conferente_id).map(e => e.conferente_id!))];
@@ -194,8 +193,8 @@ const PSPage = () => {
   };
 
   const handleFinalize = async (id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
     await supabase.from("ps_entries").update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
+    setEntries(prev => prev.map(e => e.id === id ? { ...e, status: "closed" } : e));
   };
 
   const closeModal = () => {
@@ -211,7 +210,7 @@ const PSPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">
             <AlertTriangle className="h-5 w-5 text-primary" />
-            PS - Pendências
+            PS - Problem Solv
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -233,7 +232,7 @@ const PSPage = () => {
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : entries.length === 0 ? (
-            <p className="text-center text-muted-foreground italic py-8">Nenhum PS aberto</p>
+            <p className="text-center text-muted-foreground italic py-8">Nenhum PS registrado</p>
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>
@@ -244,8 +243,9 @@ const PSPage = () => {
                     <TableHead className="font-bold">Rota</TableHead>
                     <TableHead className="font-bold">Conferente</TableHead>
                     <TableHead className="font-bold">Problema</TableHead>
-                    <TableHead className="font-bold">Data</TableHead>
-                    <TableHead className="font-bold text-center">Ações</TableHead>
+                     <TableHead className="font-bold">Data</TableHead>
+                     <TableHead className="font-bold text-center">Status</TableHead>
+                     <TableHead className="font-bold text-center">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -257,11 +257,20 @@ const PSPage = () => {
                       <TableCell>{e.conferente_name ?? "-"}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{e.description}</TableCell>
                       <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
-                          <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
-                        </Button>
-                      </TableCell>
+                       <TableCell className="text-center">
+                         {e.status === "open" ? (
+                           <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-xs font-semibold">Aberto</span>
+                         ) : (
+                           <span className="inline-flex items-center rounded-full bg-green-100 text-green-800 px-2 py-0.5 text-xs font-semibold">Finalizado</span>
+                         )}
+                       </TableCell>
+                       <TableCell className="text-center">
+                         {e.status === "open" && (
+                           <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
+                             <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
+                           </Button>
+                         )}
+                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
