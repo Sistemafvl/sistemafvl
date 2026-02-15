@@ -426,6 +426,10 @@ export type Database = {
           active: boolean
           created_at: string
           domain_id: string
+          geofence_address: string | null
+          geofence_lat: number | null
+          geofence_lng: number | null
+          geofence_radius_meters: number | null
           id: string
           name: string
           password: string
@@ -434,6 +438,10 @@ export type Database = {
           active?: boolean
           created_at?: string
           domain_id: string
+          geofence_address?: string | null
+          geofence_lat?: number | null
+          geofence_lng?: number | null
+          geofence_radius_meters?: number | null
           id?: string
           name: string
           password: string
@@ -442,6 +450,10 @@ export type Database = {
           active?: boolean
           created_at?: string
           domain_id?: string
+          geofence_address?: string | null
+          geofence_lat?: number | null
+          geofence_lng?: number | null
+          geofence_radius_meters?: number | null
           id?: string
           name?: string
           password?: string
