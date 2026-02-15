@@ -26,7 +26,6 @@ interface TbrResult {
   car_color: string | null;
   ps_status: { open: boolean; description: string } | null;
   rto_status: { open: boolean; description: string } | null;
-  all_scans: { code: string; scanned_at: string }[];
 }
 
 const DashboardHome = () => {
@@ -69,8 +68,7 @@ const DashboardHome = () => {
       const { data: tbrData } = await supabase
         .from("ride_tbrs")
         .select("*")
-        .ilike("code", `%${code}%`)
-        .order("scanned_at", { ascending: true })
+        .eq("code", code)
         .limit(1);
 
       if (!tbrData || tbrData.length === 0) {
@@ -82,11 +80,8 @@ const DashboardHome = () => {
       const tbr = tbrData[0];
       const rideId = tbr.ride_id;
 
-      // Parallel fetches
-      const [scansRes, rideRes] = await Promise.all([
-        supabase.from("ride_tbrs").select("code, scanned_at").eq("ride_id", rideId).order("scanned_at", { ascending: true }),
-        supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle(),
-      ]);
+      // Fetch ride
+      const rideRes = await supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle();
 
       const ride = rideRes.data;
       if (!ride) {
@@ -124,7 +119,6 @@ const DashboardHome = () => {
         car_color: driverRes.data?.car_color ?? null,
         ps_status: psRes.data ? { open: true, description: psRes.data.description } : null,
         rto_status: rtoRes.data ? { open: true, description: rtoRes.data.description } : null,
-        all_scans: scansRes.data ?? [],
       });
       setTbrLoading(false);
     }
@@ -228,18 +222,6 @@ const DashboardHome = () => {
                     <div><strong>Status:</strong> {tbrResult.loading_status || "—"}</div>
                     <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                     <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
-                  </div>
-                  <div className="border-t pt-3">
-                    <p className="font-bold italic text-xs mb-2">Movimentos ({tbrResult.all_scans.length} TBRs neste carregamento)</p>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {tbrResult.all_scans.map((s, i) => (
-                        <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${s.code.toUpperCase() === searchedTbr.toUpperCase() ? "bg-green-100 text-green-800 font-semibold" : "bg-muted/50"}`}>
-                          <span className="font-bold text-primary">{i + 1}.</span>
-                          <span className="font-mono flex-1">{s.code}</span>
-                          <span className="text-muted-foreground">{s.scanned_at ? format(new Date(s.scanned_at), "dd/MM HH:mm:ss") : ""}</span>
-                        </div>
-                      ))}
-                    </div>
                   </div>
                 </div>
               ) : null}
