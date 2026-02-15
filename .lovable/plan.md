@@ -1,57 +1,99 @@
 
 
-# Plano de Correcoes - 5 Pontos
+# Melhorias no Geofencing - CEP, Mapa Interativo e Alfinete Arrastavel
 
-## 1. Rastreamento TBR - Exibir apenas o TBR buscado
+## 1. CEP preenche apenas o nome da rua
 
-**Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
+Alterar a linha que monta o endereco a partir do CEP para usar somente `data.logradouro` (nome da rua), sem bairro nem cidade.
 
-Atualmente a busca usa `ilike` com `%code%` (linha 72), o que pode retornar resultados parciais. Alem disso, a secao "Movimentos" lista todos os TBRs do carregamento.
+## 2. Mapa interativo com Leaflet (via CDN no iframe)
 
-Correcoes:
-- Alterar a query de `ilike('%code%')` para `.eq("code", code)` para buscar o TBR exato
-- Remover a secao "Movimentos (X TBRs neste carregamento)" que lista todos os TBRs do ride. O usuario quer ver apenas as informacoes do TBR pesquisado, nao de todo o carregamento
-- Remover a query paralela de `all_scans` (linha 87) e o campo `all_scans` da interface
+Substituir o iframe estatico do OpenStreetMap por um mapa Leaflet carregado via CDN dentro de um iframe blob. O mapa tera:
 
-## 2. Operacao - Contagem deve considerar PS e RTO
+- **Marker arrastavel**: o usuario pode clicar e arrastar o alfinete para reposicionar a localizacao exata
+- **Circulo de raio**: circulo azul semi-transparente que representa a area do geofencing
+- **Redimensionamento em tempo real**: ao alterar o campo "Raio (metros)", o circulo atualiza automaticamente
+- **Comunicacao iframe-pai**: quando o usuario arrasta o alfinete, o iframe envia um `postMessage` com as novas coordenadas (`lat`, `lng`). O componente pai escuta esse evento e atualiza o estado local
+- **Zoom automatico**: o mapa ajusta o zoom para encaixar o circulo inteiro
 
-**Arquivo:** `src/pages/dashboard/OperacaoPage.tsx`
+## 3. Salvar posicao do alfinete arrastado
 
-Atualmente o calculo de "concluidos" subtrai apenas `piso_returns` (retornos ao piso). Quando um TBR vai para PS ou RTO, deveria tambem reduzir a contagem.
+Quando o usuario arrastar o alfinete:
+- As coordenadas locais (`currentGeo.lat`, `currentGeo.lng`) sao atualizadas via `postMessage`
+- O botao "Definir Perimetro" salvara as coordenadas atuais (originais ou ajustadas pelo arraste) no banco
+- Adicionar um novo botao "Salvar Posicao" que aparece quando o alfinete foi movido, permitindo salvar sem precisar redigitar o endereco
 
-Correcoes:
-- Alem de consultar `piso_entries`, tambem consultar `ps_entries` e `rto_entries` com status "open" para os mesmos `ride_id`s
-- Somar todos os retornos (piso + PS + RTO) para cada ride
-- Atualizar o calculo: `concluidos = total_tbrs - (piso + ps + rto)`
-- Atualizar os indicadores gerais para refletir o total correto
+## Implementacao tecnica
 
-## 3 e 4. PS - Finalizar deve manter na lista com status
+**Arquivo:** `src/pages/dashboard/ConfiguracoesPage.tsx`
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+### CEP (linha 56)
+```
+// De:
+const addr = [data.logradouro, data.bairro, ...].filter(Boolean).join(", ");
+// Para:
+const addr = data.logradouro || "";
+```
 
-Atualmente `handleFinalize` remove o item da lista local (linha 197) e atualiza status para "closed" no banco. O usuario quer que o item permaneca na lista com indicacao visual de "Finalizado".
+### Funcao geradora do HTML do mapa
+```
+const getLeafletMapHtml = (lat, lng, radius) => `
+<!DOCTYPE html>
+<html>
+<head>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+</head>
+<body style="margin:0">
+  <div id="map" style="width:100%;height:100%"></div>
+  <script>
+    var map = L.map('map');
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+    var marker = L.marker([${lat}, ${lng}], { draggable: true }).addTo(map);
+    var circle = L.circle([${lat}, ${lng}], {
+      radius: ${radius}, color: '#3b82f6', fillOpacity: 0.15
+    }).addTo(map);
+    map.fitBounds(circle.getBounds());
 
-Correcoes:
-- Alterar `loadEntries` para buscar TODOS os PS da unidade (remover filtro `.eq("status", "open")`)
-- Em `handleFinalize`, ao inves de filtrar/remover, atualizar o status localmente para "closed"
-- Na tabela, adicionar coluna "Status" com Badge colorido:
-  - "open" = Badge amarelo/destrutivo "Aberto"
-  - "closed" = Badge verde "Finalizado"
-- O botao "Finalizar" so aparece para itens com status "open"
+    marker.on('dragend', function(e) {
+      var pos = e.target.getLatLng();
+      circle.setLatLng(pos);
+      parent.postMessage({ type:'marker-moved', lat: pos.lat, lng: pos.lng }, '*');
+    });
 
-## 5. Renomear "Pendencias" para "Problem Solv"
+    window.addEventListener('message', function(e) {
+      if (e.data.type === 'update-radius') {
+        circle.setRadius(e.data.radius);
+        map.fitBounds(circle.getBounds());
+      }
+    });
+  </script>
+</body>
+</html>
+`;
+```
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+### Escuta de postMessage no componente React
+- `useEffect` com listener de `message` para capturar `marker-moved`
+- Atualiza `currentGeo.lat` e `currentGeo.lng` localmente
+- Seta flag `pinMoved` para mostrar botao "Salvar Posicao"
 
-Alterar o titulo de `PS - Pendencias` para `PS - Problem Solv` na linha 214.
+### Comunicacao de raio para o iframe
+- `useEffect` que observa `geoRadius` e envia `postMessage({ type: 'update-radius', radius })` para o iframe via `ref`
+- O circulo no mapa redimensiona sem recarregar
+
+### Botao "Salvar Posicao"
+- Aparece apenas quando `pinMoved === true`
+- Salva `currentGeo.lat`, `currentGeo.lng` e `geoRadius` no banco via update na tabela `units`
+- Reseta `pinMoved` apos salvar
 
 ---
 
-## Resumo tecnico de arquivos
+## Resumo
 
 | Acao | Arquivo |
 |------|---------|
-| Editar | `src/pages/dashboard/DashboardHome.tsx` |
-| Editar | `src/pages/dashboard/OperacaoPage.tsx` |
-| Editar | `src/pages/dashboard/PSPage.tsx` |
+| Editar | `src/pages/dashboard/ConfiguracoesPage.tsx` |
+
+Nenhuma dependencia nova sera instalada. Leaflet carrega via CDN dentro do iframe isolado.
 
