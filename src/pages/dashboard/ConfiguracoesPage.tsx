@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { MapPin, KeyRound, Trash2, Plus, Loader2, Save } from "lucide-react";
+import { MapPin, KeyRound, Trash2, Plus, Loader2 } from "lucide-react";
 
 const ConfiguracoesPage = () => {
   const { unitSession } = useAuthStore();
@@ -19,8 +19,6 @@ const ConfiguracoesPage = () => {
   const [geoLoading, setGeoLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [geoError, setGeoError] = useState("");
-  const [pinMoved, setPinMoved] = useState(false);
-  const [savingPin, setSavingPin] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Logins
@@ -46,17 +44,6 @@ const ConfiguracoesPage = () => {
 
   useEffect(() => { fetchUnit(); fetchLogins(); }, [fetchUnit, fetchLogins]);
 
-  // Listen for marker-moved postMessage from iframe
-  useEffect(() => {
-    const handler = (e: MessageEvent) => {
-      if (e.data?.type === "marker-moved") {
-        setCurrentGeo(prev => ({ ...prev, lat: e.data.lat, lng: e.data.lng }));
-        setPinMoved(true);
-      }
-    };
-    window.addEventListener("message", handler);
-    return () => window.removeEventListener("message", handler);
-  }, []);
 
   // Send radius updates to iframe
   useEffect(() => {
@@ -128,24 +115,10 @@ const ConfiguracoesPage = () => {
       setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: geoData.lat, lng: geoData.lng });
       setGeoAddress("");
       setGeoCep("");
-      setPinMoved(false);
     } catch {
       setGeoError("Erro de rede ao definir perímetro. Verifique sua conexão.");
     }
     setGeoLoading(false);
-  };
-
-  const handleSavePin = async () => {
-    if (!unitId || !currentGeo.lat || !currentGeo.lng) return;
-    setSavingPin(true);
-    await supabase.from("units").update({
-      geofence_lat: currentGeo.lat,
-      geofence_lng: currentGeo.lng,
-      geofence_radius_meters: geoRadius,
-    } as any).eq("id", unitId);
-    setCurrentGeo(prev => ({ ...prev, radius: geoRadius }));
-    setPinMoved(false);
-    setSavingPin(false);
   };
 
   // Leaflet map srcdoc HTML
@@ -163,14 +136,9 @@ const ConfiguracoesPage = () => {
 <script>
 var map=L.map('map');
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'OpenStreetMap'}).addTo(map);
-var marker=L.marker([${currentGeo.lat},${currentGeo.lng}],{draggable:true}).addTo(map);
+var marker=L.marker([${currentGeo.lat},${currentGeo.lng}]).addTo(map);
 var circle=L.circle([${currentGeo.lat},${currentGeo.lng}],{radius:${geoRadius},color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);
 map.fitBounds(circle.getBounds());
-marker.on('dragend',function(e){
-  var p=e.target.getLatLng();
-  circle.setLatLng(p);
-  parent.postMessage({type:'marker-moved',lat:p.lat,lng:p.lng},'*');
-});
 window.addEventListener('message',function(e){
   if(e.data&&e.data.type==='update-radius'){
     circle.setRadius(e.data.radius);
@@ -227,16 +195,10 @@ window.addEventListener('message',function(e){
                 width="100%"
                 height="350"
                 className="border-0"
+                sandbox="allow-scripts allow-same-origin"
                 title="Mapa do perímetro"
               />
             </div>
-          )}
-
-          {pinMoved && (
-            <Button onClick={handleSavePin} disabled={savingPin} variant="outline" className="font-bold italic gap-2">
-              {savingPin ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Salvar Posição
-            </Button>
           )}
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
