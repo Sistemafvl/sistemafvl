@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -41,11 +41,13 @@ const formatCnpj = (v: string) => {
 const menuItems = [
   { title: "Visão Geral", url: "/dashboard", icon: LayoutDashboard },
   { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
+  { title: "Retorno Piso", url: "/dashboard/retorno-piso", icon: PackageX },
   { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
   { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
 ];
 
 const managerMenuItems = [
+  { title: "Operação", url: "/dashboard/operacao", icon: Activity },
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Motoristas Parceiros", url: "/dashboard/motoristas-parceiros", icon: Users },
