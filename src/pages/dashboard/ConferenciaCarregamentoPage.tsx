@@ -7,8 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock } from "lucide-react";
-import { format } from "date-fns";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer } from "lucide-react";
+import { format, differenceInMinutes } from "date-fns";
+import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 interface RideWithDriver {
   id: string;
@@ -39,24 +43,53 @@ interface Tbr {
   scanned_at: string;
 }
 
+const formatDuration = (startedAt: string, finishedAt: string) => {
+  const mins = differenceInMinutes(new Date(finishedAt), new Date(startedAt));
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60);
+    const m = mins % 60;
+    return `${h}h ${m}min`;
+  }
+  return `${mins} min`;
+};
+
+const playErrorBeep = () => {
+  try {
+    const ctx = new AudioContext();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 400;
+    gain.gain.value = 0.3;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.3);
+  } catch {}
+};
+
 const ConferenciaCarregamentoPage = () => {
   const { unitSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [tbrs, setTbrs] = useState<Record<string, Tbr[]>>({});
   const [tbrInputs, setTbrInputs] = useState<Record<string, string>>({});
+  const [tbrSearch, setTbrSearch] = useState("");
+  const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
+  const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
+  const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
 
   const fetchRides = useCallback(async () => {
     if (!unitId) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     const { data } = await supabase
       .from("driver_rides")
       .select("*")
       .eq("unit_id", unitId)
-      .gte("completed_at", today.toISOString())
+      .gte("completed_at", startDate.toISOString())
+      .lte("completed_at", endDate.toISOString())
       .order("sequence_number", { ascending: true });
 
     if (!data) { setRides([]); return; }
@@ -73,9 +106,9 @@ const ConferenciaCarregamentoPage = () => {
       const d = driverMap.get(r.driver_id);
       return {
         ...r,
-        conferente_id: (r as any).conferente_id ?? null,
-        loading_status: (r as any).loading_status ?? "pending",
-        password: (r as any).password ?? null,
+        conferente_id: r.conferente_id ?? null,
+        loading_status: r.loading_status ?? "pending",
+        password: r.password ?? null,
         driver_name: d?.name ?? "Motorista",
         driver_avatar: d?.avatar_url ?? undefined,
         car_model: d?.car_model ?? undefined,
@@ -86,7 +119,6 @@ const ConferenciaCarregamentoPage = () => {
 
     setRides(mapped);
 
-    // Fetch TBRs for all rides
     const rideIds = mapped.map((r) => r.id);
     if (rideIds.length > 0) {
       const { data: tbrData } = await supabase
@@ -101,10 +133,11 @@ const ConferenciaCarregamentoPage = () => {
         grouped[t.ride_id].push(t);
       });
       setTbrs(grouped);
+    } else {
+      setTbrs({});
     }
-  }, [unitId]);
+  }, [unitId, startDate, endDate]);
 
-  // Fetch conferentes
   useEffect(() => {
     if (!unitId) return;
     supabase
@@ -117,7 +150,6 @@ const ConferenciaCarregamentoPage = () => {
 
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
-  // Realtime for rides and tbrs
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
@@ -148,25 +180,132 @@ const ConferenciaCarregamentoPage = () => {
     await fetchRides();
   };
 
-  const handleTbrSubmit = async (rideId: string) => {
-    const code = (tbrInputs[rideId] ?? "").trim();
-    if (!code) return;
-    await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
-    setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+  const handleDeleteTbr = async (tbrId: string) => {
+    await supabase.from("ride_tbrs").delete().eq("id", tbrId);
     await fetchRides();
+  };
+
+  // Auto-save TBR with debounce
+  const handleTbrInputChange = (rideId: string, value: string) => {
+    setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
+
+    if (debounceTimers.current[rideId]) {
+      clearTimeout(debounceTimers.current[rideId]);
+    }
+
+    if (!value.trim()) return;
+
+    debounceTimers.current[rideId] = setTimeout(async () => {
+      const code = value.trim();
+      if (code.toUpperCase().startsWith("TBR")) {
+        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
+        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+        await fetchRides();
+        // Re-focus input
+        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+      } else {
+        playErrorBeep();
+        toast.error("Código inválido! Deve iniciar com TBR");
+        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+      }
+    }, 300);
+  };
+
+  // Cleanup timers
+  useEffect(() => {
+    return () => {
+      Object.values(debounceTimers.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  // Filter rides by TBR search
+  const filteredRides = tbrSearch.trim()
+    ? rides.filter((ride) => {
+        const rideTbrs = tbrs[ride.id] ?? [];
+        return rideTbrs.some((t) => t.code.toLowerCase().includes(tbrSearch.trim().toLowerCase()));
+      })
+    : rides;
+
+  const handleStartDateSelect = (date: Date | undefined) => {
+    if (date) {
+      date.setHours(0, 0, 0, 0);
+      setStartDate(date);
+    }
+  };
+
+  const handleEndDateSelect = (date: Date | undefined) => {
+    if (date) {
+      date.setHours(23, 59, 59, 999);
+      setEndDate(date);
+    }
   };
 
   return (
     <div className="p-4 md:p-6 space-y-6">
       <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
 
-      {rides.length === 0 ? (
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            className="pl-9 h-10"
+            placeholder="Buscar TBR..."
+            value={tbrSearch}
+            onChange={(e) => setTbrSearch(e.target.value)}
+          />
+          {tbrSearch && (
+            <button onClick={() => setTbrSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+              <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+            </button>
+          )}
+        </div>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2 justify-start">
+              <CalendarIcon className="h-4 w-4" />
+              {format(startDate, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={startDate}
+              onSelect={handleStartDateSelect}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="gap-2 justify-start">
+              <CalendarIcon className="h-4 w-4" />
+              {format(endDate, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={endDate}
+              onSelect={handleEndDateSelect}
+              initialFocus
+              className={cn("p-3 pointer-events-auto")}
+            />
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {filteredRides.length === 0 ? (
         <p className="text-muted-foreground italic text-center py-12">
-          Nenhum carregamento programado hoje.
+          {tbrSearch.trim() ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
         </p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {rides.map((ride) => {
+          {filteredRides.map((ride) => {
             const status = ride.loading_status ?? "pending";
             const rideTbrs = tbrs[ride.id] ?? [];
             const isLoading = status === "loading";
@@ -201,16 +340,22 @@ const ConferenciaCarregamentoPage = () => {
                         <span className="font-mono font-bold">{ride.car_plate}</span>
                       </div>
                     )}
-                    {(ride as any).started_at && (
+                    {ride.started_at && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock className="h-4 w-4 shrink-0 text-green-600" />
-                        <span className="text-xs"><strong>Início:</strong> {format(new Date((ride as any).started_at), "dd/MM/yyyy HH:mm")}</span>
+                        <span className="text-xs"><strong>Início:</strong> {format(new Date(ride.started_at), "dd/MM/yyyy HH:mm")}</span>
                       </div>
                     )}
-                    {(ride as any).finished_at && (
+                    {ride.finished_at && (
                       <div className="flex items-center gap-2 text-muted-foreground">
                         <Clock className="h-4 w-4 shrink-0 text-red-600" />
-                        <span className="text-xs"><strong>Término:</strong> {format(new Date((ride as any).finished_at), "dd/MM/yyyy HH:mm")}</span>
+                        <span className="text-xs"><strong>Término:</strong> {format(new Date(ride.finished_at), "dd/MM/yyyy HH:mm")}</span>
+                      </div>
+                    )}
+                    {ride.started_at && ride.finished_at && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Timer className="h-4 w-4 shrink-0 text-blue-600" />
+                        <span className="text-xs"><strong>Duração:</strong> {formatDuration(ride.started_at, ride.finished_at)}</span>
                       </div>
                     )}
                     {ride.route && (
@@ -284,7 +429,14 @@ const ConferenciaCarregamentoPage = () => {
                           {rideTbrs.map((t, i) => (
                             <div key={t.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
                               <span className="font-bold text-primary">{i + 1}.</span>
-                              <span className="font-mono">{t.code}</span>
+                              <span className="font-mono flex-1">{t.code}</span>
+                              <button
+                                onClick={() => handleDeleteTbr(t.id)}
+                                className="text-destructive hover:text-destructive/80 shrink-0"
+                                title="Excluir TBR"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -292,11 +444,11 @@ const ConferenciaCarregamentoPage = () => {
                       {isLoading && (
                         <div className="flex gap-2">
                           <Input
+                            ref={(el) => { inputRefs.current[ride.id] = el; }}
                             className="h-8 text-sm font-mono"
                             placeholder="Escanear TBR..."
                             value={tbrInputs[ride.id] ?? ""}
-                            onChange={(e) => setTbrInputs((prev) => ({ ...prev, [ride.id]: e.target.value }))}
-                            onKeyDown={(e) => { if (e.key === "Enter") handleTbrSubmit(ride.id); }}
+                            onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
                             autoFocus
                           />
                         </div>
