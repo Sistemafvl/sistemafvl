@@ -23,6 +23,7 @@ import AdminLayout from "./components/admin/AdminLayout";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
 import AdminDriversPage from "./pages/admin/AdminDriversPage";
+import DatabasePage from "./pages/admin/DatabasePage";
 import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => (
             <Route path="domains" element={<DomainsUnitsPage />} />
             <Route path="managers" element={<ManagersPage />} />
             <Route path="drivers" element={<AdminDriversPage />} />
+            <Route path="database" element={<DatabasePage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
