@@ -1,61 +1,59 @@
 
 
-# Correção do Geofencing - Persistência e Mapa Simplificado
+# Plano de Correções - 3 Problemas
 
-## Problema Principal Identificado
+## 1. Botao "Adicionar Motorista na Fila" (QueuePanel)
 
-O update na tabela `units` **falha silenciosamente** porque a política RLS permite UPDATE apenas para o role `authenticated`, mas o app usa o role `anon` (sem Supabase Auth). O PATCH retorna status 204, mas 0 linhas são afetadas.
+Adicionar um botao "+" no topo do painel lateral da fila que abre um modal de busca por CPF. O fluxo:
 
-Prova: o PATCH envia os dados corretamente (`geofence_lat: -23.51`, `geofence_lng: -46.39`), mas o GET subsequente retorna `null` para todos os campos de geofence.
+- Gerente clica no botao "+" no header do painel da fila
+- Abre um Dialog com campo de busca por CPF
+- Ao digitar/buscar, consulta a tabela `drivers` pelo CPF
+- Se encontrar, exibe nome, foto e dados do motorista
+- Botao "Adicionar na Fila" insere um registro em `queue_entries` com status "waiting"
+- Depois disso, o fluxo segue normalmente (Programar, etc.)
 
-## Correções
+**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
+- Adicionar estados para o modal de busca (cpfSearch, foundDriver, searchLoading)
+- Novo Dialog com Input de CPF e resultado
+- Funcao `handleSearchDriver` que busca na tabela `drivers` por CPF
+- Funcao `handleAddToQueue` que insere em `queue_entries`
 
-### 1. Adicionar política RLS para permitir anon UPDATE na tabela `units`
+## 2. TBRs Amarelos Nao Aparecem em Outros Dispositivos
 
-Criar uma migration SQL:
+O problema: o destaque amarelo (`_yellowHighlight`) e apenas um flag local no React state. Quando outro dispositivo carrega os dados, ele nao sabe quais TBRs devem ser amarelos.
+
+**Solucao:** Persistir o status de destaque no banco de dados.
+
+- Adicionar coluna `highlight` (text, nullable) na tabela `ride_tbrs` para armazenar o tipo de destaque ("yellow", null)
+- Quando ocorre leitura tripla, atualizar o primeiro TBR com `highlight = 'yellow'` no banco
+- No `fetchRides`, mapear `highlight === 'yellow'` para `_yellowHighlight: true`
+- Assim todos os dispositivos verao o mesmo destaque
+
+**Migration SQL:**
 ```sql
-CREATE POLICY "Anon can update units"
-  ON public.units
-  FOR UPDATE
-  TO anon
-  USING (true)
-  WITH CHECK (true);
+ALTER TABLE public.ride_tbrs ADD COLUMN highlight text DEFAULT null;
 ```
 
-### 2. Simplificar o mapa (remover alfinete arrastável)
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Na logica de triplicata (count >= 2): alem de setar `_yellowHighlight` localmente, fazer `UPDATE ride_tbrs SET highlight = 'yellow' WHERE id = first.id`
+- No `fetchRides`, ao mapear TBRs: se `t.highlight === 'yellow'`, setar `_yellowHighlight: true`
 
-Conforme solicitado, remover a funcionalidade de arrastar o pino. O mapa mostrará apenas:
-- Marker fixo (não arrastável) na posição do endereço
-- Círculo azul representando o raio
-- Atualização em tempo real do círculo ao mudar o campo "Raio"
+## 3. Mapa Nao Carrega (Tiles Cinza)
 
-Remover do código:
-- `pinMoved` e `savingPin` states
-- `handleSavePin` function
-- Listener de `postMessage` para `marker-moved`
-- Botão "Salvar Posição"
-- `draggable: true` do marker no HTML do Leaflet
+O mapa mostra controles do Leaflet mas os tiles do OpenStreetMap ficam cinza. O problema e o atributo `sandbox` no iframe que bloqueia requisicoes cross-origin dos tiles.
 
-### 3. Manter `srcdoc` com `sandbox="allow-scripts allow-same-origin"`
-
-Adicionar o atributo `sandbox` de volta ao iframe para garantir que scripts e tiles carreguem corretamente.
-
-## Detalhes Técnicos
+**Solucao:** Remover completamente o atributo `sandbox` do iframe. O conteudo ja e gerado via `srcdoc` (HTML inline), entao nao ha risco de seguranca significativo.
 
 **Arquivo:** `src/pages/dashboard/ConfiguracoesPage.tsx`
+- Remover `sandbox="allow-scripts allow-same-origin allow-popups"` do iframe
 
-Mudanças:
-- Remover states: `pinMoved`, `savingPin`
-- Remover `handleSavePin`
-- Remover useEffect de `marker-moved` listener
-- No `mapSrcdoc`: remover `draggable:true` e evento `dragend`
-- Adicionar `sandbox="allow-scripts allow-same-origin"` ao iframe
-- Remover botão "Salvar Posição"
+## Resumo de Alteracoes
 
-**Migration SQL:** nova política RLS para anon UPDATE em `units`
-
-| Ação | Arquivo / Recurso |
+| Acao | Arquivo / Recurso |
 |------|-------------------|
-| Migration SQL | Adicionar RLS policy anon UPDATE em units |
-| Editar | `src/pages/dashboard/ConfiguracoesPage.tsx` |
+| Migration SQL | Adicionar coluna `highlight` em `ride_tbrs` |
+| Editar | `src/components/dashboard/QueuePanel.tsx` - modal de adicionar motorista por CPF |
+| Editar | `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` - persistir yellow highlight |
+| Editar | `src/pages/dashboard/ConfiguracoesPage.tsx` - remover sandbox do iframe |
 
