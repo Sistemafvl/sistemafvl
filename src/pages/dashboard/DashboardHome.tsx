@@ -3,14 +3,9 @@ import { Clock, Search, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
 import { format } from "date-fns";
+
+const MAX_TBR_LENGTH = 15;
 
 interface TbrResult {
   code: string;
@@ -37,6 +32,7 @@ const DashboardHome = () => {
   const [tbrResult, setTbrResult] = useState<TbrResult | null>(null);
   const [tbrLoading, setTbrLoading] = useState(false);
   const [tbrNotFound, setTbrNotFound] = useState(false);
+  const [tbrError, setTbrError] = useState("");
 
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
@@ -46,6 +42,18 @@ const DashboardHome = () => {
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tbrSearch.trim()) {
       const code = tbrSearch.trim();
+
+      if (code.length > MAX_TBR_LENGTH) {
+        setTbrError(`TBR deve ter no máximo ${MAX_TBR_LENGTH} caracteres.`);
+        setShowTbrModal(true);
+        setSearchedTbr(code);
+        setTbrLoading(false);
+        setTbrResult(null);
+        setTbrNotFound(false);
+        return;
+      }
+
+      setTbrError("");
       setSearchedTbr(code);
       setShowTbrModal(true);
       setTbrLoading(true);
@@ -133,6 +141,12 @@ const DashboardHome = () => {
     }
   };
 
+  const closeModal = () => {
+    setShowTbrModal(false);
+    setTbrSearch("");
+    setTbrError("");
+  };
+
   if (!unitSession) return null;
 
   return (
@@ -167,64 +181,70 @@ const DashboardHome = () => {
           onKeyDown={handleTbrKeyDown}
           placeholder="Buscar TBR..."
           className="pl-10 h-12 text-base"
+          maxLength={MAX_TBR_LENGTH}
         />
       </div>
 
-      {/* Modal de resultado TBR */}
-      <Dialog open={showTbrModal} onOpenChange={() => {}}>
-        <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()} onEscapeKeyDown={(e) => e.preventDefault()}>
-          <button
-            onClick={() => { setShowTbrModal(false); setTbrSearch(""); }}
-            className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 z-10"
-          >
-            <X className="h-4 w-4" />
-            <span className="sr-only">Fechar</span>
-          </button>
-          <DialogHeader>
-            <DialogTitle className="font-bold italic">Rastreamento TBR</DialogTitle>
-            <DialogDescription>
-              Código pesquisado: <span className="font-semibold text-foreground">{searchedTbr}</span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {tbrLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : tbrNotFound ? (
-              <p className="text-sm text-muted-foreground italic text-center py-4">
-                TBR não encontrado.
+      {/* Modal de resultado TBR — custom overlay, not Radix Dialog */}
+      {showTbrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80" onClick={closeModal} />
+          <div className="relative z-50 w-full max-w-lg border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
+            <button
+              onClick={closeModal}
+              className="absolute right-4 top-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-none z-10"
+            >
+              <X className="h-4 w-4" />
+              <span className="sr-only">Fechar</span>
+            </button>
+            <div className="flex flex-col space-y-1.5 text-left">
+              <h2 className="text-lg font-semibold leading-none tracking-tight font-bold italic">Rastreamento TBR</h2>
+              <p className="text-sm text-muted-foreground">
+                Código pesquisado: <span className="font-semibold text-foreground">{searchedTbr}</span>
               </p>
-            ) : tbrResult ? (
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-2 gap-2">
-                  <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
-                  <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>
-                  <div><strong>Login:</strong> {tbrResult.login || "—"}</div>
-                  <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
-                  <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
-                  <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
-                  <div><strong>Status:</strong> {tbrResult.loading_status || "—"}</div>
-                  <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
-                  <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+            </div>
+            <div className="space-y-4 py-4">
+              {tbrError ? (
+                <p className="text-sm text-destructive italic text-center py-4">{tbrError}</p>
+              ) : tbrLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
-                <div className="border-t pt-3">
-                  <p className="font-bold italic text-xs mb-2">Movimentos ({tbrResult.all_scans.length} TBRs neste carregamento)</p>
-                  <div className="max-h-40 overflow-y-auto space-y-1">
-                    {tbrResult.all_scans.map((s, i) => (
-                      <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${s.code.toUpperCase() === searchedTbr.toUpperCase() ? "bg-green-100 text-green-800 font-semibold" : "bg-muted/50"}`}>
-                        <span className="font-bold text-primary">{i + 1}.</span>
-                        <span className="font-mono flex-1">{s.code}</span>
-                        <span className="text-muted-foreground">{s.scanned_at ? format(new Date(s.scanned_at), "dd/MM HH:mm:ss") : ""}</span>
-                      </div>
-                    ))}
+              ) : tbrNotFound ? (
+                <p className="text-sm text-muted-foreground italic text-center py-4">
+                  TBR não encontrado.
+                </p>
+              ) : tbrResult ? (
+                <div className="space-y-3 text-sm">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
+                    <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>
+                    <div><strong>Login:</strong> {tbrResult.login || "—"}</div>
+                    <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
+                    <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
+                    <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
+                    <div><strong>Status:</strong> {tbrResult.loading_status || "—"}</div>
+                    <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+                    <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+                  </div>
+                  <div className="border-t pt-3">
+                    <p className="font-bold italic text-xs mb-2">Movimentos ({tbrResult.all_scans.length} TBRs neste carregamento)</p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {tbrResult.all_scans.map((s, i) => (
+                        <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${s.code.toUpperCase() === searchedTbr.toUpperCase() ? "bg-green-100 text-green-800 font-semibold" : "bg-muted/50"}`}>
+                          <span className="font-bold text-primary">{i + 1}.</span>
+                          <span className="font-mono flex-1">{s.code}</span>
+                          <span className="text-muted-foreground">{s.scanned_at ? format(new Date(s.scanned_at), "dd/MM HH:mm:ss") : ""}</span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        </div>
+      )}
     </div>
   );
 };
