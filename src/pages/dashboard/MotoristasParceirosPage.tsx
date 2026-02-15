@@ -4,24 +4,16 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Truck, Eye, Search } from "lucide-react";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 
-interface Driver {
+interface DriverWithStats {
   id: string;
   name: string;
   cpf: string;
@@ -37,6 +29,9 @@ interface Driver {
   state: string | null;
   active: boolean;
   created_at: string;
+  totalRides: number;
+  finished: number;
+  returned: number;
 }
 
 const maskCPF = (v: string) => {
@@ -47,10 +42,7 @@ const maskCPF = (v: string) => {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 };
 
-const maskPlate = (v: string) => {
-  if (v.length > 3) return v.slice(0, 3) + "-" + v.slice(3);
-  return v;
-};
+const maskPlate = (v: string) => v.length > 3 ? v.slice(0, 3) + "-" + v.slice(3) : v;
 
 const maskWhatsApp = (v: string) => {
   const d = v.replace(/\D/g, "");
@@ -61,23 +53,57 @@ const maskWhatsApp = (v: string) => {
 
 const MotoristasParceirosPage = () => {
   const { unitSession } = useAuthStore();
-  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [drivers, setDrivers] = useState<DriverWithStats[]>([]);
   const [search, setSearch] = useState("");
-  const [viewDriver, setViewDriver] = useState<Driver | null>(null);
+  const [viewDriver, setViewDriver] = useState<DriverWithStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDrivers();
-  }, []);
+    if (unitSession) loadDrivers();
+  }, [unitSession]);
 
   const loadDrivers = async () => {
+    if (!unitSession) return;
     setLoading(true);
-    const { data } = await supabase
+
+    // Get all rides for this unit
+    const { data: rides } = await supabase
+      .from("driver_rides")
+      .select("driver_id, loading_status")
+      .eq("unit_id", unitSession.id);
+
+    if (!rides || rides.length === 0) {
+      setDrivers([]);
+      setLoading(false);
+      return;
+    }
+
+    // Aggregate stats per driver
+    const statsMap: Record<string, { total: number; finished: number; returned: number }> = {};
+    rides.forEach((r) => {
+      if (!statsMap[r.driver_id]) statsMap[r.driver_id] = { total: 0, finished: 0, returned: 0 };
+      statsMap[r.driver_id].total++;
+      if (r.loading_status === "finished") statsMap[r.driver_id].finished++;
+      if (r.loading_status === "returned") statsMap[r.driver_id].returned++;
+    });
+
+    const driverIds = Object.keys(statsMap);
+    const { data: driversData } = await supabase
       .from("drivers")
       .select("*")
-      .eq("active", true)
+      .in("id", driverIds)
       .order("name");
-    if (data) setDrivers(data);
+
+    if (driversData) {
+      setDrivers(
+        driversData.map((d) => ({
+          ...d,
+          totalRides: statsMap[d.id]?.total ?? 0,
+          finished: statsMap[d.id]?.finished ?? 0,
+          returned: statsMap[d.id]?.returned ?? 0,
+        }))
+      );
+    }
     setLoading(false);
   };
 
@@ -94,72 +120,66 @@ const MotoristasParceirosPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">
             <Truck className="h-5 w-5 text-primary" />
-            Motoristas Parceiros
+            Motoristas Parceiros que passaram por sua unidade
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nome, CPF ou placa..."
-              className="pl-9 h-11"
-            />
+            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nome, CPF ou placa..." className="pl-9 h-11" />
           </div>
 
-          <div className="rounded-md border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="font-bold">Nome</TableHead>
-                  <TableHead className="font-bold">CPF</TableHead>
-                  <TableHead className="font-bold">Placa</TableHead>
-                  <TableHead className="font-bold">Modelo</TableHead>
-                  <TableHead className="font-bold text-center">Corridas</TableHead>
-                  <TableHead className="font-bold text-center">Entregues</TableHead>
-                  <TableHead className="font-bold text-center">Devolvidos</TableHead>
-                  <TableHead className="font-bold text-center">Ações</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+          {loading ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
+            </div>
+          ) : (
+            <div className="rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground italic py-8">
-                      Carregando...
-                    </TableCell>
+                    <TableHead className="font-bold">Nome</TableHead>
+                    <TableHead className="font-bold">CPF</TableHead>
+                    <TableHead className="font-bold">Placa</TableHead>
+                    <TableHead className="font-bold">Modelo</TableHead>
+                    <TableHead className="font-bold text-center">Corridas</TableHead>
+                    <TableHead className="font-bold text-center">Entregues</TableHead>
+                    <TableHead className="font-bold text-center">Devolvidos</TableHead>
+                    <TableHead className="font-bold text-center">Ações</TableHead>
                   </TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground italic py-8">
-                      Nenhum motorista encontrado
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filtered.map((d) => (
-                    <TableRow key={d.id}>
-                      <TableCell className="font-semibold">{d.name}</TableCell>
-                      <TableCell className="text-xs">{maskCPF(d.cpf)}</TableCell>
-                      <TableCell className="uppercase">{maskPlate(d.car_plate)}</TableCell>
-                      <TableCell>{d.car_model}</TableCell>
-                      <TableCell className="text-center text-muted-foreground">0</TableCell>
-                      <TableCell className="text-center text-muted-foreground">0</TableCell>
-                      <TableCell className="text-center text-muted-foreground">0</TableCell>
-                      <TableCell className="text-center">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewDriver(d)}>
-                          <Eye className="h-4 w-4" />
-                        </Button>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center text-muted-foreground italic py-8">
+                        Nenhum motorista encontrado
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
+                  ) : (
+                    filtered.map((d) => (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-semibold">{d.name}</TableCell>
+                        <TableCell className="text-xs">{maskCPF(d.cpf)}</TableCell>
+                        <TableCell className="uppercase">{maskPlate(d.car_plate)}</TableCell>
+                        <TableCell>{d.car_model}</TableCell>
+                        <TableCell className="text-center font-semibold">{d.totalRides}</TableCell>
+                        <TableCell className="text-center font-semibold text-green-600">{d.finished}</TableCell>
+                        <TableCell className="text-center font-semibold text-orange-500">{d.returned}</TableCell>
+                        <TableCell className="text-center">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewDriver(d)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {/* Driver Details Modal */}
       <Dialog open={!!viewDriver} onOpenChange={(open) => !open && setViewDriver(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -191,6 +211,11 @@ const MotoristasParceirosPage = () => {
                   {viewDriver.cep && ` - CEP: ${viewDriver.cep}`}
                 </div>
               )}
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                <div className="text-center"><span className="text-xs text-muted-foreground block">Corridas</span><span className="font-bold">{viewDriver.totalRides}</span></div>
+                <div className="text-center"><span className="text-xs text-muted-foreground block">Entregues</span><span className="font-bold text-green-600">{viewDriver.finished}</span></div>
+                <div className="text-center"><span className="text-xs text-muted-foreground block">Devolvidos</span><span className="font-bold text-orange-500">{viewDriver.returned}</span></div>
+              </div>
               <div><span className="font-semibold text-muted-foreground">Cadastrado em:</span> {new Date(viewDriver.created_at).toLocaleString("pt-BR")}</div>
             </div>
           )}

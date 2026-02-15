@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -48,6 +48,8 @@ const managerMenuItems = [
   { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Motoristas Parceiros", url: "/dashboard/motoristas-parceiros", icon: Users },
   { title: "Conferentes", url: "/dashboard/conferentes", icon: ClipboardCheck },
+  { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
+  { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
 ];
 
 const managerModalItems = [
@@ -105,6 +107,11 @@ const DashboardSidebar = () => {
                 <div className="min-w-0">
                   <p className="text-xs font-bold italic truncate">{managerSession.name}</p>
                   <p className="text-[10px] text-muted-foreground">Gerente</p>
+                  {unitSession && (
+                    <p className="text-[10px] text-muted-foreground truncate">
+                      {unitSession.name} • {unitSession.domain_name}
+                    </p>
+                  )}
                 </div>
                 <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setManagerSession(null)}>
                   Sair
