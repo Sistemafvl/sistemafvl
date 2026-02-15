@@ -610,29 +610,31 @@ const ConferenciaCarregamentoPage = () => {
           {isSearchActive ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
         </p>
       ) : (
-        <div className="relative">
-          {/* Carousel navigation arrows */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full shadow-md"
-            onClick={() => emblaApi?.scrollPrev()}
-            disabled={!canScrollPrev}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full shadow-md"
-            onClick={() => emblaApi?.scrollNext()}
-            disabled={!canScrollNext}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="overflow-hidden">
+          {/* Carousel navigation arrows - above cards */}
+          <div className="flex items-center justify-end gap-2 mb-2">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={() => emblaApi?.scrollPrev()}
+              disabled={!canScrollPrev}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-8 w-8 rounded-full"
+              onClick={() => emblaApi?.scrollNext()}
+              disabled={!canScrollNext}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
 
-          <div ref={emblaRef} className="overflow-hidden mx-4">
-            <div className="flex gap-4">
+          <div ref={emblaRef} className="overflow-hidden">
+            <div className="flex">
               {displayRides.map((ride) => {
                 const status = ride.loading_status ?? "pending";
                 const rideTbrs = displayTbrs[ride.id] ?? [];
@@ -640,7 +642,7 @@ const ConferenciaCarregamentoPage = () => {
                 const isFinished = status === "finished";
 
                 return (
-                  <div key={ride.id} className="flex-none w-[85vw] sm:w-[320px]">
+                  <div key={ride.id} className="flex-[0_0_85vw] sm:flex-[0_0_320px] min-w-0 pl-4 first:pl-0">
                     <Card className="relative overflow-hidden h-full">
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge (top-left) */}
