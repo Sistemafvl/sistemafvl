@@ -5,7 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { toast } from "sonner";
 import { MapPin, KeyRound, Trash2, Plus, Loader2 } from "lucide-react";
 
 const ConfiguracoesPage = () => {
@@ -52,13 +51,13 @@ const ConfiguracoesPage = () => {
         const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
         const data = await res.json();
         if (data.erro) {
-          toast.error("CEP não encontrado");
+          // CEP not found
         } else {
           const addr = [data.logradouro, data.bairro, `${data.localidade} - ${data.uf}`].filter(Boolean).join(", ");
           setGeoAddress(addr);
         }
       } catch {
-        toast.error("Erro ao consultar CEP");
+        // Error fetching CEP
       }
       setCepLoading(false);
     }
@@ -69,23 +68,26 @@ const ConfiguracoesPage = () => {
     setGeoLoading(true);
     try {
       const res = await supabase.functions.invoke("geocode-address", { body: { address: geoAddress.trim() } });
-      if (res.error || !res.data?.lat) {
-        toast.error(res.data?.error || "Erro ao geocodificar endereço");
+      // Handle response - data may come as string or object
+      let geoData = res.data;
+      if (typeof geoData === "string") {
+        try { geoData = JSON.parse(geoData); } catch { geoData = null; }
+      }
+      if (res.error || !geoData?.lat) {
         setGeoLoading(false);
         return;
       }
       await supabase.from("units").update({
         geofence_address: geoAddress.trim(),
-        geofence_lat: res.data.lat,
-        geofence_lng: res.data.lng,
+        geofence_lat: geoData.lat,
+        geofence_lng: geoData.lng,
         geofence_radius_meters: geoRadius,
       } as any).eq("id", unitId);
-      toast.success("Perímetro definido com sucesso!");
-      setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: res.data.lat, lng: res.data.lng });
+      setCurrentGeo({ address: geoAddress.trim(), radius: geoRadius, lat: geoData.lat, lng: geoData.lng });
       setGeoAddress("");
       setGeoCep("");
     } catch {
-      toast.error("Erro ao definir perímetro");
+      // Error setting geofence
     }
     setGeoLoading(false);
   };
@@ -98,13 +100,11 @@ const ConfiguracoesPage = () => {
     setNewPassword("");
     await fetchLogins();
     setLoginsLoading(false);
-    toast.success("Login adicionado!");
   };
 
   const handleDeleteLogin = async (id: string) => {
     await supabase.from("unit_logins").delete().eq("id", id);
     await fetchLogins();
-    toast.success("Login removido!");
   };
 
   // Build map iframe URL

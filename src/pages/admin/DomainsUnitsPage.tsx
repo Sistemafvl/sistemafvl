@@ -3,7 +3,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Building2, Building } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -26,7 +25,7 @@ const DomainsUnitsPage = () => {
   const [newDomain, setNewDomain] = useState("");
   const [newUnit, setNewUnit] = useState({ name: "", password: "" });
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
-  const { toast } = useToast();
+  
 
   const fetchDomains = async () => {
     const { data } = await supabase.from("domains").select("*").order("name");
@@ -48,12 +47,9 @@ const DomainsUnitsPage = () => {
   const addDomain = async () => {
     if (!newDomain.trim()) return;
     const { error } = await supabase.from("domains").insert({ name: newDomain.trim().toUpperCase() });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!error) {
       setNewDomain("");
       fetchDomains();
-      toast({ title: "Domínio criado" });
     }
   };
 
@@ -66,7 +62,6 @@ const DomainsUnitsPage = () => {
     await supabase.from("domains").delete().eq("id", id);
     if (selectedDomain === id) setSelectedDomain(null);
     fetchDomains();
-    toast({ title: "Domínio excluído" });
   };
 
   const addUnit = async () => {
@@ -76,12 +71,9 @@ const DomainsUnitsPage = () => {
       name: newUnit.name.trim().toUpperCase(),
       password: newUnit.password,
     });
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!error) {
       setNewUnit({ name: "", password: "" });
       fetchUnits(selectedDomain);
-      toast({ title: "Unidade criada" });
     }
   };
 
@@ -93,7 +85,6 @@ const DomainsUnitsPage = () => {
   const deleteUnit = async (id: string) => {
     await supabase.from("units").delete().eq("id", id);
     if (selectedDomain) fetchUnits(selectedDomain);
-    toast({ title: "Unidade excluída" });
   };
 
   return (

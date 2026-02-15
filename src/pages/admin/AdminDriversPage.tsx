@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import {
   Truck, Search, Eye, Pencil, Trash2, Loader2,
   ChevronLeft, ChevronRight,
@@ -52,7 +51,6 @@ const maskCPF = (v: string) => {
 };
 
 const AdminDriversPage = () => {
-  const { toast } = useToast();
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
@@ -139,18 +137,14 @@ const AdminDriversPage = () => {
     const { error } = await supabase.from("drivers").update(updates).eq("id", editDriver.id);
     setEditLoading(false);
 
-    if (error) {
-      toast({ title: "Erro ao salvar", variant: "destructive" });
-      return;
-    }
-    toast({ title: "Motorista atualizado!" });
+    if (error) return;
     setEditDriver(null);
     fetchDrivers();
   };
 
   const toggleActive = async (d: Driver) => {
     const { error } = await supabase.from("drivers").update({ active: !d.active }).eq("id", d.id);
-    if (error) { toast({ title: "Erro ao alterar status", variant: "destructive" }); return; }
+    if (error) return;
     setDrivers((prev) => prev.map((x) => (x.id === d.id ? { ...x, active: !x.active } : x)));
   };
 
@@ -159,8 +153,7 @@ const AdminDriversPage = () => {
     setDeleteLoading(true);
     const { error } = await supabase.from("drivers").delete().eq("id", deleteDriver.id);
     setDeleteLoading(false);
-    if (error) { toast({ title: "Erro ao excluir", variant: "destructive" }); return; }
-    toast({ title: "Motorista excluído!" });
+    if (error) return;
     setDeleteDriver(null);
     fetchDrivers();
   };

@@ -40,7 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
+
 
 interface Conferente {
   id: string;
@@ -69,7 +69,6 @@ const capitalize = (v: string) =>
 
 const ConferentesPage = () => {
   const { unitSession } = useAuthStore();
-  const { toast } = useToast();
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -110,14 +109,8 @@ const ConferentesPage = () => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawCpf = regCpf.replace(/\D/g, "");
-    if (!regName.trim()) {
-      toast({ title: "Preencha o nome", variant: "destructive" });
-      return;
-    }
-    if (rawCpf.length !== 11) {
-      toast({ title: "CPF inválido", variant: "destructive" });
-      return;
-    }
+    if (!regName.trim()) return;
+    if (rawCpf.length !== 11) return;
     if (!unitSession) return;
 
     setRegLoading(true);
@@ -128,15 +121,7 @@ const ConferentesPage = () => {
     });
     setRegLoading(false);
 
-    if (error) {
-      const msg = error.message.includes("duplicate")
-        ? "CPF já cadastrado nesta unidade"
-        : "Erro ao cadastrar. Tente novamente.";
-      toast({ title: msg, variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "Conferente cadastrado com sucesso!" });
+    if (error) return;
     setRegName("");
     setRegCpf("");
     setRegisterOpen(false);
@@ -148,10 +133,7 @@ const ConferentesPage = () => {
       .from("user_profiles")
       .update({ active: !c.active })
       .eq("id", c.id);
-    if (error) {
-      toast({ title: "Erro ao atualizar status", variant: "destructive" });
-      return;
-    }
+    if (error) return;
     setConferentes((prev) =>
       prev.map((x) => (x.id === c.id ? { ...x, active: !x.active } : x))
     );
@@ -166,12 +148,7 @@ const ConferentesPage = () => {
       .eq("id", deleteConferente.id);
     setDeleteLoading(false);
 
-    if (error) {
-      toast({ title: "Erro ao excluir conferente", variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "Conferente excluído com sucesso!" });
+    if (error) return;
     setConferentes((prev) => prev.filter((x) => x.id !== deleteConferente.id));
     setDeleteConferente(null);
   };
@@ -196,12 +173,7 @@ const ConferentesPage = () => {
       .eq("id", transferConferente.id);
     setTransferLoading(false);
 
-    if (error) {
-      toast({ title: "Erro ao transferir", variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "Conferente transferido com sucesso!" });
+    if (error) return;
     setTransferConferente(null);
     loadConferentes();
   };

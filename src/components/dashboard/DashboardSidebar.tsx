@@ -27,7 +27,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { useToast } from "@/hooks/use-toast";
+
 
 const formatCnpj = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -59,7 +59,6 @@ const managerModalItems = [
 const DashboardSidebar = () => {
   const { logout, unitSession, managerSession, setManagerSession } = useAuthStore();
   const { setOpenMobile } = useSidebar();
-  const { toast } = useToast();
   const [loginOpen, setLoginOpen] = useState(false);
   const [cnpj, setCnpj] = useState("");
   const [password, setPassword] = useState("");
@@ -81,15 +80,11 @@ const DashboardSidebar = () => {
       .eq("active", true)
       .maybeSingle();
     setLoading(false);
-    if (error || !data) {
-      toast({ title: "Erro", description: "CNPJ ou senha inválidos", variant: "destructive" });
-      return;
-    }
+    if (error || !data) return;
     setManagerSession({ id: data.id, name: data.name, cnpj: data.cnpj });
     setLoginOpen(false);
     setCnpj("");
     setPassword("");
-    toast({ title: `Bem-vindo, ${data.name}` });
   };
 
   return (

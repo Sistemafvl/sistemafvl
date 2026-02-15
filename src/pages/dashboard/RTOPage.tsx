@@ -16,7 +16,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+
 
 interface TbrHistory {
   ride_id: string;
@@ -47,7 +47,6 @@ interface Conferente {
 
 const RTOPage = () => {
   const { unitSession } = useAuthStore();
-  const { toast } = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -124,7 +123,6 @@ const RTOPage = () => {
       .maybeSingle();
 
     if (!tbrData) {
-      toast({ title: "TBR não encontrado", description: "Não há registros para este código.", variant: "destructive" });
       setSearching(false);
       setTbrInput("");
       inputRef.current?.focus();
@@ -138,7 +136,6 @@ const RTOPage = () => {
       .maybeSingle();
 
     if (!ride) {
-      toast({ title: "Corrida não encontrada", variant: "destructive" });
       setSearching(false);
       setTbrInput("");
       return;
@@ -188,12 +185,7 @@ const RTOPage = () => {
     const { error } = await supabase.from("rto_entries").insert(entry);
     setSaving(false);
 
-    if (error) {
-      toast({ title: "Erro ao gravar RTO", variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "RTO registrado com sucesso!" });
+    if (error) return;
     setHistoryModalOpen(false);
     setIncludeMode(false);
     setHistory(null);
@@ -204,7 +196,6 @@ const RTOPage = () => {
   const handleFinalize = async (id: string) => {
     setEntries(prev => prev.filter(e => e.id !== id));
     await supabase.from("rto_entries").update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
-    toast({ title: "RTO finalizado" });
   };
 
   const closeModal = () => {
@@ -297,11 +288,18 @@ const RTOPage = () => {
               <div><span className="font-semibold text-muted-foreground">Status:</span> {history.loading_status ?? "-"}</div>
               <div><span className="font-semibold text-muted-foreground">Data:</span> {new Date(history.completed_at).toLocaleString("pt-BR")}</div>
 
-              {!includeMode ? (
-                <Button className="w-full mt-2" onClick={handleIncludeRTO}>
-                  <RotateCcw className="h-4 w-4 mr-2" /> Incluir RTO
-                </Button>
-              ) : (
+              {!includeMode ? (() => {
+                const existingEntry = entries.find(e => e.tbr_code.toUpperCase() === tbrCode.toUpperCase());
+                return existingEntry ? (
+                  <Button className="w-full mt-2" variant="destructive" onClick={() => { handleFinalize(existingEntry.id); closeModal(); }}>
+                    <CheckCircle className="h-4 w-4 mr-2" /> Finalizar RTO
+                  </Button>
+                ) : (
+                  <Button className="w-full mt-2" onClick={handleIncludeRTO}>
+                    <RotateCcw className="h-4 w-4 mr-2" /> Incluir RTO
+                  </Button>
+                );
+              })() : (
                 <div className="space-y-3 pt-2 border-t">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Conferente</label>

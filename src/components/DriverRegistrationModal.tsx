@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Eye, EyeOff, Truck, Loader2 } from "lucide-react";
-import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
 interface Props {
@@ -49,7 +48,6 @@ const capitalize = (v: string) =>
   v.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
 const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
@@ -99,14 +97,8 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawCpf = form.cpf.replace(/\D/g, "");
-    if (rawCpf.length !== 11) {
-      toast({ title: "CPF inválido", variant: "destructive" });
-      return;
-    }
-    if (!form.name || !form.car_plate || !form.car_model || !form.password) {
-      toast({ title: "Preencha todos os campos obrigatórios", variant: "destructive" });
-      return;
-    }
+    if (rawCpf.length !== 11) return;
+    if (!form.name || !form.car_plate || !form.car_model || !form.password) return;
 
     setLoading(true);
     const { error } = await supabase.from("drivers" as any).insert({
@@ -126,15 +118,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     });
     setLoading(false);
 
-    if (error) {
-      const msg = error.message.includes("duplicate")
-        ? "CPF já cadastrado"
-        : "Erro ao cadastrar. Tente novamente.";
-      toast({ title: msg, variant: "destructive" });
-      return;
-    }
-
-    toast({ title: "Cadastro realizado com sucesso!" });
+    if (error) return;
     setForm({
       name: "", cpf: "", cep: "", address: "", neighborhood: "",
       city: "", state: "", car_plate: "", car_model: "", car_color: "",

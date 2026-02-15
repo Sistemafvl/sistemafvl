@@ -23,7 +23,9 @@ Deno.serve(async (req) => {
 
     const response = await fetch(url, {
       headers: {
-        'User-Agent': 'SistemaFVL/1.0',
+        'User-Agent': 'SistemaFVL/1.0 (https://sistemafvl.lovable.app; contato@sistemafvl.com)',
+        'Accept': 'application/json',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
       },
     });
 
