@@ -372,12 +372,32 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
+    const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
+
     setTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
     }));
     await supabase.from("ride_tbrs").delete().eq("id", tbrId);
+
+    if (tbrToDelete) {
+      const { data: rtoMatch } = await supabase
+        .from("rto_entries")
+        .select("id")
+        .eq("tbr_code", tbrToDelete.code)
+        .eq("status", "closed")
+        .eq("unit_id", unitId)
+        .maybeSingle();
+      if (rtoMatch) {
+        await supabase
+          .from("rto_entries")
+          .update({ status: "open", closed_at: null })
+          .eq("id", rtoMatch.id);
+      }
+    }
+
     fetchRides();
+    fetchOpenRtos();
   };
 
   // Auto-save TBR with debounce + optimistic insert + duplicate/triplicate detection
