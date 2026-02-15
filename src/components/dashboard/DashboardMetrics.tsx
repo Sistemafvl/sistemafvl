@@ -2,9 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2 } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 interface Props {
   unitId: string;
@@ -82,7 +81,7 @@ const DashboardMetrics = ({ unitId }: Props) => {
       const d = format(new Date(r.completed_at), "yyyy-MM-dd");
       if (ridesByDay[d] !== undefined) ridesByDay[d]++;
     });
-    setBarData(days.map(d => ({ day: format(new Date(d), "dd/MM", { locale: ptBR }), count: ridesByDay[d] })));
+    setBarData(days.map(d => ({ day: format(new Date(d), "dd/MM"), count: ridesByDay[d] })));
 
     // Filter tbrs by unit
     const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
@@ -97,7 +96,7 @@ const DashboardMetrics = ({ unitId }: Props) => {
       const d = format(new Date(t.scanned_at), "yyyy-MM-dd");
       if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
     });
-    setLineData(days.map(d => ({ day: format(new Date(d), "dd/MM", { locale: ptBR }), count: tbrsByDay[d] })));
+    setLineData(days.map(d => ({ day: format(new Date(d), "dd/MM"), count: tbrsByDay[d] })));
 
     // Pie: status distribution
     const statusCount: Record<string, number> = { pending: 0, loading: 0, finished: 0 };
