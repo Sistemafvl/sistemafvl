@@ -543,26 +543,31 @@ const ConferenciaCarregamentoPage = () => {
   const handleSaveEdit = async (rideId: string, field: string, value: string) => {
     // Anexo 1: Validação de login único por dia (horário de Brasília)
     if (field === "login" && value && unitId) {
+      // Dia em Brasília (UTC-3): 00:00 BRT = 03:00 UTC
       const now = new Date();
-      // Calcular início e fim do dia em Brasília (UTC-3)
-      const brasiliaOffset = -3 * 60; // minutes
-      const utcNow = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
-      const brasiliaTime = new Date(utcNow.getTime() + brasiliaOffset * 60000);
-      const startOfDay = new Date(brasiliaTime);
-      startOfDay.setHours(0, 0, 0, 0);
-      const endOfDay = new Date(brasiliaTime);
-      endOfDay.setHours(23, 59, 59, 999);
-      // Converter de volta para UTC para consulta
-      const startUtc = new Date(startOfDay.getTime() - brasiliaOffset * 60000 - now.getTimezoneOffset() * 60000);
-      const endUtc = new Date(endOfDay.getTime() - brasiliaOffset * 60000 - now.getTimezoneOffset() * 60000);
+      // Obter data atual em Brasília
+      const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+      const brasiliaDate = new Date(brasiliaStr);
+      const year = brasiliaDate.getFullYear();
+      const month = String(brasiliaDate.getMonth() + 1).padStart(2, "0");
+      const day = String(brasiliaDate.getDate()).padStart(2, "0");
+      // Início do dia em Brasília = 00:00 BRT = 03:00 UTC
+      const startUtc = `${year}-${month}-${day}T03:00:00.000Z`;
+      // Fim do dia em Brasília = 23:59:59 BRT = próximo dia 02:59:59 UTC
+      const nextDay = new Date(brasiliaDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const ny = nextDay.getFullYear();
+      const nm = String(nextDay.getMonth() + 1).padStart(2, "0");
+      const nd = String(nextDay.getDate()).padStart(2, "0");
+      const endUtc = `${ny}-${nm}-${nd}T02:59:59.999Z`;
 
       const { data: alreadyUsed } = await supabase
         .from("driver_rides")
         .select("id")
         .eq("unit_id", unitId)
         .eq("login", value)
-        .gte("completed_at", startUtc.toISOString())
-        .lte("completed_at", endUtc.toISOString())
+        .gte("completed_at", startUtc)
+        .lte("completed_at", endUtc)
         .neq("id", rideId)
         .maybeSingle();
 
