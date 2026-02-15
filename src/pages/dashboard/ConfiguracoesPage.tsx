@@ -195,7 +195,7 @@ window.addEventListener('message',function(e){
                 width="100%"
                 height="350"
                 className="border-0"
-                sandbox="allow-scripts allow-same-origin allow-popups"
+                
                 title="Mapa do perímetro"
               />
             </div>

@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Clock, CalendarCheck } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2 } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -22,6 +22,16 @@ interface QueueEntry {
   car_model?: string;
   car_plate?: string;
   car_color?: string;
+}
+
+interface FoundDriver {
+  id: string;
+  name: string;
+  cpf: string;
+  avatar_url: string | null;
+  car_model: string;
+  car_plate: string;
+  car_color: string | null;
 }
 
 const QueuePanel = () => {
@@ -38,6 +48,14 @@ const QueuePanel = () => {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
   const [unitLogins, setUnitLogins] = useState<{ id: string; login: string; password: string }[]>([]);
+
+  // Add driver by CPF modal states
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [cpfSearch, setCpfSearch] = useState("");
+  const [foundDriver, setFoundDriver] = useState<FoundDriver | null>(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState("");
+  const [addingToQueue, setAddingToQueue] = useState(false);
 
   const unitId = unitSession?.id;
 
@@ -71,7 +89,6 @@ const QueuePanel = () => {
       };
     });
 
-    // Check if count increased → pulse
     if (newEntries.length > prevCountRef.current && prevCountRef.current >= 0) {
       setIsPulsing(true);
     }
@@ -106,7 +123,6 @@ const QueuePanel = () => {
     setLogin("");
     setPassword("");
     setShowProgramModal(true);
-    // Fetch unit logins
     if (unitId) {
       const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
       setUnitLogins(data ?? []);
@@ -150,6 +166,66 @@ const QueuePanel = () => {
     fetchQueue();
   };
 
+  // Search driver by CPF
+  const handleSearchDriver = async () => {
+    const cpf = cpfSearch.replace(/\D/g, "");
+    if (cpf.length < 11) {
+      setSearchError("CPF deve ter 11 dígitos.");
+      return;
+    }
+    setSearchLoading(true);
+    setSearchError("");
+    setFoundDriver(null);
+
+    const { data, error } = await supabase
+      .from("drivers")
+      .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+      .eq("cpf", cpf)
+      .eq("active", true)
+      .maybeSingle();
+
+    if (error || !data) {
+      setSearchError("Motorista não encontrado.");
+    } else {
+      setFoundDriver(data as FoundDriver);
+    }
+    setSearchLoading(false);
+  };
+
+  // Add found driver to queue
+  const handleAddToQueue = async () => {
+    if (!foundDriver || !unitId) return;
+    setAddingToQueue(true);
+
+    // Check if already in queue
+    const { data: existing } = await supabase
+      .from("queue_entries")
+      .select("id")
+      .eq("unit_id", unitId)
+      .eq("driver_id", foundDriver.id)
+      .eq("status", "waiting")
+      .maybeSingle();
+
+    if (existing) {
+      setSearchError("Este motorista já está na fila.");
+      setAddingToQueue(false);
+      return;
+    }
+
+    await supabase.from("queue_entries").insert({
+      unit_id: unitId,
+      driver_id: foundDriver.id,
+      status: "waiting",
+    } as any);
+
+    setShowAddModal(false);
+    setCpfSearch("");
+    setFoundDriver(null);
+    setSearchError("");
+    setAddingToQueue(false);
+    fetchQueue();
+  };
+
   const count = entries.length;
 
   return (
@@ -176,8 +252,17 @@ const QueuePanel = () => {
             <SheetTitle className="flex items-center gap-2 font-bold italic">
               <Users className="h-5 w-5 text-primary" />
               Fila de Motoristas
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 ml-auto"
+                onClick={() => { setShowAddModal(true); setCpfSearch(""); setFoundDriver(null); setSearchError(""); }}
+                title="Adicionar motorista na fila"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
               {count > 0 && (
-                <Badge variant="default" className="ml-auto">{count} na fila</Badge>
+                <Badge variant="default">{count} na fila</Badge>
               )}
             </SheetTitle>
           </SheetHeader>
@@ -264,6 +349,68 @@ const QueuePanel = () => {
             <Button onClick={handleDefinir} className="w-full font-bold italic">
               Definir
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Adicionar Motorista por CPF */}
+      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <Search className="h-5 w-5 text-primary" />
+              Adicionar Motorista na Fila
+            </DialogTitle>
+            <DialogDescription>
+              Busque um motorista cadastrado pelo CPF
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="flex gap-2">
+              <Input
+                placeholder="Digite o CPF..."
+                value={cpfSearch}
+                onChange={(e) => setCpfSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleSearchDriver(); }}
+                maxLength={14}
+              />
+              <Button onClick={handleSearchDriver} disabled={searchLoading} size="icon">
+                {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            {searchError && (
+              <p className="text-sm text-destructive font-semibold">{searchError}</p>
+            )}
+
+            {foundDriver && (
+              <div className="p-4 rounded-lg border border-border bg-card space-y-3">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-12 w-12">
+                    {foundDriver.avatar_url && <AvatarImage src={foundDriver.avatar_url} />}
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">
+                      {foundDriver.name[0].toUpperCase()}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-bold">{foundDriver.name}</p>
+                    <p className="text-xs text-muted-foreground">CPF: {foundDriver.cpf}</p>
+                  </div>
+                </div>
+                <div className="text-sm space-y-1">
+                  <p><strong>Veículo:</strong> {foundDriver.car_model} — {foundDriver.car_color || "N/A"}</p>
+                  <p><strong>Placa:</strong> {foundDriver.car_plate}</p>
+                </div>
+                <Button
+                  onClick={handleAddToQueue}
+                  disabled={addingToQueue}
+                  className="w-full font-bold italic"
+                >
+                  {addingToQueue && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Adicionar na Fila
+                </Button>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

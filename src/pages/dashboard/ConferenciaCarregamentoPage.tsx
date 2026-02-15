@@ -189,16 +189,15 @@ const ConferenciaCarregamentoPage = () => {
         if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
         grouped[t.ride_id].push(t);
       });
-      // Preserve _yellowHighlight flags from current state
-      setTbrs((prev) => {
-        const yellowIds = new Set<string>();
-        Object.values(prev).flat().forEach(t => { if (t._yellowHighlight) yellowIds.add(t.id); });
-        const result: Record<string, Tbr[]> = {};
-        for (const [rideId, list] of Object.entries(grouped)) {
-          result[rideId] = list.map(t => yellowIds.has(t.id) ? { ...t, _yellowHighlight: true } : t);
-        }
-        return result;
-      });
+      // Map highlight from DB
+      const result: Record<string, Tbr[]> = {};
+      for (const [rideId, list] of Object.entries(grouped)) {
+        result[rideId] = list.map((t: any) => ({
+          ...t,
+          _yellowHighlight: t.highlight === "yellow",
+        }));
+      }
+      setTbrs(result);
     } else {
       setTbrs({});
     }
@@ -398,9 +397,14 @@ const ConferenciaCarregamentoPage = () => {
           });
           playErrorBeep();
 
-          // After 1s: remove 2nd and 3rd from state, highlight 1st yellow permanently
+          // After 1s: remove 2nd and 3rd from state, highlight 1st yellow permanently + persist to DB
+          const firstTbr = occurrences[0];
           const secondId = occurrences[1]?.id;
-          setTimeout(() => {
+          setTimeout(async () => {
+            // Persist yellow highlight to DB
+            if (firstTbr?.id) {
+              await supabase.from("ride_tbrs").update({ highlight: "yellow" } as any).eq("id", firstTbr.id);
+            }
             setTbrs((prev) => {
               const list = prev[rideId] ?? [];
               const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());

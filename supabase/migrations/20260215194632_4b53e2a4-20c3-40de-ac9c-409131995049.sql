@@ -1,0 +1,1 @@
+ALTER TABLE public.ride_tbrs ADD COLUMN highlight text DEFAULT null;

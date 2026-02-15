@@ -394,18 +394,21 @@ export type Database = {
       ride_tbrs: {
         Row: {
           code: string
+          highlight: string | null
           id: string
           ride_id: string
           scanned_at: string | null
         }
         Insert: {
           code: string
+          highlight?: string | null
           id?: string
           ride_id: string
           scanned_at?: string | null
         }
         Update: {
           code?: string
+          highlight?: string | null
           id?: string
           ride_id?: string
           scanned_at?: string | null
