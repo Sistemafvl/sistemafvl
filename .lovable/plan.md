@@ -1,71 +1,125 @@
 
 
-## Melhorias na Conferencia Carregamento
+## Melhorias no Dashboard: Sidebar, Motoristas e novas opcoes PS/RTO
 
-### 1. Estado de Carregamento (Loading/Skeleton)
+### 1. Card do Sidebar com Unidade e Dominio
 
-Atualmente, ao abrir a pagina, aparece "Nenhum carregamento programado hoje" por alguns segundos ate os dados carregarem. Isso da a impressao de que nao ha dados.
+No card do gerente logado no sidebar (`DashboardSidebar.tsx`), adicionar informacoes da unidade e dominio abaixo do nome do gerente.
 
-**Solucao:** Adicionar um estado `isLoading` que inicia como `true` e muda para `false` apos o primeiro fetch. Enquanto `isLoading` for true, exibir skeleton cards (placeholders animados) no lugar da mensagem vazia.
+**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
 
-- Usar o componente `Skeleton` ja existente no projeto
-- Exibir 3 skeleton cards em grid enquanto carrega
-- Aplicar o mesmo padrao em outras telas que tenham o mesmo problema
+- Usar `unitSession.name` (unidade) e `unitSession.domain_name` (dominio) do auth store
+- Exibir abaixo do nome do gerente em texto menor, ex: "Unidade: X | Dominio: Y"
 
-### 2. TBR Mais Rapido (Atualizacao Otimista)
+---
 
-O TBR demora para aparecer na lista porque o sistema espera a gravacao no banco e depois faz um `fetchRides()` completo (que busca rides + drivers + tbrs).
+### 2. Motoristas que Passaram pela Unidade
 
-**Solucao:** Implementar atualizacao otimista -- adicionar o TBR na lista local imediatamente antes de gravar no banco. Assim o usuario ve o TBR na lista instantaneamente.
+Alterar `MotoristasParceirosPage.tsx` para mostrar apenas motoristas que possuem registros na tabela `driver_rides` vinculados a unidade logada.
 
-- Ao detectar um TBR valido no debounce, inserir otimisticamente no estado `tbrs` com um ID temporario
-- Em seguida gravar no banco e fazer `fetchRides()` para sincronizar
-- O mesmo para exclusao: remover do estado local imediatamente, depois deletar no banco
+**Arquivo:** `src/pages/dashboard/MotoristasParceirosPage.tsx`
 
-### 3. Edicao Inline para Gerente (Rota, Login, Senha)
+- Mudar o titulo para "Motoristas Parceiros que passaram por sua unidade"
+- Alterar a query: buscar `driver_rides` onde `unit_id = unitSession.id`, extrair `driver_id` distintos, depois buscar os dados dos motoristas correspondentes
+- Preencher as colunas Corridas, Entregues e Devolvidos com dados reais da tabela `driver_rides` (contagem total, contagem com `loading_status = 'finished'`, e contagem com `loading_status = 'returned'`)
 
-Apenas quando o `managerSession` existir no auth store, exibir um icone de lapis ao lado dos campos Rota, Login e Senha. Ao clicar, o campo vira um input editavel. Ao salvar (blur ou Enter), grava no banco instantaneamente.
+---
 
-- Verificar `managerSession` do `useAuthStore` para condicionar a exibicao
-- Campos editaveis: `route`, `login`, `password`
-- Ao salvar: update na tabela `driver_rides` e atualizar o estado local otimisticamente
+### 3. Novas opcoes de menu: PS e RTO
+
+Criar duas novas paginas acessiveis pelo menu do gerente, com logica muito similar entre elas.
+
+#### 3.1 Tabelas no banco de dados
+
+Criar duas tabelas novas:
+
+**Tabela `ps_entries`:**
+- `id` uuid PK default gen_random_uuid()
+- `tbr_code` text NOT NULL
+- `ride_id` uuid FK -> driver_rides.id (nullable, para vincular ao historico)
+- `unit_id` uuid FK -> units.id NOT NULL
+- `conferente_id` uuid FK -> user_profiles.id (nullable)
+- `description` text NOT NULL (descricao do problema)
+- `driver_name` text (cache do nome do motorista)
+- `route` text (cache da rota)
+- `status` text default 'open' (open / closed)
+- `created_at` timestamptz default now()
+- `closed_at` timestamptz nullable
+
+**Tabela `rto_entries`:**
+- Mesma estrutura identica a `ps_entries`
+
+RLS: policies publicas (mesmo padrao do projeto).
+
+#### 3.2 Menu lateral
+
+**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
+
+- Adicionar ao array `managerMenuItems` duas novas opcoes:
+  - `{ title: "PS", url: "/dashboard/ps", icon: AlertTriangle }`
+  - `{ title: "RTO", url: "/dashboard/rto", icon: RotateCcw }`
+
+#### 3.3 Rotas
+
+**Arquivo:** `src/App.tsx`
+
+- Adicionar rotas:
+  - `/dashboard/ps` -> `PSPage`
+  - `/dashboard/rto` -> `RTOPage`
+
+#### 3.4 Pagina PS (`src/pages/dashboard/PSPage.tsx`)
+
+**Fluxo:**
+1. Campo de leitura de TBR no topo (mesmo padrao de scanner automatico com debounce 300ms)
+2. Ao ler um TBR valido (prefixo "TBR"):
+   - Busca na tabela `ride_tbrs` pelo codigo para encontrar o `ride_id`
+   - Com o `ride_id`, busca em `driver_rides` o historico completo (motorista, rota, login, conferente, datas)
+   - Exibe um modal com todas as informacoes historicas do TBR
+   - Botao "Incluir PS" no modal
+3. Ao clicar "Incluir PS":
+   - Abre campos para: descricao do problema (textarea) e selecao do conferente (dropdown com conferentes da unidade)
+   - Dados do historico sao preenchidos automaticamente (driver_name, route, ride_id)
+   - Botao "Gravar"
+4. Ao gravar, insere na tabela `ps_entries` e o TBR aparece na lista abaixo
+5. Lista de PS com colunas: Codigo TBR, Motorista, Rota, Conferente, Problema, Data, Status, Acoes
+6. Botao "Finalizar PS" na coluna de acoes: atualiza `status = 'closed'` e `closed_at = now()`
+7. Ao finalizar, o registro some da lista ativa (ou mostra como finalizado)
+
+Se o TBR nao for encontrado no historico, exibir mensagem informando que nao ha registros.
+
+#### 3.5 Pagina RTO (`src/pages/dashboard/RTOPage.tsx`)
+
+Mesma logica e layout da pagina PS, porem gravando na tabela `rto_entries`. Titulo "RTO" e icone diferente.
 
 ---
 
 ### Detalhes Tecnicos
 
-**Arquivo modificado:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+**Novas dependencias:** Nenhuma (usa componentes e libs ja existentes)
 
-**1. Loading State:**
-- Novo estado: `const [isLoading, setIsLoading] = useState(true)`
-- No `fetchRides`: setar `setIsLoading(false)` no final
-- No render: se `isLoading`, mostrar grid com 3 `Skeleton` cards (altura ~300px)
-- Import: `import { Skeleton } from "@/components/ui/skeleton"`
+**Arquivos criados:**
+- `src/pages/dashboard/PSPage.tsx`
+- `src/pages/dashboard/RTOPage.tsx`
 
-**2. TBR Otimista:**
-No `handleTbrInputChange`, apos validar que comeca com "TBR":
+**Arquivos modificados:**
+- `src/components/dashboard/DashboardSidebar.tsx` (card + menu items)
+- `src/pages/dashboard/MotoristasParceirosPage.tsx` (titulo + query filtrada por unidade)
+- `src/App.tsx` (rotas PS e RTO)
+
+**Migracao SQL:**
+- Criar tabelas `ps_entries` e `rto_entries` com RLS
+- Habilitar realtime para ambas (opcional)
+
+**Query para motoristas da unidade:**
 ```text
-1. Gerar ID temporario (crypto.randomUUID())
-2. Adicionar ao estado tbrs[rideId] imediatamente
-3. Limpar input
-4. Insert no banco em background
-5. fetchRides() para sincronizar IDs reais
+1. SELECT DISTINCT driver_id FROM driver_rides WHERE unit_id = ?
+2. SELECT * FROM drivers WHERE id IN (...)
+3. Para cada motorista: COUNT de rides, COUNT de finished, COUNT de returned
 ```
 
-Para exclusao (`handleDeleteTbr`):
+**Busca de historico do TBR (PS/RTO):**
 ```text
-1. Remover do estado tbrs imediatamente
-2. Delete no banco em background
-3. fetchRides() para sincronizar
+1. SELECT ride_id FROM ride_tbrs WHERE code = ?
+2. SELECT dr.*, d.name as driver_name FROM driver_rides dr JOIN drivers d ON d.id = dr.driver_id WHERE dr.id = ride_id
 ```
-
-**3. Edicao Inline (Gerente):**
-- Novo estado: `const [editingField, setEditingField] = useState<{rideId: string, field: string} | null>(null)`
-- Novo estado: `const [editValue, setEditValue] = useState("")`
-- Verificar `managerSession` do auth store
-- Import adicional: `Pencil` do lucide-react
-- Para cada campo (route, login, password): se `managerSession` existe, mostrar icone de lapis
-- Ao clicar no lapis: ativar modo edicao (input inline)
-- Ao blur ou Enter: salvar com `supabase.from("driver_rides").update(...)` e atualizar estado local otimisticamente
-- Campos editaveis: `route`, `login`, `password`
 
