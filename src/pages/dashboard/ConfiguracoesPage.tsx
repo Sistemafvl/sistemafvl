@@ -45,12 +45,7 @@ const ConfiguracoesPage = () => {
   useEffect(() => { fetchUnit(); fetchLogins(); }, [fetchUnit, fetchLogins]);
 
 
-  // Send radius updates to iframe
-  useEffect(() => {
-    if (iframeRef.current?.contentWindow && currentGeo.lat && currentGeo.lng) {
-      iframeRef.current.contentWindow.postMessage({ type: "update-radius", radius: geoRadius }, "*");
-    }
-  }, [geoRadius, currentGeo.lat, currentGeo.lng]);
+  // Radius postMessage removed (circle removed from map)
 
   // CEP lookup
   const handleCepChange = async (value: string) => {
@@ -134,20 +129,12 @@ const ConfiguracoesPage = () => {
 </head><body>
 <div id="map"></div>
 <script>
-var map=L.map('map',{attributionControl:false});
+var map=L.map('map').setView([${currentGeo.lat},${currentGeo.lng}],15);
 L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
-var marker=L.marker([${currentGeo.lat},${currentGeo.lng}]).addTo(map);
-var circle=L.circle([${currentGeo.lat},${currentGeo.lng}],{radius:${geoRadius},color:'#3b82f6',fillColor:'#3b82f6',fillOpacity:0.15,weight:2}).addTo(map);
-map.fitBounds(circle.getBounds());
-window.addEventListener('message',function(e){
-  if(e.data&&e.data.type==='update-radius'){
-    circle.setRadius(e.data.radius);
-    map.fitBounds(circle.getBounds());
-  }
-});
+L.marker([${currentGeo.lat},${currentGeo.lng}]).addTo(map);
 </script>
 </body></html>`;
-  }, [currentGeo.lat, currentGeo.lng, geoRadius]);
+  }, [currentGeo.lat, currentGeo.lng]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
