@@ -1,122 +1,109 @@
 
 
-## Melhorias: Configuracoes do Gerente, Duplicatas TBR, Modal Motorista, Busca TBR e Logins
+## Correcoes: Carrossel, Duplicatas TBR, Tooltips e Geofencing com Mapa
 
-### 1. Corrigir logica de duplicatas/triplicatas TBR
-
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-
-**Duplicata (2x leitura):**
-- Ambos ficam vermelhos imediatamente
-- Apos 1 segundo (nao 2), o segundo codigo e excluido automaticamente (estado + banco)
-- O primeiro volta ao estilo normal
-
-**Triplicata (3x leitura):**
-- Apos 1 segundo, os 2 ultimos sao excluidos
-- O primeiro fica amarelo **permanentemente** (remover o setTimeout que limpa o amarelo apos 3s)
-
----
-
-### 2. Icone de olho no card da Conferencia (ver motorista)
+### 1. Corrigir carrossel horizontal (remover barra de rolagem)
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-- Adicionar um icone de olho (Eye) ao lado do badge de sequencia no canto superior direito do card (onde indicado no anexo 4)
-- Ao clicar, abrir um modal com:
-  - Dados cadastrais do motorista (nome, CPF, placa, modelo, cor, email, WhatsApp, endereco)
-  - Quantidade de corridas realizadas (total de `driver_rides` desse motorista)
-  - Quantidade de TBRs carregados (soma de `ride_tbrs` de todos os rides desse motorista)
-- Buscar dados do motorista via `drivers` e agregar contagens de `driver_rides` e `ride_tbrs`
+O problema e que o container do Embla esta permitindo scroll nativo alem do carrossel. A correcao:
+- Adicionar `overflow-hidden` no container principal do carrossel
+- Garantir que o container pai nao gere scrollbar horizontal
+- Os cards so navegam pelas setas (ChevronLeft/ChevronRight), sem scrollbar visivel
 
 ---
 
-### 3. Corrigir modal de busca TBR na Visao Geral
+### 2. Corrigir bug de duplicata/triplicata TBR
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+O problema atual: ao escanear o 3o TBR identico (ex: final 12), o sistema corretamente exclui os 2 ultimos e pinta o primeiro de amarelo. Porem, ao escanear o proximo TBR (ex: final 13), o realtime (`fetchRides`) recarrega todos os TBRs do banco, e como o insert do 2o e 3o ja foi feito no banco antes do delete via setTimeout, eles reaparecem.
+
+**Solucao:**
+- Mover a exclusao do banco para ANTES da insercao, ou nao inserir duplicatas no banco
+- Na logica de duplicata (2a leitura): inserir otimisticamente no estado local, mas NAO inserir no banco. Apenas marcar vermelho e apos 1s remover do estado local
+- Na logica de triplicata (3a leitura): idem, nao inserir no banco. Marcar vermelho, apos 1s remover os 2 ultimos do estado e pintar o primeiro amarelo permanentemente
+- Ao receber update do realtime (fetchRides), preservar o flag `_yellowHighlight` dos TBRs que ja estao marcados
+
+---
+
+### 3. Remover todos os Tooltips do sistema
+
+**Arquivos modificados:**
+- `src/App.tsx` - Remover o `TooltipProvider` wrapper (manter so o conteudo interno)
+- `src/components/ui/sidebar.tsx` - Remover imports e uso de Tooltip, TooltipTrigger, TooltipContent, TooltipProvider. O `SidebarMenuButton` nao renderiza mais tooltip
+- `src/components/ui/tooltip.tsx` - Pode ser mantido (nao causa dano), mas todos os usos serao removidos
+
+---
+
+### 4. Geofencing com CEP, endereco completo e mapa
+
+**Arquivo:** `src/pages/dashboard/ConfiguracoesPage.tsx`
+
+Reformular a secao de Geofencing:
+- Adicionar campo de **CEP** que ao ser preenchido (8 digitos), consulta a API `viacep.com.br` para retornar rua, bairro, cidade e estado
+- Preencher automaticamente o campo de endereco com os dados retornados
+- Permitir edicao manual do endereco completo (numero, complemento)
+- Ao clicar "Definir Perimetro", chamar a edge function `geocode-address` para converter em coordenadas
+- Exibir um mapa estatico (iframe do OpenStreetMap) mostrando o ponto central e um circulo representando o raio
+- O mapa usa a URL do Leaflet/OpenStreetMap via iframe ou uma imagem estatica com marcador
+
+**Alternativa para o mapa:** Usar a biblioteca `leaflet` via CDN em um iframe inline, ou renderizar um mapa simples com a API de tiles do OpenStreetMap usando um elemento canvas/svg para desenhar o circulo. A abordagem mais simples e usar um iframe do OpenStreetMap centrado nas coordenadas salvas.
+
+---
+
+### 5. Corrigir modal TBR na Visao Geral
 
 **Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
 
-O modal abre e fecha rapidamente. Corrigir:
-- Remover qualquer logica que feche o modal automaticamente
-- O modal so fecha ao clicar no X ou fora
-- Ao pesquisar um TBR (Enter), buscar na tabela `ride_tbrs` pelo codigo
-- Com o `ride_id`, buscar em `driver_rides` + `drivers` o historico completo
-- Exibir no modal: motorista, rota, login, unidade, conferente, data de inicio/fim, status, e todos os movimentos do TBR (todas as leituras com datas)
-- Se nao encontrado, exibir mensagem "TBR nao encontrado"
+O modal ja tem `onPointerDownOutside={(e) => e.preventDefault()}` mas pode estar fechando por outras razoes (ex: interacao com Dialog). Verificar se ha algo no Dialog que causa o fechamento e garantir que:
+- O `onOpenChange` so recebe `false` ao clicar no X
+- Adicionar `onInteractOutside={(e) => e.preventDefault()}` e `onEscapeKeyDown` se necessario
 
 ---
 
-### 4. Tela de Configuracoes do Gerente
+### Detalhes Tecnicos
 
-**Arquivo criado:** `src/pages/dashboard/ConfiguracoesPage.tsx`
+**Arquivos modificados:**
+- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (carrossel sem scrollbar, fix duplicata/triplicata)
+- `src/pages/dashboard/ConfiguracoesPage.tsx` (CEP + endereco + mapa)
+- `src/pages/dashboard/DashboardHome.tsx` (modal TBR estavel)
+- `src/App.tsx` (remover TooltipProvider)
+- `src/components/ui/sidebar.tsx` (remover tooltips do menu lateral)
 
-**Rota:** `/dashboard/configuracoes` (ja existe no sidebar, mas nao tem pagina implementada)
-
-**Modificar:** `src/App.tsx` - adicionar rota para `ConfiguracoesPage`
-
-**Sessoes da pagina:**
-
-#### 4.1 Perimetro / Geofencing
-- Campo de endereco (input texto)
-- Campo de raio em metros (input numerico, padrao 500)
-- Botao "Definir Perimetro" que:
-  - Chama a edge function `geocode-address` para converter endereco em lat/lng
-  - Salva `geofence_address`, `geofence_lat`, `geofence_lng`, `geofence_radius_meters` na tabela `units`
-- Exibir endereco e raio atual se ja configurado
-- Toast de sucesso/erro
-
-#### 4.2 Logins e Senhas
-- Criar tabela `unit_logins` no banco para armazenar logins/senhas pre-cadastrados
-  - `id` uuid PK
-  - `unit_id` uuid NOT NULL
-  - `login` text NOT NULL
-  - `password` text NOT NULL
-  - `active` boolean default true
-  - `created_at` timestamptz default now()
-- Interface CRUD para gerenciar logins:
-  - Formulario: campos Login e Senha + botao Adicionar
-  - Lista com botao de excluir
-- RLS: policies publicas (mesmo padrao do projeto)
-
-#### 4.3 Alterar modal "Programar" no QueuePanel
-**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
-- O campo Login passa a ser um Select (dropdown) que lista os logins cadastrados em `unit_logins`
-- Ao selecionar um login, a senha correspondente e preenchida automaticamente
-- Manter opcao de digitar manualmente caso nao tenha logins cadastrados
-
----
-
-### 5. Migracao SQL
-
-Criar tabela `unit_logins`:
-```
-CREATE TABLE public.unit_logins (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  unit_id uuid NOT NULL,
-  login text NOT NULL,
-  password text NOT NULL,
-  active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.unit_logins ENABLE ROW LEVEL SECURITY;
--- Policies publicas
-CREATE POLICY "Anyone can read unit_logins" ON public.unit_logins FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert unit_logins" ON public.unit_logins FOR INSERT WITH CHECK (true);
-CREATE POLICY "Anyone can update unit_logins" ON public.unit_logins FOR UPDATE USING (true);
-CREATE POLICY "Anyone can delete unit_logins" ON public.unit_logins FOR DELETE USING (true);
+**Logica corrigida para duplicatas:**
+```text
+handleTbrInputChange:
+  count = ocorrencias do codigo na lista local
+  
+  Se count == 0: inserir no estado + banco normalmente
+  
+  Se count == 1 (2a leitura):
+    - Inserir APENAS no estado local (NAO no banco)
+    - Marcar ambos como _duplicate (vermelho)
+    - Apos 1s: remover o 2o do estado local apenas
+    - O 1o volta ao normal
+  
+  Se count >= 2 (3a leitura):
+    - Inserir APENAS no estado local (NAO no banco)
+    - Marcar todos como _triplicate (vermelho)
+    - Apos 1s: remover 2o e 3o do estado local
+    - Marcar 1o como _yellowHighlight permanente
+  
+  fetchRides (realtime): ao recarregar TBRs do banco,
+    preservar _yellowHighlight dos TBRs ja marcados
 ```
 
----
+**Consulta CEP (ViaCEP):**
+```text
+GET https://viacep.com.br/ws/{cep}/json/
+Retorna: logradouro, bairro, localidade, uf
+Preencher campo endereco: "{logradouro}, {bairro}, {localidade} - {uf}"
+```
 
-### Resumo de arquivos
-
-**Criados:**
-- `src/pages/dashboard/ConfiguracoesPage.tsx`
-
-**Modificados:**
-- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (duplicatas 1s, amarelo permanente, icone olho + modal motorista)
-- `src/pages/dashboard/DashboardHome.tsx` (modal TBR com historico completo, nao fechar sozinho)
-- `src/components/dashboard/QueuePanel.tsx` (login como Select com logins pre-cadastrados)
-- `src/App.tsx` (rota configuracoes)
-
-**Migracao SQL:**
-- Tabela `unit_logins`
+**Mapa OpenStreetMap (iframe):**
+```text
+Apos salvar coordenadas, exibir iframe:
+https://www.openstreetmap.org/export/embed.html?bbox={lng-delta},{lat-delta},{lng+delta},{lat+delta}&layer=mapnik&marker={lat},{lng}
+```
 
