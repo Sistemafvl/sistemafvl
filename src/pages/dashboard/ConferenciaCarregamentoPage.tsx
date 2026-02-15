@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil } from "lucide-react";
 import { format, differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -68,15 +69,35 @@ const playErrorBeep = () => {
   } catch {}
 };
 
+const SkeletonCard = () => (
+  <Card className="overflow-hidden">
+    <CardContent className="p-4 flex flex-col items-center gap-3">
+      <Skeleton className="h-16 w-16 rounded-full" />
+      <Skeleton className="h-5 w-32" />
+      <div className="w-full space-y-2">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-4 w-1/2" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
+      <Skeleton className="h-9 w-full" />
+      <Skeleton className="h-8 w-full" />
+    </CardContent>
+  </Card>
+);
+
 const ConferenciaCarregamentoPage = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, managerSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [tbrs, setTbrs] = useState<Record<string, Tbr[]>>({});
   const [tbrInputs, setTbrInputs] = useState<Record<string, string>>({});
   const [tbrSearch, setTbrSearch] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
+  const [editingField, setEditingField] = useState<{ rideId: string; field: string } | null>(null);
+  const [editValue, setEditValue] = useState("");
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
@@ -92,7 +113,7 @@ const ConferenciaCarregamentoPage = () => {
       .lte("completed_at", endDate.toISOString())
       .order("sequence_number", { ascending: true });
 
-    if (!data) { setRides([]); return; }
+    if (!data) { setRides([]); setIsLoading(false); return; }
 
     const driverIds = [...new Set(data.map((r) => r.driver_id))];
     const { data: drivers } = await supabase
@@ -136,6 +157,7 @@ const ConferenciaCarregamentoPage = () => {
     } else {
       setTbrs({});
     }
+    setIsLoading(false);
   }, [unitId, startDate, endDate]);
 
   useEffect(() => {
@@ -180,12 +202,19 @@ const ConferenciaCarregamentoPage = () => {
     await fetchRides();
   };
 
-  const handleDeleteTbr = async (tbrId: string) => {
+  // Optimistic TBR delete
+  const handleDeleteTbr = async (tbrId: string, rideId: string) => {
+    // Remove from local state immediately
+    setTbrs((prev) => ({
+      ...prev,
+      [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
+    }));
+    // Delete from DB in background
     await supabase.from("ride_tbrs").delete().eq("id", tbrId);
-    await fetchRides();
+    fetchRides();
   };
 
-  // Auto-save TBR with debounce
+  // Auto-save TBR with debounce + optimistic insert
   const handleTbrInputChange = (rideId: string, value: string) => {
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
 
@@ -198,11 +227,18 @@ const ConferenciaCarregamentoPage = () => {
     debounceTimers.current[rideId] = setTimeout(async () => {
       const code = value.trim();
       if (code.toUpperCase().startsWith("TBR")) {
-        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
+        // Optimistic: add to local state immediately
+        const tempId = crypto.randomUUID();
+        setTbrs((prev) => ({
+          ...prev,
+          [rideId]: [...(prev[rideId] ?? []), { id: tempId, code, scanned_at: new Date().toISOString() }],
+        }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-        await fetchRides();
-        // Re-focus input
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+
+        // Insert in DB in background, then sync
+        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
+        fetchRides();
       } else {
         playErrorBeep();
         toast.error("Código inválido! Deve iniciar com TBR");
@@ -210,6 +246,17 @@ const ConferenciaCarregamentoPage = () => {
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       }
     }, 300);
+  };
+
+  // Inline edit save
+  const handleSaveEdit = async (rideId: string, field: string, value: string) => {
+    setEditingField(null);
+    // Optimistic local update
+    setRides((prev) =>
+      prev.map((r) => (r.id === rideId ? { ...r, [field]: value || null } : r))
+    );
+    await supabase.from("driver_rides").update({ [field]: value || null } as any).eq("id", rideId);
+    fetchRides();
   };
 
   // Cleanup timers
@@ -239,6 +286,45 @@ const ConferenciaCarregamentoPage = () => {
       date.setHours(23, 59, 59, 999);
       setEndDate(date);
     }
+  };
+
+  const renderEditableField = (ride: RideWithDriver, field: "route" | "login" | "password", icon: React.ReactNode, label: string) => {
+    const value = ride[field];
+    const isEditing = editingField?.rideId === ride.id && editingField?.field === field;
+
+    if (isEditing) {
+      return (
+        <div className="flex items-center gap-2">
+          {icon}
+          <Input
+            className="h-7 text-sm flex-1"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onBlur={() => handleSaveEdit(ride.id, field, editValue)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleSaveEdit(ride.id, field, editValue); }}
+            autoFocus
+          />
+        </div>
+      );
+    }
+
+    if (!value && !managerSession) return null;
+
+    return (
+      <div className="flex items-center gap-2">
+        {icon}
+        <span><strong>{label}:</strong> {value || "—"}</span>
+        {managerSession && (
+          <button
+            onClick={() => { setEditingField({ rideId: ride.id, field }); setEditValue(value ?? ""); }}
+            className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
+            title={`Editar ${label.toLowerCase()}`}
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+    );
   };
 
   return (
@@ -299,7 +385,13 @@ const ConferenciaCarregamentoPage = () => {
         </Popover>
       </div>
 
-      {filteredRides.length === 0 ? (
+      {isLoading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
+        </div>
+      ) : filteredRides.length === 0 ? (
         <p className="text-muted-foreground italic text-center py-12">
           {tbrSearch.trim() ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
         </p>
@@ -308,7 +400,7 @@ const ConferenciaCarregamentoPage = () => {
           {filteredRides.map((ride) => {
             const status = ride.loading_status ?? "pending";
             const rideTbrs = tbrs[ride.id] ?? [];
-            const isLoading = status === "loading";
+            const isLoadingStatus = status === "loading";
             const isFinished = status === "finished";
 
             return (
@@ -358,24 +450,9 @@ const ConferenciaCarregamentoPage = () => {
                         <span className="text-xs"><strong>Duração:</strong> {formatDuration(ride.started_at, ride.finished_at)}</span>
                       </div>
                     )}
-                    {ride.route && (
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 shrink-0 text-primary" />
-                        <span><strong>Rota:</strong> {ride.route}</span>
-                      </div>
-                    )}
-                    {ride.login && (
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 shrink-0 text-primary" />
-                        <span><strong>Login:</strong> {ride.login}</span>
-                      </div>
-                    )}
-                    {ride.password && (
-                      <div className="flex items-center gap-2">
-                        <KeyRound className="h-4 w-4 shrink-0 text-primary" />
-                        <span><strong>Senha:</strong> {ride.password}</span>
-                      </div>
-                    )}
+                    {renderEditableField(ride, "route", <MapPin className="h-4 w-4 shrink-0 text-primary" />, "Rota")}
+                    {renderEditableField(ride, "login", <User className="h-4 w-4 shrink-0 text-primary" />, "Login")}
+                    {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
                   </div>
 
                   {/* Conferente Select */}
@@ -400,12 +477,12 @@ const ConferenciaCarregamentoPage = () => {
 
                   {/* Action Buttons */}
                   <div className="w-full flex gap-2">
-                    {!isLoading && !isFinished && (
+                    {!isLoadingStatus && !isFinished && (
                       <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
                         <Play className="h-3.5 w-3.5" /> Iniciar
                       </Button>
                     )}
-                    {isLoading && (
+                    {isLoadingStatus && (
                       <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
                         <Square className="h-3.5 w-3.5" /> Finalizar
                       </Button>
@@ -418,7 +495,7 @@ const ConferenciaCarregamentoPage = () => {
                   </div>
 
                   {/* TBR Area */}
-                  {(isLoading || isFinished) && (
+                  {(isLoadingStatus || isFinished) && (
                     <div className="w-full space-y-2 border-t pt-3">
                       <p className="text-xs font-bold italic flex items-center gap-1">
                         <ScanBarcode className="h-3.5 w-3.5 text-primary" />
@@ -431,7 +508,7 @@ const ConferenciaCarregamentoPage = () => {
                               <span className="font-bold text-primary">{i + 1}.</span>
                               <span className="font-mono flex-1">{t.code}</span>
                               <button
-                                onClick={() => handleDeleteTbr(t.id)}
+                                onClick={() => handleDeleteTbr(t.id, ride.id)}
                                 className="text-destructive hover:text-destructive/80 shrink-0"
                                 title="Excluir TBR"
                               >
@@ -441,7 +518,7 @@ const ConferenciaCarregamentoPage = () => {
                           ))}
                         </div>
                       )}
-                      {isLoading && (
+                      {isLoadingStatus && (
                         <div className="flex gap-2">
                           <Input
                             ref={(el) => { inputRefs.current[ride.id] = el; }}
