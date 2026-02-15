@@ -4,7 +4,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuthStore } from "@/stores/auth-store";
-import { useToast } from "@/hooks/use-toast";
 import { Building2, Eye, EyeOff, KeyRound, LogIn, User, Check, ChevronsUpDown } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
@@ -31,7 +30,6 @@ const UnitLoginForm = () => {
   const [domainOpen, setDomainOpen] = useState(false);
   const [unitOpen, setUnitOpen] = useState(false);
   const setUnitSession = useAuthStore((s) => s.setUnitSession);
-  const { toast } = useToast();
 
   const rawDigits = document.replace(/\D/g, "");
   const isCnpj = rawDigits.length > 11;
@@ -62,14 +60,13 @@ const UnitLoginForm = () => {
       });
 
       if (error || !data?.success) {
-        toast({ title: "Erro", description: data?.error || "Credenciais inválidas", variant: "destructive" });
         setLoading(false);
         return;
       }
 
       setUnitSession(data.unit);
     } catch {
-      toast({ title: "Erro", description: "Erro ao conectar", variant: "destructive" });
+      // Connection error
     }
     setLoading(false);
   };

@@ -3,7 +3,6 @@ import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode,
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 
@@ -45,8 +44,6 @@ const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: numbe
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
-  const { toast } = useToast();
-
   const [loading, setLoading] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [myEntry, setMyEntry] = useState<QueueEntry | null>(null);
@@ -240,11 +237,7 @@ const DriverQueue = () => {
       status: "waiting",
     });
     setLoading(false);
-    if (error) {
-      toast({ title: "Erro ao entrar na fila", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Você entrou na fila!" });
-    }
+    if (error) return;
   };
 
   const leaveQueue = async () => {
@@ -252,10 +245,7 @@ const DriverQueue = () => {
     setLoading(true);
     const { error } = await supabase.from("queue_entries").update({ status: "cancelled" }).eq("id", myEntry.id);
     setLoading(false);
-    if (error) {
-      toast({ title: "Erro ao sair da fila", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "Você saiu da fila" });
+    if (!error) {
       setMyEntry(null);
     }
   };

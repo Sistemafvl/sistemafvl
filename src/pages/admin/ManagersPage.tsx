@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
 import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -37,8 +36,6 @@ const ManagersPage = () => {
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
   const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
-  const { toast } = useToast();
-
   // Modal states
   const [viewManager, setViewManager] = useState<Manager | null>(null);
   const [editManager, setEditManager] = useState<Manager | null>(null);
@@ -81,12 +78,9 @@ const ManagersPage = () => {
       manager_password: newManager.manager_password || null,
       unit_id: selectedUnit,
     } as any);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!error) {
       setNewManager({ name: "", cnpj: "", password: "", manager_password: "" });
       refreshManagers();
-      toast({ title: "Gerenciador criado" });
     }
   };
 
@@ -98,7 +92,6 @@ const ManagersPage = () => {
   const deleteManager = async (id: string) => {
     await supabase.from("managers").delete().eq("id", id);
     refreshManagers();
-    toast({ title: "Gerenciador excluído" });
   };
 
   const openEdit = (m: Manager) => {
@@ -115,12 +108,9 @@ const ManagersPage = () => {
       cnpj: cleanCnpj,
       password: editForm.password,
     }).eq("id", editManager.id);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!error) {
       setEditManager(null);
       refreshManagers();
-      toast({ title: "Gerenciador atualizado" });
     }
   };
 
@@ -137,12 +127,9 @@ const ManagersPage = () => {
       cnpj: cleanCnpj,
       manager_password: credForm.manager_password,
     } as any).eq("id", credManager.id);
-    if (error) {
-      toast({ title: "Erro", description: error.message, variant: "destructive" });
-    } else {
+    if (!error) {
       setCredManager(null);
       refreshManagers();
-      toast({ title: "Credenciais atualizadas" });
     }
   };
 

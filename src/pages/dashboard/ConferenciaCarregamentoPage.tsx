@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,6 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { format, differenceInMinutes } from "date-fns";
-import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import useEmblaCarousel from "embla-carousel-react";
 
@@ -417,7 +416,6 @@ const ConferenciaCarregamentoPage = () => {
         }
       } else {
         playErrorBeep();
-        toast.error("Código inválido! Deve iniciar com TBR");
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       }
@@ -543,7 +541,7 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6">
+    <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
       <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
 
       {/* Filters */}
@@ -642,7 +640,7 @@ const ConferenciaCarregamentoPage = () => {
                 const isFinished = status === "finished";
 
                 return (
-                  <div key={ride.id} className="flex-none w-[320px]">
+                  <div key={ride.id} className="flex-none w-[85vw] sm:w-[320px]">
                     <Card className="relative overflow-hidden h-full">
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge (top-left) */}
@@ -738,7 +736,7 @@ const ConferenciaCarregamentoPage = () => {
                           )}
                           {isLoadingStatus && (
                             <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
-                              <Square className="h-3.5 w-3.5" /> Finalizar
+                              <CheckCircle className="h-3.5 w-3.5" /> Finalizar
                             </Button>
                           )}
                           {isFinished && (
