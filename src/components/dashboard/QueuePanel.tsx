@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -24,11 +24,12 @@ interface QueueEntry {
   car_color?: string;
 }
 
-
 const QueuePanel = () => {
   const { unitSession } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
+  const [isPulsing, setIsPulsing] = useState(false);
+  const prevCountRef = useRef(0);
 
   // Modal states
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
@@ -36,7 +37,6 @@ const QueuePanel = () => {
   const [route, setRoute] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
-
 
   const unitId = unitSession?.id;
 
@@ -58,19 +58,24 @@ const QueuePanel = () => {
       .in("id", driverIds);
 
     const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
-    setEntries(
-      data.map((e) => {
-        const d = driverMap.get(e.driver_id);
-        return {
-          ...e,
-          driver_name: d?.name ?? "Motorista",
-          driver_avatar: d?.avatar_url ?? undefined,
-          car_model: d?.car_model ?? undefined,
-          car_plate: d?.car_plate ?? undefined,
-          car_color: d?.car_color ?? undefined,
-        };
-      })
-    );
+    const newEntries = data.map((e) => {
+      const d = driverMap.get(e.driver_id);
+      return {
+        ...e,
+        driver_name: d?.name ?? "Motorista",
+        driver_avatar: d?.avatar_url ?? undefined,
+        car_model: d?.car_model ?? undefined,
+        car_plate: d?.car_plate ?? undefined,
+        car_color: d?.car_color ?? undefined,
+      };
+    });
+
+    // Check if count increased → pulse
+    if (newEntries.length > prevCountRef.current && prevCountRef.current >= 0) {
+      setIsPulsing(true);
+    }
+    prevCountRef.current = newEntries.length;
+    setEntries(newEntries);
   }, [unitId]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
@@ -102,10 +107,14 @@ const QueuePanel = () => {
     setShowProgramModal(true);
   };
 
+  const handleOpenPanel = () => {
+    setIsPulsing(false);
+    setOpen(true);
+  };
+
   const handleDefinir = async () => {
     if (!selectedEntry || !unitId) return;
 
-    // Calculate sequence number (rides today for this unit + 1)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const { count } = await supabase
@@ -116,13 +125,11 @@ const QueuePanel = () => {
 
     const sequenceNumber = (count ?? 0) + 1;
 
-    // Mark queue entry as completed
     await supabase
       .from("queue_entries")
       .update({ status: "completed", called_at: new Date().toISOString(), completed_at: new Date().toISOString() })
       .eq("id", selectedEntry.id);
 
-    // Insert ride with route, login, sequence
     await supabase.from("driver_rides").insert({
       driver_id: selectedEntry.driver_id,
       unit_id: selectedEntry.unit_id,
@@ -141,10 +148,12 @@ const QueuePanel = () => {
 
   return (
     <>
-      {/* Floating trigger */}
+      {/* Floating trigger with pulse animation */}
       <button
-        onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-all"
+        onClick={handleOpenPanel}
+        className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-all ${
+          isPulsing ? "animate-pulse ring-2 ring-primary ring-offset-2 ring-offset-background" : ""
+        }`}
       >
         <Users className="h-5 w-5" />
         <span className="font-bold italic text-sm">Fila</span>
@@ -221,30 +230,15 @@ const QueuePanel = () => {
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
               <Label htmlFor="route" className="font-semibold">Rota</Label>
-              <Input
-                id="route"
-                placeholder="Informe a rota..."
-                value={route}
-                onChange={(e) => setRoute(e.target.value)}
-              />
+              <Input id="route" placeholder="Informe a rota..." value={route} onChange={(e) => setRoute(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="login" className="font-semibold">Login</Label>
-              <Input
-                id="login"
-                placeholder="Informe o login..."
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-              />
+              <Input id="login" placeholder="Informe o login..." value={login} onChange={(e) => setLogin(e.target.value)} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="password" className="font-semibold">Senha</Label>
-              <Input
-                id="password"
-                placeholder="Informe a senha..."
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <Input id="password" placeholder="Informe a senha..." value={password} onChange={(e) => setPassword(e.target.value)} />
             </div>
             <Button onClick={handleDefinir} className="w-full font-bold italic">
               Definir
@@ -252,7 +246,6 @@ const QueuePanel = () => {
           </div>
         </DialogContent>
       </Dialog>
-
     </>
   );
 };

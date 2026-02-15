@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, MapPinOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +33,16 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
+// Haversine distance in meters
+const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
   const { toast } = useToast();
@@ -44,6 +54,12 @@ const DriverQueue = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
+  const [tbrCount, setTbrCount] = useState(0);
+
+  // Geofencing state
+  const [isWithinGeofence, setIsWithinGeofence] = useState<boolean | null>(null); // null = checking or no geofence
+  const [geofenceMessage, setGeofenceMessage] = useState("");
+  const [hasGeofence, setHasGeofence] = useState(false);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -52,10 +68,78 @@ const DriverQueue = () => {
 
   const inQueue = !!myEntry;
 
-  // Fetch active ride (pending or loading)
+  // Check geofencing
+  useEffect(() => {
+    if (!unitId) return;
+
+    const checkGeofence = async () => {
+      const { data: unit } = await supabase
+        .from("units")
+        .select("geofence_lat, geofence_lng, geofence_radius_meters")
+        .eq("id", unitId)
+        .single();
+
+      if (!unit || !unit.geofence_lat || !unit.geofence_lng) {
+        setHasGeofence(false);
+        setIsWithinGeofence(true);
+        return;
+      }
+
+      setHasGeofence(true);
+      const radius = (unit as any).geofence_radius_meters ?? 500;
+
+      if (!navigator.geolocation) {
+        setIsWithinGeofence(false);
+        setGeofenceMessage("Geolocalização não disponível no seu dispositivo");
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, unit.geofence_lat!, unit.geofence_lng!);
+          if (dist <= radius) {
+            setIsWithinGeofence(true);
+          } else {
+            setIsWithinGeofence(false);
+            setGeofenceMessage(`Você está fora do perímetro da unidade (${Math.round(dist)}m de distância)`);
+          }
+        },
+        () => {
+          setIsWithinGeofence(false);
+          setGeofenceMessage("Permita o acesso à localização para entrar na fila");
+        }
+      );
+    };
+
+    checkGeofence();
+  }, [unitId]);
+
+  // Fetch TBR count for active ride
+  useEffect(() => {
+    if (!activeRide?.id) { setTbrCount(0); return; }
+
+    const fetchTbrCount = async () => {
+      const { count } = await supabase
+        .from("ride_tbrs")
+        .select("*", { count: "exact", head: true })
+        .eq("ride_id", activeRide.id);
+      setTbrCount(count ?? 0);
+    };
+
+    fetchTbrCount();
+
+    const channel = supabase
+      .channel(`tbr-count-${activeRide.id}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs", filter: `ride_id=eq.${activeRide.id}` }, () => {
+        fetchTbrCount();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [activeRide?.id]);
+
   const fetchActiveRide = useCallback(async () => {
     if (!driverId) return;
-
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -71,7 +155,6 @@ const DriverQueue = () => {
     setActiveRide(data && data.length > 0 ? data[0] as ActiveRide : null);
   }, [driverId]);
 
-  // Fetch queue state
   const fetchQueue = useCallback(async () => {
     if (!unitId || !driverId) return;
 
@@ -111,62 +194,39 @@ const DriverQueue = () => {
     }
   }, [unitId, driverId]);
 
-  // Initial fetch
   useEffect(() => {
     fetchQueue();
     fetchActiveRide();
   }, [fetchQueue, fetchActiveRide]);
 
-  // Realtime for queue_entries
   useEffect(() => {
     if (!unitId) return;
-
     const channel = supabase
       .channel(`queue-${unitId}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "queue_entries",
-        filter: `unit_id=eq.${unitId}`,
-      }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries", filter: `unit_id=eq.${unitId}` }, () => {
         fetchQueue();
         fetchActiveRide();
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchQueue, fetchActiveRide]);
 
-  // Realtime for driver_rides (to detect when ride is created or finished)
   useEffect(() => {
     if (!driverId) return;
-
     const channel = supabase
       .channel(`driver-rides-${driverId}`)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "driver_rides",
-        filter: `driver_id=eq.${driverId}`,
-      }, () => {
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `driver_id=eq.${driverId}` }, () => {
         fetchActiveRide();
       })
       .subscribe();
-
     return () => { supabase.removeChannel(channel); };
   }, [driverId, fetchActiveRide]);
 
-  // Elapsed timer
   useEffect(() => {
-    if (!myEntry) {
-      setElapsedSeconds(0);
-      return;
-    }
-
+    if (!myEntry) { setElapsedSeconds(0); return; }
     const joinedAt = new Date(myEntry.joined_at).getTime();
     const update = () => setElapsedSeconds(Math.floor((Date.now() - joinedAt) / 1000));
     update();
-
     const interval = setInterval(update, 1000);
     return () => clearInterval(interval);
   }, [myEntry]);
@@ -174,13 +234,11 @@ const DriverQueue = () => {
   const joinQueue = async () => {
     if (!unitId || !driverId) return;
     setLoading(true);
-
     const { error } = await supabase.from("queue_entries").insert({
       driver_id: driverId,
       unit_id: unitId,
       status: "waiting",
     });
-
     setLoading(false);
     if (error) {
       toast({ title: "Erro ao entrar na fila", description: error.message, variant: "destructive" });
@@ -192,12 +250,7 @@ const DriverQueue = () => {
   const leaveQueue = async () => {
     if (!myEntry) return;
     setLoading(true);
-
-    const { error } = await supabase
-      .from("queue_entries")
-      .update({ status: "cancelled" })
-      .eq("id", myEntry.id);
-
+    const { error } = await supabase.from("queue_entries").update({ status: "cancelled" }).eq("id", myEntry.id);
     setLoading(false);
     if (error) {
       toast({ title: "Erro ao sair da fila", description: error.message, variant: "destructive" });
@@ -208,10 +261,9 @@ const DriverQueue = () => {
   };
 
   const estimatedMinutes = position * avgWaitMinutes;
-
   const statusLabel = activeRide?.loading_status === "loading" ? "Carregando" : "Aguardando Carregamento";
+  const canJoinQueue = isWithinGeofence === true;
 
-  // If driver has an active ride, show "Em Carregamento" state
   if (activeRide) {
     return (
       <div className="space-y-6">
@@ -239,16 +291,23 @@ const DriverQueue = () => {
           </Card>
         </div>
 
-        <Card className="border-primary">
+        <Card className="border-primary relative">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-primary flex items-center gap-2">
                 <Truck className="h-5 w-5" />
                 Carregamento Ativo
               </CardTitle>
-              <Badge variant={activeRide.loading_status === "loading" ? "default" : "secondary"}>
-                {statusLabel}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {/* TBR counter */}
+                <Badge variant="secondary" className="gap-1">
+                  <ScanBarcode className="h-3 w-3" />
+                  TBRs: {tbrCount}
+                </Badge>
+                <Badge variant={activeRide.loading_status === "loading" ? "default" : "secondary"}>
+                  {statusLabel}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -343,9 +402,19 @@ const DriverQueue = () => {
             </Card>
           </div>
 
+          {/* Geofence warning */}
+          {hasGeofence && isWithinGeofence === false && (
+            <Card className="border-destructive bg-destructive/5">
+              <CardContent className="flex items-center gap-3 pt-6">
+                <MapPinOff className="h-5 w-5 text-destructive" />
+                <p className="text-sm text-destructive font-medium">{geofenceMessage}</p>
+              </CardContent>
+            </Card>
+          )}
+
           <Button
             onClick={joinQueue}
-            disabled={loading}
+            disabled={loading || !canJoinQueue}
             className="w-full h-14 text-lg font-bold"
             size="lg"
           >

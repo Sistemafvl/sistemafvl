@@ -10,10 +10,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
 import { format, differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import useEmblaCarousel from "embla-carousel-react";
 
 interface RideWithDriver {
   id: string;
@@ -42,6 +43,9 @@ interface Tbr {
   id: string;
   code: string;
   scanned_at: string;
+  _duplicate?: boolean;
+  _triplicate?: boolean;
+  _yellowHighlight?: boolean;
 }
 
 const formatDuration = (startedAt: string, finishedAt: string) => {
@@ -93,6 +97,7 @@ const ConferenciaCarregamentoPage = () => {
   const [tbrs, setTbrs] = useState<Record<string, Tbr[]>>({});
   const [tbrInputs, setTbrInputs] = useState<Record<string, string>>({});
   const [tbrSearch, setTbrSearch] = useState("");
+  const [tbrSearchCommitted, setTbrSearchCommitted] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
@@ -101,6 +106,27 @@ const ConferenciaCarregamentoPage = () => {
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
+
+  // Carousel
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
+  const [canScrollPrev, setCanScrollPrev] = useState(false);
+  const [canScrollNext, setCanScrollNext] = useState(false);
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => {
+      setCanScrollPrev(emblaApi.canScrollPrev());
+      setCanScrollNext(emblaApi.canScrollNext());
+    };
+    onSelect();
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+    return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onSelect); };
+  }, [emblaApi]);
+
+  // Search-specific rides (ignoring date filter)
+  const [searchRides, setSearchRides] = useState<RideWithDriver[]>([]);
+  const [searchTbrs, setSearchTbrs] = useState<Record<string, Tbr[]>>({});
 
   const fetchRides = useCallback(async () => {
     if (!unitId) return;
@@ -160,6 +186,82 @@ const ConferenciaCarregamentoPage = () => {
     setIsLoading(false);
   }, [unitId, startDate, endDate]);
 
+  // Search TBR ignoring date filter (item 3)
+  const fetchSearchResults = useCallback(async (searchTerm: string) => {
+    if (!unitId || !searchTerm.trim()) {
+      setSearchRides([]);
+      setSearchTbrs({});
+      return;
+    }
+
+    // Find all ride_tbrs matching the search for this unit's rides
+    const { data: allUnitRides } = await supabase
+      .from("driver_rides")
+      .select("id")
+      .eq("unit_id", unitId);
+
+    if (!allUnitRides || allUnitRides.length === 0) { setSearchRides([]); setSearchTbrs({}); return; }
+
+    const allRideIds = allUnitRides.map(r => r.id);
+    const { data: matchingTbrs } = await supabase
+      .from("ride_tbrs")
+      .select("*")
+      .in("ride_id", allRideIds)
+      .ilike("code", `%${searchTerm.trim()}%`)
+      .order("scanned_at", { ascending: true });
+
+    if (!matchingTbrs || matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); return; }
+
+    const matchingRideIds = [...new Set(matchingTbrs.map(t => t.ride_id))];
+
+    const { data: ridesData } = await supabase
+      .from("driver_rides")
+      .select("*")
+      .in("id", matchingRideIds)
+      .order("sequence_number", { ascending: true });
+
+    if (!ridesData) { setSearchRides([]); setSearchTbrs({}); return; }
+
+    const driverIds = [...new Set(ridesData.map(r => r.driver_id))];
+    const { data: drivers } = await supabase
+      .from("drivers")
+      .select("id, name, avatar_url, car_model, car_plate, car_color")
+      .in("id", driverIds);
+
+    const driverMap = new Map((drivers ?? []).map(d => [d.id, d]));
+
+    const mapped = ridesData.map((r) => {
+      const d = driverMap.get(r.driver_id);
+      return {
+        ...r,
+        conferente_id: r.conferente_id ?? null,
+        loading_status: r.loading_status ?? "pending",
+        password: r.password ?? null,
+        driver_name: d?.name ?? "Motorista",
+        driver_avatar: d?.avatar_url ?? undefined,
+        car_model: d?.car_model ?? undefined,
+        car_plate: d?.car_plate ?? undefined,
+        car_color: d?.car_color ?? undefined,
+      };
+    });
+
+    setSearchRides(mapped);
+
+    // Fetch ALL tbrs for these rides
+    const { data: allTbrData } = await supabase
+      .from("ride_tbrs")
+      .select("*")
+      .in("ride_id", matchingRideIds)
+      .order("scanned_at", { ascending: true });
+
+    const grouped: Record<string, Tbr[]> = {};
+    (allTbrData ?? []).forEach((t: any) => {
+      if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
+      grouped[t.ride_id].push(t);
+    });
+    setSearchTbrs(grouped);
+  }, [unitId]);
+
   useEffect(() => {
     if (!unitId) return;
     supabase
@@ -202,19 +304,16 @@ const ConferenciaCarregamentoPage = () => {
     await fetchRides();
   };
 
-  // Optimistic TBR delete
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
-    // Remove from local state immediately
     setTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
     }));
-    // Delete from DB in background
     await supabase.from("ride_tbrs").delete().eq("id", tbrId);
     fetchRides();
   };
 
-  // Auto-save TBR with debounce + optimistic insert
+  // Auto-save TBR with debounce + optimistic insert + duplicate/triplicate detection
   const handleTbrInputChange = (rideId: string, value: string) => {
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
 
@@ -227,18 +326,86 @@ const ConferenciaCarregamentoPage = () => {
     debounceTimers.current[rideId] = setTimeout(async () => {
       const code = value.trim();
       if (code.toUpperCase().startsWith("TBR")) {
-        // Optimistic: add to local state immediately
+        const currentTbrs = tbrs[rideId] ?? [];
+        const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === code.toUpperCase());
+        const count = occurrences.length;
+
+        // Optimistic insert
         const tempId = crypto.randomUUID();
-        setTbrs((prev) => ({
-          ...prev,
-          [rideId]: [...(prev[rideId] ?? []), { id: tempId, code, scanned_at: new Date().toISOString() }],
-        }));
+        const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
+
+        if (count === 0) {
+          // Normal insert
+          setTbrs((prev) => ({
+            ...prev,
+            [rideId]: [...(prev[rideId] ?? []), newTbr],
+          }));
+        } else if (count === 1) {
+          // Duplicate (2nd read) — mark both red
+          newTbr._duplicate = true;
+          setTbrs((prev) => {
+            const updated = (prev[rideId] ?? []).map(t =>
+              t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
+            );
+            return { ...prev, [rideId]: [...updated, newTbr] };
+          });
+
+          // Auto-delete 2nd after 2s
+          setTimeout(() => {
+            setTbrs((prev) => {
+              const list = prev[rideId] ?? [];
+              // Remove the duplicate (tempId) and clear flag from original
+              const filtered = list
+                .filter(t => t.id !== tempId)
+                .map(t => t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: false } : t);
+              return { ...prev, [rideId]: filtered };
+            });
+            supabase.from("ride_tbrs").delete().eq("id", tempId);
+          }, 2000);
+        } else if (count >= 2) {
+          // Triplicate (3rd read) — mark all red, then remove last 2
+          newTbr._triplicate = true;
+          setTbrs((prev) => {
+            const updated = (prev[rideId] ?? []).map(t =>
+              t.code.toUpperCase() === code.toUpperCase() ? { ...t, _triplicate: true, _duplicate: false } : t
+            );
+            return { ...prev, [rideId]: [...updated, newTbr] };
+          });
+
+          // After 2s: delete 2nd and 3rd, highlight 1st yellow
+          const secondId = occurrences[1]?.id;
+          setTimeout(() => {
+            setTbrs((prev) => {
+              const list = prev[rideId] ?? [];
+              const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());
+              const first = matching[0];
+              const idsToRemove = new Set([tempId, secondId].filter(Boolean));
+              const filtered = list
+                .filter(t => !idsToRemove.has(t.id))
+                .map(t => t.id === first?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
+              return { ...prev, [rideId]: filtered };
+            });
+            if (secondId) supabase.from("ride_tbrs").delete().eq("id", secondId);
+            supabase.from("ride_tbrs").delete().eq("id", tempId);
+
+            // Clear yellow after 3s
+            setTimeout(() => {
+              setTbrs((prev) => {
+                const list = (prev[rideId] ?? []).map(t =>
+                  t.code.toUpperCase() === code.toUpperCase() ? { ...t, _yellowHighlight: false } : t
+                );
+                return { ...prev, [rideId]: list };
+              });
+            }, 3000);
+          }, 2000);
+        }
+
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
 
-        // Insert in DB in background, then sync
+        // Insert in DB
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code } as any);
-        fetchRides();
+        if (count === 0) fetchRides();
       } else {
         playErrorBeep();
         toast.error("Código inválido! Deve iniciar com TBR");
@@ -248,10 +415,8 @@ const ConferenciaCarregamentoPage = () => {
     }, 300);
   };
 
-  // Inline edit save
   const handleSaveEdit = async (rideId: string, field: string, value: string) => {
     setEditingField(null);
-    // Optimistic local update
     setRides((prev) =>
       prev.map((r) => (r.id === rideId ? { ...r, [field]: value || null } : r))
     );
@@ -259,20 +424,34 @@ const ConferenciaCarregamentoPage = () => {
     fetchRides();
   };
 
-  // Cleanup timers
   useEffect(() => {
     return () => {
       Object.values(debounceTimers.current).forEach(clearTimeout);
     };
   }, []);
 
-  // Filter rides by TBR search
-  const filteredRides = tbrSearch.trim()
-    ? rides.filter((ride) => {
-        const rideTbrs = tbrs[ride.id] ?? [];
-        return rideTbrs.some((t) => t.code.toLowerCase().includes(tbrSearch.trim().toLowerCase()));
-      })
-    : rides;
+  // Handle search by Enter (item 2)
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const val = tbrSearch.trim();
+      setTbrSearchCommitted(val);
+      if (val) {
+        fetchSearchResults(val);
+      }
+    }
+  };
+
+  const handleClearSearch = () => {
+    setTbrSearch("");
+    setTbrSearchCommitted("");
+    setSearchRides([]);
+    setSearchTbrs({});
+  };
+
+  // Determine which rides/tbrs to display
+  const isSearchActive = tbrSearchCommitted.trim().length > 0;
+  const displayRides = isSearchActive ? searchRides : rides;
+  const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
     if (date) {
@@ -327,6 +506,16 @@ const ConferenciaCarregamentoPage = () => {
     );
   };
 
+  const getTbrItemClass = (tbr: Tbr) => {
+    if (tbr._duplicate || tbr._triplicate) return "bg-red-100 text-red-700 border-red-300";
+    if (tbr._yellowHighlight) return "bg-yellow-100 text-yellow-700 border-yellow-300";
+    // Green highlight when search matches
+    if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
+      return "bg-green-100 border-green-400 text-green-800";
+    }
+    return "bg-muted/50";
+  };
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
@@ -337,12 +526,13 @@ const ConferenciaCarregamentoPage = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             className="pl-9 h-10"
-            placeholder="Buscar TBR..."
+            placeholder="Buscar TBR... (Enter para buscar)"
             value={tbrSearch}
             onChange={(e) => setTbrSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
           />
           {tbrSearch && (
-            <button onClick={() => setTbrSearch("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+            <button onClick={handleClearSearch} className="absolute right-3 top-1/2 -translate-y-1/2">
               <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
             </button>
           )}
@@ -386,156 +576,188 @@ const ConferenciaCarregamentoPage = () => {
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="flex gap-4">
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
         </div>
-      ) : filteredRides.length === 0 ? (
+      ) : displayRides.length === 0 ? (
         <p className="text-muted-foreground italic text-center py-12">
-          {tbrSearch.trim() ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
+          {isSearchActive ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredRides.map((ride) => {
-            const status = ride.loading_status ?? "pending";
-            const rideTbrs = tbrs[ride.id] ?? [];
-            const isLoadingStatus = status === "loading";
-            const isFinished = status === "finished";
+        <div className="relative">
+          {/* Carousel navigation arrows */}
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute -left-4 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full shadow-md"
+            onClick={() => emblaApi?.scrollPrev()}
+            disabled={!canScrollPrev}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="outline"
+            size="icon"
+            className="absolute -right-4 top-1/2 -translate-y-1/2 z-10 h-8 w-8 rounded-full shadow-md"
+            onClick={() => emblaApi?.scrollNext()}
+            disabled={!canScrollNext}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
 
-            return (
-              <Card key={ride.id} className="relative overflow-hidden">
-                <CardContent className="p-4 flex flex-col items-center gap-3">
-                  <Badge variant="default" className="absolute top-3 right-3 text-sm px-3 py-0.5 font-bold">
-                    <Hash className="h-3.5 w-3.5 mr-0.5" />
-                    {ride.sequence_number}º
-                  </Badge>
+          <div ref={emblaRef} className="overflow-hidden mx-4">
+            <div className="flex gap-4">
+              {displayRides.map((ride) => {
+                const status = ride.loading_status ?? "pending";
+                const rideTbrs = displayTbrs[ride.id] ?? [];
+                const isLoadingStatus = status === "loading";
+                const isFinished = status === "finished";
 
-                  <Avatar className="h-16 w-16">
-                    {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
-                    <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
-                      {(ride.driver_name ?? "M")[0].toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
+                return (
+                  <div key={ride.id} className="flex-none w-[320px]">
+                    <Card className="relative overflow-hidden h-full">
+                      <CardContent className="p-4 flex flex-col items-center gap-3">
+                        {/* TBR Counter badge (top-left) */}
+                        <Badge variant="secondary" className="absolute top-3 left-3 text-xs px-2 py-0.5 font-bold gap-1">
+                          <ScanBarcode className="h-3 w-3" />
+                          {rideTbrs.length}
+                        </Badge>
 
-                  <h3 className="text-lg font-bold text-center">{ride.driver_name}</h3>
+                        <Badge variant="default" className="absolute top-3 right-3 text-sm px-3 py-0.5 font-bold">
+                          <Hash className="h-3.5 w-3.5 mr-0.5" />
+                          {ride.sequence_number}º
+                        </Badge>
 
-                  <div className="w-full space-y-1.5 text-sm">
-                    {(ride.car_model || ride.car_color) && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Car className="h-4 w-4 shrink-0" />
-                        <span>{[ride.car_model, ride.car_color].filter(Boolean).join(" — ")}</span>
-                      </div>
-                    )}
-                    {ride.car_plate && (
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold">{ride.car_plate}</span>
-                      </div>
-                    )}
-                    {ride.started_at && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-4 w-4 shrink-0 text-green-600" />
-                        <span className="text-xs"><strong>Início:</strong> {format(new Date(ride.started_at), "dd/MM/yyyy HH:mm")}</span>
-                      </div>
-                    )}
-                    {ride.finished_at && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Clock className="h-4 w-4 shrink-0 text-red-600" />
-                        <span className="text-xs"><strong>Término:</strong> {format(new Date(ride.finished_at), "dd/MM/yyyy HH:mm")}</span>
-                      </div>
-                    )}
-                    {ride.started_at && ride.finished_at && (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <Timer className="h-4 w-4 shrink-0 text-blue-600" />
-                        <span className="text-xs"><strong>Duração:</strong> {formatDuration(ride.started_at, ride.finished_at)}</span>
-                      </div>
-                    )}
-                    {renderEditableField(ride, "route", <MapPin className="h-4 w-4 shrink-0 text-primary" />, "Rota")}
-                    {renderEditableField(ride, "login", <User className="h-4 w-4 shrink-0 text-primary" />, "Login")}
-                    {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
-                  </div>
+                        <Avatar className="h-16 w-16 mt-2">
+                          {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
+                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
+                            {(ride.driver_name ?? "M")[0].toUpperCase()}
+                          </AvatarFallback>
+                        </Avatar>
 
-                  {/* Conferente Select */}
-                  <div className="w-full">
-                    <Select
-                      value={ride.conferente_id ?? ""}
-                      onValueChange={(val) => handleSelectConferente(ride.id, val)}
-                    >
-                      <SelectTrigger className="w-full h-9 text-sm">
-                        <div className="flex items-center gap-2">
-                          <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-                          <SelectValue placeholder="Selecionar Conferente" />
-                        </div>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {conferentes.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                        <h3 className="text-lg font-bold text-center">{ride.driver_name}</h3>
 
-                  {/* Action Buttons */}
-                  <div className="w-full flex gap-2">
-                    {!isLoadingStatus && !isFinished && (
-                      <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
-                        <Play className="h-3.5 w-3.5" /> Iniciar
-                      </Button>
-                    )}
-                    {isLoadingStatus && (
-                      <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
-                        <Square className="h-3.5 w-3.5" /> Finalizar
-                      </Button>
-                    )}
-                    {isFinished && (
-                      <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => handleRetornar(ride.id)}>
-                        <RotateCcw className="h-3.5 w-3.5" /> Retornar
-                      </Button>
-                    )}
-                  </div>
-
-                  {/* TBR Area */}
-                  {(isLoadingStatus || isFinished) && (
-                    <div className="w-full space-y-2 border-t pt-3">
-                      <p className="text-xs font-bold italic flex items-center gap-1">
-                        <ScanBarcode className="h-3.5 w-3.5 text-primary" />
-                        TBRs Lidos ({rideTbrs.length})
-                      </p>
-                      {rideTbrs.length > 0 && (
-                        <div className="max-h-32 overflow-y-auto space-y-1">
-                          {rideTbrs.map((t, i) => (
-                            <div key={t.id} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
-                              <span className="font-bold text-primary">{i + 1}.</span>
-                              <span className="font-mono flex-1">{t.code}</span>
-                              <button
-                                onClick={() => handleDeleteTbr(t.id, ride.id)}
-                                className="text-destructive hover:text-destructive/80 shrink-0"
-                                title="Excluir TBR"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </button>
+                        <div className="w-full space-y-1.5 text-sm">
+                          {(ride.car_model || ride.car_color) && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Car className="h-4 w-4 shrink-0" />
+                              <span>{[ride.car_model, ride.car_color].filter(Boolean).join(" — ")}</span>
                             </div>
-                          ))}
+                          )}
+                          {ride.car_plate && (
+                            <div className="flex items-center gap-2">
+                              <span className="font-mono font-bold">{ride.car_plate}</span>
+                            </div>
+                          )}
+                          {ride.started_at && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Clock className="h-4 w-4 shrink-0 text-green-600" />
+                              <span className="text-xs"><strong>Início:</strong> {format(new Date(ride.started_at), "dd/MM/yyyy HH:mm")}</span>
+                            </div>
+                          )}
+                          {ride.finished_at && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Clock className="h-4 w-4 shrink-0 text-red-600" />
+                              <span className="text-xs"><strong>Término:</strong> {format(new Date(ride.finished_at), "dd/MM/yyyy HH:mm")}</span>
+                            </div>
+                          )}
+                          {ride.started_at && ride.finished_at && (
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Timer className="h-4 w-4 shrink-0 text-blue-600" />
+                              <span className="text-xs"><strong>Duração:</strong> {formatDuration(ride.started_at, ride.finished_at)}</span>
+                            </div>
+                          )}
+                          {renderEditableField(ride, "route", <MapPin className="h-4 w-4 shrink-0 text-primary" />, "Rota")}
+                          {renderEditableField(ride, "login", <User className="h-4 w-4 shrink-0 text-primary" />, "Login")}
+                          {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
                         </div>
-                      )}
-                      {isLoadingStatus && (
-                        <div className="flex gap-2">
-                          <Input
-                            ref={(el) => { inputRefs.current[ride.id] = el; }}
-                            className="h-8 text-sm font-mono"
-                            placeholder="Escanear TBR..."
-                            value={tbrInputs[ride.id] ?? ""}
-                            onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
-                            autoFocus
-                          />
+
+                        {/* Conferente Select */}
+                        <div className="w-full">
+                          <Select
+                            value={ride.conferente_id ?? ""}
+                            onValueChange={(val) => handleSelectConferente(ride.id, val)}
+                          >
+                            <SelectTrigger className="w-full h-9 text-sm">
+                              <div className="flex items-center gap-2">
+                                <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                                <SelectValue placeholder="Selecionar Conferente" />
+                              </div>
+                            </SelectTrigger>
+                            <SelectContent>
+                              {conferentes.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })}
+
+                        {/* Action Buttons */}
+                        <div className="w-full flex gap-2">
+                          {!isLoadingStatus && !isFinished && (
+                            <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
+                              <Play className="h-3.5 w-3.5" /> Iniciar
+                            </Button>
+                          )}
+                          {isLoadingStatus && (
+                            <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
+                              <Square className="h-3.5 w-3.5" /> Finalizar
+                            </Button>
+                          )}
+                          {isFinished && (
+                            <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => handleRetornar(ride.id)}>
+                              <RotateCcw className="h-3.5 w-3.5" /> Retornar
+                            </Button>
+                          )}
+                        </div>
+
+                        {/* TBR Area */}
+                        {(isLoadingStatus || isFinished) && (
+                          <div className="w-full space-y-2 border-t pt-3">
+                            <p className="text-xs font-bold italic flex items-center gap-1">
+                              <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+                              TBRs Lidos ({rideTbrs.length})
+                            </p>
+                            {rideTbrs.length > 0 && (
+                              <div className="max-h-32 overflow-y-auto space-y-1">
+                                {rideTbrs.map((t, i) => (
+                                  <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
+                                    <span className="font-bold text-primary">{i + 1}.</span>
+                                    <span className="font-mono flex-1">{t.code}</span>
+                                    <button
+                                      onClick={() => handleDeleteTbr(t.id, ride.id)}
+                                      className="text-destructive hover:text-destructive/80 shrink-0"
+                                      title="Excluir TBR"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {isLoadingStatus && (
+                              <div className="flex gap-2">
+                                <Input
+                                  ref={(el) => { inputRefs.current[ride.id] = el; }}
+                                  className="h-8 text-sm font-mono"
+                                  placeholder="Escanear TBR..."
+                                  value={tbrInputs[ride.id] ?? ""}
+                                  onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
+                                  autoFocus
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       )}
     </div>
