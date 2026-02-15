@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, MapPinOff } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -32,16 +32,6 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// Haversine distance in meters
-const haversineDistance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-  const R = 6371000;
-  const toRad = (deg: number) => (deg * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
-
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
   const [loading, setLoading] = useState(false);
@@ -53,63 +43,12 @@ const DriverQueue = () => {
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [tbrCount, setTbrCount] = useState(0);
 
-  // Geofencing state
-  const [isWithinGeofence, setIsWithinGeofence] = useState<boolean | null>(null); // null = checking or no geofence
-  const [geofenceMessage, setGeofenceMessage] = useState("");
-  const [hasGeofence, setHasGeofence] = useState(false);
-
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
   const domainName = unitSession?.domain_name ?? "—";
   const unitName = unitSession?.name ?? "—";
 
   const inQueue = !!myEntry;
-
-  // Check geofencing
-  useEffect(() => {
-    if (!unitId) return;
-
-    const checkGeofence = async () => {
-      const { data: unit } = await supabase
-        .from("units")
-        .select("geofence_lat, geofence_lng, geofence_radius_meters")
-        .eq("id", unitId)
-        .single();
-
-      if (!unit || !unit.geofence_lat || !unit.geofence_lng) {
-        setHasGeofence(false);
-        setIsWithinGeofence(true);
-        return;
-      }
-
-      setHasGeofence(true);
-      const radius = (unit as any).geofence_radius_meters ?? 500;
-
-      if (!navigator.geolocation) {
-        setIsWithinGeofence(false);
-        setGeofenceMessage("Geolocalização não disponível no seu dispositivo");
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, unit.geofence_lat!, unit.geofence_lng!);
-          if (dist <= radius) {
-            setIsWithinGeofence(true);
-          } else {
-            setIsWithinGeofence(false);
-            setGeofenceMessage(`Você está fora do perímetro da unidade (${Math.round(dist)}m de distância)`);
-          }
-        },
-        () => {
-          setIsWithinGeofence(false);
-          setGeofenceMessage("Permita o acesso à localização para entrar na fila");
-        }
-      );
-    };
-
-    checkGeofence();
-  }, [unitId]);
 
   // Fetch TBR count for active ride
   useEffect(() => {
@@ -252,7 +191,6 @@ const DriverQueue = () => {
 
   const estimatedMinutes = position * avgWaitMinutes;
   const statusLabel = activeRide?.loading_status === "loading" ? "Carregando" : "Aguardando Carregamento";
-  const canJoinQueue = isWithinGeofence === true;
 
   if (activeRide) {
     return (
@@ -289,7 +227,6 @@ const DriverQueue = () => {
                 Carregamento Ativo
               </CardTitle>
               <div className="flex items-center gap-2">
-                {/* TBR counter */}
                 <Badge variant="secondary" className="gap-1">
                   <ScanBarcode className="h-3 w-3" />
                   TBRs: {tbrCount}
@@ -392,19 +329,9 @@ const DriverQueue = () => {
             </Card>
           </div>
 
-          {/* Geofence warning */}
-          {hasGeofence && isWithinGeofence === false && (
-            <Card className="border-destructive bg-destructive/5">
-              <CardContent className="flex items-center gap-3 pt-6">
-                <MapPinOff className="h-5 w-5 text-destructive" />
-                <p className="text-sm text-destructive font-medium">{geofenceMessage}</p>
-              </CardContent>
-            </Card>
-          )}
-
           <Button
             onClick={joinQueue}
-            disabled={loading || !canJoinQueue}
+            disabled={loading}
             className="w-full h-14 text-lg font-bold"
             size="lg"
           >
