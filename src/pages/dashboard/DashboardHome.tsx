@@ -1,7 +1,8 @@
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock, Search } from "lucide-react";
+import { Clock, Search, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Dialog,
   DialogContent,
@@ -9,6 +10,23 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import { format } from "date-fns";
+
+interface TbrResult {
+  code: string;
+  scanned_at: string;
+  ride_id: string;
+  driver_name: string;
+  route: string | null;
+  login: string | null;
+  unit_name: string;
+  conferente_name: string | null;
+  started_at: string | null;
+  finished_at: string | null;
+  loading_status: string | null;
+  sequence_number: number | null;
+  all_scans: { code: string; scanned_at: string }[];
+}
 
 const DashboardHome = () => {
   const { unitSession } = useAuthStore();
@@ -16,16 +34,102 @@ const DashboardHome = () => {
   const [tbrSearch, setTbrSearch] = useState("");
   const [showTbrModal, setShowTbrModal] = useState(false);
   const [searchedTbr, setSearchedTbr] = useState("");
+  const [tbrResult, setTbrResult] = useState<TbrResult | null>(null);
+  const [tbrLoading, setTbrLoading] = useState(false);
+  const [tbrNotFound, setTbrNotFound] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  const handleTbrKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tbrSearch.trim()) {
-      setSearchedTbr(tbrSearch.trim());
+      const code = tbrSearch.trim();
+      setSearchedTbr(code);
       setShowTbrModal(true);
+      setTbrLoading(true);
+      setTbrResult(null);
+      setTbrNotFound(false);
+
+      // Search ride_tbrs
+      const { data: tbrData } = await supabase
+        .from("ride_tbrs")
+        .select("*")
+        .ilike("code", `%${code}%`)
+        .order("scanned_at", { ascending: true })
+        .limit(1);
+
+      if (!tbrData || tbrData.length === 0) {
+        setTbrNotFound(true);
+        setTbrLoading(false);
+        return;
+      }
+
+      const tbr = tbrData[0];
+      const rideId = tbr.ride_id;
+
+      // Get all scans for this ride
+      const { data: allScans } = await supabase
+        .from("ride_tbrs")
+        .select("code, scanned_at")
+        .eq("ride_id", rideId)
+        .order("scanned_at", { ascending: true });
+
+      // Get ride details
+      const { data: ride } = await supabase
+        .from("driver_rides")
+        .select("*")
+        .eq("id", rideId)
+        .maybeSingle();
+
+      if (!ride) {
+        setTbrNotFound(true);
+        setTbrLoading(false);
+        return;
+      }
+
+      // Get driver
+      const { data: driver } = await supabase
+        .from("drivers")
+        .select("name")
+        .eq("id", ride.driver_id)
+        .maybeSingle();
+
+      // Get unit
+      const { data: unit } = await supabase
+        .from("units")
+        .select("name")
+        .eq("id", ride.unit_id)
+        .maybeSingle();
+
+      // Get conferente
+      let conferenteName: string | null = null;
+      if (ride.conferente_id) {
+        const { data: conf } = await supabase
+          .from("user_profiles")
+          .select("name")
+          .eq("id", ride.conferente_id)
+          .maybeSingle();
+        conferenteName = conf?.name ?? null;
+      }
+
+      setTbrResult({
+        code: tbr.code,
+        scanned_at: tbr.scanned_at ?? "",
+        ride_id: rideId,
+        driver_name: driver?.name ?? "Desconhecido",
+        route: ride.route,
+        login: ride.login,
+        unit_name: unit?.name ?? "—",
+        conferente_name: conferenteName,
+        started_at: ride.started_at,
+        finished_at: ride.finished_at,
+        loading_status: ride.loading_status,
+        sequence_number: ride.sequence_number,
+        all_scans: allScans ?? [],
+      });
+      setTbrLoading(false);
     }
   };
 
@@ -68,7 +172,7 @@ const DashboardHome = () => {
 
       {/* Modal de resultado TBR */}
       <Dialog open={showTbrModal} onOpenChange={setShowTbrModal}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg" onPointerDownOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle className="font-bold italic">Rastreamento TBR</DialogTitle>
             <DialogDescription>
@@ -76,9 +180,41 @@ const DashboardHome = () => {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground italic">
-              A funcionalidade de rastreamento de TBR será implementada em breve. Quando disponível, aqui serão exibidos o status, histórico e todos os dados do pacote.
-            </p>
+            {tbrLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : tbrNotFound ? (
+              <p className="text-sm text-muted-foreground italic text-center py-4">
+                TBR não encontrado.
+              </p>
+            ) : tbrResult ? (
+              <div className="space-y-3 text-sm">
+                <div className="grid grid-cols-2 gap-2">
+                  <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
+                  <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>
+                  <div><strong>Login:</strong> {tbrResult.login || "—"}</div>
+                  <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
+                  <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
+                  <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
+                  <div><strong>Status:</strong> {tbrResult.loading_status || "—"}</div>
+                  <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+                  <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+                </div>
+                <div className="border-t pt-3">
+                  <p className="font-bold italic text-xs mb-2">Movimentos ({tbrResult.all_scans.length} TBRs neste carregamento)</p>
+                  <div className="max-h-40 overflow-y-auto space-y-1">
+                    {tbrResult.all_scans.map((s, i) => (
+                      <div key={i} className={`flex items-center gap-2 text-xs px-2 py-1 rounded ${s.code.toUpperCase() === searchedTbr.toUpperCase() ? "bg-green-100 text-green-800 font-semibold" : "bg-muted/50"}`}>
+                        <span className="font-bold text-primary">{i + 1}.</span>
+                        <span className="font-mono flex-1">{s.code}</span>
+                        <span className="text-muted-foreground">{s.scanned_at ? format(new Date(s.scanned_at), "dd/MM HH:mm:ss") : ""}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         </DialogContent>
       </Dialog>

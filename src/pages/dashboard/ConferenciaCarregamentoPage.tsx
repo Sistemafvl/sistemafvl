@@ -10,7 +10,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, Square, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { format, differenceInMinutes } from "date-fns";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -103,6 +110,10 @@ const ConferenciaCarregamentoPage = () => {
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
   const [editingField, setEditingField] = useState<{ rideId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState("");
+  // Driver info modal
+  const [driverModalOpen, setDriverModalOpen] = useState(false);
+  const [driverModalData, setDriverModalData] = useState<any>(null);
+  const [driverModalLoading, setDriverModalLoading] = useState(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
@@ -350,18 +361,17 @@ const ConferenciaCarregamentoPage = () => {
             return { ...prev, [rideId]: [...updated, newTbr] };
           });
 
-          // Auto-delete 2nd after 2s
+          // Auto-delete 2nd after 1s
           setTimeout(() => {
             setTbrs((prev) => {
               const list = prev[rideId] ?? [];
-              // Remove the duplicate (tempId) and clear flag from original
               const filtered = list
                 .filter(t => t.id !== tempId)
                 .map(t => t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: false } : t);
               return { ...prev, [rideId]: filtered };
             });
             supabase.from("ride_tbrs").delete().eq("id", tempId);
-          }, 2000);
+          }, 1000);
         } else if (count >= 2) {
           // Triplicate (3rd read) — mark all red, then remove last 2
           newTbr._triplicate = true;
@@ -372,7 +382,7 @@ const ConferenciaCarregamentoPage = () => {
             return { ...prev, [rideId]: [...updated, newTbr] };
           });
 
-          // After 2s: delete 2nd and 3rd, highlight 1st yellow
+          // After 1s: delete 2nd and 3rd, highlight 1st yellow permanently
           const secondId = occurrences[1]?.id;
           setTimeout(() => {
             setTbrs((prev) => {
@@ -387,17 +397,7 @@ const ConferenciaCarregamentoPage = () => {
             });
             if (secondId) supabase.from("ride_tbrs").delete().eq("id", secondId);
             supabase.from("ride_tbrs").delete().eq("id", tempId);
-
-            // Clear yellow after 3s
-            setTimeout(() => {
-              setTbrs((prev) => {
-                const list = (prev[rideId] ?? []).map(t =>
-                  t.code.toUpperCase() === code.toUpperCase() ? { ...t, _yellowHighlight: false } : t
-                );
-                return { ...prev, [rideId]: list };
-              });
-            }, 3000);
-          }, 2000);
+          }, 1000);
         }
 
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
@@ -504,6 +504,23 @@ const ConferenciaCarregamentoPage = () => {
         )}
       </div>
     );
+  };
+
+  const handleOpenDriverModal = async (driverId: string) => {
+    setDriverModalOpen(true);
+    setDriverModalLoading(true);
+    setDriverModalData(null);
+    const { data: driver } = await supabase.from("drivers").select("*").eq("id", driverId).maybeSingle();
+    const { count: ridesCount } = await supabase.from("driver_rides").select("*", { count: "exact", head: true }).eq("driver_id", driverId);
+    const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
+    let tbrsCount = 0;
+    if (driverRides && driverRides.length > 0) {
+      const rIds = driverRides.map(r => r.id);
+      const { count } = await supabase.from("ride_tbrs").select("*", { count: "exact", head: true }).in("ride_id", rIds);
+      tbrsCount = count ?? 0;
+    }
+    setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
+    setDriverModalLoading(false);
   };
 
   const getTbrItemClass = (tbr: Tbr) => {
@@ -625,10 +642,19 @@ const ConferenciaCarregamentoPage = () => {
                           {rideTbrs.length}
                         </Badge>
 
-                        <Badge variant="default" className="absolute top-3 right-3 text-sm px-3 py-0.5 font-bold">
-                          <Hash className="h-3.5 w-3.5 mr-0.5" />
-                          {ride.sequence_number}º
-                        </Badge>
+                        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleOpenDriverModal(ride.driver_id)}
+                            className="h-7 w-7 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors"
+                            title="Ver motorista"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-foreground" />
+                          </button>
+                          <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
+                            <Hash className="h-3.5 w-3.5 mr-0.5" />
+                            {ride.sequence_number}º
+                          </Badge>
+                        </div>
 
                         <Avatar className="h-16 w-16 mt-2">
                           {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
@@ -760,6 +786,49 @@ const ConferenciaCarregamentoPage = () => {
           </div>
         </div>
       )}
+      {/* Driver Info Modal */}
+      <Dialog open={driverModalOpen} onOpenChange={setDriverModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <User className="h-5 w-5 text-primary" /> Informações do Motorista
+            </DialogTitle>
+            <DialogDescription>Dados cadastrais e estatísticas</DialogDescription>
+          </DialogHeader>
+          {driverModalLoading ? (
+            <div className="space-y-3 py-4">
+              <Skeleton className="h-5 w-full" />
+              <Skeleton className="h-5 w-3/4" />
+              <Skeleton className="h-5 w-1/2" />
+            </div>
+          ) : driverModalData?.driver ? (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div><strong>Nome:</strong> {driverModalData.driver.name}</div>
+                <div><strong>CPF:</strong> {driverModalData.driver.cpf}</div>
+                <div><strong>Placa:</strong> {driverModalData.driver.car_plate}</div>
+                <div><strong>Modelo:</strong> {driverModalData.driver.car_model}</div>
+                <div><strong>Cor:</strong> {driverModalData.driver.car_color || "—"}</div>
+                <div><strong>Email:</strong> {driverModalData.driver.email || "—"}</div>
+                <div><strong>WhatsApp:</strong> {driverModalData.driver.whatsapp || "—"}</div>
+                <div><strong>Endereço:</strong> {driverModalData.driver.address || "—"}</div>
+              </div>
+              <div className="border-t pt-3 flex gap-6">
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{driverModalData.ridesCount}</p>
+                  <p className="text-xs text-muted-foreground">Corridas</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-2xl font-bold text-primary">{driverModalData.tbrsCount}</p>
+                  <p className="text-xs text-muted-foreground">TBRs Carregados</p>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground italic text-sm py-4">Motorista não encontrado.</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -9,6 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Users, Clock, CalendarCheck } from "lucide-react";
 
 interface QueueEntry {
@@ -37,6 +38,7 @@ const QueuePanel = () => {
   const [route, setRoute] = useState("");
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
+  const [unitLogins, setUnitLogins] = useState<{ id: string; login: string; password: string }[]>([]);
 
   const unitId = unitSession?.id;
 
@@ -99,12 +101,17 @@ const QueuePanel = () => {
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const openProgramModal = (entry: QueueEntry) => {
+  const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
     setLogin("");
     setPassword("");
     setShowProgramModal(true);
+    // Fetch unit logins
+    if (unitId) {
+      const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
+      setUnitLogins(data ?? []);
+    }
   };
 
   const handleOpenPanel = () => {
@@ -234,11 +241,26 @@ const QueuePanel = () => {
             </div>
             <div className="space-y-2">
               <Label htmlFor="login" className="font-semibold">Login</Label>
-              <Input id="login" placeholder="Informe o login..." value={login} onChange={(e) => setLogin(e.target.value)} />
+              {unitLogins.length > 0 ? (
+                <Select value={login} onValueChange={(val) => {
+                  setLogin(val);
+                  const found = unitLogins.find(l => l.login === val);
+                  if (found) setPassword(found.password);
+                }}>
+                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecionar login..." /></SelectTrigger>
+                  <SelectContent>
+                    {unitLogins.map((l) => (
+                      <SelectItem key={l.id} value={l.login}>{l.login}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <Input id="login" placeholder="Informe o login..." value={login} onChange={(e) => setLogin(e.target.value)} />
+              )}
             </div>
             <div className="space-y-2">
               <Label htmlFor="password" className="font-semibold">Senha</Label>
-              <Input id="password" placeholder="Informe a senha..." value={password} onChange={(e) => setPassword(e.target.value)} />
+              <Input id="password" placeholder="Informe a senha..." value={password} onChange={(e) => setPassword(e.target.value)} readOnly={unitLogins.length > 0 && !!login} />
             </div>
             <Button onClick={handleDefinir} className="w-full font-bold italic">
               Definir
