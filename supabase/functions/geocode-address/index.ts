@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     }
 
     const encoded = encodeURIComponent(address);
-    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&limit=1&countrycodes=br`;
 
     const response = await fetch(url, {
       headers: {
@@ -32,8 +32,8 @@ Deno.serve(async (req) => {
     const data = await response.json();
 
     if (!data || data.length === 0) {
-      return new Response(JSON.stringify({ error: 'Endereço não encontrado' }), {
-        status: 404,
+      return new Response(JSON.stringify({ error: 'Endereço não encontrado. Tente simplificar (ex: apenas rua e cidade).' }), {
+        status: 200,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

@@ -76,12 +76,18 @@ const ConfiguracoesPage = () => {
         try { geoData = JSON.parse(geoData); } catch { geoData = null; }
       }
       if (res.error) {
-        setGeoError("Erro ao chamar serviço de geocodificação. Tente novamente.");
+        // Try to extract message from error context
+        let msg = "Erro ao chamar serviço de geocodificação. Tente novamente.";
+        try {
+          const parsed = JSON.parse((res.error as any)?.context?.body || "{}");
+          if (parsed.error) msg = parsed.error;
+        } catch { /* ignore */ }
+        setGeoError(msg);
         setGeoLoading(false);
         return;
       }
       if (!geoData || geoData.error) {
-        setGeoError(geoData?.error || "Endereço não encontrado. Verifique e tente novamente.");
+        setGeoError(geoData?.error || "Endereço não encontrado. Tente simplificar (ex: apenas rua e cidade).");
         setGeoLoading(false);
         return;
       }
