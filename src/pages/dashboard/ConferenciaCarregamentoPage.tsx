@@ -610,9 +610,9 @@ const ConferenciaCarregamentoPage = () => {
           {isSearchActive ? "Nenhum resultado encontrado." : "Nenhum carregamento programado hoje."}
         </p>
       ) : (
-        <div className="overflow-hidden">
-          {/* Carousel navigation arrows - above cards */}
-          <div className="flex items-center justify-end gap-2 mb-2">
+        <div>
+          {/* Carousel navigation arrows - between filters and cards, right-aligned */}
+          <div className="flex items-center justify-end gap-2 mb-3">
             <Button
               variant="outline"
               size="icon"
