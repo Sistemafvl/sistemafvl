@@ -5,8 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2 } from "lucide-react";
-import { format, startOfDay, endOfDay } from "date-fns";
+import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock } from "lucide-react";
+import { format, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -39,6 +39,7 @@ const OperacaoPage = () => {
   const [cards, setCards] = useState<DriverCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [tbrSearch, setTbrSearch] = useState("");
+  const [tbrValue, setTbrValue] = useState(0);
 
   useEffect(() => {
     if (unitSession) loadData();
@@ -69,16 +70,19 @@ const OperacaoPage = () => {
     const confIds = [...new Set(rides.filter((r) => r.conferente_id).map((r) => r.conferente_id!))];
     const rideIds = rides.map((r) => r.id);
 
-    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
+    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes] = await Promise.all([
       supabase.from("drivers").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
-      supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
-      supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
-      supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds).eq("status", "open"),
+      supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds),
+      supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds),
+      supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds),
+      supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitSession.id).maybeSingle(),
     ]);
+
+    setTbrValue(Number(settingsRes.data?.tbr_value ?? 0));
 
     const driverMap = Object.fromEntries((driversRes.data ?? []).map((d) => [d.id, d]));
     const confMap = Object.fromEntries((confsRes.data ?? []).map((c) => [c.id, c.name]));
@@ -208,48 +212,83 @@ const OperacaoPage = () => {
           ) : (
             <div className="grid gap-3">
               {filteredCards.map((c) => {
-                const concluidos = c.total_tbrs - c.piso_returns;
-                return (
-                  <div key={c.ride_id} className="rounded-lg border bg-card p-4 flex flex-col sm:flex-row gap-4">
-                    {/* Avatar */}
-                    <div className="flex items-center justify-center shrink-0">
-                      {c.avatar_url ? (
-                        <img src={c.avatar_url} className="h-12 w-12 rounded-full object-cover border" alt="" />
-                      ) : (
-                        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
-                          {c.driver_name.charAt(0)}
+                  const concluidos = c.total_tbrs - c.piso_returns;
+                  const totalGanho = concluidos * tbrValue;
+                  const mediaTbr = c.total_tbrs > 0 ? totalGanho / c.total_tbrs : 0;
+                  const performance = c.total_tbrs > 0 ? (concluidos / c.total_tbrs) * 100 : 0;
+                  const tempoMin = c.started_at && c.finished_at
+                    ? differenceInMinutes(new Date(c.finished_at), new Date(c.started_at))
+                    : null;
+                  const tempoStr = tempoMin != null
+                    ? `${String(Math.floor(tempoMin / 60)).padStart(2, "0")}:${String(tempoMin % 60).padStart(2, "0")}`
+                    : "—";
+
+                  return (
+                    <div key={c.ride_id} className="rounded-lg border bg-card p-4 space-y-3">
+                      <div className="flex flex-col sm:flex-row gap-4">
+                        {/* Avatar */}
+                        <div className="flex items-center justify-center shrink-0">
+                          {c.avatar_url ? (
+                            <img src={c.avatar_url} className="h-12 w-12 rounded-full object-cover border" alt="" />
+                          ) : (
+                            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-lg">
+                              {c.driver_name.charAt(0)}
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    {/* Info */}
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-bold text-sm">{c.driver_name}</p>
-                        <Badge variant="outline" className="text-[10px]">{c.loading_status ?? "—"}</Badge>
+                        {/* Info */}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="font-bold text-sm">{c.driver_name}</p>
+                            <Badge variant="outline" className="text-[10px]">{c.loading_status ?? "—"}</Badge>
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
+                            <span>🚗 {[c.car_model, c.car_color].filter(Boolean).join(" • ")}</span>
+                            <span>🪪 {c.car_plate}</span>
+                            <span>📍 {c.route ?? "—"}</span>
+                            <span>🔑 {c.login ?? "—"}</span>
+                            <span>👤 {c.conferente_name ?? "—"}</span>
+                            <span>🕐 {c.started_at ? format(new Date(c.started_at), "HH:mm") : "—"} → {c.finished_at ? format(new Date(c.finished_at), "HH:mm") : "—"}</span>
+                          </div>
+                        </div>
+                        {/* Indicador */}
+                        <div className="flex flex-col items-center justify-center shrink-0 min-w-[80px]">
+                          <p className={cn("text-xl font-bold", c.piso_returns > 0 ? "text-destructive" : "text-green-600")}>
+                            {concluidos}/{c.total_tbrs}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">concluídos</p>
+                          {c.piso_returns > 0 && (
+                            <Badge variant="destructive" className="text-[10px] mt-1">
+                              {c.piso_returns} retorno{c.piso_returns > 1 ? "s" : ""}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                        <span>🚗 {[c.car_model, c.car_color].filter(Boolean).join(" • ")}</span>
-                        <span>🪪 {c.car_plate}</span>
-                        <span>📍 {c.route ?? "—"}</span>
-                        <span>🔑 {c.login ?? "—"}</span>
-                        <span>👤 {c.conferente_name ?? "—"}</span>
-                        <span>🕐 {c.started_at ? format(new Date(c.started_at), "HH:mm") : "—"} → {c.finished_at ? format(new Date(c.finished_at), "HH:mm") : "—"}</span>
+                      {/* Mini-cards de métricas */}
+                      <div className="grid grid-cols-4 gap-2">
+                        <div className="rounded-md border bg-muted/40 p-2 text-center">
+                          <DollarSign className="h-3.5 w-3.5 mx-auto text-primary mb-0.5" />
+                          <p className="text-sm font-bold">R$ {totalGanho.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          <p className="text-[10px] text-muted-foreground">Total Ganho</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/40 p-2 text-center">
+                          <BarChart3 className="h-3.5 w-3.5 mx-auto text-primary mb-0.5" />
+                          <p className="text-sm font-bold">R$ {mediaTbr.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                          <p className="text-[10px] text-muted-foreground">Média/TBR</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/40 p-2 text-center">
+                          <TrendingUp className={cn("h-3.5 w-3.5 mx-auto mb-0.5", performance >= 90 ? "text-green-600" : performance >= 70 ? "text-yellow-500" : "text-destructive")} />
+                          <p className="text-sm font-bold">{performance.toFixed(0)}%</p>
+                          <p className="text-[10px] text-muted-foreground">Performance</p>
+                        </div>
+                        <div className="rounded-md border bg-muted/40 p-2 text-center">
+                          <Clock className="h-3.5 w-3.5 mx-auto text-primary mb-0.5" />
+                          <p className="text-sm font-bold">{tempoStr}</p>
+                          <p className="text-[10px] text-muted-foreground">Tempo</p>
+                        </div>
                       </div>
                     </div>
-                    {/* Indicador */}
-                    <div className="flex flex-col items-center justify-center shrink-0 min-w-[80px]">
-                      <p className={cn("text-xl font-bold", c.piso_returns > 0 ? "text-destructive" : "text-green-600")}>
-                        {concluidos}/{c.total_tbrs}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">concluídos</p>
-                      {c.piso_returns > 0 && (
-                        <Badge variant="destructive" className="text-[10px] mt-1">
-                          {c.piso_returns} retorno{c.piso_returns > 1 ? "s" : ""}
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                );
+                  );
               })}
             </div>
           )}
