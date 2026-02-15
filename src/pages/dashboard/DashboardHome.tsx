@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
+import DashboardInsights from "@/components/dashboard/DashboardInsights";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -170,6 +171,7 @@ const DashboardHome = () => {
 
       {/* Métricas e Gráficos BI */}
       <DashboardMetrics unitId={unitSession.id} />
+      <DashboardInsights unitId={unitSession.id} />
 
       {showTbrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

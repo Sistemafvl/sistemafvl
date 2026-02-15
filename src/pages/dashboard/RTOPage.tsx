@@ -2,11 +2,11 @@ import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { RotateCcw, Search, CheckCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { RotateCcw, Search } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -16,7 +16,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-
+import { Button } from "@/components/ui/button";
 
 interface TbrHistory {
   ride_id: string;
@@ -38,6 +38,7 @@ interface RtoEntry {
   created_at: string;
   conferente_id: string | null;
   conferente_name?: string;
+  cep: string | null;
 }
 
 interface Conferente {
@@ -58,6 +59,7 @@ const RTOPage = () => {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [includeMode, setIncludeMode] = useState(false);
   const [description, setDescription] = useState("");
+  const [cepInput, setCepInput] = useState("");
   const [selectedConferente, setSelectedConferente] = useState("");
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [entries, setEntries] = useState<RtoEntry[]>([]);
@@ -87,7 +89,6 @@ const RTOPage = () => {
       .from("rto_entries")
       .select("*")
       .eq("unit_id", unitSession.id)
-      .eq("status", "open")
       .order("created_at", { ascending: false });
     if (data) {
       const confIds = [...new Set(data.filter(e => e.conferente_id).map(e => e.conferente_id!))];
@@ -165,6 +166,7 @@ const RTOPage = () => {
   const handleIncludeRTO = () => {
     setIncludeMode(true);
     setDescription("");
+    setCepInput("");
     setSelectedConferente("");
   };
 
@@ -180,6 +182,7 @@ const RTOPage = () => {
       description: description.trim(),
       driver_name: history.driver_name,
       route: history.route,
+      cep: cepInput.trim() || null,
     };
 
     const { error } = await supabase.from("rto_entries").insert(entry);
@@ -191,11 +194,6 @@ const RTOPage = () => {
     setHistory(null);
     loadEntries();
     inputRef.current?.focus();
-  };
-
-  const handleFinalize = async (id: string) => {
-    setEntries(prev => prev.filter(e => e.id !== id));
-    await supabase.from("rto_entries").update({ status: "closed", closed_at: new Date().toISOString() }).eq("id", id);
   };
 
   const closeModal = () => {
@@ -233,7 +231,7 @@ const RTOPage = () => {
               {[1, 2, 3].map(i => <Skeleton key={i} className="h-12 w-full" />)}
             </div>
           ) : entries.length === 0 ? (
-            <p className="text-center text-muted-foreground italic py-8">Nenhum RTO aberto</p>
+            <p className="text-center text-muted-foreground italic py-8">Nenhum RTO registrado</p>
           ) : (
             <div className="rounded-md border overflow-x-auto">
               <Table>
@@ -242,10 +240,11 @@ const RTOPage = () => {
                     <TableHead className="font-bold">TBR</TableHead>
                     <TableHead className="font-bold">Motorista</TableHead>
                     <TableHead className="font-bold">Rota</TableHead>
+                    <TableHead className="font-bold">CEP</TableHead>
                     <TableHead className="font-bold">Conferente</TableHead>
                     <TableHead className="font-bold">Problema</TableHead>
                     <TableHead className="font-bold">Data</TableHead>
-                    <TableHead className="font-bold text-center">Ações</TableHead>
+                    <TableHead className="font-bold text-center">Status</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -254,13 +253,16 @@ const RTOPage = () => {
                       <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                       <TableCell>{e.driver_name ?? "-"}</TableCell>
                       <TableCell>{e.route ?? "-"}</TableCell>
+                      <TableCell className="font-mono text-xs">{e.cep ?? "-"}</TableCell>
                       <TableCell>{e.conferente_name ?? "-"}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{e.description}</TableCell>
                       <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
                       <TableCell className="text-center">
-                        <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
-                          <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
-                        </Button>
+                        {e.status === "open" ? (
+                          <Badge variant="outline" className="border-yellow-500 text-yellow-600 bg-yellow-50">Pendente</Badge>
+                        ) : (
+                          <Badge variant="outline" className="border-green-500 text-green-600 bg-green-50">Finalizado</Badge>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -288,18 +290,11 @@ const RTOPage = () => {
               <div><span className="font-semibold text-muted-foreground">Status:</span> {history.loading_status ?? "-"}</div>
               <div><span className="font-semibold text-muted-foreground">Data:</span> {new Date(history.completed_at).toLocaleString("pt-BR")}</div>
 
-              {!includeMode ? (() => {
-                const existingEntry = entries.find(e => e.tbr_code.toUpperCase() === tbrCode.toUpperCase());
-                return existingEntry ? (
-                  <Button className="w-full mt-2" variant="destructive" onClick={() => { handleFinalize(existingEntry.id); closeModal(); }}>
-                    <CheckCircle className="h-4 w-4 mr-2" /> Finalizar RTO
-                  </Button>
-                ) : (
-                  <Button className="w-full mt-2" onClick={handleIncludeRTO}>
-                    <RotateCcw className="h-4 w-4 mr-2" /> Incluir RTO
-                  </Button>
-                );
-              })() : (
+              {!includeMode ? (
+                <Button className="w-full mt-2" onClick={handleIncludeRTO}>
+                  <RotateCcw className="h-4 w-4 mr-2" /> Incluir RTO
+                </Button>
+              ) : (
                 <div className="space-y-3 pt-2 border-t">
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Conferente</label>
@@ -311,6 +306,10 @@ const RTOPage = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold">CEP do destino</label>
+                    <Input value={cepInput} onChange={(e) => setCepInput(e.target.value)} placeholder="Ex: 08141180" maxLength={9} />
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold">Descrição do problema</label>

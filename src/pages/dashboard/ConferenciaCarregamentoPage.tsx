@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +53,14 @@ interface Tbr {
   _duplicate?: boolean;
   _triplicate?: boolean;
   _yellowHighlight?: boolean;
+}
+
+interface OpenRto {
+  id: string;
+  tbr_code: string;
+  cep: string;
+  description: string;
+  driver_name: string | null;
 }
 
 const formatDuration = (startedAt: string, finishedAt: string) => {
@@ -143,7 +151,7 @@ const ConferenciaCarregamentoPage = () => {
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
-
+  const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   // Carousel
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
@@ -318,6 +326,19 @@ const ConferenciaCarregamentoPage = () => {
       .then(({ data }) => { if (data) setConferentes(data); });
   }, [unitId]);
 
+  // Fetch open RTOs with CEP for suggestion bubbles
+  const fetchOpenRtos = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase
+      .from("rto_entries")
+      .select("id, tbr_code, cep, description, driver_name")
+      .eq("unit_id", unitId)
+      .eq("status", "open")
+      .not("cep", "is", null);
+    setOpenRtos((data ?? []).filter(r => r.cep && r.cep.trim().length >= 4) as OpenRto[]);
+  }, [unitId]);
+
+  useEffect(() => { fetchOpenRtos(); }, [fetchOpenRtos]);
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
   useEffect(() => {
@@ -843,6 +864,47 @@ const ConferenciaCarregamentoPage = () => {
                             </Button>
                           )}
                         </div>
+
+                        {/* RTO Suggestion Bubble */}
+                        {ride.route && openRtos.length > 0 && (() => {
+                          const routeText = ride.route!.replace(/\s/g, "");
+                          const matchingRto = openRtos.find(rto => {
+                            const cepPrefix = rto.cep.substring(0, 4);
+                            return routeText.includes(cepPrefix);
+                          });
+                          if (!matchingRto) return null;
+                          // Check if this TBR is already scanned in this ride
+                          const alreadyIncluded = (displayTbrs[ride.id] ?? []).some(
+                            t => t.code.toUpperCase() === matchingRto.tbr_code.toUpperCase()
+                          );
+                          if (alreadyIncluded) return null;
+                          return (
+                            <div className="w-full rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-xs space-y-2">
+                              <div className="flex items-start gap-2">
+                                <Lightbulb className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
+                                <p className="text-yellow-800">
+                                  <strong>Sugestão:</strong> O <span className="font-mono font-bold">{matchingRto.tbr_code}</span> possui um RTO pendente com CEP <span className="font-mono">{matchingRto.cep}</span>, compatível com esta rota. Considere incluí-lo neste carregamento.
+                                </p>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="w-full border-yellow-400 text-yellow-700 hover:bg-yellow-100"
+                                onClick={async () => {
+                                  // Insert TBR into this ride
+                                  await supabase.from("ride_tbrs").insert({ ride_id: ride.id, code: matchingRto.tbr_code, trip_number: 1 } as any);
+                                  // Close the RTO
+                                  await supabase.from("rto_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", matchingRto.id);
+                                  // Refresh
+                                  fetchRides();
+                                  fetchOpenRtos();
+                                }}
+                              >
+                                <ScanBarcode className="h-3.5 w-3.5 mr-1" /> Incluir TBR
+                              </Button>
+                            </div>
+                          );
+                        })()}
 
                         {/* TBR Area */}
                         {(isLoadingStatus || isFinished) && (
