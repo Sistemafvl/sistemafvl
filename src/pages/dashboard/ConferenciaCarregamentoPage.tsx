@@ -541,6 +541,42 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleSaveEdit = async (rideId: string, field: string, value: string) => {
+    // Anexo 1: Validação de login único por dia (horário de Brasília)
+    if (field === "login" && value && unitId) {
+      const now = new Date();
+      // Calcular início e fim do dia em Brasília (UTC-3)
+      const brasiliaOffset = -3 * 60; // minutes
+      const utcNow = new Date(now.getTime() + now.getTimezoneOffset() * 60000);
+      const brasiliaTime = new Date(utcNow.getTime() + brasiliaOffset * 60000);
+      const startOfDay = new Date(brasiliaTime);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(brasiliaTime);
+      endOfDay.setHours(23, 59, 59, 999);
+      // Converter de volta para UTC para consulta
+      const startUtc = new Date(startOfDay.getTime() - brasiliaOffset * 60000 - now.getTimezoneOffset() * 60000);
+      const endUtc = new Date(endOfDay.getTime() - brasiliaOffset * 60000 - now.getTimezoneOffset() * 60000);
+
+      const { data: alreadyUsed } = await supabase
+        .from("driver_rides")
+        .select("id")
+        .eq("unit_id", unitId)
+        .eq("login", value)
+        .gte("completed_at", startUtc.toISOString())
+        .lte("completed_at", endUtc.toISOString())
+        .neq("id", rideId)
+        .maybeSingle();
+
+      if (alreadyUsed) {
+        const { toast } = await import("@/hooks/use-toast");
+        toast({
+          title: "Login já em uso",
+          description: `O login "${value}" já foi atribuído a outro carregamento hoje. Ele será liberado após 00:00 (horário de Brasília).`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setEditingField(null);
     setRides((prev) =>
       prev.map((r) => (r.id === rideId ? { ...r, [field]: value || null } : r))
