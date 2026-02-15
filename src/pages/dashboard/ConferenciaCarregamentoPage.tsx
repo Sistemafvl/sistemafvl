@@ -612,7 +612,7 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           {/* Carousel navigation arrows - between filters and cards, right-aligned */}
-          <div className="flex items-center justify-end gap-2 mb-3">
+          <div className="flex items-center justify-start gap-2 mb-3">
             <Button
               variant="outline"
               size="icon"
