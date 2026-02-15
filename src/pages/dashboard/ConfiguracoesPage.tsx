@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KeyRound, Trash2, Plus } from "lucide-react";
+import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2 } from "lucide-react";
 
 const ConfiguracoesPage = () => {
   const { unitSession } = useAuthStore();
@@ -16,13 +16,27 @@ const ConfiguracoesPage = () => {
   const [newPassword, setNewPassword] = useState("");
   const [loginsLoading, setLoginsLoading] = useState(false);
 
+  // TBR Value
+  const [tbrValue, setTbrValue] = useState("");
+  const [tbrSaving, setTbrSaving] = useState(false);
+  const [tbrLoaded, setTbrLoaded] = useState(false);
+
   const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
     setLogins(data ?? []);
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); }, [fetchLogins]);
+  const fetchTbrValue = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitId).maybeSingle();
+    if (data) {
+      setTbrValue(formatCurrency(Number(data.tbr_value)));
+    }
+    setTbrLoaded(true);
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); }, [fetchLogins, fetchTbrValue]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -37,6 +51,36 @@ const ConfiguracoesPage = () => {
   const handleDeleteLogin = async (id: string) => {
     await supabase.from("unit_logins").delete().eq("id", id);
     await fetchLogins();
+  };
+
+  // Currency formatting
+  const formatCurrency = (value: number) => {
+    return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const parseCurrency = (str: string): number => {
+    const cleaned = str.replace(/[^\d,]/g, "").replace(",", ".");
+    return parseFloat(cleaned) || 0;
+  };
+
+  const handleTbrValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setTbrValue(""); return; }
+    const num = parseInt(raw, 10) / 100;
+    setTbrValue(formatCurrency(num));
+  };
+
+  const handleSaveTbrValue = async () => {
+    if (!unitId) return;
+    setTbrSaving(true);
+    const numValue = parseCurrency(tbrValue);
+    const { data: existing } = await supabase.from("unit_settings").select("id").eq("unit_id", unitId).maybeSingle();
+    if (existing) {
+      await supabase.from("unit_settings").update({ tbr_value: numValue } as any).eq("unit_id", unitId);
+    } else {
+      await supabase.from("unit_settings").insert({ unit_id: unitId, tbr_value: numValue } as any);
+    }
+    setTbrSaving(false);
   };
 
   if (!unitId) return null;
@@ -76,6 +120,35 @@ const ConfiguracoesPage = () => {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Valor por TBR */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <DollarSign className="h-5 w-5 text-primary" />
+            Valor por TBR
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Valor pago por TBR entregue (exceto retornos piso). Este valor será utilizado para calcular os ganhos dos motoristas.
+          </p>
+          <div className="flex gap-2 items-center">
+            <span className="text-sm font-semibold text-muted-foreground">R$</span>
+            <Input
+              value={tbrValue}
+              onChange={handleTbrValueChange}
+              placeholder="0,00"
+              className="max-w-[160px] text-right font-mono"
+              disabled={!tbrLoaded}
+            />
+            <Button onClick={handleSaveTbrValue} disabled={tbrSaving || !tbrValue} size="sm">
+              {tbrSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -428,6 +428,7 @@ export type Database = {
       }
       rto_entries: {
         Row: {
+          cep: string | null
           closed_at: string | null
           conferente_id: string | null
           created_at: string
@@ -441,6 +442,7 @@ export type Database = {
           unit_id: string
         }
         Insert: {
+          cep?: string | null
           closed_at?: string | null
           conferente_id?: string | null
           created_at?: string
@@ -454,6 +456,7 @@ export type Database = {
           unit_id: string
         }
         Update: {
+          cep?: string | null
           closed_at?: string | null
           conferente_id?: string | null
           created_at?: string
@@ -514,6 +517,30 @@ export type Database = {
           login?: string
           password?: string
           unit_id?: string
+        }
+        Relationships: []
+      }
+      unit_settings: {
+        Row: {
+          created_at: string
+          id: string
+          tbr_value: number
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          tbr_value?: number
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          tbr_value?: number
+          unit_id?: string
+          updated_at?: string
         }
         Relationships: []
       }

@@ -403,8 +403,8 @@ const ConferenciaCarregamentoPage = () => {
               playErrorBeep();
               const { toast } = await import("@/hooks/use-toast");
               toast({
-                title: "TBR bloqueado",
-                description: "Este TBR precisa ser registrado no Retorno Piso antes de sair novamente.",
+                title: "TBR em viagem",
+                description: "Este TBR encontra-se em viagem. Registre-o no Retorno Piso antes de escaneá-lo novamente no carregamento.",
                 variant: "destructive",
               });
               setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
