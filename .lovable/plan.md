@@ -1,125 +1,183 @@
 
 
-## Melhorias no Dashboard: Sidebar, Motoristas e novas opcoes PS/RTO
+## Melhorias na Conferencia Carregamento, Fila e TBR
 
-### 1. Card do Sidebar com Unidade e Dominio
+### 1. TBR Localizado em Verde (Busca Global)
 
-No card do gerente logado no sidebar (`DashboardSidebar.tsx`), adicionar informacoes da unidade e dominio abaixo do nome do gerente.
+Quando o campo de busca TBR no topo da Conferencia Carregamento tiver valor, os TBRs que correspondem ao termo buscado serao destacados com fundo verde dentro do card.
 
-**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
-
-- Usar `unitSession.name` (unidade) e `unitSession.domain_name` (dominio) do auth store
-- Exibir abaixo do nome do gerente em texto menor, ex: "Unidade: X | Dominio: Y"
-
----
-
-### 2. Motoristas que Passaram pela Unidade
-
-Alterar `MotoristasParceirosPage.tsx` para mostrar apenas motoristas que possuem registros na tabela `driver_rides` vinculados a unidade logada.
-
-**Arquivo:** `src/pages/dashboard/MotoristasParceirosPage.tsx`
-
-- Mudar o titulo para "Motoristas Parceiros que passaram por sua unidade"
-- Alterar a query: buscar `driver_rides` onde `unit_id = unitSession.id`, extrair `driver_id` distintos, depois buscar os dados dos motoristas correspondentes
-- Preencher as colunas Corridas, Entregues e Devolvidos com dados reais da tabela `driver_rides` (contagem total, contagem com `loading_status = 'finished'`, e contagem com `loading_status = 'returned'`)
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Na renderizacao de cada TBR na lista, verificar se `tbrSearch` nao esta vazio e se o codigo do TBR contem o termo
+- Se sim, aplicar classe `bg-green-100 border-green-400` no item
+- Caso contrario, manter o estilo atual `bg-muted/50`
 
 ---
 
-### 3. Novas opcoes de menu: PS e RTO
+### 2. Busca por Enter (Visao Geral e Conferencia)
 
-Criar duas novas paginas acessiveis pelo menu do gerente, com logica muito similar entre elas.
+O campo de busca TBR na Visao Geral ja funciona por Enter. No Conferencia Carregamento, o localizador (campo de busca no topo) passara a funcionar tambem apenas por Enter.
 
-#### 3.1 Tabelas no banco de dados
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Remover o `onChange` direto do `tbrSearch` que filtra em tempo real
+- Adicionar estado `tbrSearchCommitted` que so e atualizado ao pressionar Enter
+- O filtro de cards usa `tbrSearchCommitted`; o input exibe `tbrSearch` livremente
+- Ao limpar (botao X), limpar ambos os estados
 
-Criar duas tabelas novas:
+---
 
-**Tabela `ps_entries`:**
-- `id` uuid PK default gen_random_uuid()
-- `tbr_code` text NOT NULL
-- `ride_id` uuid FK -> driver_rides.id (nullable, para vincular ao historico)
-- `unit_id` uuid FK -> units.id NOT NULL
-- `conferente_id` uuid FK -> user_profiles.id (nullable)
-- `description` text NOT NULL (descricao do problema)
-- `driver_name` text (cache do nome do motorista)
-- `route` text (cache da rota)
-- `status` text default 'open' (open / closed)
-- `created_at` timestamptz default now()
-- `closed_at` timestamptz nullable
+### 3. Localizador Ignora Filtro de Data
 
-**Tabela `rto_entries`:**
-- Mesma estrutura identica a `ps_entries`
+O localizador de TBR na Conferencia Carregamento buscara em todos os carregamentos da unidade, independente das datas selecionadas.
 
-RLS: policies publicas (mesmo padrao do projeto).
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Quando `tbrSearchCommitted` estiver preenchido:
+  - Buscar TBRs pelo codigo na tabela `ride_tbrs` (sem filtro de data)
+  - Identificar os `ride_id` correspondentes
+  - Buscar esses rides diretamente (sem filtro de data)
+  - Exibir apenas esses cards
+- Quando vazio, manter o filtro de data normal
 
-#### 3.2 Menu lateral
+---
 
-**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
+### 4. Geofencing para "Entrar na Fila"
 
-- Adicionar ao array `managerMenuItems` duas novas opcoes:
-  - `{ title: "PS", url: "/dashboard/ps", icon: AlertTriangle }`
-  - `{ title: "RTO", url: "/dashboard/rto", icon: RotateCcw }`
+Implementar um sistema de perimetro baseado em endereco para controlar o acesso ao botao "Entrar na Fila".
 
-#### 3.3 Rotas
+**Migracao SQL:** Adicionar colunas na tabela `units`:
+- `geofence_address` text (endereco digitado pelo gerente)
+- `geofence_lat` double precision
+- `geofence_lng` double precision
+- `geofence_radius_meters` integer default 500
 
-**Arquivo:** `src/App.tsx`
+**Geocodificacao:** Criar uma edge function `geocode-address` que usa a API gratuita do Nominatim (OpenStreetMap) para converter endereco em coordenadas.
 
-- Adicionar rotas:
-  - `/dashboard/ps` -> `PSPage`
-  - `/dashboard/rto` -> `RTOPage`
+**Tela de Configuracoes:** Adicionar campos para:
+- Endereco (input de texto)
+- Raio em metros (input numerico, padrao 500m)
+- Botao "Definir Perimetro" que chama a edge function e salva lat/lng/raio na unidade
 
-#### 3.4 Pagina PS (`src/pages/dashboard/PSPage.tsx`)
+**Tela do Motorista (DriverQueue):**
+- Ao abrir a pagina, solicitar geolocalizacao via `navigator.geolocation`
+- Calcular distancia entre posicao do motorista e coordenada da unidade usando formula de Haversine
+- Se a distancia for maior que o raio, desabilitar o botao "ENTRAR NA FILA" e exibir mensagem "Voce esta fora do perimetro da unidade"
+- Se a unidade nao tiver geofence configurado, o botao funciona normalmente
 
-**Fluxo:**
-1. Campo de leitura de TBR no topo (mesmo padrao de scanner automatico com debounce 300ms)
-2. Ao ler um TBR valido (prefixo "TBR"):
-   - Busca na tabela `ride_tbrs` pelo codigo para encontrar o `ride_id`
-   - Com o `ride_id`, busca em `driver_rides` o historico completo (motorista, rota, login, conferente, datas)
-   - Exibe um modal com todas as informacoes historicas do TBR
-   - Botao "Incluir PS" no modal
-3. Ao clicar "Incluir PS":
-   - Abre campos para: descricao do problema (textarea) e selecao do conferente (dropdown com conferentes da unidade)
-   - Dados do historico sao preenchidos automaticamente (driver_name, route, ride_id)
-   - Botao "Gravar"
-4. Ao gravar, insere na tabela `ps_entries` e o TBR aparece na lista abaixo
-5. Lista de PS com colunas: Codigo TBR, Motorista, Rota, Conferente, Problema, Data, Status, Acoes
-6. Botao "Finalizar PS" na coluna de acoes: atualiza `status = 'closed'` e `closed_at = now()`
-7. Ao finalizar, o registro some da lista ativa (ou mostra como finalizado)
+---
 
-Se o TBR nao for encontrado no historico, exibir mensagem informando que nao ha registros.
+### 5. Animacao Pulsante na Fila (Novo Motorista)
 
-#### 3.5 Pagina RTO (`src/pages/dashboard/RTOPage.tsx`)
+Quando um novo motorista entrar na fila, o botao flutuante "Fila" no canto inferior direito pulsara como alerta para o gerente.
 
-Mesma logica e layout da pagina PS, porem gravando na tabela `rto_entries`. Titulo "RTO" e icone diferente.
+**Arquivo:** `QueuePanel.tsx`
+- Manter referencia do `count` anterior
+- Quando `count` aumentar, ativar estado `isPulsing = true`
+- Aplicar classe CSS `animate-pulse` + `ring-2 ring-primary ring-offset-2` no botao
+- Ao clicar no botao (abrir o painel), desativar `isPulsing`
+
+---
+
+### 6. Contador de TBR no Card (Conferencia)
+
+Adicionar um contador visual de TBRs no canto superior esquerdo do card, conforme indicado na imagem (Anexo 6).
+
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- No card, adicionar um Badge no canto superior esquerdo (oposto ao numero de sequencia)
+- Exibir o numero de TBRs lidos: `rideTbrs.length`
+- Estilo: badge com icone de barcode pequeno
+
+---
+
+### 7. Cards em Carrossel Horizontal com Setas
+
+Substituir o grid de cards por um carrossel horizontal com navegacao por setas.
+
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Usar `embla-carousel-react` (ja instalado) ou CSS com `overflow-x-auto` e `scroll-snap`
+- Cards dispostos lado a lado em uma unica linha horizontal
+- Setas de navegacao (ChevronLeft / ChevronRight) nas laterais
+- Cada card com largura fixa (~320px)
+- Scroll suave ao clicar nas setas
+
+---
+
+### 8. Contador de TBR na Visao do Motorista
+
+Adicionar o mesmo contador de TBRs no card de "Carregamento Ativo" do motorista.
+
+**Arquivo:** `DriverQueue.tsx`
+- Buscar TBRs do `activeRide.id` na tabela `ride_tbrs`
+- Exibir contador com icone de barcode: "TBRs: X"
+- Posicionar no canto do card de carregamento ativo, conforme indicado na imagem
+
+---
+
+### 9. TBR Duplicado (2x) - Vermelho + Auto-exclusao
+
+Quando o mesmo TBR for lido 2 vezes no mesmo card, ambos ficam em vermelho e o segundo e excluido automaticamente apos 2 segundos.
+
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Ao inserir TBR (otimista), verificar se o codigo ja existe na lista `tbrs[rideId]`
+- Se duplicado (2a leitura):
+  - Inserir otimisticamente mas marcar como duplicado
+  - Pintar ambos (original e copia) em vermelho (`bg-red-100 text-red-700`)
+  - Apos 2 segundos: excluir o segundo do estado local e do banco
+  - O primeiro volta ao estilo normal
+
+---
+
+### 10. TBR Triplicado (3x) - Amarelo + Auto-exclusao de 2
+
+Quando o mesmo TBR for lido 3 vezes seguidas, os 2 ultimos sao excluidos apos 2 segundos e o primeiro fica amarelo.
+
+**Arquivo:** `ConferenciaCarregamentoPage.tsx`
+- Contar quantas vezes o codigo aparece na lista
+- Se aparecer 3 vezes:
+  - Pintar todos em vermelho momentaneamente
+  - Apos 2 segundos: excluir os 2 ultimos (estado local + banco)
+  - Pintar o primeiro em amarelo (`bg-yellow-100 text-yellow-700`) por alguns segundos
 
 ---
 
 ### Detalhes Tecnicos
 
-**Novas dependencias:** Nenhuma (usa componentes e libs ja existentes)
+**Arquivos modificados:**
+- `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (itens 1, 2, 3, 6, 7, 9, 10)
+- `src/pages/driver/DriverQueue.tsx` (itens 4, 8)
+- `src/components/dashboard/QueuePanel.tsx` (item 5)
 
 **Arquivos criados:**
-- `src/pages/dashboard/PSPage.tsx`
-- `src/pages/dashboard/RTOPage.tsx`
+- `supabase/functions/geocode-address/index.ts` (item 4)
 
-**Arquivos modificados:**
-- `src/components/dashboard/DashboardSidebar.tsx` (card + menu items)
-- `src/pages/dashboard/MotoristasParceirosPage.tsx` (titulo + query filtrada por unidade)
-- `src/App.tsx` (rotas PS e RTO)
+**Migracao SQL (item 4):**
+- Adicionar 4 colunas na tabela `units`: `geofence_address`, `geofence_lat`, `geofence_lng`, `geofence_radius_meters`
 
-**Migracao SQL:**
-- Criar tabelas `ps_entries` e `rto_entries` com RLS
-- Habilitar realtime para ambas (opcional)
+**Dependencias:** Nenhuma nova (embla-carousel-react ja instalado)
 
-**Query para motoristas da unidade:**
+**Logica de duplicacao TBR (itens 9 e 10):**
 ```text
-1. SELECT DISTINCT driver_id FROM driver_rides WHERE unit_id = ?
-2. SELECT * FROM drivers WHERE id IN (...)
-3. Para cada motorista: COUNT de rides, COUNT de finished, COUNT de returned
+handleTbrInputChange:
+  1. Contar ocorrencias do codigo na lista atual
+  2. Se 0: inserir normalmente
+  3. Se 1 (sera o 2o): inserir, marcar ambos como "duplicate"
+     -> setTimeout 2s: excluir o 2o do estado + DB, limpar marca do 1o
+  4. Se 2 (sera o 3o): inserir, marcar todos como "triplicate"  
+     -> setTimeout 2s: excluir 2o e 3o do estado + DB, pintar 1o amarelo
 ```
 
-**Busca de historico do TBR (PS/RTO):**
+**Geofencing - Formula de Haversine (no frontend):**
 ```text
-1. SELECT ride_id FROM ride_tbrs WHERE code = ?
-2. SELECT dr.*, d.name as driver_name FROM driver_rides dr JOIN drivers d ON d.id = dr.driver_id WHERE dr.id = ride_id
+function haversineDistance(lat1, lng1, lat2, lng2):
+  R = 6371000 (raio da Terra em metros)
+  dLat = toRad(lat2 - lat1)
+  dLng = toRad(lng2 - lng1)
+  a = sin(dLat/2)^2 + cos(lat1)*cos(lat2)*sin(dLng/2)^2
+  return R * 2 * atan2(sqrt(a), sqrt(1-a))
+```
+
+**Busca TBR ignorando data (item 3):**
+```text
+1. ride_tbrs WHERE code ILIKE '%search%' AND ride_id IN (rides da unidade)
+2. Com ride_ids encontrados, buscar driver_rides sem filtro de data
+3. Exibir esses cards com TBRs encontrados destacados em verde
 ```
 
