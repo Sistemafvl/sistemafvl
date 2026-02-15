@@ -648,7 +648,7 @@ const ConferenciaCarregamentoPage = () => {
 
                 return (
                   <div key={ride.id} className="flex-[0_0_85vw] sm:flex-[0_0_320px] min-w-0 pl-4 first:pl-0">
-                    <Card className="relative overflow-hidden h-full">
+                    <Card className={cn("relative overflow-hidden h-full transition-colors", isLoadingStatus && "bg-blue-50 border-blue-200", isFinished && "bg-green-50 border-green-200")}>
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge (top-left) */}
                         <Badge variant="secondary" className="absolute top-3 left-3 text-xs px-2 py-0.5 font-bold gap-1">
