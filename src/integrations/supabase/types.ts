@@ -219,6 +219,70 @@ export type Database = {
           },
         ]
       }
+      ps_entries: {
+        Row: {
+          closed_at: string | null
+          conferente_id: string | null
+          created_at: string
+          description: string
+          driver_name: string | null
+          id: string
+          ride_id: string | null
+          route: string | null
+          status: string
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          description: string
+          driver_name?: string | null
+          id?: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          description?: string
+          driver_name?: string | null
+          id?: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ps_entries_conferente_id_fkey"
+            columns: ["conferente_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ps_entries_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "driver_rides"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ps_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       queue_entries: {
         Row: {
           called_at: string | null
@@ -289,6 +353,70 @@ export type Database = {
             columns: ["ride_id"]
             isOneToOne: false
             referencedRelation: "driver_rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rto_entries: {
+        Row: {
+          closed_at: string | null
+          conferente_id: string | null
+          created_at: string
+          description: string
+          driver_name: string | null
+          id: string
+          ride_id: string | null
+          route: string | null
+          status: string
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          description: string
+          driver_name?: string | null
+          id?: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          closed_at?: string | null
+          conferente_id?: string | null
+          created_at?: string
+          description?: string
+          driver_name?: string | null
+          id?: string
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rto_entries_conferente_id_fkey"
+            columns: ["conferente_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rto_entries_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "driver_rides"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rto_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
             referencedColumns: ["id"]
           },
         ]
