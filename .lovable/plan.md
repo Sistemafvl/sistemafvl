@@ -1,59 +1,19 @@
 
-# Corrigir reversao de RTO ao excluir TBR incluso via sugestao
 
-## Problema
+# Resumo das alteracoes
 
-Quando o usuario inclui um TBR via o balao de sugestao de RTO, o sistema:
-1. Insere o TBR no `ride_tbrs`
-2. Fecha o RTO (`status = 'closed'`)
+**Arquivo:** `src/pages/dashboard/OperacaoPage.tsx`
 
-Porem, ao clicar no X para remover esse TBR, o sistema apenas deleta o `ride_tbrs`, mas nao reabre o RTO. O balao de sugestao nao retorna porque o RTO continua com status "closed".
+**1. Mini-cards dentro de cada card de motorista**
 
-## Solucao
+Adicionar 4 mini-cards na parte inferior de cada quadrante do motorista (dentro do mesmo card):
 
-Modificar a funcao `handleDeleteTbr` em `ConferenciaCarregamentoPage.tsx` para:
+- **Total Ganho** — valor em R$ que o motorista ganhou naquele carregamento (TBRs concluidos x valor do TBR configurado)
+- **Media/TBR** — valor medio ganho por TBR
+- **Performance** — percentual de conclusao (TBRs entregues vs total)
+- **Tempo** — duracao do carregamento (horario inicio ate fim)
 
-1. Antes de deletar o TBR, verificar se existe um `rto_entries` com `status = 'closed'` cujo `tbr_code` corresponde ao codigo do TBR sendo excluido
-2. Se existir, reabrir o RTO (`status = 'open'`, limpar `closed_at`)
-3. Apos a exclusao, chamar `fetchOpenRtos()` para atualizar a lista de RTOs abertos e fazer o balao reaparecer
+**2. Correcao do bug de contagem**
 
-## Secao Tecnica
+Quando um TBR retorna ao piso e sai com outro motorista, o retorno deixa de ser descontado do motorista original (ex: mostra 5/5 em vez de 4/5). A correcao remove o filtro de status das queries de retorno, garantindo que o desconto permaneca mesmo apos o piso ser fechado.
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-
-**Funcao `handleDeleteTbr` (linha 374-381) - alteracao:**
-
-```text
-const handleDeleteTbr = async (tbrId: string, rideId: string) => {
-  // Encontrar o codigo do TBR antes de remover
-  const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
-  
-  setTbrs((prev) => ({
-    ...prev,
-    [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
-  }));
-  await supabase.from("ride_tbrs").delete().eq("id", tbrId);
-
-  // Se o TBR excluido tinha um RTO fechado associado, reabrir
-  if (tbrToDelete) {
-    const { data: rtoMatch } = await supabase
-      .from("rto_entries")
-      .select("id")
-      .eq("tbr_code", tbrToDelete.code)
-      .eq("status", "closed")
-      .eq("unit_id", unitId)
-      .maybeSingle();
-    if (rtoMatch) {
-      await supabase
-        .from("rto_entries")
-        .update({ status: "open", closed_at: null })
-        .eq("id", rtoMatch.id);
-    }
-  }
-
-  fetchRides();
-  fetchOpenRtos();
-};
-```
-
-Isso garante que ao remover o TBR, o RTO volta a ficar pendente e o balao de sugestao reaparece automaticamente.
