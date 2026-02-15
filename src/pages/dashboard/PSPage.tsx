@@ -210,7 +210,7 @@ const PSPage = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">
             <AlertTriangle className="h-5 w-5 text-primary" />
-            PS - Problem Solv
+            PS - Problem Solve
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
