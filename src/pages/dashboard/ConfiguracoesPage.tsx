@@ -228,7 +228,7 @@ window.addEventListener('message',function(e){
                 height="350"
                 className="border-0"
                 title="Mapa do perímetro"
-                sandbox="allow-scripts"
+                sandbox="allow-scripts allow-same-origin"
               />
             </div>
           )}
