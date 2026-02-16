@@ -54,7 +54,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     const metricBox = (value: string | number, label: string, bg: string) => (
       <div
         style={{
-          display: "inline-block",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
           padding: "10px 18px",
           margin: "4px",
           borderRadius: "8px",
@@ -64,7 +67,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
           border: `1px solid ${COLORS.grayBorder}`,
         }}
       >
-        <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark, lineHeight: "1.2" }}>{value}</div>
+        <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark, lineHeight: "1.2" }}>{String(value)}</div>
         <div style={{ fontSize: "10px", color: COLORS.dark, textTransform: "uppercase", fontWeight: 700, marginTop: "2px" }}>{label}</div>
       </div>
     );
@@ -122,7 +125,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
               </div>
 
               {/* Metrics */}
-              <div style={{ marginBottom: "10px", textAlign: "center" }}>
+              <div style={{ marginBottom: "10px", display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "4px" }}>
                 {metricBox(d.totalTbrs, "TBRs", COLORS.tealLight)}
                 {metricBox(d.totalReturns, "Retornos", "#fee2e2")}
                 {metricBox(d.totalCompleted, "Concluídos", COLORS.green)}

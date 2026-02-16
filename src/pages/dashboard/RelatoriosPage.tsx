@@ -372,23 +372,25 @@ const RelatoriosPage = () => {
         </div>
       </div>
 
-      {/* Off-screen report containers */}
-      {payrollData && (
-        <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
-          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
-      )}
-      {dailyData && (
-        <DailySummaryReportContent ref={dailyRef} data={dailyData} unitName={unitName}
-          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
-      )}
-      {returnsData && (
-        <ReturnsReportContent ref={returnsRef} pisoEntries={returnsData.piso} psEntries={returnsData.ps} rtoEntries={returnsData.rto}
-          unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
-      )}
-      {rankingData && (
-        <RankingReportContent ref={rankingRef} data={rankingData} unitName={unitName} tbrValue={tbrValue}
-          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
-      )}
+      {/* Off-screen report containers — permanently fixed off-screen so browser calculates layout before html2canvas capture */}
+      <div style={{ position: "fixed", left: "-9999px", top: 0, width: "1122px", zIndex: -1 }}>
+        {payrollData && (
+          <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
+            startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+        )}
+        {dailyData && (
+          <DailySummaryReportContent ref={dailyRef} data={dailyData} unitName={unitName}
+            startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+        )}
+        {returnsData && (
+          <ReturnsReportContent ref={returnsRef} pisoEntries={returnsData.piso} psEntries={returnsData.ps} rtoEntries={returnsData.rto}
+            unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+        )}
+        {rankingData && (
+          <RankingReportContent ref={rankingRef} data={rankingData} unitName={unitName} tbrValue={tbrValue}
+            startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+        )}
+      </div>
     </>
   );
 };
