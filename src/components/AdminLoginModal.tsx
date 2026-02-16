@@ -24,13 +24,25 @@ const AdminLoginModal = ({ open, onOpenChange }: AdminLoginModalProps) => {
     setLoading(true);
     setError("");
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (authError) {
+    if (authError || !authData.session) {
       setError("Credenciais inválidas");
+      setLoading(false);
+      return;
+    }
+
+    // Validate admin role server-side
+    const { data: validateData, error: validateError } = await supabase.functions.invoke("admin-validate", {
+      headers: { Authorization: `Bearer ${authData.session.access_token}` },
+    });
+
+    if (validateError || !validateData?.isAdmin) {
+      setError("Usuário não é administrador");
+      await supabase.auth.signOut();
       setLoading(false);
       return;
     }
@@ -76,7 +88,7 @@ const AdminLoginModal = ({ open, onOpenChange }: AdminLoginModalProps) => {
             <p className="text-sm text-destructive font-medium">{error}</p>
           )}
           <Button type="submit" className="w-full font-bold italic" disabled={loading}>
-            {loading ? "Entrando..." : "ENTRAR"}
+            {loading ? "Validando..." : "ENTRAR"}
           </Button>
         </form>
       </DialogContent>
