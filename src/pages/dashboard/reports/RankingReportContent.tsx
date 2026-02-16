@@ -33,7 +33,7 @@ const podiumColors: Record<number, string> = {
 
 const RankingReportContent = forwardRef<HTMLDivElement, Props>(
   ({ data, unitName, tbrValue, startDate, endDate, generatedBy, logoBase64 }, ref) => (
-    <div ref={ref} style={{ display: "none", background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
+    <div ref={ref} style={{ background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
       <div style={{ padding: "16px" }}>
         <ReportHeader logoBase64={logoBase64} title="RANKING DE PERFORMANCE" unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} />
 
