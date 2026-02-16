@@ -12,10 +12,10 @@ import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import RetornoPisoPage from "./pages/dashboard/RetornoPisoPage";
 import OperacaoPage from "./pages/dashboard/OperacaoPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
+import FeedbacksPage from "./pages/dashboard/FeedbacksPage";
 import DriverLayout from "./components/dashboard/DriverLayout";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverQueue from "./pages/driver/DriverQueue";
-import DriverStats from "./pages/driver/DriverStats";
 import DriverRides from "./pages/driver/DriverRides";
 import DriverProfile from "./pages/driver/DriverProfile";
 import DriverReviews from "./pages/driver/DriverReviews";
@@ -43,13 +43,13 @@ const App = () => (
             <Route path="retorno-piso" element={<RetornoPisoPage />} />
             <Route path="operacao" element={<OperacaoPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
+            <Route path="feedbacks" element={<FeedbacksPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
             <Route path="fila" element={<DriverQueue />} />
             <Route path="corridas" element={<DriverRides />} />
-            <Route path="indicadores" element={<DriverStats />} />
             <Route path="perfil" element={<DriverProfile />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />

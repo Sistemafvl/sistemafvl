@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Car, BarChart3, User, Star, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Car, User, Star, Settings, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
@@ -23,7 +23,6 @@ const driverMenuItems = [
   { title: "Visão Geral", url: "/motorista", icon: LayoutDashboard },
   { title: "Entrar na Fila", url: "/motorista/fila", icon: Users },
   { title: "Corridas", url: "/motorista/corridas", icon: Car },
-  { title: "Indicadores", url: "/motorista/indicadores", icon: BarChart3 },
   { title: "Perfil", url: "/motorista/perfil", icon: User },
   { title: "Avaliar Unidades", url: "/motorista/avaliacoes", icon: Star },
   { title: "Configurações", url: "/motorista/configuracoes", icon: Settings },

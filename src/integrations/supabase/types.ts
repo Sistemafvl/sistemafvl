@@ -520,6 +520,48 @@ export type Database = {
         }
         Relationships: []
       }
+      unit_reviews: {
+        Row: {
+          comment: string | null
+          created_at: string
+          driver_id: string
+          id: string
+          rating: number
+          unit_id: string
+        }
+        Insert: {
+          comment?: string | null
+          created_at?: string
+          driver_id: string
+          id?: string
+          rating: number
+          unit_id: string
+        }
+        Update: {
+          comment?: string | null
+          created_at?: string
+          driver_id?: string
+          id?: string
+          rating?: number
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_reviews_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_reviews_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       unit_settings: {
         Row: {
           created_at: string
