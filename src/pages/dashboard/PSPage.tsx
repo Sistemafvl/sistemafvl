@@ -140,7 +140,7 @@ const PSPage = () => {
       return;
     }
 
-    const { data: driver } = await supabase.from("drivers").select("name").eq("id", ride.driver_id).maybeSingle();
+    const { data: driver } = await supabase.from("drivers_public").select("name").eq("id", ride.driver_id).maybeSingle();
     let confName: string | null = null;
     if (ride.conferente_id) {
       const { data: conf } = await supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle();

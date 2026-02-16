@@ -72,7 +72,7 @@ const QueuePanel = () => {
 
     const driverIds = data.map((e) => e.driver_id);
     const { data: drivers } = await supabase
-      .from("drivers")
+      .from("drivers_public")
       .select("id, name, avatar_url, car_model, car_plate, car_color")
       .in("id", driverIds);
 
@@ -224,7 +224,7 @@ const QueuePanel = () => {
     setFoundDriver(null);
 
     const { data, error } = await supabase
-      .from("drivers")
+      .from("drivers_public")
       .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
       .eq("cpf", cpf)
       .eq("active", true)

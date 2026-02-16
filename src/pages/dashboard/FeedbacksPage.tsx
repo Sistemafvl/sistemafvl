@@ -38,7 +38,7 @@ const FeedbacksPage = () => {
       if (revs.length > 0) {
         const driverIds = [...new Set(revs.map((r: any) => r.driver_id))];
         const { data: driversData } = await supabase
-          .from("drivers")
+          .from("drivers_public")
           .select("id, name, avatar_url, bio, car_model, car_color")
           .in("id", driverIds);
 

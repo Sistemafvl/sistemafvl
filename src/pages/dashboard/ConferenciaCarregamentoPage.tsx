@@ -188,7 +188,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const driverIds = [...new Set(data.map((r) => r.driver_id))];
     const { data: drivers } = await supabase
-      .from("drivers")
+      .from("drivers_public")
       .select("id, name, avatar_url, car_model, car_plate, car_color")
       .in("id", driverIds);
 
@@ -278,7 +278,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const driverIds = [...new Set(ridesData.map(r => r.driver_id))];
     const { data: drivers } = await supabase
-      .from("drivers")
+      .from("drivers_public")
       .select("id, name, avatar_url, car_model, car_plate, car_color")
       .in("id", driverIds);
 
@@ -683,7 +683,7 @@ const ConferenciaCarregamentoPage = () => {
     setDriverModalOpen(true);
     setDriverModalLoading(true);
     setDriverModalData(null);
-    const { data: driver } = await supabase.from("drivers").select("*").eq("id", driverId).maybeSingle();
+    const { data: driver } = await supabase.from("drivers_public").select("*").eq("id", driverId).maybeSingle();
     const { count: ridesCount } = await supabase.from("driver_rides").select("*", { count: "exact", head: true }).eq("driver_id", driverId);
     const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
     let tbrsCount = 0;

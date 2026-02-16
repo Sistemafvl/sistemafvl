@@ -78,7 +78,7 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
-        supabase.from("drivers").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
+        supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
         supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
         supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
@@ -273,7 +273,7 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
-        supabase.from("drivers").select("id, name").in("id", driverIds),
+        supabase.from("drivers_public").select("id, name").in("id", driverIds),
         supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
         supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),

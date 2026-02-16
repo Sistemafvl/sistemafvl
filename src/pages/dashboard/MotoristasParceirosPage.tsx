@@ -125,7 +125,7 @@ const MotoristasParceirosPage = () => {
     });
 
     const driverIds = Object.keys(statsMap);
-    const { data: driversData } = await supabase.from("drivers").select("id, name, cpf, car_model, car_plate, car_color, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, avatar_url, bio").in("id", driverIds).order("name");
+    const { data: driversData } = await supabase.from("drivers_public").select("id, name, cpf, car_model, car_plate, car_color, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, avatar_url, bio").in("id", driverIds).order("name");
 
     if (driversData) {
       setDrivers(
