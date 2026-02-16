@@ -106,11 +106,14 @@ const RetornoPisoPage = () => {
     setSearching(true);
     setTbrCode(code);
 
-    const { data: tbrData } = await supabase
+    const { data: tbrRows } = await supabase
       .from("ride_tbrs")
       .select("ride_id")
       .eq("code", code)
-      .maybeSingle();
+      .order("scanned_at", { ascending: false })
+      .limit(1);
+
+    const tbrData = tbrRows && tbrRows.length > 0 ? tbrRows[0] : null;
 
     if (!tbrData) {
       setSearching(false);
@@ -225,15 +228,37 @@ const RetornoPisoPage = () => {
   const handleConfirmRto = async () => {
     if (!unitSession || !rtoEntry) return;
     setRtoSaving(true);
-    await supabase.from("rto_entries").insert({
-      tbr_code: rtoEntry.tbr_code,
-      ride_id: rtoEntry.ride_id,
-      unit_id: unitSession.id,
-      driver_name: rtoEntry.driver_name,
-      route: rtoEntry.route,
-      description: rtoEntry.reason,
-      cep: rtoCep.replace("-", "") || null,
-    } as any);
+
+    // Check if RTO already exists for this TBR code — reuse same row
+    const { data: existingRto } = await supabase
+      .from("rto_entries")
+      .select("id")
+      .eq("tbr_code", rtoEntry.tbr_code)
+      .eq("unit_id", unitSession.id)
+      .limit(1);
+
+    if (existingRto && existingRto.length > 0) {
+      await supabase.from("rto_entries").update({
+        status: "open",
+        closed_at: null,
+        ride_id: rtoEntry.ride_id,
+        driver_name: rtoEntry.driver_name,
+        route: rtoEntry.route,
+        description: rtoEntry.reason,
+        cep: rtoCep.replace("-", "") || null,
+      } as any).eq("id", existingRto[0].id);
+    } else {
+      await supabase.from("rto_entries").insert({
+        tbr_code: rtoEntry.tbr_code,
+        ride_id: rtoEntry.ride_id,
+        unit_id: unitSession.id,
+        driver_name: rtoEntry.driver_name,
+        route: rtoEntry.route,
+        description: rtoEntry.reason,
+        cep: rtoCep.replace("-", "") || null,
+      } as any);
+    }
+
     await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", rtoEntry.id);
     setEntries((prev) => prev.filter((e) => e.id !== rtoEntry.id));
     setRtoModalOpen(false);

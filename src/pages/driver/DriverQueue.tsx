@@ -175,13 +175,17 @@ const DriverQueue = () => {
   const joinQueue = async () => {
     if (!unitId || !driverId) return;
     setLoading(true);
-    const { error } = await supabase.from("queue_entries").insert({
+    const { data, error } = await supabase.from("queue_entries").insert({
       driver_id: driverId,
       unit_id: unitId,
       status: "waiting",
-    });
+    }).select().single();
     setLoading(false);
     if (error) return;
+    // Optimistic update
+    setMyEntry(data as QueueEntry);
+    // Refresh full queue
+    fetchQueue();
   };
 
   const leaveQueue = async () => {

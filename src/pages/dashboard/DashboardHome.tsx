@@ -1,10 +1,12 @@
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock, Search, Loader2, X } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare } from "lucide-react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { Card, CardContent } from "@/components/ui/card";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 
@@ -32,8 +34,11 @@ interface TbrResult {
 
 const DashboardHome = () => {
   const { unitSession } = useAuthStore();
+  const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
   const [tbrSearch, setTbrSearch] = useState("");
+  const [feedbackAvg, setFeedbackAvg] = useState(0);
+  const [feedbackTotal, setFeedbackTotal] = useState(0);
   const [showTbrModal, setShowTbrModal] = useState(false);
   const [searchedTbr, setSearchedTbr] = useState("");
   const [tbrResult, setTbrResult] = useState<TbrResult | null>(null);
@@ -45,6 +50,21 @@ const DashboardHome = () => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // Fetch feedback summary
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    const fetchFeedback = async () => {
+      const { data } = await supabase
+        .from("unit_reviews")
+        .select("rating")
+        .eq("unit_id", unitSession.id);
+      const revs = data ?? [];
+      setFeedbackTotal(revs.length);
+      setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
+    };
+    fetchFeedback();
+  }, [unitSession?.id]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tbrSearch.trim()) {
@@ -168,6 +188,33 @@ const DashboardHome = () => {
           maxLength={MAX_TBR_LENGTH}
         />
       </div>
+
+      {/* Feedback indicator card */}
+      <Card
+        className="cursor-pointer hover:border-primary/50 transition-colors"
+        onClick={() => navigate("/dashboard/feedbacks")}
+      >
+        <CardContent className="p-4 flex items-center gap-4">
+          <div className="h-12 w-12 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+            <Star className="h-6 w-6 text-amber-500" />
+          </div>
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-muted-foreground">Avaliação da Unidade</p>
+            <div className="flex items-center gap-3 mt-0.5">
+              <span className="text-2xl font-bold text-amber-500">{feedbackAvg > 0 ? feedbackAvg.toFixed(1) : "—"}</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <MessageSquare className="h-3 w-3" />
+                {feedbackTotal} feedbacks
+              </span>
+            </div>
+          </div>
+          <div className="flex gap-0.5">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Star key={i} className={`h-4 w-4 ${i <= Math.round(feedbackAvg) ? "text-amber-500 fill-amber-500" : "text-muted-foreground/20"}`} />
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Métricas e Gráficos BI */}
       <DashboardMetrics unitId={unitSession.id} />
