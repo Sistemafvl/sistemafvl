@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MessageSquare, Star, Users, TrendingUp } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format, subDays, addDays } from "date-fns";
 
 const FeedbacksPage = () => {
   const { unitSession } = useAuthStore();
@@ -26,7 +26,7 @@ const FeedbacksPage = () => {
         .select("*")
         .eq("unit_id", unitId)
         .gte("created_at", `${startDate}T00:00:00`)
-        .lte("created_at", `${endDate}T23:59:59`)
+        .lte("created_at", `${format(addDays(new Date(endDate), 1), "yyyy-MM-dd")}T00:00:00`)
         .order("created_at", { ascending: false });
 
       const revs = data ?? [];
