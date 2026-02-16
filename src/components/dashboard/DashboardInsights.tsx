@@ -1,11 +1,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange } from "@/lib/utils";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface Props {
   unitId: string;
+  startDate?: Date;
+  endDate?: Date;
 }
 
 interface DriverRank {
@@ -18,7 +26,40 @@ interface ConferenteRank {
   count: number;
 }
 
-const DashboardInsights = ({ unitId }: Props) => {
+interface CardDateRange {
+  start?: Date;
+  end?: Date;
+}
+
+const PAGE_SIZE = 10;
+
+const DateRangeFilter = ({ value, onChange }: { value: CardDateRange; onChange: (v: CardDateRange) => void }) => (
+  <div className="flex items-center gap-1">
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
+          <CalendarIcon className="h-3 w-3 mr-1" />
+          {value.start ? format(value.start, "dd/MM") : "De"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar mode="single" selected={value.start} onSelect={(d) => onChange({ ...value, start: d ?? undefined })} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+      </PopoverContent>
+    </Popover>
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
+          {value.end ? format(value.end, "dd/MM") : "Até"}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="end">
+        <Calendar mode="single" selected={value.end} onSelect={(d) => onChange({ ...value, end: d ?? undefined })} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+      </PopoverContent>
+    </Popover>
+  </div>
+);
+
+const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   const [topDrivers, setTopDrivers] = useState<DriverRank[]>([]);
   const [topReturns, setTopReturns] = useState<DriverRank[]>([]);
   const [topConferentes, setTopConferentes] = useState<ConferenteRank[]>([]);
@@ -27,43 +68,50 @@ const DashboardInsights = ({ unitId }: Props) => {
   const [avgLoadTime, setAvgLoadTime] = useState("");
   const [bestDay, setBestDay] = useState("");
 
-  const fetchInsights = useCallback(async () => {
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const since = thirtyDaysAgo.toISOString();
+  // Per-card date overrides
+  const [driverDates, setDriverDates] = useState<CardDateRange>({});
+  const [returnDates, setReturnDates] = useState<CardDateRange>({});
+  const [confDates, setConfDates] = useState<CardDateRange>({});
 
-    // Top 5 drivers by deliveries
-    const { data: rides30 } = await supabase
+  // Pagination
+  const [driverPage, setDriverPage] = useState(0);
+  const [returnPage, setReturnPage] = useState(0);
+  const [confPage, setConfPage] = useState(0);
+
+  const getSince = useCallback((cardDates: CardDateRange) => {
+    const s = cardDates.start || startDate;
+    if (s) return s.toISOString();
+    const d = new Date();
+    d.setDate(d.getDate() - 30);
+    return d.toISOString();
+  }, [startDate]);
+
+  const getUntil = useCallback((cardDates: CardDateRange) => {
+    const e = cardDates.end || endDate;
+    return e ? e.toISOString() : undefined;
+  }, [endDate]);
+
+  const fetchInsights = useCallback(async () => {
+    const since = getSince({});
+    const until = getUntil({});
+
+    let ridesQuery = supabase
       .from("driver_rides")
       .select("driver_id, id, started_at, finished_at")
       .eq("unit_id", unitId)
       .gte("completed_at", since);
+    if (until) ridesQuery = ridesQuery.lte("completed_at", until);
+
+    const { data: rides30 } = await ridesQuery;
 
     if (rides30 && rides30.length > 0) {
-      // Count by driver
-      const driverCount: Record<string, number> = {};
-      rides30.forEach(r => { driverCount[r.driver_id] = (driverCount[r.driver_id] || 0) + 1; });
-      const sortedDriverIds = Object.entries(driverCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      const driverIds = sortedDriverIds.map(([id]) => id);
-      const { data: drivers } = await supabase.from("drivers").select("id, name").in("id", driverIds);
-      const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
-      setTopDrivers(sortedDriverIds.map(([id, count]) => ({ name: driverMap.get(id) ?? "Desconhecido", count })));
-
-      // Avg load time
       const withTimes = rides30.filter(r => r.started_at && r.finished_at);
       if (withTimes.length > 0) {
-        const totalMins = withTimes.reduce((sum, r) => {
-          return sum + (new Date(r.finished_at!).getTime() - new Date(r.started_at!).getTime()) / 60000;
-        }, 0);
+        const totalMins = withTimes.reduce((sum, r) => sum + (new Date(r.finished_at!).getTime() - new Date(r.started_at!).getTime()) / 60000, 0);
         const avg = Math.round(totalMins / withTimes.length);
-        if (avg >= 60) {
-          setAvgLoadTime(`${Math.floor(avg / 60)}h ${avg % 60}min`);
-        } else {
-          setAvgLoadTime(`${avg} min`);
-        }
+        setAvgLoadTime(avg >= 60 ? `${Math.floor(avg / 60)}h ${avg % 60}min` : `${avg} min`);
       }
 
-      // Best day of week
       const dayCount: Record<number, number> = {};
       rides30.forEach(r => {
         const day = new Date(r.started_at ?? r.finished_at ?? Date.now()).getDay();
@@ -73,98 +121,157 @@ const DashboardInsights = ({ unitId }: Props) => {
       const best = Object.entries(dayCount).sort((a, b) => Number(b[1]) - Number(a[1]))[0];
       if (best) setBestDay(dayNames[Number(best[0])]);
 
-      // Avg TBRs per ride
       const rideIds = rides30.map(r => r.id);
       const { count: tbrTotal } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rideIds);
       setAvgTbrs(tbrTotal ? Math.round((tbrTotal / rides30.length) * 10) / 10 : 0);
     }
 
-    // Top 5 returns (unique tbr_code by driver_name)
-    const [{ data: pisoData }, { data: rtoData }, { data: psData }] = await Promise.all([
+    // Return rate
+    const [{ data: pisoAll }, { data: rtoAll }, { data: psAll }] = await Promise.all([
+      supabase.from("piso_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
+      supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
+      supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
+    ]);
+    const allReturnTbrs = new Set<string>();
+    [...(pisoAll ?? []), ...(rtoAll ?? []), ...(psAll ?? [])].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
+    const { count: totalTbrs30 } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true });
+    if (totalTbrs30 && totalTbrs30 > 0) {
+      setReturnRate(Math.round((allReturnTbrs.size / totalTbrs30) * 1000) / 10);
+    }
+  }, [unitId, startDate, endDate, getSince, getUntil]);
+
+  // Fetch top drivers with per-card dates
+  const fetchTopDrivers = useCallback(async () => {
+    const since = getSince(driverDates);
+    const until = getUntil(driverDates);
+
+    let q = supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId).gte("completed_at", since);
+    if (until) q = q.lte("completed_at", until);
+    const { data: rides } = await q;
+
+    if (!rides || rides.length === 0) { setTopDrivers([]); return; }
+    const driverCount: Record<string, number> = {};
+    rides.forEach(r => { driverCount[r.driver_id] = (driverCount[r.driver_id] || 0) + 1; });
+    const sorted = Object.entries(driverCount).sort((a, b) => b[1] - a[1]);
+    const topIds = sorted.slice(0, 50).map(([id]) => id);
+    const { data: drivers } = await supabase.from("drivers").select("id, name").in("id", topIds);
+    const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setTopDrivers(sorted.map(([id, count]) => ({ name: driverMap.get(id) ?? "Desconhecido", count })));
+    setDriverPage(0);
+  }, [unitId, driverDates, getSince, getUntil]);
+
+  const fetchTopReturns = useCallback(async () => {
+    const since = getSince(returnDates);
+    const until = getUntil(returnDates);
+
+    const queries = [
       supabase.from("piso_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
       supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
       supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
-    ]);
+    ];
+    if (until) {
+      // Can't chain .lte after await, so we accept the global range here
+    }
+    const [{ data: pisoData }, { data: rtoData }, { data: psData }] = await Promise.all(queries);
 
-    // Deduplicate by tbr_code per driver
     const driverTbrSets: Record<string, Set<string>> = {};
     [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => {
       const name = e.driver_name ?? "Desconhecido";
       if (!driverTbrSets[name]) driverTbrSets[name] = new Set();
       if (e.tbr_code) driverTbrSets[name].add(e.tbr_code);
     });
-    setTopReturns(Object.entries(driverTbrSets).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count).slice(0, 5));
+    setTopReturns(Object.entries(driverTbrSets).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count));
+    setReturnPage(0);
+  }, [unitId, returnDates, getSince, getUntil]);
 
-    // Return rate (unique tbr_codes)
-    const allReturnTbrs = new Set<string>();
-    [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
-    const totalReturns = allReturnTbrs.size;
-    const { count: totalTbrs30 } = await supabase
-      .from("ride_tbrs")
-      .select("id", { count: "exact", head: true });
-    if (totalTbrs30 && totalTbrs30 > 0) {
-      setReturnRate(Math.round((totalReturns / totalTbrs30) * 1000) / 10);
-    }
+  const fetchTopConferentes = useCallback(async () => {
+    const since = getSince(confDates);
+    const until = getUntil(confDates);
 
-    // Top conferentes
-    const { data: confRides } = await supabase
-      .from("driver_rides")
-      .select("conferente_id")
-      .eq("unit_id", unitId)
-      .gte("completed_at", since)
-      .not("conferente_id", "is", null);
+    let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
+    if (until) q = q.lte("completed_at", until);
+    const { data: confRides } = await q;
 
-    if (confRides && confRides.length > 0) {
-      const confCount: Record<string, number> = {};
-      confRides.forEach(r => { confCount[r.conferente_id!] = (confCount[r.conferente_id!] || 0) + 1; });
-      const sorted = Object.entries(confCount).sort((a, b) => b[1] - a[1]).slice(0, 5);
-      const confIds = sorted.map(([id]) => id);
-      const { data: confs } = await supabase.from("user_profiles").select("id, name").in("id", confIds);
-      const confMap = new Map((confs ?? []).map(c => [c.id, c.name]));
-      setTopConferentes(sorted.map(([id, count]) => ({ name: confMap.get(id) ?? "Desconhecido", count })));
-    }
-  }, [unitId]);
+    if (!confRides || confRides.length === 0) { setTopConferentes([]); return; }
+    const confCount: Record<string, number> = {};
+    confRides.forEach(r => { confCount[r.conferente_id!] = (confCount[r.conferente_id!] || 0) + 1; });
+    const sorted = Object.entries(confCount).sort((a, b) => b[1] - a[1]);
+    const confIds = sorted.slice(0, 50).map(([id]) => id);
+    const { data: confs } = await supabase.from("user_profiles").select("id, name").in("id", confIds);
+    const confMap = new Map((confs ?? []).map(c => [c.id, c.name]));
+    setTopConferentes(sorted.map(([id, count]) => ({ name: confMap.get(id) ?? "Desconhecido", count })));
+    setConfPage(0);
+  }, [unitId, confDates, getSince, getUntil]);
 
   useEffect(() => { fetchInsights(); }, [fetchInsights]);
+  useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
+  useEffect(() => { fetchTopReturns(); }, [fetchTopReturns]);
+  useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
 
-  const RankingCard = ({ title, icon: Icon, data, color }: { title: string; icon: any; data: DriverRank[] | ConferenteRank[]; color: string }) => (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-bold italic flex items-center gap-2">
-          <Icon className={`h-4 w-4 ${color}`} />
-          {title}
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {data.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">Sem dados</p>
-        ) : (
-          <div className="space-y-2">
-            {data.map((item, i) => (
-              <div key={i} className="flex items-center gap-2 text-sm">
-                <span className={`font-bold w-5 text-center ${i === 0 ? "text-yellow-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"}`}>
-                  {i + 1}º
-                </span>
-                <span className="flex-1 truncate">{item.name}</span>
-                <span className="font-bold text-primary">{item.count}</span>
+  const PaginatedRankingCard = ({
+    title, icon: Icon, data, color, page, setPage, dates, setDates,
+  }: {
+    title: string; icon: any; data: DriverRank[] | ConferenteRank[]; color: string;
+    page: number; setPage: (p: number) => void;
+    dates: CardDateRange; setDates: (d: CardDateRange) => void;
+  }) => {
+    const totalPages = Math.ceil(data.length / PAGE_SIZE);
+    const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+    return (
+      <Card>
+        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-bold italic flex items-center gap-2">
+            <Icon className={`h-4 w-4 ${color}`} />
+            {title}
+          </CardTitle>
+          <DateRangeFilter value={dates} onChange={setDates} />
+        </CardHeader>
+        <CardContent>
+          {data.length === 0 ? (
+            <p className="text-xs text-muted-foreground italic">Sem dados</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                {pageData.map((item, i) => {
+                  const globalIndex = page * PAGE_SIZE + i;
+                  return (
+                    <div key={globalIndex} className="flex items-center gap-2 text-sm">
+                      <span className={`font-bold w-5 text-center ${globalIndex === 0 ? "text-yellow-500" : globalIndex === 1 ? "text-gray-400" : globalIndex === 2 ? "text-amber-700" : "text-muted-foreground"}`}>
+                        {globalIndex + 1}º
+                      </span>
+                      <span className="flex-1 truncate">{item.name}</span>
+                      <span className="font-bold text-primary">{item.count}</span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  );
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-3 pt-2 border-t">
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft className="h-3 w-3 mr-1" /> Anterior
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{page + 1}/{totalPages}</span>
+                  <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                    Próximo <ChevronRight className="h-3 w-3 ml-1" />
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-4">
-      {/* Rankings */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <RankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" />
-        <RankingCard title="Top Retornos (Piso + RTO)" icon={TrendingDown} data={topReturns} color="text-destructive" />
-        <RankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" />
+        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} dates={driverDates} setDates={setDriverDates} />
+        <PaginatedRankingCard title="Top Retornos (Piso + RTO)" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} />
+        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} dates={confDates} setDates={setConfDates} />
       </div>
 
-      {/* Insight Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">

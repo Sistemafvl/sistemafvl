@@ -462,6 +462,13 @@ const ConferenciaCarregamentoPage = () => {
               .eq("tbr_code", code)
               .eq("status", "open");
 
+            // Close any open rto_entries for this TBR (Anexo 5)
+            await supabase
+              .from("rto_entries")
+              .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+              .eq("tbr_code", code)
+              .eq("status", "open");
+
             playReincidenceBeep();
           }
 
@@ -860,8 +867,9 @@ const ConferenciaCarregamentoPage = () => {
                             </div>
                           )}
                           {ride.car_plate && (
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold">{ride.car_plate}</span>
+                            <div className="flex items-center gap-2 text-muted-foreground">
+                              <Car className="h-4 w-4 shrink-0" />
+                              <span className="font-mono font-bold text-foreground">{ride.car_plate}</span>
                             </div>
                           )}
                           {ride.started_at && (

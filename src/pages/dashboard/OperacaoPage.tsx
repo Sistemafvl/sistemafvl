@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock } from "lucide-react";
+import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock as ClockIcon, Car, MapPin, KeyRound, User, X } from "lucide-react";
 import { format, differenceInMinutes } from "date-fns";
 import { getBrazilDayRange, getBrazilNow } from "@/lib/utils";
 import { ptBR } from "date-fns/locale";
@@ -34,6 +34,12 @@ interface DriverCard {
   piso_returns: number;
 }
 
+interface TbrDetail {
+  code: string;
+  scanned_at: string;
+  hasReturn: boolean;
+}
+
 const OperacaoPage = () => {
   const { unitSession } = useAuthStore();
   const [selectedDate, setSelectedDate] = useState<Date>(() => getBrazilNow());
@@ -41,6 +47,10 @@ const OperacaoPage = () => {
   const [loading, setLoading] = useState(true);
   const [tbrSearch, setTbrSearch] = useState("");
   const [tbrValue, setTbrValue] = useState(0);
+  const [tbrModalOpen, setTbrModalOpen] = useState(false);
+  const [tbrModalCard, setTbrModalCard] = useState<DriverCard | null>(null);
+  const [tbrModalList, setTbrModalList] = useState<TbrDetail[]>([]);
+  const [tbrModalLoading, setTbrModalLoading] = useState(false);
 
   useEffect(() => {
     if (unitSession) loadData();
@@ -249,16 +259,45 @@ const OperacaoPage = () => {
                             <Badge variant="outline" className="text-[10px]">{c.loading_status ?? "—"}</Badge>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
-                            <span>🚗 {[c.car_model, c.car_color].filter(Boolean).join(" • ")}</span>
-                            <span>🪪 {c.car_plate}</span>
-                            <span>📍 {c.route ?? "—"}</span>
-                            <span>🔑 {c.login ?? "—"}</span>
-                            <span>👤 {c.conferente_name ?? "—"}</span>
-                            <span>🕐 {c.started_at ? format(new Date(c.started_at), "HH:mm") : "—"} → {c.finished_at ? format(new Date(c.finished_at), "HH:mm") : "—"}</span>
+                            <span className="flex items-center gap-1"><Car className="h-3 w-3" /> {[c.car_model, c.car_color].filter(Boolean).join(" • ")}</span>
+                            <span className="flex items-center gap-1"><Car className="h-3 w-3" /> {c.car_plate}</span>
+                            <span className="flex items-center gap-1"><MapPin className="h-3 w-3" /> {c.route ?? "—"}</span>
+                            <span className="flex items-center gap-1"><KeyRound className="h-3 w-3" /> {c.login ?? "—"}</span>
+                            <span className="flex items-center gap-1"><User className="h-3 w-3" /> {c.conferente_name ?? "—"}</span>
+                            <span className="flex items-center gap-1"><ClockIcon className="h-3 w-3" /> {c.started_at ? format(new Date(c.started_at), "HH:mm") : "—"} → {c.finished_at ? format(new Date(c.finished_at), "HH:mm") : "—"}</span>
                           </div>
                         </div>
-                        {/* Indicador */}
-                        <div className="flex flex-col items-center justify-center shrink-0 min-w-[80px]">
+                        {/* Indicador - clicável */}
+                        <div
+                          className="flex flex-col items-center justify-center shrink-0 min-w-[80px] cursor-pointer hover:opacity-80 transition-opacity"
+                          onClick={async () => {
+                            setTbrModalCard(c);
+                            setTbrModalOpen(true);
+                            setTbrModalLoading(true);
+                            // Fetch TBRs for this ride
+                            const { data: rideTbrs } = await supabase
+                              .from("ride_tbrs")
+                              .select("code, scanned_at")
+                              .eq("ride_id", c.ride_id)
+                              .order("scanned_at", { ascending: true });
+                            // Fetch returns for this ride
+                            const [pisoR, psR, rtoR] = await Promise.all([
+                              supabase.from("piso_entries").select("tbr_code").eq("ride_id", c.ride_id),
+                              supabase.from("ps_entries").select("tbr_code").eq("ride_id", c.ride_id),
+                              supabase.from("rto_entries").select("tbr_code").eq("ride_id", c.ride_id),
+                            ]);
+                            const returnSet = new Set<string>();
+                            [...(pisoR.data ?? []), ...(psR.data ?? []), ...(rtoR.data ?? [])].forEach((e: any) => {
+                              if (e.tbr_code) returnSet.add(e.tbr_code);
+                            });
+                            setTbrModalList((rideTbrs ?? []).map(t => ({
+                              code: t.code,
+                              scanned_at: t.scanned_at ?? "",
+                              hasReturn: returnSet.has(t.code),
+                            })));
+                            setTbrModalLoading(false);
+                          }}
+                        >
                           <p className={cn("text-xl font-bold", c.piso_returns > 0 ? "text-destructive" : "text-green-600")}>
                             {concluidos}/{c.total_tbrs}
                           </p>
@@ -288,7 +327,7 @@ const OperacaoPage = () => {
                           <p className="text-[10px] text-muted-foreground">Performance</p>
                         </div>
                         <div className="rounded-md border bg-muted/40 p-2 text-center">
-                          <Clock className="h-3.5 w-3.5 mx-auto text-primary mb-0.5" />
+                          <ClockIcon className="h-3.5 w-3.5 mx-auto text-primary mb-0.5" />
                           <p className="text-sm font-bold">{tempoStr}</p>
                           <p className="text-[10px] text-muted-foreground">Tempo</p>
                         </div>
@@ -300,6 +339,50 @@ const OperacaoPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* TBR Detail Modal */}
+      {tbrModalOpen && tbrModalCard && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80" onClick={() => setTbrModalOpen(false)} />
+          <div className="relative z-50 w-full max-w-lg border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setTbrModalOpen(false)}
+              className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100 z-10"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <h2 className="text-lg font-bold italic mb-4">Detalhes do Carregamento</h2>
+            <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+              <div><strong>Motorista:</strong> {tbrModalCard.driver_name}</div>
+              <div><strong>Placa:</strong> {tbrModalCard.car_plate}</div>
+              <div><strong>Carro:</strong> {[tbrModalCard.car_model, tbrModalCard.car_color].filter(Boolean).join(" • ")}</div>
+              <div><strong>Rota:</strong> {tbrModalCard.route ?? "—"}</div>
+              <div><strong>Login:</strong> {tbrModalCard.login ?? "—"}</div>
+              <div><strong>Conferente:</strong> {tbrModalCard.conferente_name ?? "—"}</div>
+              <div><strong>Início:</strong> {tbrModalCard.started_at ? format(new Date(tbrModalCard.started_at), "HH:mm") : "—"}</div>
+              <div><strong>Término:</strong> {tbrModalCard.finished_at ? format(new Date(tbrModalCard.finished_at), "HH:mm") : "—"}</div>
+            </div>
+            <h3 className="text-sm font-bold italic mb-2">TBRs ({tbrModalList.length})</h3>
+            {tbrModalLoading ? (
+              <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-primary" /></div>
+            ) : tbrModalList.length === 0 ? (
+              <p className="text-sm text-muted-foreground italic">Nenhum TBR escaneado</p>
+            ) : (
+              <div className="space-y-1 max-h-[300px] overflow-y-auto">
+                {tbrModalList.map((t, i) => (
+                  <div key={i} className={cn(
+                    "flex items-center justify-between rounded-md px-3 py-1.5 text-sm font-mono",
+                    t.hasReturn ? "bg-destructive/10 text-destructive" : "bg-green-500/10 text-green-700 dark:text-green-400"
+                  )}>
+                    <span>{t.code}</span>
+                    <span className="text-xs opacity-70">{t.scanned_at ? format(new Date(t.scanned_at), "HH:mm") : ""}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
