@@ -4,13 +4,17 @@ import AdminLoginModal from "@/components/AdminLoginModal";
 import UnitLoginForm from "@/components/UnitLoginForm";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
 import { useAuthStore } from "@/stores/auth-store";
-import { Navigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Truck } from "lucide-react";
+import { Truck, Download, X } from "lucide-react";
 import { useTheme } from "next-themes";
+import { usePwaInstall } from "@/hooks/use-pwa-install";
 
 const Index = () => {
   const { setTheme } = useTheme();
+  const { canInstall, isInstalled, install } = usePwaInstall();
+  const [dismissedBanner, setDismissedBanner] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setTheme("light");
@@ -22,6 +26,8 @@ const Index = () => {
   if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
   if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
+
+  const showBanner = (canInstall || !isInstalled) && !dismissedBanner;
 
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
@@ -49,6 +55,31 @@ const Index = () => {
             Cadastro Motorista
           </Button>
         </div>
+
+        {showBanner && (
+          <div className="relative rounded-lg border bg-card p-3 shadow-sm">
+            <button
+              onClick={() => setDismissedBanner(true)}
+              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-3 pr-6">
+              <Download className="h-5 w-5 text-primary shrink-0" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-foreground">Instale o app!</p>
+                <p className="text-xs text-muted-foreground">Acesse mais rápido pela tela inicial</p>
+              </div>
+              <Button
+                size="sm"
+                variant="default"
+                onClick={() => canInstall ? install() : navigate("/install")}
+              >
+                {canInstall ? "Instalar" : "Ver como"}
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
 
       <AdminLoginModal open={showAdminModal} onOpenChange={setShowAdminModal} />

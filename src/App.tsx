@@ -29,6 +29,7 @@ import DatabasePage from "./pages/admin/DatabasePage";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import SecurityPage from "./pages/admin/SecurityPage";
 import NotFound from "./pages/NotFound";
+import InstallPage from "./pages/InstallPage";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -36,6 +37,7 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/install" element={<InstallPage />} />
           <Route path="/dashboard" element={<DashboardLayout />}>
             <Route index element={<DashboardHome />} />
             <Route path="motoristas-parceiros" element={<MotoristasParceirosPage />} />
