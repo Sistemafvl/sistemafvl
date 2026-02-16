@@ -69,7 +69,7 @@ const ReturnsReportContent = forwardRef<HTMLDivElement, Props>(
   ({ pisoEntries, psEntries, rtoEntries, unitName, startDate, endDate, generatedBy, logoBase64 }, ref) => {
     const total = pisoEntries.length + psEntries.length + rtoEntries.length;
     return (
-      <div ref={ref} style={{ display: "none", background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
+      <div ref={ref} style={{ background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
         <div style={{ padding: "16px" }}>
           <ReportHeader logoBase64={logoBase64} title="RELATÓRIO DE RETORNOS" unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} />
 
@@ -80,9 +80,9 @@ const ReturnsReportContent = forwardRef<HTMLDivElement, Props>(
               { label: "RTO", count: rtoEntries.length, bg: "#fce7f3" },
               { label: "Total", count: total, bg: COLORS.tealLight },
             ].map((m) => (
-              <div key={m.label} style={{ padding: "6px 16px", borderRadius: "6px", background: m.bg, textAlign: "center" }}>
-                <div style={{ fontSize: "18px", fontWeight: 800, color: COLORS.tealDark }}>{m.count}</div>
-                <div style={{ fontSize: "7px", fontWeight: 600, color: COLORS.gray, textTransform: "uppercase" }}>{m.label}</div>
+              <div key={m.label} style={{ padding: "10px 18px", borderRadius: "6px", background: m.bg, textAlign: "center", minWidth: "100px", border: `1px solid ${COLORS.grayBorder}` }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark }}>{m.count}</div>
+                <div style={{ fontSize: "10px", fontWeight: 600, color: COLORS.dark, textTransform: "uppercase" }}>{m.label}</div>
               </div>
             ))}
           </div>

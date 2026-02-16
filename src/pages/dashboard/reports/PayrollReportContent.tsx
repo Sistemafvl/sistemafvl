@@ -72,7 +72,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     return (
       <div
         ref={ref}
-        style={{ display: "none", background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}
+        style={{ background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}
       >
         {/* Individual driver pages */}
         {data.map((d) => {

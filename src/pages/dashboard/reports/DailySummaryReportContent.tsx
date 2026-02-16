@@ -39,7 +39,7 @@ const DailySummaryReportContent = forwardRef<HTMLDivElement, Props>(
     );
 
     return (
-      <div ref={ref} style={{ display: "none", background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
+      <div ref={ref} style={{ background: COLORS.white, fontFamily: "Arial, sans-serif", fontSize: "11px", color: COLORS.dark }}>
         <div style={{ padding: "16px" }}>
           <ReportHeader logoBase64={logoBase64} title="RESUMO DIÁRIO DE OPERAÇÃO" unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} />
 
