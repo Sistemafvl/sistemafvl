@@ -71,24 +71,21 @@ const RelatoriosPage = () => {
     const container = reportRef.current;
     if (!container) return;
 
-    // Make visible for capture
     container.style.position = "absolute";
     container.style.left = "-9999px";
     container.style.top = "0";
     container.style.display = "block";
-    container.style.width = "794px"; // A4 width at 96dpi
+    container.style.width = "1122px"; // A4 landscape at 96dpi
 
-    // Wait for render
     await new Promise(r => setTimeout(r, 300));
 
     try {
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pdfWidth = 210;
-      const pdfHeight = 297;
-      const margin = 10;
+      const pdf = new jsPDF("l", "mm", "a4"); // landscape
+      const pdfWidth = 297;
+      const pdfHeight = 210;
+      const margin = 8;
       const contentWidth = pdfWidth - margin * 2;
 
-      // Capture each section (each direct child div is a "page")
       const sections = container.querySelectorAll<HTMLElement>(":scope > div");
 
       for (let i = 0; i < sections.length; i++) {
@@ -104,7 +101,7 @@ const RelatoriosPage = () => {
         const imgData = canvas.toDataURL("image/png");
         const imgHeight = (canvas.height * contentWidth) / canvas.width;
 
-        pdf.addImage(imgData, "PNG", margin, margin, contentWidth, imgHeight);
+        pdf.addImage(imgData, "PNG", margin, margin, contentWidth, Math.min(imgHeight, pdfHeight - margin * 2));
       }
 
       const fileName = `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`;
@@ -288,115 +285,145 @@ const RelatoriosPage = () => {
       </div>
 
       {/* Off-screen report content for PDF capture */}
-      {payrollData && (
-        <div ref={reportRef} style={{ display: "none", background: "#fff", fontFamily: "Arial, sans-serif", fontSize: "11px", color: "#111" }}>
-          {/* PAGE 1 — Summary */}
-          <div style={{ padding: "20px" }}>
-            <h1 style={{ fontSize: "18px", fontWeight: 800, marginBottom: "4px" }}>FOLHA DE PAGAMENTO</h1>
-            <p style={{ fontSize: "13px", color: "#555", marginBottom: "12px" }}>
-              {unitName} — {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")}
-            </p>
-            <p style={{ fontSize: "10px", color: "#888", marginBottom: "16px" }}>
-              Valor por TBR: R$ {tbrValue.toFixed(2).replace(".", ",")} | Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm")}
-            </p>
+      {payrollData && (() => {
+        // Build sorted unique dates across all drivers
+        const allDates = [...new Set(payrollData.flatMap(d => d.days.map(day => day.date)))].sort();
+        const cellStyle: React.CSSProperties = { border: "1px solid #333", padding: "4px 6px", fontSize: "9px", textAlign: "center" };
+        const headerStyle: React.CSSProperties = { ...cellStyle, background: "#222", color: "#fff", fontWeight: 700, textTransform: "uppercase", fontSize: "8px" };
 
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
-              <thead>
-                <tr>
-                  {["Motorista", "Dias", "Logins", "TBRs", "Retornos", "Concluídos", "Valor (R$)"].map(h => (
-                    <th key={h} style={{ border: "1px solid #333", padding: "5px 8px", background: "#222", color: "#fff", fontWeight: 700, fontSize: "10px", textTransform: "uppercase" as const, textAlign: "left" as const }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {payrollData.map((d) => (
-                  <tr key={d.driver.id}>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px", fontWeight: 600 }}>{d.driver.name}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{d.daysWorked}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px", fontSize: "10px" }}>{d.loginsUsed.join(", ") || "—"}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{d.totalTbrs}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{d.totalReturns}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{d.totalCompleted}</td>
-                    <td style={{ border: "1px solid #333", padding: "5px 8px" }}>R$ {d.totalValue.toFixed(2).replace(".", ",")}</td>
-                  </tr>
-                ))}
-                <tr style={{ background: "#f0f0f0", fontWeight: 700 }}>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>TOTAL</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{grandTotalDays}</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>—</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{grandTotalTbrs}</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{grandTotalReturns}</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{grandTotalCompleted}</td>
-                  <td style={{ border: "1px solid #333", padding: "5px 8px" }}>R$ {grandTotalValue.toFixed(2).replace(".", ",")}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        return (
+          <div ref={reportRef} style={{ display: "none", background: "#fff", fontFamily: "Arial, sans-serif", fontSize: "11px", color: "#111" }}>
+            {/* Individual driver pages */}
+            {payrollData.map((d) => {
+              // Group by login: for each login, show TBRs per day
+              const loginDayMap = new Map<string, Map<string, { tbrs: number; returns: number }>>();
+              d.days.forEach(day => {
+                const login = day.login || "Sem login";
+                if (!loginDayMap.has(login)) loginDayMap.set(login, new Map());
+                loginDayMap.get(login)!.set(day.date, { tbrs: day.tbrCount, returns: day.returns });
+              });
+              const logins = [...loginDayMap.keys()].sort();
+              const completionRate = d.totalTbrs > 0 ? ((d.totalCompleted / d.totalTbrs) * 100).toFixed(1) : "0.0";
 
-          {/* Individual driver pages */}
-          {payrollData.map((d) => {
-            const maxTbrs = Math.max(...d.days.map(day => day.tbrCount), 1);
-            const completionRate = d.totalTbrs > 0 ? ((d.totalCompleted / d.totalTbrs) * 100).toFixed(1) : "0.0";
+              return (
+                <div key={d.driver.id} style={{ padding: "16px" }}>
+                  <h2 style={{ fontSize: "14px", fontWeight: 800, marginBottom: "2px" }}>FOLHA DE PAGAMENTO — {d.driver.name}</h2>
+                  <p style={{ fontSize: "10px", color: "#444", marginBottom: "2px" }}>
+                    CPF: {formatCpf(d.driver.cpf)} | Placa: {d.driver.car_plate} | {d.driver.car_model}{d.driver.car_color ? ` ${d.driver.car_color}` : ""}
+                  </p>
+                  <p style={{ fontSize: "9px", color: "#888", marginBottom: "10px" }}>
+                    Período: {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")} | Valor TBR: R$ {tbrValue.toFixed(2).replace(".", ",")}
+                  </p>
 
-            return (
-              <div key={d.driver.id} style={{ padding: "20px" }}>
-                <h2 style={{ fontSize: "15px", fontWeight: 700, marginBottom: "8px" }}>FICHA INDIVIDUAL — {d.driver.name}</h2>
-                <p style={{ fontSize: "11px", color: "#444", marginBottom: "12px" }}>
-                  CPF: {formatCpf(d.driver.cpf)} | Placa: {d.driver.car_plate} | {d.driver.car_model}{d.driver.car_color ? ` ${d.driver.car_color}` : ""}
-                </p>
-
-                <div style={{ borderTop: "2px solid #222", margin: "12px 0" }} />
-
-                <div style={{ marginBottom: "16px" }}>
-                  {[
-                    { value: d.totalTbrs, label: "Total TBRs" },
-                    { value: d.totalReturns, label: "Retornos" },
-                    { value: `${completionRate}%`, label: "Conclusão" },
-                    { value: d.avgDaily, label: "Média Diária" },
-                    { value: `R$ ${d.totalValue.toFixed(2).replace(".", ",")}`, label: "Valor Total" },
-                  ].map(m => (
-                    <div key={m.label} style={{ display: "inline-block", padding: "6px 12px", margin: "4px", border: "1px solid #ccc", borderRadius: "4px", textAlign: "center" as const }}>
-                      <div style={{ fontSize: "20px", fontWeight: 800, color: "#111" }}>{m.value}</div>
-                      <div style={{ fontSize: "9px", color: "#666", textTransform: "uppercase" as const }}>{m.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                <div style={{ fontSize: "11px", marginBottom: "12px", padding: "8px", background: "#f8f8f8", borderRadius: "4px" }}>
-                  <strong>Insights:</strong>
-                  {d.bestDay && <span> Melhor dia: {formatDateBR(d.bestDay.date)} ({d.bestDay.tbrs} TBRs)</span>}
-                  {d.worstDay && d.days.length > 1 && <span> | Pior dia: {formatDateBR(d.worstDay.date)} ({d.worstDay.tbrs} TBRs)</span>}
-                  <span> | Dias trabalhados: {d.daysWorked}</span>
-                </div>
-
-                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: "16px" }}>
-                  <thead>
-                    <tr>
-                      {["Data", "Login", "TBRs", "Retornos", "Valor (R$)", "Performance"].map(h => (
-                        <th key={h} style={{ border: "1px solid #333", padding: "5px 8px", background: "#222", color: "#fff", fontWeight: 700, fontSize: "10px", textTransform: "uppercase" as const, textAlign: "left" as const, ...(h === "Performance" ? { width: "30%" } : {}) }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {d.days.map((day) => (
-                      <tr key={day.date}>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{formatDateBR(day.date)}</td>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{day.login || "—"}</td>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{day.tbrCount}</td>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>{day.returns}</td>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>R$ {day.value.toFixed(2).replace(".", ",")}</td>
-                        <td style={{ border: "1px solid #333", padding: "5px 8px" }}>
-                          <div style={{ display: "inline-block", height: "14px", background: "#2563eb", borderRadius: "2px", minWidth: "2px", width: `${(day.tbrCount / maxTbrs) * 100}%` }} />
-                        </td>
-                      </tr>
+                  <div style={{ marginBottom: "10px" }}>
+                    {[
+                      { value: d.totalTbrs, label: "TBRs" },
+                      { value: d.totalReturns, label: "Retornos" },
+                      { value: d.totalCompleted, label: "Concluídos" },
+                      { value: `${completionRate}%`, label: "Taxa" },
+                      { value: d.avgDaily, label: "Média/Dia" },
+                      { value: `R$ ${d.totalValue.toFixed(2).replace(".", ",")}`, label: "Valor Total" },
+                    ].map(m => (
+                      <div key={m.label} style={{ display: "inline-block", padding: "4px 10px", margin: "2px", border: "1px solid #ccc", borderRadius: "4px", textAlign: "center" }}>
+                        <div style={{ fontSize: "16px", fontWeight: 800 }}>{m.value}</div>
+                        <div style={{ fontSize: "7px", color: "#666", textTransform: "uppercase" }}>{m.label}</div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                  </div>
+
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr>
+                        <th style={headerStyle}>Login</th>
+                        {allDates.map(date => (
+                          <th key={date} style={headerStyle}>{formatDateBR(date)}</th>
+                        ))}
+                        <th style={headerStyle}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {logins.map(login => {
+                        const dayData = loginDayMap.get(login)!;
+                        const loginTotal = allDates.reduce((s, date) => s + (dayData.get(date)?.tbrs ?? 0), 0);
+                        return (
+                          <tr key={login}>
+                            <td style={{ ...cellStyle, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap" }}>{login}</td>
+                            {allDates.map(date => {
+                              const val = dayData.get(date)?.tbrs ?? 0;
+                              return <td key={date} style={{ ...cellStyle, background: val > 0 ? "#f0fdf4" : "#fafafa" }}>{val || "—"}</td>;
+                            })}
+                            <td style={{ ...cellStyle, fontWeight: 700, background: "#f5f5f5" }}>{loginTotal}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ fontWeight: 700, background: "#f0f0f0" }}>
+                        <td style={cellStyle}>TOTAL</td>
+                        {allDates.map(date => {
+                          const dayTotal = d.days.find(day => day.date === date)?.tbrCount ?? 0;
+                          return <td key={date} style={cellStyle}>{dayTotal || "—"}</td>;
+                        })}
+                        <td style={{ ...cellStyle, fontWeight: 800 }}>{d.totalTbrs}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              );
+            })}
+
+            {/* Last page — General summary */}
+            <div style={{ padding: "16px" }}>
+              <h2 style={{ fontSize: "14px", fontWeight: 800, marginBottom: "2px" }}>RESUMO GERAL — FOLHA DE PAGAMENTO</h2>
+              <p style={{ fontSize: "10px", color: "#444", marginBottom: "2px" }}>
+                {unitName} — {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")}
+              </p>
+              <p style={{ fontSize: "9px", color: "#888", marginBottom: "10px" }}>
+                Valor por TBR: R$ {tbrValue.toFixed(2).replace(".", ",")} | Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm")}
+              </p>
+
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={headerStyle}>Motorista</th>
+                    {allDates.map(date => (
+                      <th key={date} style={headerStyle}>{formatDateBR(date)}</th>
+                    ))}
+                    <th style={headerStyle}>TBRs</th>
+                    <th style={headerStyle}>Ret.</th>
+                    <th style={headerStyle}>Conc.</th>
+                    <th style={headerStyle}>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payrollData.map(d => (
+                    <tr key={d.driver.id}>
+                      <td style={{ ...cellStyle, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap" }}>{d.driver.name}</td>
+                      {allDates.map(date => {
+                        const val = d.days.find(day => day.date === date)?.tbrCount ?? 0;
+                        return <td key={date} style={{ ...cellStyle, background: val > 0 ? "#f0fdf4" : "#fafafa" }}>{val || "—"}</td>;
+                      })}
+                      <td style={cellStyle}>{d.totalTbrs}</td>
+                      <td style={cellStyle}>{d.totalReturns}</td>
+                      <td style={cellStyle}>{d.totalCompleted}</td>
+                      <td style={{ ...cellStyle, fontWeight: 600 }}>R$ {d.totalValue.toFixed(2).replace(".", ",")}</td>
+                    </tr>
+                  ))}
+                  <tr style={{ fontWeight: 700, background: "#f0f0f0" }}>
+                    <td style={cellStyle}>TOTAL</td>
+                    {allDates.map(date => {
+                      const dayTotal = payrollData.reduce((s, d) => s + (d.days.find(day => day.date === date)?.tbrCount ?? 0), 0);
+                      return <td key={date} style={cellStyle}>{dayTotal || "—"}</td>;
+                    })}
+                    <td style={cellStyle}>{grandTotalTbrs}</td>
+                    <td style={cellStyle}>{grandTotalReturns}</td>
+                    <td style={cellStyle}>{grandTotalCompleted}</td>
+                    <td style={{ ...cellStyle, fontWeight: 800 }}>R$ {grandTotalValue.toFixed(2).replace(".", ",")}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })()}
     </>
   );
 };
