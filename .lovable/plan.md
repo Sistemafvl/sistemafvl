@@ -1,33 +1,67 @@
 
-# Corrigir Relatorios: Download PDF + Funcionamento
 
-## Problema
-1. O botao "Gerar PDF" da Folha de Pagamento abre o dialogo de impressao do navegador (`window.print()`) em vez de baixar um arquivo PDF diretamente.
-2. Os outros 3 botoes mostram "Em breve" (comportamento esperado), mas o usuario esperava que funcionassem.
+# Relatorios Profissionais com Design Visual + 3 Novos Relatorios
 
-## Solucao
+## 1. Folha de Pagamento -- Design Profissional
 
-### 1. Gerar PDF como download direto
-Substituir `window.print()` por geracao de PDF real usando as bibliotecas `jspdf` e `html2canvas`:
-- Instalar `jspdf` e `html2canvas` como dependencias
-- Apos montar o conteudo do relatorio em uma div oculta (ja existe), capturar com `html2canvas` e converter para PDF com `jspdf`
-- O arquivo sera baixado automaticamente com nome tipo `folha_pagamento_01-02-2026_a_15-02-2026.pdf`
+Redesign completo do PDF gerado, com visual de documento financeiro profissional:
 
-### 2. Tornar a div do relatorio visivel temporariamente
-- A div com classe `hidden print:block` precisa ficar visivel momentaneamente para o `html2canvas` capturar
-- Mostrar a div, capturar cada pagina (resumo + fichas individuais), e esconder novamente
+### Cabecalho de cada pagina
+- Logo do sistema (src/assets/logo.png) convertido para base64 e embutido no HTML off-screen
+- Nome da unidade em destaque
+- Periodo do relatorio
+- Data/hora de geracao
+- Nome do gerente que gerou (obtido de `unitSession.user_name`)
+
+### Ficha individual do motorista (1 pagina por motorista)
+- Barra superior colorida (teal/cinza escuro, identidade visual do sistema)
+- Dados do motorista: nome, CPF, placa, modelo
+- Cards de metricas com fundo colorido (TBRs, Retornos, Concluidos, Taxa, Media, Valor)
+- Tabela Login x Dias com cores alternadas e destaque nos valores
+- Area de assinatura no rodape: duas linhas com "Assinatura do Gerente" e "Assinatura do Motorista"
+- Rodape com "Documento gerado pelo Sistema FVL"
+
+### Pagina de resumo geral (ultima pagina)
+- Mesmo cabecalho com logo
+- Tabela consolidada: Motorista x Dias x Totais x Valor
+- Totalizadores com destaque visual
+- Cores: header teal (#0d9488), linhas alternadas, texto escuro
+
+## 2. Relatorio Resumo Diario (NOVO)
+
+Gera PDF com resumo operacional do periodo selecionado:
+- Total de carregamentos realizados por dia
+- Total de TBRs escaneados
+- Total de retornos (Piso + PS + RTO) separados por tipo
+- Numero de motoristas ativos por dia
+- Tabela: Data | Carregamentos | TBRs | Piso | PS | RTO | Total Retornos
+- Dados de `driver_rides`, `ride_tbrs`, `piso_entries`, `ps_entries`, `rto_entries`
+
+## 3. Relatorio de Retornos (NOVO)
+
+Gera PDF listando todos os retornos do periodo:
+- Secao Piso: tabela com TBR Code, Motivo, Motorista, Rota, Data
+- Secao PS: tabela com TBR Code, Descricao, Motorista, Rota, Data
+- Secao RTO: tabela com TBR Code, Descricao, CEP, Motorista, Rota, Data
+- Totalizadores por tipo
+- Dados de `piso_entries`, `ps_entries`, `rto_entries` com joins nos nomes
+
+## 4. Ranking de Performance (NOVO)
+
+Gera PDF com ranking dos motoristas:
+- Tabela ordenada por total de TBRs (desc)
+- Colunas: Posicao | Motorista | TBRs | Retornos | Taxa Conclusao | Dias Trabalhados | Media/Dia | Valor
+- Destaque visual para top 3 (ouro, prata, bronze)
+- Dados ja disponiveis via `driver_rides` + `ride_tbrs` + retornos
 
 ## Alteracoes tecnicas
 
-**Dependencias novas:** `jspdf`, `html2canvas`
-
 **Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
-- Remover `window.print()` e a logica de `@media print`
-- Criar funcao `generatePDF()` que:
-  1. Torna a div do relatorio visivel temporariamente
-  2. Usa `html2canvas` para capturar cada secao (resumo + cada ficha individual)
-  3. Adiciona cada captura como pagina no `jspdf`
-  4. Chama `pdf.save("folha_pagamento_PERIODO.pdf")` para download direto
-  5. Esconde a div novamente
-- Manter o layout do relatorio como esta (tabelas, metricas, insights) mas ajustar os estilos para renderizacao em tela (remover dependencia de `@media print`)
-- A div do relatorio usara `position: absolute; left: -9999px` em vez de `hidden` para permitir captura pelo html2canvas
+- Completa reescrita do HTML off-screen para design profissional com cores e logo
+- Logo carregado como base64 via canvas para embutir no HTML off-screen (html2canvas nao carrega imports do bundler)
+- Adicionar `unitSession.user_name` como "Gerado por"
+- Adicionar campos de assinatura em cada ficha de motorista
+- Criar 3 novas funcoes de fetch + geracao de PDF (resumo diario, retornos, ranking)
+- Cada relatorio tera seu proprio ref e HTML off-screen
+- Paleta de cores: teal (#0d9488) para headers, cinza claro para alternancia, branco de fundo
+
