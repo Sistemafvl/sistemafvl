@@ -133,6 +133,9 @@ const QueuePanel = () => {
     fetchQueue();
   };
 
+  // Used logins today
+  const [usedLoginsToday, setUsedLoginsToday] = useState<Set<string>>(new Set());
+
   const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
@@ -142,6 +145,18 @@ const QueuePanel = () => {
     if (unitId) {
       const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
       setUnitLogins(data ?? []);
+
+      // Check which logins were used today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data: ridesData } = await supabase
+        .from("driver_rides")
+        .select("login")
+        .eq("unit_id", unitId)
+        .gte("completed_at", today.toISOString())
+        .not("login", "is", null);
+      const used = new Set<string>((ridesData ?? []).map((r: any) => r.login).filter(Boolean));
+      setUsedLoginsToday(used);
     }
   };
 
@@ -407,7 +422,12 @@ const QueuePanel = () => {
                   <SelectTrigger className="w-full"><SelectValue placeholder="Selecionar login..." /></SelectTrigger>
                   <SelectContent>
                     {unitLogins.map((l) => (
-                      <SelectItem key={l.id} value={l.login}>{l.login}</SelectItem>
+                      <SelectItem key={l.id} value={l.login}>
+                        <span className="flex items-center gap-2">
+                          {l.login}
+                          {usedLoginsToday.has(l.login) && <Check className="h-3.5 w-3.5 text-green-500" />}
+                        </span>
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
