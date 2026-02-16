@@ -55,16 +55,17 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
       <div
         style={{
           display: "inline-block",
-          padding: "6px 14px",
-          margin: "3px",
-          borderRadius: "6px",
+          padding: "10px 18px",
+          margin: "4px",
+          borderRadius: "8px",
           textAlign: "center",
           background: bg,
-          minWidth: "80px",
+          minWidth: "100px",
+          border: `1px solid ${COLORS.grayBorder}`,
         }}
       >
-        <div style={{ fontSize: "18px", fontWeight: 800, color: COLORS.tealDark }}>{value}</div>
-        <div style={{ fontSize: "7px", color: COLORS.gray, textTransform: "uppercase", fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark, lineHeight: "1.2" }}>{value}</div>
+        <div style={{ fontSize: "10px", color: COLORS.dark, textTransform: "uppercase", fontWeight: 700, marginTop: "2px" }}>{label}</div>
       </div>
     );
 
