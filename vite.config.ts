@@ -17,10 +17,10 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query"],
+    dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "zustand", "next-themes", "recharts"],
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-dom/client", "@tanstack/react-query", "recharts"],
+    include: ["react", "react-dom", "react-dom/client", "@tanstack/react-query", "recharts", "zustand", "next-themes"],
     force: true,
   },
 }));
