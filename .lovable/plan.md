@@ -1,62 +1,60 @@
 
-# Transformar o Sistema FVL em um App Instalavel (PWA)
 
-## O que e isso?
+# Seguranca 100% - Resolver os 2 Alertas Restantes
 
-PWA (Progressive Web App) permite que qualquer pessoa que acesse o sistema pelo celular receba a opcao de "Instalar" o app na tela inicial. Ele abre em tela cheia, sem barra do navegador, como se fosse um aplicativo nativo -- mas sem precisar de App Store ou Play Store.
+## Alerta 1: QueuePanel trafega senhas de unit_logins
 
-## O que sera feito
+### Problema
+`QueuePanel.tsx` (linha 146) e `ConfiguracoesPage.tsx` (linha 26) fazem `select("id, login, password")` na tabela `unit_logins`, trafegando senhas no frontend.
 
-### 1. Instalar o plugin `vite-plugin-pwa`
-Adicionar a dependencia que gera automaticamente o Service Worker e o manifesto do app.
+### Solucao
+Criar uma Edge Function `create-ride-with-login` que:
+- Recebe `driver_ride_id` + `unit_login_id` + `route`
+- Busca o login/senha no servidor (nunca envia ao frontend)
+- Insere/atualiza o `driver_rides` com login e senha preenchidos server-side
+- Retorna apenas confirmacao (sem senha)
 
-### 2. Configurar o `vite.config.ts`
-Adicionar o plugin PWA com:
-- Nome do app: "Sistema FVL"
-- Descricao: "Sistema Logistico Favela Llog"
-- Cor do tema: azul escuro (#1e3a5f) combinando com a identidade visual
-- Icones do app (192x192 e 512x512)
-- Modo standalone (abre sem barra do navegador)
-- Cache inteligente para funcionar offline
-
-### 3. Criar icones PWA
-Gerar icones nos tamanhos 192x192 e 512x512 na pasta `public/` a partir do logo existente.
-
-### 4. Atualizar o `index.html`
-Adicionar meta tags para:
-- `theme-color` (cor da barra de status no celular)
-- Link para o manifesto
-- Icone Apple Touch
-
-### 5. Criar pagina `/install`
-Uma pagina dedicada com instrucoes visuais para instalar o app:
-- Detecta automaticamente se o navegador suporta instalacao
-- Mostra o botao "Instalar" quando disponivel
-- Instrucoes para iPhone (Safari > Compartilhar > Adicionar a Tela de Inicio)
-- Instrucoes para Android (menu > Instalar app)
-
-### 6. Adicionar prompt de instalacao na tela inicial
-Na pagina de login (`Index.tsx`), exibir um banner discreto sugerindo a instalacao quando o usuario ainda nao instalou.
+Alterar o frontend:
+- `QueuePanel.tsx`: consultar `unit_logins` apenas com `select("id, login")` (sem password). Ao programar, chamar a Edge Function em vez de fazer UPDATE direto
+- `ConfiguracoesPage.tsx`: manter `select("id, login, password")` apenas para o gerente que gerencia os logins (precisa ver a senha que cadastrou). Alternativa: tambem ocultar e usar Edge Function para revelar
 
 ---
 
-## Detalhes Tecnicos
+## Alerta 2: Senhas armazenadas em texto plano
 
-### Arquivos novos
-- `public/pwa-192x192.png` -- Icone 192px
-- `public/pwa-512x512.png` -- Icone 512px  
-- `src/pages/InstallPage.tsx` -- Pagina de instalacao
-- `src/hooks/use-pwa-install.ts` -- Hook para controlar o prompt de instalacao
+### Problema
+Campos `password` em `drivers`, `managers`, `units` e `unit_logins` estao sem hashing. Se o banco for comprometido, todas as senhas ficam expostas.
 
-### Arquivos modificados
-- `vite.config.ts` -- Adicionar `VitePWA()` plugin
-- `index.html` -- Meta tags PWA (theme-color, apple-touch-icon)
-- `src/App.tsx` -- Rota `/install`
-- `src/pages/Index.tsx` -- Banner de instalacao
-- `package.json` -- Dependencia `vite-plugin-pwa`
+### Solucao
+Criar uma Edge Function `hash-password` (utilitaria interna) e refatorar os fluxos:
 
-### Configuracao do Service Worker
-- Estrategia: `generateSW` (gerado automaticamente)
-- Cache: HTML, CSS, JS, imagens, fontes
-- Rota `/~oauth` excluida do cache (para nao interferir com autenticacao)
-- Atualizacao automatica quando nova versao e publicada
+1. **unit_logins**: Criar Edge Function `manage-unit-login` que faz INSERT/UPDATE com bcrypt no servidor. A `create-ride-with-login` compara hash ao autenticar
+2. **drivers**: A Edge Function `authenticate-unit` ja existe para login de unidades. Criar `authenticate-driver` que valida senha com bcrypt
+3. **managers**: Criar `authenticate-manager` com bcrypt
+4. **units**: Refatorar `authenticate-unit` para usar bcrypt
+
+Criar migration para hashear todas as senhas existentes usando uma funcao SQL com `pgcrypto`.
+
+### ATENCAO - Impacto Grande
+Essa mudanca requer:
+- Habilitar extensao `pgcrypto` no banco
+- Migrar TODAS as senhas existentes para hash
+- Refatorar TODOS os fluxos de login (motorista, gerente, unidade)
+- Atualizar TODOS os formularios de cadastro/edicao para enviar senha via Edge Function
+- Testar extensivamente antes de publicar
+
+---
+
+## Arquivos novos
+1. `supabase/functions/create-ride-with-login/index.ts` - Insere ride com login/senha server-side
+
+## Arquivos modificados
+1. `src/components/dashboard/QueuePanel.tsx` - Remover `password` do select, usar Edge Function
+2. `src/pages/admin/SecurityPage.tsx` - Atualizar status do alerta do QueuePanel para "Ativo"
+
+## O que NAO sera feito agora (Alerta 2)
+O hashing de senhas (bcrypt) e uma refatoracao complexa que afeta todos os fluxos de autenticacao do sistema. Recomendo resolver em uma etapa separada e dedicada para evitar quebrar logins existentes. O alerta sera mantido na pagina de seguranca como "risco documentado".
+
+## Resultado esperado
+- Score sobe de 86% para ~93% (1 alerta resolvido)
+- Para chegar a 100%, o hashing de senhas precisara ser implementado em etapa futura dedicada
