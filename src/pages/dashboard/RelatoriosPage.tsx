@@ -80,9 +80,9 @@ const RelatoriosPage = () => {
       const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
         supabase.from("drivers").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
         supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds),
+        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       ]);
 
       const drivers = driversRes.data ?? [];
@@ -105,7 +105,12 @@ const RelatoriosPage = () => {
 
         const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
           const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-          const rReturns = [...allPiso, ...allPs, ...allRto].filter(p => p.ride_id && info.rideIds.includes(p.ride_id)).length;
+          // Unique tbr_code returns
+          const returnTbrSet = new Set<string>();
+          [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
+            if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
+          });
+          const rReturns = returnTbrSet.size;
           return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * common.tVal };
         });
 
@@ -270,9 +275,9 @@ const RelatoriosPage = () => {
       const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
         supabase.from("drivers").select("id, name").in("id", driverIds),
         supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds),
+        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       ]);
 
       const drivers = driversRes.data ?? [];
@@ -284,7 +289,10 @@ const RelatoriosPage = () => {
         const driverRides = rides.filter(r => r.driver_id === did);
         const driverRideIds = driverRides.map(r => r.id);
         const tbrs = allTbrs.filter(t => driverRideIds.includes(t.ride_id)).length;
-        const returns = allReturns.filter(r => r.ride_id && driverRideIds.includes(r.ride_id)).length;
+        // Unique tbr_code returns
+        const returnTbrSet = new Set<string>();
+        allReturns.forEach((r: any) => { if (r.ride_id && driverRideIds.includes(r.ride_id) && r.tbr_code) returnTbrSet.add(r.tbr_code); });
+        const returns = returnTbrSet.size;
         const completed = tbrs - returns;
         const daysWorked = new Set(driverRides.map(r => format(new Date(r.completed_at), "yyyy-MM-dd"))).size;
         return {

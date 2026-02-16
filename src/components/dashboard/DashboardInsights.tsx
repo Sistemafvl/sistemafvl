@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays } from "lucide-react";
+import { getBrazilDayRange } from "@/lib/utils";
 
 interface Props {
   unitId: string;
@@ -78,21 +79,26 @@ const DashboardInsights = ({ unitId }: Props) => {
       setAvgTbrs(tbrTotal ? Math.round((tbrTotal / rides30.length) * 10) / 10 : 0);
     }
 
-    // Top 5 returns (piso + rto by driver_name)
-    const [{ data: pisoData }, { data: rtoData }] = await Promise.all([
-      supabase.from("piso_entries").select("driver_name").eq("unit_id", unitId).gte("created_at", since),
-      supabase.from("rto_entries").select("driver_name").eq("unit_id", unitId).gte("created_at", since),
+    // Top 5 returns (unique tbr_code by driver_name)
+    const [{ data: pisoData }, { data: rtoData }, { data: psData }] = await Promise.all([
+      supabase.from("piso_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
+      supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
+      supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
     ]);
 
-    const returnCount: Record<string, number> = {};
-    [...(pisoData ?? []), ...(rtoData ?? [])].forEach(e => {
+    // Deduplicate by tbr_code per driver
+    const driverTbrSets: Record<string, Set<string>> = {};
+    [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => {
       const name = e.driver_name ?? "Desconhecido";
-      returnCount[name] = (returnCount[name] || 0) + 1;
+      if (!driverTbrSets[name]) driverTbrSets[name] = new Set();
+      if (e.tbr_code) driverTbrSets[name].add(e.tbr_code);
     });
-    setTopReturns(Object.entries(returnCount).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => ({ name, count })));
+    setTopReturns(Object.entries(driverTbrSets).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count).slice(0, 5));
 
-    // Return rate
-    const totalReturns = (pisoData?.length ?? 0) + (rtoData?.length ?? 0);
+    // Return rate (unique tbr_codes)
+    const allReturnTbrs = new Set<string>();
+    [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
+    const totalReturns = allReturnTbrs.size;
     const { count: totalTbrs30 } = await supabase
       .from("ride_tbrs")
       .select("id", { count: "exact", head: true });

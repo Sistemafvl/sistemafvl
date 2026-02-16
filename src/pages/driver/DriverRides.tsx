@@ -46,9 +46,9 @@ const DriverRides = () => {
       const [unitsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("id, ride_id").in("ride_id", rideIds),
+        supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
       ]);
 
@@ -58,10 +58,16 @@ const DriverRides = () => {
       const tbrCountMap = new Map<string, number>();
       (tbrsRes.data ?? []).forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
 
-      const returnCountMap = new Map<string, number>();
-      [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((r) => {
-        if (r.ride_id) returnCountMap.set(r.ride_id, (returnCountMap.get(r.ride_id) ?? 0) + 1);
+      // Count unique tbr_codes per ride for returns
+      const returnTbrSets = new Map<string, Set<string>>();
+      [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((r: any) => {
+        if (r.ride_id && r.tbr_code) {
+          if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
+          returnTbrSets.get(r.ride_id)!.add(r.tbr_code);
+        }
       });
+      const returnCountMap = new Map<string, number>();
+      returnTbrSets.forEach((set, rideId) => returnCountMap.set(rideId, set.size));
 
       setRides(data.map((r) => ({
         ...r,
@@ -172,7 +178,7 @@ const DriverRides = () => {
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
                       <DollarSign className="h-3 w-3 text-emerald-600 mb-0.5" />
                       <span className="text-[10px] text-muted-foreground leading-none">Total</span>
-                      <span className="text-xs font-bold text-emerald-600">R${totalGanho.toFixed(0)}</span>
+                      <span className="text-xs font-bold text-emerald-600">R${totalGanho.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
                       <TrendingUp className="h-3 w-3 text-blue-600 mb-0.5" />

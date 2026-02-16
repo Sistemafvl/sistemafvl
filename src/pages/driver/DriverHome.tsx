@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Car, Package, DollarSign, Target, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { format, subDays, parseISO, eachDayOfInterval, isWithinInterval, startOfDay } from "date-fns";
+import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr } from "@/lib/utils";
 
 const COLORS = ["#f59e0b", "#3b82f6", "#ef4444"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -16,8 +17,8 @@ const DriverHome = () => {
   const { unitSession } = useAuthStore();
   const driverId = unitSession?.user_profile_id;
 
-  const [startDate, setStartDate] = useState(() => format(subDays(new Date(), 30), "yyyy-MM-dd"));
-  const [endDate, setEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [startDate, setStartDate] = useState(() => getBrazilTodayStr());
+  const [endDate, setEndDate] = useState(() => getBrazilTodayStr());
   const [rides, setRides] = useState<any[]>([]);
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
@@ -31,8 +32,8 @@ const DriverHome = () => {
     if (!driverId) return;
     const fetch = async () => {
       setLoading(true);
-      const start = `${startDate}T00:00:00`;
-      const end = `${endDate}T23:59:59`;
+      const { start } = getBrazilDayRange(startDate);
+      const { end } = getBrazilDayRange(endDate);
 
       const { data: ridesData } = await supabase
         .from("driver_rides")
@@ -56,9 +57,9 @@ const DriverHome = () => {
 
       const [t, pi, ps, rto, us, un] = await Promise.all([
         supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("id, ride_id").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("id, ride_id").in("ride_id", rideIds),
+        supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("units").select("id, name").in("id", unitIds),
       ]);
@@ -77,17 +78,25 @@ const DriverHome = () => {
   const metrics = useMemo(() => {
     const totalRides = rides.length;
     const totalTbrs = tbrs.length;
-    const totalReturns = pisoEntries.length + psEntries.length + rtoEntries.length;
+
+    // Count unique tbr_codes per ride for returns
+    const returnTbrSets = new Map<string, Set<string>>();
+    [...pisoEntries, ...psEntries, ...rtoEntries].forEach((r: any) => {
+      if (r.ride_id && r.tbr_code) {
+        if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
+        returnTbrSets.get(r.ride_id)!.add(r.tbr_code);
+      }
+    });
+    const returnsByRide = new Map<string, number>();
+    returnTbrSets.forEach((set, rideId) => returnsByRide.set(rideId, set.size));
+
+    const totalReturns = Array.from(returnsByRide.values()).reduce((s, v) => s + v, 0);
     const concluidos = Math.max(0, totalTbrs - totalReturns);
 
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     let totalGanho = 0;
     const tbrsByRide = new Map<string, number>();
     tbrs.forEach((t: any) => tbrsByRide.set(t.ride_id, (tbrsByRide.get(t.ride_id) ?? 0) + 1));
-    const returnsByRide = new Map<string, number>();
-    [...pisoEntries, ...psEntries, ...rtoEntries].forEach((r: any) => {
-      if (r.ride_id) returnsByRide.set(r.ride_id, (returnsByRide.get(r.ride_id) ?? 0) + 1);
-    });
 
     rides.forEach((ride: any) => {
       const rTbrs = tbrsByRide.get(ride.id) ?? 0;

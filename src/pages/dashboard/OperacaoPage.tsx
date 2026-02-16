@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock } from "lucide-react";
-import { format, startOfDay, endOfDay, differenceInMinutes } from "date-fns";
+import { format, differenceInMinutes } from "date-fns";
+import { getBrazilDayRange, getBrazilNow } from "@/lib/utils";
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -35,7 +36,7 @@ interface DriverCard {
 
 const OperacaoPage = () => {
   const { unitSession } = useAuthStore();
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date>(() => getBrazilNow());
   const [cards, setCards] = useState<DriverCard[]>([]);
   const [loading, setLoading] = useState(true);
   const [tbrSearch, setTbrSearch] = useState("");
@@ -49,8 +50,8 @@ const OperacaoPage = () => {
     if (!unitSession) return;
     setLoading(true);
 
-    const dayStart = startOfDay(selectedDate).toISOString();
-    const dayEnd = endOfDay(selectedDate).toISOString();
+    const dateStr = format(selectedDate, "yyyy-MM-dd");
+    const { start: dayStart, end: dayEnd } = getBrazilDayRange(dateStr);
 
     const { data: rides } = await supabase
       .from("driver_rides")
@@ -76,9 +77,9 @@ const OperacaoPage = () => {
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
       supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
-      supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds),
-      supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds),
-      supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds),
+      supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitSession.id).maybeSingle(),
     ]);
 
@@ -93,11 +94,16 @@ const OperacaoPage = () => {
       tbrCounts[t.ride_id] = (tbrCounts[t.ride_id] || 0) + 1;
     });
 
-    // Count all open issues per ride (piso + ps + rto)
-    const issueCounts: Record<string, number> = {};
-    [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((p) => {
-      if (p.ride_id) issueCounts[p.ride_id] = (issueCounts[p.ride_id] || 0) + 1;
+    // Count unique tbr_codes per ride for returns
+    const returnTbrSets: Record<string, Set<string>> = {};
+    [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((p: any) => {
+      if (p.ride_id && p.tbr_code) {
+        if (!returnTbrSets[p.ride_id]) returnTbrSets[p.ride_id] = new Set();
+        returnTbrSets[p.ride_id].add(p.tbr_code);
+      }
     });
+    const issueCounts: Record<string, number> = {};
+    Object.entries(returnTbrSets).forEach(([rideId, set]) => { issueCounts[rideId] = set.size; });
 
     const result: DriverCard[] = rides.map((r) => {
       const d = driverMap[r.driver_id];

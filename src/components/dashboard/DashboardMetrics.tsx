@@ -3,7 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2 } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays } from "date-fns";
+import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
 
 interface Props {
   unitId: string;
@@ -32,9 +33,7 @@ const DashboardMetrics = ({ unitId }: Props) => {
   const [pieData, setPieData] = useState<{ name: string; value: number }[]>([]);
 
   const fetchAll = useCallback(async () => {
-    const today = new Date();
-    const todayStart = startOfDay(today).toISOString();
-    const todayEnd = endOfDay(today).toISOString();
+    const { start: todayStart, end: todayEnd } = getBrazilDayRange();
 
     const [ridesRes, tbrsRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
       supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", todayEnd),
@@ -63,10 +62,15 @@ const DashboardMetrics = ({ unitId }: Props) => {
     });
 
     // Last 7 days charts
+    const todayStr = getBrazilTodayStr();
+    const todayDate = new Date(todayStr);
     const days: string[] = [];
-    for (let i = 6; i >= 0; i--) days.push(format(subDays(today, i), "yyyy-MM-dd"));
-
-    const sevenDaysAgo = startOfDay(subDays(today, 6)).toISOString();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(todayDate);
+      d.setDate(d.getDate() - i);
+      days.push(d.toISOString().slice(0, 10));
+    }
+    const { start: sevenDaysAgo } = getBrazilDayRange(days[0]);
 
     const [rides7, tbrs7, statusRes] = await Promise.all([
       supabase.from("driver_rides").select("completed_at").eq("unit_id", unitId).gte("completed_at", sevenDaysAgo),
@@ -78,10 +82,10 @@ const DashboardMetrics = ({ unitId }: Props) => {
     const ridesByDay: Record<string, number> = {};
     days.forEach(d => ridesByDay[d] = 0);
     (rides7.data ?? []).forEach(r => {
-      const d = format(new Date(r.completed_at), "yyyy-MM-dd");
+      const d = toBrazilDateStr(r.completed_at);
       if (ridesByDay[d] !== undefined) ridesByDay[d]++;
     });
-    setBarData(days.map(d => ({ day: format(new Date(d), "dd/MM"), count: ridesByDay[d] })));
+    setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
     // Filter tbrs by unit
     const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
@@ -93,10 +97,10 @@ const DashboardMetrics = ({ unitId }: Props) => {
     days.forEach(d => tbrsByDay[d] = 0);
     filteredTbrs.forEach(t => {
       if (!t.scanned_at) return;
-      const d = format(new Date(t.scanned_at), "yyyy-MM-dd");
+      const d = toBrazilDateStr(t.scanned_at);
       if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
     });
-    setLineData(days.map(d => ({ day: format(new Date(d), "dd/MM"), count: tbrsByDay[d] })));
+    setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
 
     // Pie: status distribution
     const statusCount: Record<string, number> = { pending: 0, loading: 0, finished: 0 };
