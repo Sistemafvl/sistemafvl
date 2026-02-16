@@ -15,13 +15,60 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { path, bucket } = await req.json();
+    // Validate caller identity
+    const authHeader = req.headers.get("Authorization");
+    const { path, bucket, driver_id } = await req.json();
 
     if (!path || !bucket) {
       return new Response(
         JSON.stringify({ error: "Missing path or bucket" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
+    }
+
+    // For private buckets, require some form of identity validation
+    if (bucket === "driver-documents") {
+      if (!driver_id) {
+        return new Response(
+          JSON.stringify({ error: "Missing driver_id for private bucket" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Verify the path belongs to the claimed driver
+      if (!path.startsWith(driver_id + "/")) {
+        return new Response(
+          JSON.stringify({ error: "Path does not match driver_id" }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // If there's an auth header, validate it (admin/manager accessing driver docs)
+      if (authHeader?.startsWith("Bearer ")) {
+        const token = authHeader.replace("Bearer ", "");
+        const { data: userData, error: userError } = await supabase.auth.getUser(token);
+        if (userError || !userData?.user) {
+          return new Response(
+            JSON.stringify({ error: "Invalid token" }),
+            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        // Authenticated user (admin/manager) - allow access
+      } else {
+        // No auth header - verify the driver exists to provide minimal validation
+        const { data: driverData, error: driverError } = await supabase
+          .from("drivers")
+          .select("id")
+          .eq("id", driver_id)
+          .maybeSingle();
+
+        if (driverError || !driverData) {
+          return new Response(
+            JSON.stringify({ error: "Driver not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
     }
 
     // Generate a signed URL valid for 1 hour
