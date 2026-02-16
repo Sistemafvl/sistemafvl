@@ -10,137 +10,69 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
-
-interface DriverPayrollData {
-  driver: {
-    id: string;
-    name: string;
-    cpf: string;
-    car_plate: string;
-    car_model: string;
-    car_color: string | null;
-  };
-  days: {
-    date: string;
-    login: string | null;
-    tbrCount: number;
-    returns: number;
-    value: number;
-  }[];
-  totalTbrs: number;
-  totalReturns: number;
-  totalCompleted: number;
-  totalValue: number;
-  daysWorked: number;
-  loginsUsed: string[];
-  bestDay: { date: string; tbrs: number } | null;
-  worstDay: { date: string; tbrs: number } | null;
-  avgDaily: number;
-}
+import { loadLogoBase64, generatePDFFromContainer, formatCurrency } from "./reports/pdf-utils";
+import PayrollReportContent, { type DriverPayrollData } from "./reports/PayrollReportContent";
+import DailySummaryReportContent, { type DailySummaryRow } from "./reports/DailySummaryReportContent";
+import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
+import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
 
 const RelatoriosPage = () => {
   const { unitSession } = useAuthStore();
   const [startDate, setStartDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setDate(1);
-    d.setHours(0, 0, 0, 0);
-    return d;
+    const d = new Date(); d.setDate(1); d.setHours(0, 0, 0, 0); return d;
   });
   const [endDate, setEndDate] = useState<Date>(() => {
-    const d = new Date();
-    d.setHours(23, 59, 59, 999);
-    return d;
+    const d = new Date(); d.setHours(23, 59, 59, 999); return d;
   });
   const [loading, setLoading] = useState<string | null>(null);
+
+  // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
   const [unitName, setUnitName] = useState("");
   const [tbrValue, setTbrValue] = useState(0);
-  const reportRef = useRef<HTMLDivElement>(null);
+  const [logoBase64, setLogoBase64] = useState("");
+  const payrollRef = useRef<HTMLDivElement>(null);
+
+  // Daily summary state
+  const [dailyData, setDailyData] = useState<DailySummaryRow[] | null>(null);
+  const dailyRef = useRef<HTMLDivElement>(null);
+
+  // Returns state
+  const [returnsData, setReturnsData] = useState<{ piso: ReturnEntry[]; ps: ReturnEntry[]; rto: ReturnEntry[] } | null>(null);
+  const returnsRef = useRef<HTMLDivElement>(null);
+
+  // Ranking state
+  const [rankingData, setRankingData] = useState<RankingRow[] | null>(null);
+  const rankingRef = useRef<HTMLDivElement>(null);
 
   const unitId = unitSession?.id;
+  const generatedBy = unitSession?.user_name || "Sistema";
 
-  const formatCpf = (cpf: string) =>
-    cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+  const ensureCommon = async () => {
+    if (!unitId) return null;
+    const logo = await loadLogoBase64();
+    setLogoBase64(logo);
+    const { data: unitData } = await supabase.from("units").select("name").eq("id", unitId).maybeSingle();
+    const uName = unitData?.name ?? "";
+    setUnitName(uName);
+    const { data: settings } = await supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitId).maybeSingle();
+    const tVal = Number(settings?.tbr_value ?? 0);
+    setTbrValue(tVal);
+    return { uName, tVal, logo };
+  };
 
-  const formatDateBR = (dateStr: string) =>
-    format(new Date(dateStr + "T12:00:00"), "dd/MM", { locale: ptBR });
-
-  const generatePDFFromData = useCallback(async (data: DriverPayrollData[], uName: string, tVal: number) => {
-    const container = reportRef.current;
-    if (!container) return;
-
-    container.style.position = "absolute";
-    container.style.left = "-9999px";
-    container.style.top = "0";
-    container.style.display = "block";
-    container.style.width = "1122px"; // A4 landscape at 96dpi
-
-    await new Promise(r => setTimeout(r, 300));
-
-    try {
-      const pdf = new jsPDF("l", "mm", "a4"); // landscape
-      const pdfWidth = 297;
-      const pdfHeight = 210;
-      const margin = 8;
-      const contentWidth = pdfWidth - margin * 2;
-
-      const sections = container.querySelectorAll<HTMLElement>(":scope > div");
-
-      for (let i = 0; i < sections.length; i++) {
-        if (i > 0) pdf.addPage();
-
-        const canvas = await html2canvas(sections[i], {
-          scale: 2,
-          useCORS: true,
-          backgroundColor: "#ffffff",
-          logging: false,
-        });
-
-        const imgData = canvas.toDataURL("image/png");
-        const imgHeight = (canvas.height * contentWidth) / canvas.width;
-
-        pdf.addImage(imgData, "PNG", margin, margin, contentWidth, Math.min(imgHeight, pdfHeight - margin * 2));
-      }
-
-      const fileName = `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`;
-      pdf.save(fileName);
-
-      toast({ title: "PDF gerado!", description: `Arquivo ${fileName} baixado com sucesso.` });
-    } catch (err) {
-      console.error("PDF generation error:", err);
-      toast({ title: "Erro", description: "Erro ao gerar o PDF.", variant: "destructive" });
-    } finally {
-      container.style.display = "none";
-    }
-  }, [startDate, endDate]);
-
-  const fetchPayrollData = async () => {
+  // ── Payroll ──
+  const fetchPayroll = async () => {
     if (!unitId) return;
     setLoading("payroll");
-
     try {
-      const { data: unitData } = await supabase.from("units").select("name").eq("id", unitId).maybeSingle();
-      const uName = unitData?.name ?? "";
-      setUnitName(uName);
+      const common = await ensureCommon();
+      if (!common) return;
 
-      const { data: settings } = await supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitId).maybeSingle();
-      const tbrVal = Number(settings?.tbr_value ?? 0);
-      setTbrValue(tbrVal);
+      const { data: rides } = await supabase.from("driver_rides").select("*").eq("unit_id", unitId)
+        .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString());
 
-      const { data: rides } = await supabase
-        .from("driver_rides")
-        .select("*")
-        .eq("unit_id", unitId)
-        .gte("completed_at", startDate.toISOString())
-        .lte("completed_at", endDate.toISOString());
-
-      if (!rides || rides.length === 0) {
-        toast({ title: "Sem dados", description: "Nenhum carregamento encontrado no período selecionado.", variant: "destructive" });
-        setLoading(null);
-        return;
-      }
+      if (!rides?.length) { toast({ title: "Sem dados", description: "Nenhum carregamento no período.", variant: "destructive" }); setLoading(null); return; }
 
       const driverIds = [...new Set(rides.map(r => r.driver_id))];
       const rideIds = rides.map(r => r.id);
@@ -158,74 +90,230 @@ const RelatoriosPage = () => {
       const allPiso = pisoRes.data ?? [];
       const allPs = psRes.data ?? [];
       const allRto = rtoRes.data ?? [];
-
       const driverMap = new Map(drivers.map(d => [d.id, d]));
 
       const result: DriverPayrollData[] = driverIds.map(driverId => {
         const driver = driverMap.get(driverId)!;
         const driverRides = rides.filter(r => r.driver_id === driverId);
-
         const dayMap = new Map<string, { login: string | null; rideIds: string[] }>();
         driverRides.forEach(r => {
           const dayKey = format(new Date(r.completed_at), "yyyy-MM-dd");
           const existing = dayMap.get(dayKey);
-          if (existing) {
-            existing.rideIds.push(r.id);
-            if (r.login && !existing.login) existing.login = r.login;
-          } else {
-            dayMap.set(dayKey, { login: r.login, rideIds: [r.id] });
-          }
+          if (existing) { existing.rideIds.push(r.id); if (r.login && !existing.login) existing.login = r.login; }
+          else dayMap.set(dayKey, { login: r.login, rideIds: [r.id] });
         });
 
         const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
           const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-          const rReturns = [
-            ...allPiso.filter(p => p.ride_id && info.rideIds.includes(p.ride_id)),
-            ...allPs.filter(p => p.ride_id && info.rideIds.includes(p.ride_id)),
-            ...allRto.filter(p => p.ride_id && info.rideIds.includes(p.ride_id)),
-          ].length;
-          return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * tbrVal };
+          const rReturns = [...allPiso, ...allPs, ...allRto].filter(p => p.ride_id && info.rideIds.includes(p.ride_id)).length;
+          return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * common.tVal };
         });
 
         const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
         const totalReturns = days.reduce((s, d) => s + d.returns, 0);
         const totalCompleted = totalTbrs - totalReturns;
-        const totalValue = totalCompleted * tbrVal;
         const loginsUsed = [...new Set(driverRides.map(r => r.login).filter(Boolean) as string[])];
         const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
         const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
-        const avgDaily = days.length ? Math.round(totalTbrs / days.length) : 0;
 
         return {
           driver: { id: driver.id, name: driver.name, cpf: driver.cpf, car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color },
-          days, totalTbrs, totalReturns, totalCompleted, totalValue, daysWorked: days.length, loginsUsed,
+          days, totalTbrs, totalReturns, totalCompleted, totalValue: totalCompleted * common.tVal,
+          daysWorked: days.length, loginsUsed,
           bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
           worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
-          avgDaily,
+          avgDaily: days.length ? Math.round(totalTbrs / days.length) : 0,
         };
       }).sort((a, b) => b.totalTbrs - a.totalTbrs);
 
       setPayrollData(result);
-
-      // Generate PDF after state renders
-      setTimeout(() => generatePDFFromData(result, uName, tbrVal), 400);
-    } catch (err) {
-      toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" });
-    }
+      setTimeout(async () => {
+        if (payrollRef.current) {
+          await generatePDFFromContainer(payrollRef.current, `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+          toast({ title: "PDF gerado!", description: "Folha de pagamento baixada com sucesso." });
+        }
+      }, 500);
+    } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
     setLoading(null);
   };
 
-  const grandTotalTbrs = payrollData?.reduce((s, d) => s + d.totalTbrs, 0) ?? 0;
-  const grandTotalReturns = payrollData?.reduce((s, d) => s + d.totalReturns, 0) ?? 0;
-  const grandTotalCompleted = payrollData?.reduce((s, d) => s + d.totalCompleted, 0) ?? 0;
-  const grandTotalValue = payrollData?.reduce((s, d) => s + d.totalValue, 0) ?? 0;
-  const grandTotalDays = payrollData?.reduce((s, d) => s + d.daysWorked, 0) ?? 0;
+  // ── Daily Summary ──
+  const fetchDailySummary = async () => {
+    if (!unitId) return;
+    setLoading("daily");
+    try {
+      const common = await ensureCommon();
+      if (!common) return;
+
+      const [ridesRes, pisoRes, psRes, rtoRes] = await Promise.all([
+        supabase.from("driver_rides").select("id, completed_at, driver_id").eq("unit_id", unitId)
+          .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString()),
+        supabase.from("piso_entries").select("id, created_at").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("ps_entries").select("id, created_at").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("rto_entries").select("id, created_at").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+      ]);
+
+      const rides = ridesRes.data ?? [];
+      const rideIds = rides.map(r => r.id);
+
+      const tbrsRes = rideIds.length > 0
+        ? await supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds)
+        : { data: [] };
+
+      const allTbrs = tbrsRes.data ?? [];
+      const piso = pisoRes.data ?? [];
+      const ps = psRes.data ?? [];
+      const rto = rtoRes.data ?? [];
+
+      // Group by day
+      const dayMap = new Map<string, DailySummaryRow>();
+      rides.forEach(r => {
+        const day = format(new Date(r.completed_at), "yyyy-MM-dd");
+        if (!dayMap.has(day)) dayMap.set(day, { date: day, loadings: 0, tbrs: 0, piso: 0, ps: 0, rto: 0, totalReturns: 0, activeDrivers: 0 });
+        dayMap.get(day)!.loadings++;
+      });
+
+      // Count TBRs per day via ride
+      const rideToDay = new Map<string, string>();
+      rides.forEach(r => rideToDay.set(r.id, format(new Date(r.completed_at), "yyyy-MM-dd")));
+      allTbrs.forEach(t => {
+        const day = rideToDay.get(t.ride_id);
+        if (day && dayMap.has(day)) dayMap.get(day)!.tbrs++;
+      });
+
+      // Returns per day
+      piso.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.piso++; });
+      ps.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.ps++; });
+      rto.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.rto++; });
+
+      // Active drivers per day
+      const dayDrivers = new Map<string, Set<string>>();
+      rides.forEach(r => {
+        const day = format(new Date(r.completed_at), "yyyy-MM-dd");
+        if (!dayDrivers.has(day)) dayDrivers.set(day, new Set());
+        dayDrivers.get(day)!.add(r.driver_id);
+      });
+      dayDrivers.forEach((set, day) => { if (dayMap.has(day)) dayMap.get(day)!.activeDrivers = set.size; });
+
+      // Total returns
+      dayMap.forEach(row => { row.totalReturns = row.piso + row.ps + row.rto; });
+
+      const rows = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+      if (!rows.length) { toast({ title: "Sem dados", description: "Nenhum dado no período.", variant: "destructive" }); setLoading(null); return; }
+
+      setDailyData(rows);
+      setTimeout(async () => {
+        if (dailyRef.current) {
+          await generatePDFFromContainer(dailyRef.current, `resumo_diario_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+          toast({ title: "PDF gerado!", description: "Resumo diário baixado com sucesso." });
+        }
+      }, 500);
+    } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
+    setLoading(null);
+  };
+
+  // ── Returns ──
+  const fetchReturns = async () => {
+    if (!unitId) return;
+    setLoading("returns");
+    try {
+      const common = await ensureCommon();
+      if (!common) return;
+
+      const [pisoRes, psRes, rtoRes] = await Promise.all([
+        supabase.from("piso_entries").select("tbr_code, reason, driver_name, route, created_at").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("ps_entries").select("tbr_code, description, driver_name, route, created_at").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        supabase.from("rto_entries").select("tbr_code, description, driver_name, route, created_at, cep").eq("unit_id", unitId)
+          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+      ]);
+
+      const pisoEntries: ReturnEntry[] = (pisoRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.reason, driver_name: e.driver_name, route: e.route, date: e.created_at }));
+      const psEntries: ReturnEntry[] = (psRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at }));
+      const rtoEntries: ReturnEntry[] = (rtoRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at, cep: e.cep }));
+
+      if (!pisoEntries.length && !psEntries.length && !rtoEntries.length) {
+        toast({ title: "Sem dados", description: "Nenhum retorno no período.", variant: "destructive" }); setLoading(null); return;
+      }
+
+      setReturnsData({ piso: pisoEntries, ps: psEntries, rto: rtoEntries });
+      setTimeout(async () => {
+        if (returnsRef.current) {
+          await generatePDFFromContainer(returnsRef.current, `retornos_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+          toast({ title: "PDF gerado!", description: "Relatório de retornos baixado com sucesso." });
+        }
+      }, 500);
+    } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
+    setLoading(null);
+  };
+
+  // ── Ranking ──
+  const fetchRanking = async () => {
+    if (!unitId) return;
+    setLoading("performance");
+    try {
+      const common = await ensureCommon();
+      if (!common) return;
+
+      const { data: rides } = await supabase.from("driver_rides").select("id, driver_id, completed_at").eq("unit_id", unitId)
+        .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString());
+
+      if (!rides?.length) { toast({ title: "Sem dados", description: "Nenhum carregamento no período.", variant: "destructive" }); setLoading(null); return; }
+
+      const driverIds = [...new Set(rides.map(r => r.driver_id))];
+      const rideIds = rides.map(r => r.id);
+
+      const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
+        supabase.from("drivers").select("id, name").in("id", driverIds),
+        supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
+        supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds),
+        supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds),
+        supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds),
+      ]);
+
+      const drivers = driversRes.data ?? [];
+      const driverMap = new Map(drivers.map(d => [d.id, d.name]));
+      const allTbrs = tbrsRes.data ?? [];
+      const allReturns = [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])];
+
+      const ranking: RankingRow[] = driverIds.map(did => {
+        const driverRides = rides.filter(r => r.driver_id === did);
+        const driverRideIds = driverRides.map(r => r.id);
+        const tbrs = allTbrs.filter(t => driverRideIds.includes(t.ride_id)).length;
+        const returns = allReturns.filter(r => r.ride_id && driverRideIds.includes(r.ride_id)).length;
+        const completed = tbrs - returns;
+        const daysWorked = new Set(driverRides.map(r => format(new Date(r.completed_at), "yyyy-MM-dd"))).size;
+        return {
+          position: 0,
+          name: driverMap.get(did) || "—",
+          tbrs, returns,
+          completionRate: tbrs > 0 ? ((completed / tbrs) * 100).toFixed(1) : "0.0",
+          daysWorked,
+          avgDaily: daysWorked > 0 ? Math.round(tbrs / daysWorked) : 0,
+          value: completed * common.tVal,
+        };
+      }).sort((a, b) => b.tbrs - a.tbrs).map((r, i) => ({ ...r, position: i + 1 }));
+
+      setRankingData(ranking);
+      setTimeout(async () => {
+        if (rankingRef.current) {
+          await generatePDFFromContainer(rankingRef.current, `ranking_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+          toast({ title: "PDF gerado!", description: "Ranking de performance baixado com sucesso." });
+        }
+      }, 500);
+    } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
+    setLoading(null);
+  };
 
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Relatório detalhado com ficha individual por motorista", icon: FileText, action: fetchPayrollData },
-    { key: "daily", title: "Resumo Diário", description: "Consolidado da operação do dia selecionado", icon: BarChart3, action: () => toast({ title: "Em breve", description: "Relatório em desenvolvimento." }) },
-    { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: () => toast({ title: "Em breve", description: "Relatório em desenvolvimento." }) },
-    { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: () => toast({ title: "Em breve", description: "Relatório em desenvolvimento." }) },
+    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll },
+    { key: "daily", title: "Resumo Diário", description: "Consolidado operacional por dia do período", icon: BarChart3, action: fetchDailySummary },
+    { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: fetchReturns },
+    { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: fetchRanking },
   ];
 
   return (
@@ -284,146 +372,23 @@ const RelatoriosPage = () => {
         </div>
       </div>
 
-      {/* Off-screen report content for PDF capture */}
-      {payrollData && (() => {
-        // Build sorted unique dates across all drivers
-        const allDates = [...new Set(payrollData.flatMap(d => d.days.map(day => day.date)))].sort();
-        const cellStyle: React.CSSProperties = { border: "1px solid #333", padding: "4px 6px", fontSize: "9px", textAlign: "center" };
-        const headerStyle: React.CSSProperties = { ...cellStyle, background: "#222", color: "#fff", fontWeight: 700, textTransform: "uppercase", fontSize: "8px" };
-
-        return (
-          <div ref={reportRef} style={{ display: "none", background: "#fff", fontFamily: "Arial, sans-serif", fontSize: "11px", color: "#111" }}>
-            {/* Individual driver pages */}
-            {payrollData.map((d) => {
-              // Group by login: for each login, show TBRs per day
-              const loginDayMap = new Map<string, Map<string, { tbrs: number; returns: number }>>();
-              d.days.forEach(day => {
-                const login = day.login || "Sem login";
-                if (!loginDayMap.has(login)) loginDayMap.set(login, new Map());
-                loginDayMap.get(login)!.set(day.date, { tbrs: day.tbrCount, returns: day.returns });
-              });
-              const logins = [...loginDayMap.keys()].sort();
-              const completionRate = d.totalTbrs > 0 ? ((d.totalCompleted / d.totalTbrs) * 100).toFixed(1) : "0.0";
-
-              return (
-                <div key={d.driver.id} style={{ padding: "16px" }}>
-                  <h2 style={{ fontSize: "14px", fontWeight: 800, marginBottom: "2px" }}>FOLHA DE PAGAMENTO — {d.driver.name}</h2>
-                  <p style={{ fontSize: "10px", color: "#444", marginBottom: "2px" }}>
-                    CPF: {formatCpf(d.driver.cpf)} | Placa: {d.driver.car_plate} | {d.driver.car_model}{d.driver.car_color ? ` ${d.driver.car_color}` : ""}
-                  </p>
-                  <p style={{ fontSize: "9px", color: "#888", marginBottom: "10px" }}>
-                    Período: {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")} | Valor TBR: R$ {tbrValue.toFixed(2).replace(".", ",")}
-                  </p>
-
-                  <div style={{ marginBottom: "10px" }}>
-                    {[
-                      { value: d.totalTbrs, label: "TBRs" },
-                      { value: d.totalReturns, label: "Retornos" },
-                      { value: d.totalCompleted, label: "Concluídos" },
-                      { value: `${completionRate}%`, label: "Taxa" },
-                      { value: d.avgDaily, label: "Média/Dia" },
-                      { value: `R$ ${d.totalValue.toFixed(2).replace(".", ",")}`, label: "Valor Total" },
-                    ].map(m => (
-                      <div key={m.label} style={{ display: "inline-block", padding: "4px 10px", margin: "2px", border: "1px solid #ccc", borderRadius: "4px", textAlign: "center" }}>
-                        <div style={{ fontSize: "16px", fontWeight: 800 }}>{m.value}</div>
-                        <div style={{ fontSize: "7px", color: "#666", textTransform: "uppercase" }}>{m.label}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr>
-                        <th style={headerStyle}>Login</th>
-                        {allDates.map(date => (
-                          <th key={date} style={headerStyle}>{formatDateBR(date)}</th>
-                        ))}
-                        <th style={headerStyle}>Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {logins.map(login => {
-                        const dayData = loginDayMap.get(login)!;
-                        const loginTotal = allDates.reduce((s, date) => s + (dayData.get(date)?.tbrs ?? 0), 0);
-                        return (
-                          <tr key={login}>
-                            <td style={{ ...cellStyle, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap" }}>{login}</td>
-                            {allDates.map(date => {
-                              const val = dayData.get(date)?.tbrs ?? 0;
-                              return <td key={date} style={{ ...cellStyle, background: val > 0 ? "#f0fdf4" : "#fafafa" }}>{val || "—"}</td>;
-                            })}
-                            <td style={{ ...cellStyle, fontWeight: 700, background: "#f5f5f5" }}>{loginTotal}</td>
-                          </tr>
-                        );
-                      })}
-                      <tr style={{ fontWeight: 700, background: "#f0f0f0" }}>
-                        <td style={cellStyle}>TOTAL</td>
-                        {allDates.map(date => {
-                          const dayTotal = d.days.find(day => day.date === date)?.tbrCount ?? 0;
-                          return <td key={date} style={cellStyle}>{dayTotal || "—"}</td>;
-                        })}
-                        <td style={{ ...cellStyle, fontWeight: 800 }}>{d.totalTbrs}</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
-
-            {/* Last page — General summary */}
-            <div style={{ padding: "16px" }}>
-              <h2 style={{ fontSize: "14px", fontWeight: 800, marginBottom: "2px" }}>RESUMO GERAL — FOLHA DE PAGAMENTO</h2>
-              <p style={{ fontSize: "10px", color: "#444", marginBottom: "2px" }}>
-                {unitName} — {format(startDate, "dd/MM/yyyy")} a {format(endDate, "dd/MM/yyyy")}
-              </p>
-              <p style={{ fontSize: "9px", color: "#888", marginBottom: "10px" }}>
-                Valor por TBR: R$ {tbrValue.toFixed(2).replace(".", ",")} | Gerado em: {format(new Date(), "dd/MM/yyyy HH:mm")}
-              </p>
-
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={headerStyle}>Motorista</th>
-                    {allDates.map(date => (
-                      <th key={date} style={headerStyle}>{formatDateBR(date)}</th>
-                    ))}
-                    <th style={headerStyle}>TBRs</th>
-                    <th style={headerStyle}>Ret.</th>
-                    <th style={headerStyle}>Conc.</th>
-                    <th style={headerStyle}>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payrollData.map(d => (
-                    <tr key={d.driver.id}>
-                      <td style={{ ...cellStyle, fontWeight: 600, textAlign: "left", whiteSpace: "nowrap" }}>{d.driver.name}</td>
-                      {allDates.map(date => {
-                        const val = d.days.find(day => day.date === date)?.tbrCount ?? 0;
-                        return <td key={date} style={{ ...cellStyle, background: val > 0 ? "#f0fdf4" : "#fafafa" }}>{val || "—"}</td>;
-                      })}
-                      <td style={cellStyle}>{d.totalTbrs}</td>
-                      <td style={cellStyle}>{d.totalReturns}</td>
-                      <td style={cellStyle}>{d.totalCompleted}</td>
-                      <td style={{ ...cellStyle, fontWeight: 600 }}>R$ {d.totalValue.toFixed(2).replace(".", ",")}</td>
-                    </tr>
-                  ))}
-                  <tr style={{ fontWeight: 700, background: "#f0f0f0" }}>
-                    <td style={cellStyle}>TOTAL</td>
-                    {allDates.map(date => {
-                      const dayTotal = payrollData.reduce((s, d) => s + (d.days.find(day => day.date === date)?.tbrCount ?? 0), 0);
-                      return <td key={date} style={cellStyle}>{dayTotal || "—"}</td>;
-                    })}
-                    <td style={cellStyle}>{grandTotalTbrs}</td>
-                    <td style={cellStyle}>{grandTotalReturns}</td>
-                    <td style={cellStyle}>{grandTotalCompleted}</td>
-                    <td style={{ ...cellStyle, fontWeight: 800 }}>R$ {grandTotalValue.toFixed(2).replace(".", ",")}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })()}
+      {/* Off-screen report containers */}
+      {payrollData && (
+        <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
+          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+      )}
+      {dailyData && (
+        <DailySummaryReportContent ref={dailyRef} data={dailyData} unitName={unitName}
+          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+      )}
+      {returnsData && (
+        <ReturnsReportContent ref={returnsRef} pisoEntries={returnsData.piso} psEntries={returnsData.ps} rtoEntries={returnsData.rto}
+          unitName={unitName} startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+      )}
+      {rankingData && (
+        <RankingReportContent ref={rankingRef} data={rankingData} unitName={unitName} tbrValue={tbrValue}
+          startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+      )}
     </>
   );
 };
