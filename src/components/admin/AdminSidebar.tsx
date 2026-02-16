@@ -1,4 +1,4 @@
-import { Building2, Users, Truck, LogOut, Database } from "lucide-react";
+import { Building2, Users, Truck, LogOut, Database, BarChart3, Shield } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,10 +17,12 @@ import {
 import { Button } from "@/components/ui/button";
 
 const menuItems = [
+  { title: "Visão Geral", url: "/admin/overview", icon: BarChart3 },
   { title: "Domínios e Unidades", url: "/admin/domains", icon: Building2 },
   { title: "Gerenciadores", url: "/admin/managers", icon: Users },
   { title: "Gerenciamento de Motoristas", url: "/admin/drivers", icon: Truck },
   { title: "Banco de Dados", url: "/admin/database", icon: Database },
+  { title: "Segurança Geral", url: "/admin/security", icon: Shield },
 ];
 
 const AdminSidebar = () => {
