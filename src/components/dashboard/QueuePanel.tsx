@@ -45,9 +45,8 @@ const QueuePanel = () => {
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [route, setRoute] = useState("");
-  const [login, setLogin] = useState("");
-  const [password, setPassword] = useState("");
-  const [unitLogins, setUnitLogins] = useState<{ id: string; login: string; password: string }[]>([]);
+  const [selectedLoginId, setSelectedLoginId] = useState("");
+  const [unitLogins, setUnitLogins] = useState<{ id: string; login: string }[]>([]);
 
   // Add driver by CPF modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -139,11 +138,10 @@ const QueuePanel = () => {
   const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
-    setLogin("");
-    setPassword("");
+    setSelectedLoginId("");
     setShowProgramModal(true);
     if (unitId) {
-      const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
+      const { data } = await supabase.from("unit_logins").select("id, login").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
       setUnitLogins(data ?? []);
 
       // Check which logins were used today
@@ -168,30 +166,20 @@ const QueuePanel = () => {
   const handleDefinir = async () => {
     if (!selectedEntry || !unitId) return;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const { count } = await supabase
-      .from("driver_rides")
-      .select("*", { count: "exact", head: true })
-      .eq("unit_id", unitId)
-      .gte("completed_at", today.toISOString());
+    const { data, error } = await supabase.functions.invoke("create-ride-with-login", {
+      body: {
+        driver_id: selectedEntry.driver_id,
+        unit_id: selectedEntry.unit_id,
+        queue_entry_id: selectedEntry.id,
+        route,
+        unit_login_id: selectedLoginId || null,
+      },
+    });
 
-    const sequenceNumber = (count ?? 0) + 1;
-
-    await supabase
-      .from("queue_entries")
-      .update({ status: "completed", called_at: new Date().toISOString(), completed_at: new Date().toISOString() })
-      .eq("id", selectedEntry.id);
-
-    await supabase.from("driver_rides").insert({
-      driver_id: selectedEntry.driver_id,
-      unit_id: selectedEntry.unit_id,
-      queue_entry_id: selectedEntry.id,
-      route,
-      login,
-      password,
-      sequence_number: sequenceNumber,
-    } as any);
+    if (error) {
+      console.error("Error creating ride:", error);
+      return;
+    }
 
     setShowProgramModal(false);
     fetchQueue();
@@ -414,30 +402,22 @@ const QueuePanel = () => {
             <div className="space-y-2">
               <Label htmlFor="login" className="font-semibold">Login</Label>
               {unitLogins.length > 0 ? (
-                <Select value={login} onValueChange={(val) => {
-                  setLogin(val);
-                  const found = unitLogins.find(l => l.login === val);
-                  if (found) setPassword(found.password);
-                }}>
+                <Select value={selectedLoginId} onValueChange={setSelectedLoginId}>
                   <SelectTrigger className="w-full"><SelectValue placeholder="Selecionar login..." /></SelectTrigger>
                   <SelectContent>
                     {unitLogins.map((l) => (
-                      <SelectItem key={l.id} value={l.login}>
+                      <SelectItem key={l.id} value={l.id}>
                         <span className="flex items-center gap-2">
                           {l.login}
-                          {usedLoginsToday.has(l.login) && <Check className="h-3.5 w-3.5 text-green-500" />}
+                          {usedLoginsToday.has(l.login) && <Check className="h-3.5 w-3.5 text-emerald-500" />}
                         </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               ) : (
-                <Input id="login" placeholder="Informe o login..." value={login} onChange={(e) => setLogin(e.target.value)} />
+                <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado. Cadastre em Configurações.</p>
               )}
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="font-semibold">Senha</Label>
-              <Input id="password" placeholder="Informe a senha..." value={password} onChange={(e) => setPassword(e.target.value)} readOnly={unitLogins.length > 0 && !!login} />
             </div>
             <Button onClick={handleDefinir} className="w-full font-bold italic">
               Definir

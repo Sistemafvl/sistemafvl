@@ -86,7 +86,7 @@ const SecurityPage = () => {
     { label: "Senhas não trafegam em listagens", status: "active", detail: "Frontend usa views públicas (drivers_public, managers_public, units_public) que excluem campos de senha." },
     { label: "Dados bancários via Edge Function", status: "active", detail: "Informações bancárias dos motoristas são carregadas sob demanda via get-driver-details com autenticação." },
     { label: "Documentos via Signed URLs", status: "active", detail: "Documentos sensíveis nunca têm URLs permanentes. Acesso temporário com validação de identidade." },
-    { label: "QueuePanel trafega senhas de unit_logins", status: "alert", detail: "Fluxo de programação de carregamento requer login/senha da unidade no frontend. Risco aceito com plano de migração futura para Edge Function." },
+    { label: "QueuePanel usa Edge Function server-side", status: "active", detail: "Login e senha são atribuídos ao carregamento via Edge Function create-ride-with-login, sem trafegar senhas no frontend." },
   ];
 
   const recommendations = [
