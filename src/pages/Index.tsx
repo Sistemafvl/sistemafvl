@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import LogoHeader from "@/components/LogoHeader";
 import AdminLoginModal from "@/components/AdminLoginModal";
 import UnitLoginForm from "@/components/UnitLoginForm";
@@ -7,8 +7,14 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Navigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Truck } from "lucide-react";
+import { useTheme } from "next-themes";
 
 const Index = () => {
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    setTheme("light");
+  }, [setTheme]);
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [showDriverModal, setShowDriverModal] = useState(false);
   const { isMasterAdmin, unitSession } = useAuthStore();

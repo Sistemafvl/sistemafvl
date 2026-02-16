@@ -1,12 +1,19 @@
+import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
 
 const DashboardLayout = () => {
   const { unitSession, managerSession } = useAuthStore();
-  
+  const { setTheme } = useTheme();
+
+  useEffect(() => {
+    const saved = localStorage.getItem("theme_unit") || "light";
+    setTheme(saved);
+  }, [setTheme]);
 
   if (!unitSession) return <Navigate to="/" replace />;
 

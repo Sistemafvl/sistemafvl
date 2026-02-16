@@ -9,6 +9,12 @@ const DriverSettings = () => {
   const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(() => localStorage.getItem("driver_notifications") !== "false");
 
+  const handleThemeChange = (dark: boolean) => {
+    const newTheme = dark ? "dark" : "light";
+    setTheme(newTheme);
+    localStorage.setItem("theme_driver", newTheme);
+  };
+
   const handleNotifications = (checked: boolean) => {
     setNotifications(checked);
     localStorage.setItem("driver_notifications", String(checked));
@@ -31,7 +37,7 @@ const DriverSettings = () => {
         <CardContent>
           <div className="flex items-center justify-between">
             <Label className="text-sm">Tema escuro</Label>
-            <Switch checked={theme === "dark"} onCheckedChange={(c) => setTheme(c ? "dark" : "light")} />
+            <Switch checked={theme === "dark"} onCheckedChange={handleThemeChange} />
           </div>
         </CardContent>
       </Card>
