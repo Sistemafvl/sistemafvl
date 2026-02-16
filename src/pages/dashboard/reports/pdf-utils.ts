@@ -28,13 +28,9 @@ export const generatePDFFromContainer = async (
   container: HTMLDivElement,
   fileName: string
 ) => {
-  container.style.position = "absolute";
-  container.style.left = "-9999px";
-  container.style.top = "0";
-  container.style.display = "block";
-  container.style.width = "1122px";
-
-  await new Promise((r) => setTimeout(r, 400));
+  // Container is already positioned off-screen by parent wrapper
+  // Just ensure it's visible and wait for layout
+  await new Promise((r) => setTimeout(r, 600));
 
   const pdf = new jsPDF("l", "mm", "a4");
   const pdfWidth = 297;
@@ -68,7 +64,6 @@ export const generatePDFFromContainer = async (
   }
 
   pdf.save(fileName);
-  container.style.display = "none";
 };
 
 export const formatCpf = (cpf: string) =>

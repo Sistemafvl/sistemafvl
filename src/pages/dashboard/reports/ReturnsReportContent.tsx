@@ -80,8 +80,8 @@ const ReturnsReportContent = forwardRef<HTMLDivElement, Props>(
               { label: "RTO", count: rtoEntries.length, bg: "#fce7f3" },
               { label: "Total", count: total, bg: COLORS.tealLight },
             ].map((m) => (
-              <div key={m.label} style={{ padding: "10px 18px", borderRadius: "6px", background: m.bg, textAlign: "center", minWidth: "100px", border: `1px solid ${COLORS.grayBorder}` }}>
-                <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark }}>{m.count}</div>
+              <div key={m.label} style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 18px", borderRadius: "6px", background: m.bg, textAlign: "center", minWidth: "100px", border: `1px solid ${COLORS.grayBorder}` }}>
+                <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark }}>{String(m.count)}</div>
                 <div style={{ fontSize: "10px", fontWeight: 600, color: COLORS.dark, textTransform: "uppercase" }}>{m.label}</div>
               </div>
             ))}
