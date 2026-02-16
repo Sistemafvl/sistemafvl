@@ -95,10 +95,12 @@ const MotoristasParceirosPage = () => {
     if (!viewDriver) { setBankData(null); setDriverDocs([]); return; }
     const fetchExtra = async () => {
       const [bankRes, docsRes] = await Promise.all([
-        supabase.from("drivers").select("bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type").eq("id", viewDriver.id).maybeSingle(),
+        supabase.functions.invoke("get-driver-details", {
+          body: { driver_id: viewDriver.id },
+        }),
         supabase.from("driver_documents").select("id, doc_type, file_url, file_name").eq("driver_id", viewDriver.id),
       ]);
-      setBankData((bankRes.data as any) ?? null);
+      setBankData(bankRes.data ?? null);
       setDriverDocs((docsRes.data as any) ?? []);
     };
     fetchExtra();
@@ -150,7 +152,12 @@ const MotoristasParceirosPage = () => {
 
       for (const doc of driverDocs) {
         try {
-          const res = await fetch(doc.file_url);
+          // Get signed URL for private bucket
+          const { data: signedData } = await supabase.functions.invoke("get-signed-url", {
+            body: { path: doc.file_url, bucket: "driver-documents" },
+          });
+          if (!signedData?.signedUrl) continue;
+          const res = await fetch(signedData.signedUrl);
           const blob = await res.blob();
           const ext = doc.file_name.split(".").pop() || "pdf";
           zip.file(`${DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}.${ext}`, blob);
