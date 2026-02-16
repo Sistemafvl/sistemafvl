@@ -213,7 +213,7 @@ const DashboardSidebar = () => {
             </DialogTitle>
             <DialogDescription>Entre com suas credenciais de gerente.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
+          <form onSubmit={(e) => { e.preventDefault(); handleManagerLogin(); }} className="space-y-3">
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">CNPJ</Label>
               <Input
@@ -242,10 +242,10 @@ const DashboardSidebar = () => {
                 </button>
               </div>
             </div>
-            <Button className="w-full" onClick={handleManagerLogin} disabled={loading}>
+            <Button className="w-full" type="submit" disabled={loading}>
               {loading ? "Entrando..." : "Entrar"}
             </Button>
-          </div>
+          </form>
         </DialogContent>
       </Dialog>
 

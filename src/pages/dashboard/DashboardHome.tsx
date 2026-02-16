@@ -1,12 +1,17 @@
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock, Search, Loader2, X, Star, MessageSquare } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 
@@ -36,6 +41,8 @@ const DashboardHome = () => {
   const { unitSession } = useAuthStore();
   const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
+  const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
+  const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
   const [tbrSearch, setTbrSearch] = useState("");
   const [feedbackAvg, setFeedbackAvg] = useState(0);
   const [feedbackTotal, setFeedbackTotal] = useState(0);
@@ -216,9 +223,40 @@ const DashboardHome = () => {
         </CardContent>
       </Card>
 
+      {/* Filtro de período */}
+      <div className="flex flex-wrap items-center gap-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("w-[160px] justify-start text-left font-normal text-sm", !filterStart && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {filterStart ? format(filterStart, "dd/MM/yyyy") : "Data início"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterStart} onSelect={setFilterStart} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className={cn("w-[160px] justify-start text-left font-normal text-sm", !filterEnd && "text-muted-foreground")}>
+              <CalendarIcon className="mr-2 h-4 w-4" />
+              {filterEnd ? format(filterEnd, "dd/MM/yyyy") : "Data fim"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterEnd} onSelect={setFilterEnd} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        {(filterStart || filterEnd) && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStart(undefined); setFilterEnd(undefined); }}>
+            <X className="h-4 w-4 mr-1" /> Limpar
+          </Button>
+        )}
+      </div>
+
       {/* Métricas e Gráficos BI */}
-      <DashboardMetrics unitId={unitSession.id} />
-      <DashboardInsights unitId={unitSession.id} />
+      <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
+      <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
 
       {showTbrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
