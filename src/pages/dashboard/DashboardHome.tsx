@@ -119,8 +119,8 @@ const DashboardHome = () => {
         ride.conferente_id
           ? supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle()
           : Promise.resolve({ data: null }),
-        supabase.from("ps_entries").select("description, status").eq("tbr_code", code).eq("status", "open").maybeSingle(),
-        supabase.from("rto_entries").select("description, status").eq("tbr_code", code).eq("status", "open").maybeSingle(),
+        supabase.from("ps_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("rto_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
 
       setTbrResult({
@@ -139,8 +139,8 @@ const DashboardHome = () => {
         car_model: driverRes.data?.car_model ?? null,
         car_plate: driverRes.data?.car_plate ?? null,
         car_color: driverRes.data?.car_color ?? null,
-        ps_status: psRes.data ? { open: true, description: psRes.data.description } : null,
-        rto_status: rtoRes.data ? { open: true, description: rtoRes.data.description } : null,
+        ps_status: psRes.data ? { open: psRes.data.status === "open", description: psRes.data.description } : null,
+        rto_status: rtoRes.data ? { open: rtoRes.data.status === "open", description: rtoRes.data.description } : null,
       });
       setTbrLoading(false);
     }
@@ -248,21 +248,33 @@ const DashboardHome = () => {
                 <p className="text-sm text-muted-foreground italic text-center py-4">TBR não encontrado.</p>
               ) : tbrResult ? (
                 <div className="space-y-3 text-sm">
-                  {/* Badges PS / RTO */}
-                  {(tbrResult.ps_status || tbrResult.rto_status) && (
-                    <div className="flex flex-wrap gap-2">
-                      {tbrResult.ps_status && (
-                        <Badge variant="destructive" className="text-xs">
-                          PS Aberto — {tbrResult.ps_status.description}
-                        </Badge>
-                      )}
-                      {tbrResult.rto_status && (
-                        <Badge className="bg-orange-600 text-white text-xs">
-                          RTO Aberto — {tbrResult.rto_status.description}
-                        </Badge>
-                      )}
-                    </div>
-                  )}
+                   {/* Badges PS / RTO */}
+                   {(tbrResult.ps_status || tbrResult.rto_status) && (
+                     <div className="flex flex-wrap gap-2">
+                       {tbrResult.ps_status && (
+                         tbrResult.ps_status.open ? (
+                           <Badge variant="destructive" className="text-xs">
+                             PS Aberto — {tbrResult.ps_status.description}
+                           </Badge>
+                         ) : (
+                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
+                             PS Finalizado — {tbrResult.ps_status.description}
+                           </Badge>
+                         )
+                       )}
+                       {tbrResult.rto_status && (
+                         tbrResult.rto_status.open ? (
+                           <Badge className="bg-orange-600 text-white text-xs">
+                             RTO Aberto — {tbrResult.rto_status.description}
+                           </Badge>
+                         ) : (
+                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
+                             RTO Finalizado — {tbrResult.rto_status.description}
+                           </Badge>
+                         )
+                       )}
+                     </div>
+                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
                     <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>

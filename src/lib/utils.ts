@@ -4,3 +4,45 @@ import { twMerge } from "tailwind-merge";
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/** Get current date in Brazil timezone (America/Sao_Paulo) */
+export function getBrazilNow(): Date {
+  const now = new Date();
+  const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  return new Date(brStr);
+}
+
+/** Get today's date string in yyyy-MM-dd format in Brazil timezone */
+export function getBrazilTodayStr(): string {
+  const br = getBrazilNow();
+  const yyyy = br.getFullYear();
+  const mm = String(br.getMonth() + 1).padStart(2, "0");
+  const dd = String(br.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Get start and end of a given date (yyyy-MM-dd) in Brazil timezone as ISO strings (UTC) */
+export function getBrazilDayRange(dateStr?: string): { start: string; end: string } {
+  const br = dateStr ?? getBrazilTodayStr();
+  return {
+    start: `${br}T03:00:00.000Z`,
+    end: new Date(new Date(`${br}T03:00:00.000Z`).getTime() + 86400000 - 1).toISOString(),
+  };
+}
+
+/** Format an ISO date to dd/MM/yyyy in Brazil timezone */
+export function formatDateBR(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Get yyyy-MM-dd for an ISO date in Brazil timezone */
+export function toBrazilDateStr(iso: string): string {
+  const d = new Date(iso);
+  const brStr = d.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+  const br = new Date(brStr);
+  const yyyy = br.getFullYear();
+  const mm = String(br.getMonth() + 1).padStart(2, "0");
+  const dd = String(br.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}

@@ -5,13 +5,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Truck, Eye, Search } from "lucide-react";
+import { Truck, Eye, Search, Download, Loader2 } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { toast } from "@/hooks/use-toast";
 
 interface DriverWithStats {
   id: string;
@@ -34,6 +35,22 @@ interface DriverWithStats {
   returned: number;
 }
 
+interface BankData {
+  bank_name: string | null;
+  bank_agency: string | null;
+  bank_account: string | null;
+  pix_key: string | null;
+  pix_key_name: string | null;
+  pix_key_type: string | null;
+}
+
+interface DriverDoc {
+  id: string;
+  doc_type: string;
+  file_url: string;
+  file_name: string;
+}
+
 const maskCPF = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 3) return d;
@@ -51,34 +68,52 @@ const maskWhatsApp = (v: string) => {
   return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
 
+const PIX_TYPE_LABELS: Record<string, string> = {
+  cpf: "CPF", cnpj: "CNPJ", email: "E-mail", telefone: "Telefone", aleatoria: "Chave Aleatória",
+};
+
+const DOC_TYPE_LABELS: Record<string, string> = {
+  cnh: "CNH", crlv: "CRLV", comprovante_endereco: "Comprovante de Endereço",
+};
+
 const MotoristasParceirosPage = () => {
   const { unitSession } = useAuthStore();
   const [drivers, setDrivers] = useState<DriverWithStats[]>([]);
   const [search, setSearch] = useState("");
   const [viewDriver, setViewDriver] = useState<DriverWithStats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bankData, setBankData] = useState<BankData | null>(null);
+  const [driverDocs, setDriverDocs] = useState<DriverDoc[]>([]);
+  const [downloadingZip, setDownloadingZip] = useState(false);
 
   useEffect(() => {
     if (unitSession) loadDrivers();
   }, [unitSession]);
 
+  // Load bank data and docs when viewing a driver
+  useEffect(() => {
+    if (!viewDriver) { setBankData(null); setDriverDocs([]); return; }
+    const fetchExtra = async () => {
+      const [bankRes, docsRes] = await Promise.all([
+        supabase.from("drivers").select("bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type").eq("id", viewDriver.id).maybeSingle(),
+        supabase.from("driver_documents").select("id, doc_type, file_url, file_name").eq("driver_id", viewDriver.id),
+      ]);
+      setBankData((bankRes.data as any) ?? null);
+      setDriverDocs((docsRes.data as any) ?? []);
+    };
+    fetchExtra();
+  }, [viewDriver?.id]);
+
   const loadDrivers = async () => {
     if (!unitSession) return;
     setLoading(true);
-
-    // Get all rides for this unit
     const { data: rides } = await supabase
       .from("driver_rides")
       .select("driver_id, loading_status")
       .eq("unit_id", unitSession.id);
 
-    if (!rides || rides.length === 0) {
-      setDrivers([]);
-      setLoading(false);
-      return;
-    }
+    if (!rides || rides.length === 0) { setDrivers([]); setLoading(false); return; }
 
-    // Aggregate stats per driver
     const statsMap: Record<string, { total: number; finished: number; returned: number }> = {};
     rides.forEach((r) => {
       if (!statsMap[r.driver_id]) statsMap[r.driver_id] = { total: 0, finished: 0, returned: 0 };
@@ -88,11 +123,7 @@ const MotoristasParceirosPage = () => {
     });
 
     const driverIds = Object.keys(statsMap);
-    const { data: driversData } = await supabase
-      .from("drivers")
-      .select("*")
-      .in("id", driverIds)
-      .order("name");
+    const { data: driversData } = await supabase.from("drivers").select("*").in("id", driverIds).order("name");
 
     if (driversData) {
       setDrivers(
@@ -107,12 +138,49 @@ const MotoristasParceirosPage = () => {
     setLoading(false);
   };
 
+  const handleDownloadZip = async () => {
+    if (driverDocs.length === 0) {
+      toast({ title: "Sem documentos", description: "Este motorista não possui documentos enviados.", variant: "destructive" });
+      return;
+    }
+    setDownloadingZip(true);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const zip = new JSZip();
+
+      for (const doc of driverDocs) {
+        try {
+          const res = await fetch(doc.file_url);
+          const blob = await res.blob();
+          const ext = doc.file_name.split(".").pop() || "pdf";
+          zip.file(`${DOC_TYPE_LABELS[doc.doc_type] || doc.doc_type}.${ext}`, blob);
+        } catch {
+          // skip failed downloads
+        }
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const url = URL.createObjectURL(content);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `documentos_${viewDriver?.name?.replace(/\s+/g, "_") ?? "motorista"}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Download concluído!" });
+    } catch {
+      toast({ title: "Erro ao gerar ZIP", variant: "destructive" });
+    }
+    setDownloadingZip(false);
+  };
+
   const filtered = drivers.filter(
     (d) =>
       d.name.toLowerCase().includes(search.toLowerCase()) ||
       d.cpf.includes(search.replace(/\D/g, "")) ||
       d.car_plate.toLowerCase().includes(search.toLowerCase())
   );
+
+  const hasBankData = bankData && (bankData.bank_name || bankData.pix_key);
 
   return (
     <div className="space-y-4">
@@ -181,7 +249,7 @@ const MotoristasParceirosPage = () => {
       </Card>
 
       <Dialog open={!!viewDriver} onOpenChange={(open) => !open && setViewDriver(null)}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
               <Truck className="h-5 w-5 text-primary" /> Dados do Motorista
@@ -211,12 +279,39 @@ const MotoristasParceirosPage = () => {
                   {viewDriver.cep && ` - CEP: ${viewDriver.cep}`}
                 </div>
               )}
+
+              {/* Bank Data */}
+              {hasBankData && (
+                <div className="pt-2 border-t space-y-1">
+                  <p className="font-bold text-xs uppercase text-muted-foreground">Dados Bancários</p>
+                  <div className="grid grid-cols-2 gap-1 text-xs">
+                    {bankData.bank_name && <div><span className="text-muted-foreground">Banco:</span> {bankData.bank_name}</div>}
+                    {bankData.bank_agency && <div><span className="text-muted-foreground">Agência:</span> {bankData.bank_agency}</div>}
+                    {bankData.bank_account && <div><span className="text-muted-foreground">Conta:</span> {bankData.bank_account}</div>}
+                    {bankData.pix_key_type && <div><span className="text-muted-foreground">Tipo Pix:</span> {PIX_TYPE_LABELS[bankData.pix_key_type] ?? bankData.pix_key_type}</div>}
+                    {bankData.pix_key && <div><span className="text-muted-foreground">Chave Pix:</span> {bankData.pix_key}</div>}
+                    {bankData.pix_key_name && <div><span className="text-muted-foreground">Titular:</span> {bankData.pix_key_name}</div>}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-3 gap-2 pt-2 border-t">
                 <div className="text-center"><span className="text-xs text-muted-foreground block">Corridas</span><span className="font-bold">{viewDriver.totalRides}</span></div>
                 <div className="text-center"><span className="text-xs text-muted-foreground block">Entregues</span><span className="font-bold text-green-600">{viewDriver.finished}</span></div>
                 <div className="text-center"><span className="text-xs text-muted-foreground block">Devolvidos</span><span className="font-bold text-orange-500">{viewDriver.returned}</span></div>
               </div>
               <div><span className="font-semibold text-muted-foreground">Cadastrado em:</span> {new Date(viewDriver.created_at).toLocaleString("pt-BR")}</div>
+
+              {/* Download Documents */}
+              <Button
+                variant="outline"
+                className="w-full mt-2"
+                onClick={handleDownloadZip}
+                disabled={downloadingZip || driverDocs.length === 0}
+              >
+                {downloadingZip ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+                {driverDocs.length > 0 ? `Baixar Documentos (${driverDocs.length})` : "Sem documentos"}
+              </Button>
             </div>
           )}
         </DialogContent>

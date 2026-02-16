@@ -237,9 +237,8 @@ const RTOPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="font-bold">TBR</TableHead>
-                    <TableHead className="font-bold">Motorista</TableHead>
-                    <TableHead className="font-bold">Rota</TableHead>
+                     <TableHead className="font-bold">TBR</TableHead>
+                     <TableHead className="font-bold">Rota</TableHead>
                     <TableHead className="font-bold">CEP</TableHead>
                     <TableHead className="font-bold">Conferente</TableHead>
                     <TableHead className="font-bold">Problema</TableHead>
@@ -251,8 +250,7 @@ const RTOPage = () => {
                   {entries.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
-                      <TableCell>{e.driver_name ?? "-"}</TableCell>
-                      <TableCell>{e.route ?? "-"}</TableCell>
+                       <TableCell>{e.route ?? "-"}</TableCell>
                       <TableCell className="font-mono text-xs">{e.cep ?? "-"}</TableCell>
                       <TableCell>{e.conferente_name ?? "-"}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{e.description}</TableCell>

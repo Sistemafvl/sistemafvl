@@ -20,6 +20,7 @@ import DriverRides from "./pages/driver/DriverRides";
 import DriverProfile from "./pages/driver/DriverProfile";
 import DriverReviews from "./pages/driver/DriverReviews";
 import DriverSettings from "./pages/driver/DriverSettings";
+import DriverDocuments from "./pages/driver/DriverDocuments";
 import AdminLayout from "./components/admin/AdminLayout";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="fila" element={<DriverQueue />} />
             <Route path="corridas" element={<DriverRides />} />
             <Route path="perfil" element={<DriverProfile />} />
+            <Route path="documentos" element={<DriverDocuments />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />
           </Route>

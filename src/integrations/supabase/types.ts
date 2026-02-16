@@ -35,6 +35,41 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_documents: {
+        Row: {
+          created_at: string
+          doc_type: string
+          driver_id: string
+          file_name: string
+          file_url: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          doc_type: string
+          driver_id: string
+          file_name: string
+          file_url: string
+          id?: string
+        }
+        Update: {
+          created_at?: string
+          doc_type?: string
+          driver_id?: string
+          file_name?: string
+          file_url?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_documents_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_rides: {
         Row: {
           completed_at: string
@@ -120,6 +155,9 @@ export type Database = {
           active: boolean
           address: string | null
           avatar_url: string | null
+          bank_account: string | null
+          bank_agency: string | null
+          bank_name: string | null
           bio: string | null
           car_color: string | null
           car_model: string
@@ -133,6 +171,9 @@ export type Database = {
           name: string
           neighborhood: string | null
           password: string
+          pix_key: string | null
+          pix_key_name: string | null
+          pix_key_type: string | null
           state: string | null
           whatsapp: string | null
         }
@@ -140,6 +181,9 @@ export type Database = {
           active?: boolean
           address?: string | null
           avatar_url?: string | null
+          bank_account?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
           bio?: string | null
           car_color?: string | null
           car_model: string
@@ -153,6 +197,9 @@ export type Database = {
           name: string
           neighborhood?: string | null
           password: string
+          pix_key?: string | null
+          pix_key_name?: string | null
+          pix_key_type?: string | null
           state?: string | null
           whatsapp?: string | null
         }
@@ -160,6 +207,9 @@ export type Database = {
           active?: boolean
           address?: string | null
           avatar_url?: string | null
+          bank_account?: string | null
+          bank_agency?: string | null
+          bank_name?: string | null
           bio?: string | null
           car_color?: string | null
           car_model?: string
@@ -173,6 +223,9 @@ export type Database = {
           name?: string
           neighborhood?: string | null
           password?: string
+          pix_key?: string | null
+          pix_key_name?: string | null
+          pix_key_type?: string | null
           state?: string | null
           whatsapp?: string | null
         }
