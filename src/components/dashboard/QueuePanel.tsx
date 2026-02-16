@@ -9,7 +9,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -121,6 +121,14 @@ const QueuePanel = () => {
     await supabase
       .from("queue_entries")
       .update({ status: "approved" })
+      .eq("id", entry.id);
+    fetchQueue();
+  };
+
+  const handleReject = async (entry: QueueEntry) => {
+    await supabase
+      .from("queue_entries")
+      .update({ status: "rejected", completed_at: new Date().toISOString() })
       .eq("id", entry.id);
     fetchQueue();
   };
@@ -316,15 +324,26 @@ const QueuePanel = () => {
                     </p>
                   </div>
                   {entry.status === "waiting" ? (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="shrink-0 font-bold italic text-xs h-7 px-2"
-                      onClick={() => handleApprove(entry)}
-                    >
-                      <Check className="h-3 w-3 mr-1" />
-                      Aprovar
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button
+                        size="sm"
+                        variant="default"
+                        className="shrink-0 font-bold italic text-xs h-7 px-2"
+                        onClick={() => handleApprove(entry)}
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Aprovar
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="shrink-0 h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => handleReject(entry)}
+                        title="Recusar"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ) : (
                     <Button
                       size="sm"
