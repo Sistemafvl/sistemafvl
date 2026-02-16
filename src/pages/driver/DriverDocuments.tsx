@@ -72,6 +72,18 @@ const DriverDocuments = () => {
     fetchData();
   }, [driverId]);
 
+  const getSignedUrl = async (path: string): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase.functions.invoke("get-signed-url", {
+        body: { path, bucket: "driver-documents" },
+      });
+      if (error || !data?.signedUrl) return null;
+      return data.signedUrl;
+    } catch {
+      return null;
+    }
+  };
+
   const handleUpload = async (docType: string, file: File) => {
     if (!driverId) return;
     if (file.size > 5 * 1024 * 1024) {
@@ -91,7 +103,9 @@ const DriverDocuments = () => {
       setUploading(null);
       return;
     }
-    const { data: urlData } = supabase.storage.from("driver-documents").getPublicUrl(path);
+
+    // Store the storage path (not public URL since bucket is now private)
+    const fileUrl = path;
 
     // Delete previous doc of same type
     const existing = docs.find((d) => d.doc_type === docType);
@@ -102,7 +116,7 @@ const DriverDocuments = () => {
     await supabase.from("driver_documents").insert({
       driver_id: driverId,
       doc_type: docType,
-      file_url: urlData.publicUrl,
+      file_url: fileUrl,
       file_name: file.name,
     } as any);
 
@@ -165,9 +179,16 @@ const DriverDocuments = () => {
                   {existing ? (
                     <div className="flex items-center gap-2 mt-1">
                       <Check className="h-3.5 w-3.5 text-green-500" />
-                      <a href={existing.file_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline truncate">
+                      <button
+                        onClick={async () => {
+                          const url = await getSignedUrl(existing.file_url);
+                          if (url) window.open(url, "_blank");
+                          else toast({ title: "Erro ao abrir documento", variant: "destructive" });
+                        }}
+                        className="text-xs text-primary underline truncate cursor-pointer bg-transparent border-none p-0"
+                      >
                         {existing.file_name}
-                      </a>
+                      </button>
                       <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive" onClick={() => handleDeleteDoc(existing)}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
