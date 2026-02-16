@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.get-manager-details]
 verify_jwt = false
+
+[functions.create-ride-with-login]
+verify_jwt = false
