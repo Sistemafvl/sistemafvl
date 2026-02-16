@@ -837,6 +837,9 @@ const ConferenciaCarregamentoPage = () => {
                         </Badge>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          {isFinished && (
+                            <CheckCircle className="h-5 w-5 text-green-600" />
+                          )}
                           <button
                             onClick={() => handleOpenDriverModal(ride.driver_id)}
                             className="h-7 w-7 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors"

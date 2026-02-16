@@ -13,6 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -34,6 +35,7 @@ interface TbrTrackInfo {
   car_color: string | null;
   loading_status: string | null;
   completed_at: string;
+  trip_number: number;
 }
 
 interface PisoEntry {
@@ -108,7 +110,7 @@ const RetornoPisoPage = () => {
 
     const { data: tbrRows } = await supabase
       .from("ride_tbrs")
-      .select("ride_id")
+      .select("ride_id, trip_number")
       .eq("code", code)
       .order("scanned_at", { ascending: false })
       .limit(1);
@@ -155,6 +157,7 @@ const RetornoPisoPage = () => {
       car_color: driverRes.data?.car_color ?? null,
       loading_status: ride.loading_status,
       completed_at: ride.completed_at,
+      trip_number: tbrData?.trip_number ?? 1,
     });
     setModalOpen(true);
     setSearching(false);
@@ -344,7 +347,19 @@ const RetornoPisoPage = () => {
             <button onClick={() => setModalOpen(false)} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
               <X className="h-4 w-4" />
             </button>
-            <h2 className="text-lg font-bold italic mb-1">Retorno Piso — {tbrCode}</h2>
+            <div className="flex items-center justify-between pr-8">
+              <h2 className="text-lg font-bold italic mb-1">Retorno Piso — {tbrCode}</h2>
+              {trackInfo && trackInfo.trip_number >= 2 && (
+                <Badge className={cn(
+                  "text-xs font-bold",
+                  trackInfo.trip_number === 2 && "bg-purple-500 hover:bg-purple-600",
+                  trackInfo.trip_number === 3 && "bg-orange-500 hover:bg-orange-600",
+                  trackInfo.trip_number >= 4 && "bg-red-500 hover:bg-red-600",
+                )}>
+                  {trackInfo.trip_number >= 4 ? "4ª+ tentativa" : `${trackInfo.trip_number}ª tentativa`}
+                </Badge>
+              )}
+            </div>
 
             {trackInfo ? (
               <div className="space-y-3 text-sm mt-3">

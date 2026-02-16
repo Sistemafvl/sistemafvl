@@ -220,7 +220,7 @@ const FeedbacksPage = () => {
                         <p className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2">{driver.bio}</p>
                       )}
 
-                      {rev.comment && <p className="text-xs text-muted-foreground italic">{rev.comment}</p>}
+                      {rev.comment && <p className="text-xs text-muted-foreground italic">"{rev.comment}"</p>}
                     </div>
                   );
                 })

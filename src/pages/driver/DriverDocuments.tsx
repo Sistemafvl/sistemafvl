@@ -21,6 +21,9 @@ const DOC_TYPES = [
   { value: "cnh", label: "CNH" },
   { value: "crlv", label: "CRLV" },
   { value: "comprovante_endereco", label: "Comprovante de Endereço" },
+  { value: "outros_1", label: "Outros 1" },
+  { value: "outros_2", label: "Outros 2" },
+  { value: "outros_3", label: "Outros 3" },
 ];
 
 const PIX_TYPES = [
