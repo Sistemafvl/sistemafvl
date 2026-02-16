@@ -28,13 +28,13 @@ const DomainsUnitsPage = () => {
   
 
   const fetchDomains = async () => {
-    const { data } = await supabase.from("domains").select("*").order("name");
+    const { data } = await supabase.from("domains").select("id, name, active").order("name");
     if (data) setDomains(data);
   };
 
   const fetchUnits = async (domainId: string) => {
-    const { data } = await supabase.from("units").select("*").eq("domain_id", domainId).order("name");
-    if (data) setUnits(data);
+    const { data } = await supabase.from("units_public").select("id, domain_id, name, active").eq("domain_id", domainId).order("name");
+    if (data) setUnits(data as any);
   };
 
   useEffect(() => { fetchDomains(); }, []);

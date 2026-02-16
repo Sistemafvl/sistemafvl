@@ -82,7 +82,7 @@ const OperacaoPage = () => {
     const rideIds = rides.map((r) => r.id);
 
     const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes] = await Promise.all([
-      supabase.from("drivers").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
+      supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),

@@ -154,7 +154,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     rides.forEach(r => { driverCount[r.driver_id] = (driverCount[r.driver_id] || 0) + 1; });
     const sorted = Object.entries(driverCount).sort((a, b) => b[1] - a[1]);
     const topIds = sorted.slice(0, 50).map(([id]) => id);
-    const { data: drivers } = await supabase.from("drivers").select("id, name").in("id", topIds);
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", topIds);
     const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
     setTopDrivers(sorted.map(([id, count]) => ({ name: driverMap.get(id) ?? "Desconhecido", count })));
     setDriverPage(0);

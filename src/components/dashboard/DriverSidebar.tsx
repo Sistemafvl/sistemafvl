@@ -44,7 +44,7 @@ const DriverSidebar = () => {
 
   useEffect(() => {
     if (!driverId) return;
-    supabase.from("drivers").select("avatar_url").eq("id", driverId).single()
+    supabase.from("drivers_public").select("avatar_url").eq("id", driverId).single()
       .then(({ data }) => {
         if (data && (data as any).avatar_url) setAvatarUrl((data as any).avatar_url);
       });

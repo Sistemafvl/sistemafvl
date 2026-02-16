@@ -35,7 +35,6 @@ interface Driver {
   city: string | null;
   state: string | null;
   cep: string | null;
-  password: string;
   active: boolean;
   created_at: string;
 }
@@ -58,6 +57,8 @@ const AdminDriversPage = () => {
   const [loading, setLoading] = useState(true);
 
   const [viewDriver, setViewDriver] = useState<Driver | null>(null);
+  const [viewPassword, setViewPassword] = useState<string | null>(null);
+  const [viewPasswordLoading, setViewPasswordLoading] = useState(false);
   const [editDriver, setEditDriver] = useState<Driver | null>(null);
   const [deleteDriver, setDeleteDriver] = useState<Driver | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -75,7 +76,8 @@ const AdminDriversPage = () => {
     const from = page * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    let query = supabase.from("drivers").select("*", { count: "exact" });
+    const selectFields = "id, name, cpf, car_plate, car_model, car_color, email, whatsapp, address, neighborhood, city, state, cep, active, created_at";
+    let query = supabase.from("drivers_public").select(selectFields, { count: "exact" });
 
     if (search.trim()) {
       const s = search.trim();
@@ -98,6 +100,17 @@ const AdminDriversPage = () => {
   useEffect(() => { setPage(0); }, [search]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  const openView = async (d: Driver) => {
+    setViewDriver(d);
+    setViewPassword(null);
+    setViewPasswordLoading(true);
+    const { data } = await supabase.functions.invoke("get-driver-details", {
+      body: { driver_id: d.id, include_password: true },
+    });
+    setViewPassword(data?.password ?? null);
+    setViewPasswordLoading(false);
+  };
 
   const openEdit = (d: Driver) => {
     setEditDriver(d);
@@ -215,7 +228,7 @@ const AdminDriversPage = () => {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-center gap-1">
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewDriver(d)} title="Ver info">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openView(d)} title="Ver info">
                             <Eye className="h-4 w-4" />
                           </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(d)} title="Editar">
@@ -251,7 +264,7 @@ const AdminDriversPage = () => {
       </Card>
 
       {/* View Modal */}
-      <Dialog open={!!viewDriver} onOpenChange={(open) => !open && setViewDriver(null)}>
+      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setViewPassword(null); } }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
@@ -272,6 +285,10 @@ const AdminDriversPage = () => {
               {viewDriver.neighborhood && <div><span className="font-semibold text-muted-foreground">Bairro:</span> {viewDriver.neighborhood}</div>}
               {viewDriver.city && <div><span className="font-semibold text-muted-foreground">Cidade:</span> {viewDriver.city}{viewDriver.state ? ` - ${viewDriver.state}` : ""}</div>}
               {viewDriver.cep && <div><span className="font-semibold text-muted-foreground">CEP:</span> {viewDriver.cep}</div>}
+              <div>
+                <span className="font-semibold text-muted-foreground">Senha:</span>{" "}
+                {viewPasswordLoading ? <Loader2 className="inline h-3 w-3 animate-spin" /> : viewPassword ?? "—"}
+              </div>
               <div><span className="font-semibold text-muted-foreground">Status:</span>{" "}
                 <Badge variant={viewDriver.active ? "default" : "secondary"}>{viewDriver.active ? "Ativo" : "Inativo"}</Badge>
               </div>

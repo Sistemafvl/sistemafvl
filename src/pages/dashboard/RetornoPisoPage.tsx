@@ -138,7 +138,7 @@ const RetornoPisoPage = () => {
     }
 
     const [driverRes, confRes] = await Promise.all([
-      supabase.from("drivers").select("name, car_model, car_plate, car_color").eq("id", ride.driver_id).maybeSingle(),
+      supabase.from("drivers_public").select("name, car_model, car_plate, car_color").eq("id", ride.driver_id).maybeSingle(),
       ride.conferente_id
         ? supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle()
         : Promise.resolve({ data: null }),

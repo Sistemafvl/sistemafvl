@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog } from "lucide-react";
+import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog, Loader2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -18,7 +18,7 @@ import {
 
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; }
-interface Manager { id: string; name: string; cnpj: string; password: string; manager_password: string | null; active: boolean; unit_id: string; created_at: string; }
+interface ManagerPublic { id: string; name: string; cnpj: string; active: boolean; unit_id: string; created_at: string; }
 
 const formatCnpj = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -32,15 +32,17 @@ const formatCnpj = (v: string) => {
 const ManagersPage = () => {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
-  const [managers, setManagers] = useState<Manager[]>([]);
+  const [managers, setManagers] = useState<ManagerPublic[]>([]);
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
   const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
   // Modal states
-  const [viewManager, setViewManager] = useState<Manager | null>(null);
-  const [editManager, setEditManager] = useState<Manager | null>(null);
+  const [viewManager, setViewManager] = useState<ManagerPublic | null>(null);
+  const [viewPasswords, setViewPasswords] = useState<{ password: string; manager_password: string | null } | null>(null);
+  const [viewPasswordsLoading, setViewPasswordsLoading] = useState(false);
+  const [editManager, setEditManager] = useState<ManagerPublic | null>(null);
   const [editForm, setEditForm] = useState({ name: "", cnpj: "", password: "" });
-  const [credManager, setCredManager] = useState<Manager | null>(null);
+  const [credManager, setCredManager] = useState<ManagerPublic | null>(null);
   const [credForm, setCredForm] = useState({ cnpj: "", manager_password: "" });
 
   useEffect(() => {
@@ -51,8 +53,8 @@ const ManagersPage = () => {
 
   useEffect(() => {
     if (!selectedDomain) { setUnits([]); setSelectedUnit(""); return; }
-    supabase.from("units").select("id, name").eq("domain_id", selectedDomain).eq("active", true).order("name").then(({ data }) => {
-      if (data) setUnits(data);
+    supabase.from("units_public").select("id, name").eq("domain_id", selectedDomain).eq("active", true).order("name").then(({ data }) => {
+      if (data) setUnits(data as any);
     });
   }, [selectedDomain]);
 
@@ -63,8 +65,8 @@ const ManagersPage = () => {
 
   const refreshManagers = () => {
     if (!selectedUnit) return;
-    supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => {
-      if (data) setManagers(data);
+    supabase.from("managers_public").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => {
+      if (data) setManagers(data as any);
     });
   };
 
@@ -94,29 +96,43 @@ const ManagersPage = () => {
     refreshManagers();
   };
 
-  const openEdit = (m: Manager) => {
+  const openView = async (m: ManagerPublic) => {
+    setViewManager(m);
+    setViewPasswords(null);
+    setViewPasswordsLoading(true);
+    const { data } = await supabase.functions.invoke("get-manager-details", {
+      body: { manager_id: m.id },
+    });
+    setViewPasswords(data ?? null);
+    setViewPasswordsLoading(false);
+  };
+
+  const openEdit = (m: ManagerPublic) => {
     setEditManager(m);
-    setEditForm({ name: m.name, cnpj: formatCnpj(m.cnpj), password: m.password });
+    setEditForm({ name: m.name, cnpj: formatCnpj(m.cnpj), password: "" });
   };
 
   const saveEdit = async () => {
     if (!editManager) return;
     const cleanCnpj = editForm.cnpj.replace(/\D/g, "");
-    if (!editForm.name.trim() || cleanCnpj.length !== 14 || !editForm.password) return;
-    const { error } = await supabase.from("managers").update({
+    if (!editForm.name.trim() || cleanCnpj.length !== 14) return;
+    const updates: any = {
       name: editForm.name.trim().toUpperCase(),
       cnpj: cleanCnpj,
-      password: editForm.password,
-    }).eq("id", editManager.id);
+    };
+    if (editForm.password.trim()) {
+      updates.password = editForm.password.trim();
+    }
+    const { error } = await supabase.from("managers").update(updates).eq("id", editManager.id);
     if (!error) {
       setEditManager(null);
       refreshManagers();
     }
   };
 
-  const openCred = (m: Manager) => {
+  const openCred = (m: ManagerPublic) => {
     setCredManager(m);
-    setCredForm({ cnpj: formatCnpj(m.cnpj), manager_password: (m as any).manager_password || "" });
+    setCredForm({ cnpj: formatCnpj(m.cnpj), manager_password: "" });
   };
 
   const saveCred = async () => {
@@ -215,7 +231,7 @@ const ManagersPage = () => {
                       <p className="text-xs text-muted-foreground">{formatCnpj(m.cnpj)}</p>
                     </div>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewManager(m)}>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openView(m)}>
                         <Eye className="h-3.5 w-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(m)}>
@@ -245,7 +261,7 @@ const ManagersPage = () => {
       </Card>
 
       {/* Modal Visualizar */}
-      <Dialog open={!!viewManager} onOpenChange={(open) => !open && setViewManager(null)}>
+      <Dialog open={!!viewManager} onOpenChange={(open) => { if (!open) { setViewManager(null); setViewPasswords(null); } }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
@@ -257,8 +273,14 @@ const ManagersPage = () => {
             <div className="space-y-3 text-sm">
               <div><span className="font-semibold text-muted-foreground">Nome:</span> <span className="font-bold">{viewManager.name}</span></div>
               <div><span className="font-semibold text-muted-foreground">CNPJ:</span> {formatCnpj(viewManager.cnpj)}</div>
-              <div><span className="font-semibold text-muted-foreground">Senha de Acesso:</span> {viewManager.password}</div>
-              <div><span className="font-semibold text-muted-foreground">Senha Gerente:</span> {(viewManager as any).manager_password || <span className="italic text-muted-foreground">Não definida</span>}</div>
+              <div>
+                <span className="font-semibold text-muted-foreground">Senha de Acesso:</span>{" "}
+                {viewPasswordsLoading ? <Loader2 className="inline h-3 w-3 animate-spin" /> : viewPasswords?.password ?? "—"}
+              </div>
+              <div>
+                <span className="font-semibold text-muted-foreground">Senha Gerente:</span>{" "}
+                {viewPasswordsLoading ? <Loader2 className="inline h-3 w-3 animate-spin" /> : viewPasswords?.manager_password || <span className="italic text-muted-foreground">Não definida</span>}
+              </div>
               <div><span className="font-semibold text-muted-foreground">Status:</span> {viewManager.active ? "Ativo" : "Inativo"}</div>
               <div><span className="font-semibold text-muted-foreground">Criado em:</span> {new Date(viewManager.created_at).toLocaleString("pt-BR")}</div>
               <div><span className="font-semibold text-muted-foreground">ID Unidade:</span> <span className="text-xs">{viewManager.unit_id}</span></div>
@@ -286,8 +308,8 @@ const ManagersPage = () => {
               <Input value={editForm.cnpj} onChange={(e) => setEditForm((p) => ({ ...p, cnpj: formatCnpj(e.target.value) }))} className="h-11" />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs font-semibold">Senha de Acesso</Label>
-              <Input value={editForm.password} onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))} className="h-11" />
+              <Label className="text-xs font-semibold">Nova Senha de Acesso (deixe vazio para manter)</Label>
+              <Input value={editForm.password} onChange={(e) => setEditForm((p) => ({ ...p, password: e.target.value }))} type="password" className="h-11" />
             </div>
           </div>
           <DialogFooter>
