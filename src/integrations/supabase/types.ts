@@ -68,6 +68,13 @@ export type Database = {
             referencedRelation: "drivers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "driver_documents_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       driver_rides: {
@@ -135,6 +142,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "driver_rides_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "driver_rides_queue_entry_id_fkey"
             columns: ["queue_entry_id"]
             isOneToOne: false
@@ -146,6 +160,13 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "driver_rides_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
             referencedColumns: ["id"]
           },
         ]
@@ -268,6 +289,13 @@ export type Database = {
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "managers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
             referencedColumns: ["id"]
           },
         ]
@@ -397,6 +425,13 @@ export type Database = {
             referencedRelation: "units"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ps_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       queue_entries: {
@@ -436,10 +471,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "queue_entries_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "queue_entries_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "queue_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
             referencedColumns: ["id"]
           },
         ]
@@ -544,6 +593,13 @@ export type Database = {
             referencedRelation: "units"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "rto_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
         ]
       }
       unit_logins: {
@@ -607,10 +663,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "unit_reviews_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "unit_reviews_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_reviews_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
             referencedColumns: ["id"]
           },
         ]
@@ -722,17 +792,217 @@ export type Database = {
             referencedRelation: "units"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_profiles_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
         ]
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
       }
     }
     Views: {
-      [_ in never]: never
+      drivers_public: {
+        Row: {
+          active: boolean | null
+          address: string | null
+          avatar_url: string | null
+          bio: string | null
+          car_color: string | null
+          car_model: string | null
+          car_plate: string | null
+          cep: string | null
+          city: string | null
+          cpf: string | null
+          created_at: string | null
+          email: string | null
+          id: string | null
+          name: string | null
+          neighborhood: string | null
+          state: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          address?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          car_color?: string | null
+          car_model?: string | null
+          car_plate?: string | null
+          cep?: string | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          name?: string | null
+          neighborhood?: string | null
+          state?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          address?: string | null
+          avatar_url?: string | null
+          bio?: string | null
+          car_color?: string | null
+          car_model?: string | null
+          car_plate?: string | null
+          cep?: string | null
+          city?: string | null
+          cpf?: string | null
+          created_at?: string | null
+          email?: string | null
+          id?: string | null
+          name?: string | null
+          neighborhood?: string | null
+          state?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      managers_public: {
+        Row: {
+          active: boolean | null
+          cnpj: string | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+          unit_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          cnpj?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          unit_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          cnpj?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "managers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "managers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      unit_logins_public: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          id: string | null
+          login: string | null
+          unit_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string | null
+          login?: string | null
+          unit_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string | null
+          login?: string | null
+          unit_id?: string | null
+        }
+        Relationships: []
+      }
+      units_public: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          domain_id: string | null
+          geofence_address: string | null
+          geofence_lat: number | null
+          geofence_lng: number | null
+          geofence_radius_meters: number | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          domain_id?: string | null
+          geofence_address?: string | null
+          geofence_lat?: number | null
+          geofence_lng?: number | null
+          geofence_radius_meters?: number | null
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          domain_id?: string | null
+          geofence_address?: string | null
+          geofence_lat?: number | null
+          geofence_lng?: number | null
+          geofence_radius_meters?: number | null
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "units_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -859,6 +1129,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin"],
+    },
   },
 } as const
