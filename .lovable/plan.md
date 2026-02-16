@@ -1,185 +1,171 @@
 
 
-# Plano de Seguranca - Sistema FVL
+# Revisao Completa de Visibilidade de Dados Apos Seguranca
 
-## Contexto de Negocios
+## Resumo da Analise
 
-O sistema FVL e um sistema interno onde:
-- **Master Admin** precisa ver senhas de gerentes e unidades (recuperacao de senha)
-- **Gerentes** precisam ver dados dos motoristas (nome, placa, CPF, dados bancarios)
-- **Colaboradores** precisam ver dados operacionais (carregamentos, TBRs, etc.)
-
-O problema NAO e a visibilidade interna. O problema e que **qualquer pessoa externa** com a chave anonima (visivel no F12 do navegador) pode acessar e destruir TUDO.
-
-## Vulnerabilidades Criticas Encontradas
-
-### 1. Senhas expostas publicamente
-Qualquer pessoa pode abrir o console do navegador e executar:
-```text
-// Com a anon key visivel no F12:
-fetch('https://[url]/rest/v1/drivers?select=name,cpf,password', { headers: { apikey: '[anon_key]' }})
-fetch('https://[url]/rest/v1/managers?select=name,cnpj,password,manager_password', ...)
-fetch('https://[url]/rest/v1/units?select=name,password', ...)
-```
-Resultado: todas as senhas do sistema ficam expostas.
-
-### 2. Dados podem ser deletados por qualquer pessoa
-```text
-fetch('https://[url]/rest/v1/driver_rides', { method: 'DELETE', headers: { apikey: '[anon_key]' }})
-```
-Qualquer pessoa pode apagar TODOS os carregamentos, TBRs, motoristas, etc.
-
-### 3. Master Admin via localStorage
-Qualquer pessoa pode digitar no console:
-```text
-localStorage.setItem('fvl-auth', '{"state":{"isMasterAdmin":true}}')
-```
-E ganhar acesso total ao painel de administracao.
-
-### 4. Dados pessoais expostos (CPF, WhatsApp, email, PIX, documentos)
-Acessiveis via API anonima sem nenhuma restricao.
+Revisando todos os arquivos do frontend e as Edge Functions, identifiquei **problemas reais** onde dados podem deixar de aparecer para usuarios autorizados, e tambem pontos onde a seguranca ainda nao esta totalmente aplicada.
 
 ---
 
-## Plano de Correcao (por prioridade)
+## Problemas Encontrados
 
-### Fase 1: Proteger senhas (CRITICO)
+### 1. ManagersPage.tsx - Consulta direta na tabela `managers` (CRITICO)
 
-**Criar views publicas que escondem campos senssiveis**
+**Arquivo:** `src/pages/admin/ManagersPage.tsx` (linha 66)
 
-Para cada tabela que contem senha, criar uma view sem o campo password:
+A pagina de gerenciadores ainda faz `supabase.from("managers").select("*")`, o que retorna `password` e `manager_password` diretamente. Isso funciona APENAS porque o Master Admin esta autenticado via Supabase Auth e a RLS permite `SELECT` para `authenticated`.
 
-- `drivers_public` - sem `password` (usada pelo frontend em listagens)
-- `managers_public` - sem `password` e `manager_password`
-- `units_public` - sem `password`
+**Problema:** Se o RLS da tabela `managers` for restringido para bloquear SELECT direto (como previsto no plano), a pagina vai quebrar. Alem disso, senhas estao sendo trafegadas no frontend desnecessariamente.
 
-O frontend passara a consultar as views em vez das tabelas diretamente. Apenas edge functions (com service_role_key) acessarao as tabelas com senhas.
-
-**Restringir SELECT na tabela base** para que anon nao consiga ler senhas diretamente:
-- Tabela `drivers`: SELECT anon via view (sem password)
-- Tabela `managers`: SELECT anon via view (sem passwords)  
-- Tabela `units`: SELECT anon via view (sem password)
-
-O Master Admin continuara vendo senhas pois acessara via edge function autenticada.
-
-### Fase 2: Proteger contra DELETE/UPDATE malicioso
-
-**Restringir operacoes destrutivas** em todas as tabelas:
-
-- DELETE: somente via edge function ou usuario autenticado (Supabase Auth)
-- UPDATE em campos criticos (password, active): somente via edge function
-- INSERT em tabelas operacionais (driver_rides, ride_tbrs, etc.): manter aberto (necessario para operacao)
-
-Tabelas que precisam de DELETE protegido:
-- `drivers`, `managers`, `units`, `domains`
-- `driver_rides`, `ride_tbrs`
-- `queue_entries`, `unit_logins`, `user_profiles`
-- `piso_entries`, `ps_entries`, `rto_entries`
-
-### Fase 3: Validar Master Admin no servidor
-
-**Criar edge function `validate-admin`** que:
-1. Recebe o token JWT do Supabase Auth
-2. Verifica se o usuario e admin real (via tabela `user_roles` ou checagem de email)
-3. Retorna confirmacao
-
-**Alterar `AdminLoginModal.tsx`**:
-- Apos `signInWithPassword`, chamar a edge function para validar
-- Nao confiar apenas no localStorage
-
-**Alterar `AdminLayout.tsx`**:
-- Ao montar, verificar sessao ativa com Supabase Auth
-- Se nao houver sessao valida, redirecionar para login
-
-### Fase 4: Proteger documentos no Storage
-
-**Bucket `driver-documents`**: mudar de publico para privado
-- Acesso somente via URLs assinadas (signed URLs) geradas por edge function
-- Motorista so acessa seus proprios documentos
-- Gerente acessa documentos dos motoristas da sua unidade
-
-**Bucket `driver-avatars`**: pode manter publico (nao e dado sensivel)
-
-### Fase 5: Proteger dados pessoais
-
-**Tabela `drivers`**: campos como `email`, `whatsapp`, `pix_key`, `bank_account` nao devem ser legiveis por anon diretamente.
-- A view `drivers_public` incluira apenas: `id`, `name`, `cpf`, `car_model`, `car_plate`, `car_color`, `active`, `created_at`, `avatar_url`, `bio`
-- Dados bancarios e contato serao acessiveis via edge function que valida sessao
+**Correcao:** Alterar para consultar `managers_public` para a listagem e usar a Edge Function `get-manager-details` apenas quando o admin clica em "Visualizar" para ver senhas.
 
 ---
 
-## Detalhamento Tecnico
+### 2. AdminDriversPage.tsx - Consulta direta na tabela `drivers` com `select("*")` (CRITICO)
 
-### Migracao SQL
+**Arquivo:** `src/pages/admin/AdminDriversPage.tsx` (linha 78)
 
-```text
--- 1. View publica de drivers (sem password e dados sensiveis)
-CREATE VIEW public.drivers_public WITH (security_invoker=on) AS
-  SELECT id, name, cpf, car_model, car_plate, car_color, 
-         active, created_at, avatar_url, bio, 
-         state, city, neighborhood, address, cep
-  FROM public.drivers;
+A pagina faz `supabase.from("drivers").select("*")` que inclui `password` e todos os campos sensiveis. Funciona porque o admin esta autenticado, mas trafega senhas no frontend.
 
--- 2. View publica de managers (sem passwords)
-CREATE VIEW public.managers_public WITH (security_invoker=on) AS
-  SELECT id, name, cnpj, active, unit_id, created_at
-  FROM public.managers;
+**Problema:** A interface `Driver` (linha 38) inclui `password: string` e o modal de visualizacao NAO mostra a senha, mas ela esta no objeto. Alem disso, o formulario de edicao permite alterar a senha diretamente na tabela `drivers`.
 
--- 3. View publica de units (sem password)
-CREATE VIEW public.units_public WITH (security_invoker=on) AS
-  SELECT id, name, domain_id, active, created_at,
-         geofence_lat, geofence_lng, geofence_address, geofence_radius_meters
-  FROM public.units;
-
--- 4. Restringir DELETE em tabelas criticas (remover policies de DELETE com USING(true) para anon)
--- 5. Manter INSERT/UPDATE abertos onde necessario para operacao
--- 6. Tabela user_roles para validar admin
-```
-
-### Edge Functions necessarias
-
-1. **`get-driver-details`** - Retorna dados completos (incluindo bancarios) validando sessao
-2. **`get-manager-details`** - Retorna dados do gerente incluindo senhas (somente para master admin autenticado)
-3. **`admin-validate`** - Valida se sessao JWT pertence a um admin real
-4. **`get-signed-url`** - Gera URL temporaria para documentos no storage privado
-
-### Arquivos do frontend a alterar
-
-| Arquivo | Alteracao |
-|---|---|
-| `MotoristasParceirosPage.tsx` | Consultar `drivers_public` + edge function para dados bancarios |
-| `AdminDriversPage.tsx` | Consultar `drivers_public` + edge function para senha (master) |
-| `ManagersPage.tsx` | Consultar `managers_public` + edge function para senhas (master) |
-| `DomainsUnitsPage.tsx` | Consultar `units_public` |
-| `ConferenciaCarregamentoPage.tsx` | Consultar `drivers_public` em vez de `drivers` |
-| `OperacaoPage.tsx` | Consultar `drivers_public` |
-| `AdminLayout.tsx` | Validar sessao Supabase Auth ao montar |
-| `AdminLoginModal.tsx` | Chamar edge function de validacao |
-| `auth-store.ts` | Adicionar verificacao de sessao JWT |
-| `DriverDocuments.tsx` | Usar signed URLs para documentos |
-
-### O que NAO muda
-
-- Fluxo de login por CPF/CNPJ (ja usa edge function `authenticate-unit`)
-- Visibilidade de dados operacionais (carregamentos, TBRs, fila) - necessario para operacao
-- Gerente continua vendo dados dos motoristas (via sessao validada)
-- Master continua vendo senhas (via edge function autenticada)
-- Cadastro de motorista continua publico (formulario aberto)
+**Correcao:** Consultar `drivers_public` para listagem. Para ver/editar senha, usar `get-driver-details` com `include_password: true`.
 
 ---
 
-## Ordem de Implementacao
+### 3. DomainsUnitsPage.tsx - Consulta `units` com `select("*")` (MODERADO)
 
-1. Criar views publicas + migrar SELECT do frontend (impacto imediato, sem quebrar nada)
-2. Restringir DELETE em todas as tabelas (protecao contra destruicao)
-3. Criar edge function de validacao admin + alterar frontend
-4. Tornar bucket de documentos privado + signed URLs
-5. Criar edge functions para dados sensiveis (bancarios, senhas)
+**Arquivo:** `src/pages/admin/DomainsUnitsPage.tsx` (linhas 31, 36)
 
-## Riscos e Observacoes
+Consulta `units` com `select("*")`, o que inclui `password`. A senha da unidade nao e exibida na interface, mas esta sendo trafegada.
 
-- A migracao precisa ser feita com cuidado para nao quebrar funcionalidades existentes
-- O cadastro de motorista continuara inserindo senha em texto plano (hash pode ser fase futura)
-- O sistema de autenticacao principal (CPF + senha da unidade) ja usa edge function, o que e bom
-- As views precisam ter RLS habilitado com policies adequadas
+**Correcao:** Alterar para `units_public` ou selecionar campos especificos sem `password`.
+
+---
+
+### 4. DriverDocuments.tsx - Motorista consulta `drivers` diretamente para dados bancarios (FUNCIONAL)
+
+**Arquivo:** `src/pages/driver/DriverDocuments.tsx` (linha 58)
+
+O motorista faz `supabase.from("drivers").select("bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type")` para carregar seus proprios dados bancarios. Isso funciona porque o RLS permite SELECT para anon na tabela `drivers`.
+
+**Problema:** Se restringirmos o SELECT da tabela `drivers` no futuro, essa consulta vai quebrar. A view `drivers_public` NAO inclui campos bancarios.
+
+**Impacto:** O motorista deixaria de ver seus dados bancarios. **Precisa manter funcionando.**
+
+**Correcao:** Manter a consulta atual por enquanto (funciona com RLS atual), OU criar uma Edge Function dedicada para o motorista consultar seus proprios dados.
+
+---
+
+### 5. DashboardHome.tsx - Consulta `units` e `drivers` para busca de TBR (MODERADO)
+
+**Arquivo:** `src/pages/dashboard/DashboardHome.tsx` (linhas 124-131)
+
+Ao buscar TBR, faz `supabase.from("drivers").select("name, car_model, car_plate, car_color")` e `supabase.from("units").select("name")`. Seleciona apenas campos nao sensiveis, entao **esta OK** e nao precisa de alteracao. Continuara funcionando mesmo com restricoes futuras, pois seleciona campos que existem na view publica.
+
+---
+
+### 6. OperacaoPage.tsx - Consulta `drivers` com campos seguros (OK)
+
+**Arquivo:** `src/pages/dashboard/OperacaoPage.tsx` (linha 85)
+
+Faz `supabase.from("drivers").select("id, name, car_model, car_plate, car_color, avatar_url")`. Todos os campos selecionados existem na view `drivers_public`. **Nao quebra.** Mas seria mais seguro mudar para `drivers_public`.
+
+---
+
+### 7. ConferenciaCarregamentoPage.tsx - Consulta `drivers` com campos seguros (OK)
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (linhas 190-193)
+
+Faz `supabase.from("drivers").select("id, name, avatar_url, car_model, car_plate, car_color")`. Campos seguros. **Nao quebra.**
+
+---
+
+### 8. QueuePanel.tsx - Consulta `drivers` com campos seguros (OK)
+
+**Arquivo:** `src/components/dashboard/QueuePanel.tsx` (linhas 74-77)
+
+Faz `supabase.from("drivers").select("id, name, avatar_url, car_model, car_plate, car_color")`. Campos seguros. **Nao quebra.**
+
+---
+
+### 9. MotoristasParceirosPage.tsx - Consulta `drivers` com `email` e `whatsapp` (ATENCAO)
+
+**Arquivo:** `src/pages/dashboard/MotoristasParceirosPage.tsx` (linha 128)
+
+Faz `supabase.from("drivers").select("id, name, cpf, car_model, car_plate, car_color, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, avatar_url, bio")`. Inclui `email` e `whatsapp`.
+
+**Situacao:** A view `drivers_public` INCLUI `email` e `whatsapp` (conforme a view criada na migracao). Portanto **nao quebra**. Os gerentes precisam ver esses dados dos motoristas, entao e correto exibi-los.
+
+---
+
+### 10. QueuePanel.tsx - Consulta `unit_logins` com `password` (ATENCAO)
+
+**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
+
+O painel de fila provavelmente consulta `unit_logins` para preencher login/senha ao programar um carregamento. Se a view `unit_logins_public` nao inclui `password`, o fluxo de programacao de carregamento pode quebrar.
+
+**Correcao:** Verificar se o QueuePanel precisa da senha do login para atribuir ao carregamento. Se sim, manter consulta na tabela base (para usuarios autenticados) ou usar Edge Function.
+
+---
+
+## Resumo de Impacto
+
+| Pagina | Consulta Atual | Quebra? | Acao Necessaria |
+|---|---|---|---|
+| ManagersPage | `managers.*` | Nao (RLS OK) | Migrar para `managers_public` + edge function para senhas |
+| AdminDriversPage | `drivers.*` | Nao (RLS OK) | Migrar para `drivers_public` + edge function para senha |
+| DomainsUnitsPage | `units.*` | Nao (RLS OK) | Migrar para `units_public` ou selecionar campos |
+| DriverDocuments | `drivers.bank_*` | Nao (RLS OK) | Manter (motorista edita proprios dados) |
+| MotoristasParceirosPage | campos seguros | Nao | Ja OK, usa edge function para bancarios |
+| OperacaoPage | campos seguros | Nao | Opcional: trocar para `drivers_public` |
+| ConferenciaCarregamentoPage | campos seguros | Nao | Opcional: trocar para `drivers_public` |
+| QueuePanel | campos seguros | Nao | Opcional: trocar para `drivers_public` |
+| DashboardHome | campos seguros | Nao | OK como esta |
+
+---
+
+## Plano de Correcao
+
+### Etapa 1: ManagersPage.tsx
+- Mudar `refreshManagers()` para consultar `managers_public` em vez de `managers`
+- No modal "Visualizar", chamar `get-manager-details` para obter senhas (somente para Master Admin autenticado)
+- Manter INSERT/UPDATE na tabela `managers` (admin autenticado pode)
+
+### Etapa 2: AdminDriversPage.tsx
+- Mudar `fetchDrivers()` para consultar `drivers_public` (ou `drivers` selecionando campos sem password)
+- Remover `password` da interface `Driver`
+- No modal "Visualizar", adicionar botao para carregar senha via `get-driver-details` com `include_password: true`
+- No formulario de edicao, manter campo de senha (UPDATE direto na tabela `drivers` funciona para admin autenticado)
+
+### Etapa 3: DomainsUnitsPage.tsx
+- Mudar `fetchDomains()` para selecionar campos especificos: `id, name, active` (sem password)
+- Mudar `fetchUnits()` para consultar `units_public` ou selecionar `id, domain_id, name, active` (sem password)
+
+### Etapa 4: Paginas operacionais (opcional mas recomendado)
+- OperacaoPage, ConferenciaCarregamentoPage, QueuePanel: trocar `from("drivers")` para `from("drivers_public")` para consistencia
+- DashboardHome: ja seleciona campos seguros, pode manter
+
+### Etapa 5: DriverDocuments.tsx
+- Manter como esta: o motorista consulta e edita seus proprios dados bancarios diretamente na tabela `drivers`
+- Funciona com RLS atual e e necessario para o fluxo do motorista
+
+---
+
+## O que NAO vai quebrar
+
+- Dados operacionais (carregamentos, TBRs, fila, retornos) continuam vissiveis normalmente
+- Gerentes continuam vendo nome, CPF, placa, modelo, email, WhatsApp dos motoristas
+- Dados bancarios dos motoristas continuam acessiveis via Edge Function para gerentes
+- Documentos acessiveis via signed URLs
+- Motoristas continuam editando seus proprios dados bancarios e documentos
+- Master Admin continua vendo senhas (via Edge Functions)
+- Cadastro de motorista continua funcionando
+
+## O que VAI mudar (melhoria)
+
+- Senhas de gerentes nao serao mais trafegadas no frontend na listagem
+- Senha do motorista nao sera mais trafegada no frontend na listagem do admin
+- Senha da unidade nao sera mais trafegada ao listar unidades
 
