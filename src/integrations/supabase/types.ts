@@ -188,6 +188,7 @@ export type Database = {
           cpf: string
           created_at: string
           email: string | null
+          house_number: string | null
           id: string
           name: string
           neighborhood: string | null
@@ -214,6 +215,7 @@ export type Database = {
           cpf: string
           created_at?: string
           email?: string | null
+          house_number?: string | null
           id?: string
           name: string
           neighborhood?: string | null
@@ -240,6 +242,7 @@ export type Database = {
           cpf?: string
           created_at?: string
           email?: string | null
+          house_number?: string | null
           id?: string
           name?: string
           neighborhood?: string | null

@@ -9,8 +9,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Eye, EyeOff, Truck, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Truck, Loader2, Upload, Check, FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
 
 interface Props {
   open: boolean;
@@ -47,6 +48,15 @@ const maskPlate = (v: string) => {
 const capitalize = (v: string) =>
   v.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
+const DOC_TYPES = [
+  { value: "cnh", label: "CNH", required: true },
+  { value: "crlv", label: "CRLV", required: true },
+  { value: "comprovante_endereco", label: "Comprovante de Endereço", required: true },
+  { value: "outros_1", label: "Outros 1", required: false },
+  { value: "outros_2", label: "Outros 2", required: false },
+  { value: "outros_3", label: "Outros 3", required: false },
+];
+
 const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -57,6 +67,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     cpf: "",
     cep: "",
     address: "",
+    house_number: "",
     neighborhood: "",
     city: "",
     state: "",
@@ -68,10 +79,13 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     password: "",
   });
 
+  // Document uploads
+  const [docFiles, setDocFiles] = useState<Record<string, File>>({});
+  const [uploadingDoc, setUploadingDoc] = useState<string | null>(null);
+
   const set = (field: string, value: string) =>
     setForm((prev) => ({ ...prev, [field]: value }));
 
-  // Auto-fetch address from CEP
   const rawCep = form.cep.replace(/\D/g, "");
   useEffect(() => {
     if (rawCep.length !== 8) return;
@@ -94,18 +108,28 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     return () => { cancelled = true; };
   }, [rawCep]);
 
+  const requiredDocsMissing = DOC_TYPES
+    .filter(d => d.required)
+    .some(d => !docFiles[d.value]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawCpf = form.cpf.replace(/\D/g, "");
     if (rawCpf.length !== 11) return;
     if (!form.name || !form.car_plate || !form.car_model || !form.password) return;
+    if (requiredDocsMissing) {
+      toast({ title: "Documentos obrigatórios", description: "Envie CNH, CRLV e Comprovante de Endereço.", variant: "destructive" });
+      return;
+    }
 
     setLoading(true);
-    const { error } = await supabase.from("drivers" as any).insert({
+
+    const { data: insertedDriver, error } = await supabase.from("drivers" as any).insert({
       name: form.name.trim(),
       cpf: rawCpf,
       cep: form.cep.replace(/\D/g, "") || null,
       address: form.address || null,
+      house_number: form.house_number || null,
       neighborhood: form.neighborhood || null,
       city: form.city || null,
       state: form.state || null,
@@ -115,21 +139,45 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       email: form.email.trim() || null,
       whatsapp: form.whatsapp.replace(/\D/g, "") || null,
       password: form.password,
-    });
-    setLoading(false);
+    }).select("id").single();
 
-    if (error) return;
+    if (error || !insertedDriver) {
+      setLoading(false);
+      return;
+    }
+
+    const driverId = (insertedDriver as any).id;
+
+    // Upload documents
+    for (const [docType, file] of Object.entries(docFiles)) {
+      setUploadingDoc(docType);
+      const ext = file.name.split(".").pop()?.toLowerCase();
+      const path = `${driverId}/${docType}_${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("driver-documents").upload(path, file);
+      if (!uploadError) {
+        await supabase.from("driver_documents").insert({
+          driver_id: driverId,
+          doc_type: docType,
+          file_url: path,
+          file_name: file.name,
+        } as any);
+      }
+    }
+    setUploadingDoc(null);
+
+    setLoading(false);
     setForm({
-      name: "", cpf: "", cep: "", address: "", neighborhood: "",
+      name: "", cpf: "", cep: "", address: "", house_number: "", neighborhood: "",
       city: "", state: "", car_plate: "", car_model: "", car_color: "",
       email: "", whatsapp: "", password: "",
     });
+    setDocFiles({});
     onOpenChange(false);
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-md">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Truck className="h-5 w-5" /> Cadastro Motorista Parceiro
@@ -162,11 +210,17 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
           </div>
 
           {/* Endereço */}
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="space-y-1">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="space-y-1 sm:col-span-2">
               <Label htmlFor="dr-address">Endereço</Label>
               <Input id="dr-address" value={form.address} onChange={(e) => set("address", capitalize(e.target.value))} />
             </div>
+            <div className="space-y-1">
+              <Label htmlFor="dr-house-number">Número</Label>
+              <Input id="dr-house-number" value={form.house_number} onChange={(e) => set("house_number", e.target.value)} placeholder="Nº" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
               <Label htmlFor="dr-neighborhood">Bairro</Label>
               <Input id="dr-neighborhood" value={form.neighborhood} onChange={(e) => set("neighborhood", capitalize(e.target.value))} />
@@ -231,7 +285,66 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading}>
+          {/* Documents Upload Section */}
+          <div className="space-y-2 border-t pt-3">
+            <p className="text-sm font-bold italic flex items-center gap-1">
+              <FileText className="h-4 w-4 text-primary" />
+              Documentos
+            </p>
+            <div className="space-y-2">
+              {DOC_TYPES.map((dt) => {
+                const file = docFiles[dt.value];
+                return (
+                  <div key={dt.value} className="flex items-center gap-3 p-2 rounded-lg border border-border">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-semibold">
+                        {dt.label} {dt.required && <span className="text-destructive">*</span>}
+                      </p>
+                      {file ? (
+                        <p className="text-[11px] text-muted-foreground flex items-center gap-1 truncate">
+                          <Check className="h-3 w-3 text-green-500 shrink-0" />
+                          {file.name}
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-muted-foreground">Nenhum arquivo</p>
+                      )}
+                    </div>
+                    <label className="cursor-pointer shrink-0">
+                      <input
+                        type="file"
+                        accept=".pdf,.png,.jpg,.jpeg"
+                        className="hidden"
+                        onChange={(e) => {
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            if (f.size > 5 * 1024 * 1024) {
+                              toast({ title: "Arquivo muito grande", description: "Máximo 5MB.", variant: "destructive" });
+                              return;
+                            }
+                            const ext = f.name.split(".").pop()?.toLowerCase();
+                            if (!["pdf", "png", "jpg", "jpeg"].includes(ext ?? "")) {
+                              toast({ title: "Formato inválido", description: "Use PDF, PNG ou JPG.", variant: "destructive" });
+                              return;
+                            }
+                            setDocFiles(prev => ({ ...prev, [dt.value]: f }));
+                          }
+                          e.target.value = "";
+                        }}
+                      />
+                      <Button size="sm" variant="outline" asChild className="h-7 text-xs">
+                        <span>
+                          {uploadingDoc === dt.value ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
+                          {file ? "Trocar" : "Enviar"}
+                        </span>
+                      </Button>
+                    </label>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={loading || requiredDocsMissing}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Truck className="mr-2 h-4 w-4" />}
             Cadastrar
           </Button>

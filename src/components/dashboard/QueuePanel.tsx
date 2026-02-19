@@ -34,6 +34,14 @@ interface FoundDriver {
   car_color: string | null;
 }
 
+const maskCPF = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
 const QueuePanel = () => {
   const { unitSession } = useAuthStore();
   const [open, setOpen] = useState(false);
@@ -41,20 +49,24 @@ const QueuePanel = () => {
   const [isPulsing, setIsPulsing] = useState(false);
   const prevCountRef = useRef(0);
 
-  // Modal states
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
   const [route, setRoute] = useState("");
   const [selectedLoginId, setSelectedLoginId] = useState("");
   const [unitLogins, setUnitLogins] = useState<{ id: string; login: string }[]>([]);
 
-  // Add driver by CPF modal states
   const [showAddModal, setShowAddModal] = useState(false);
   const [cpfSearch, setCpfSearch] = useState("");
   const [foundDriver, setFoundDriver] = useState<FoundDriver | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [addingToQueue, setAddingToQueue] = useState(false);
+
+  // Name search states
+  const [nameSearch, setNameSearch] = useState("");
+  const [nameResults, setNameResults] = useState<FoundDriver[]>([]);
+  const [nameSearchLoading, setNameSearchLoading] = useState(false);
+  const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const unitId = unitSession?.id;
 
@@ -101,12 +113,7 @@ const QueuePanel = () => {
     if (!unitId) return;
     const channel = supabase
       .channel("queue-panel-" + unitId)
-      .on("postgres_changes", {
-        event: "*",
-        schema: "public",
-        table: "queue_entries",
-        filter: `unit_id=eq.${unitId}`,
-      }, () => { fetchQueue(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "queue_entries", filter: `unit_id=eq.${unitId}` }, () => { fetchQueue(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchQueue]);
@@ -117,22 +124,15 @@ const QueuePanel = () => {
   };
 
   const handleApprove = async (entry: QueueEntry) => {
-    await supabase
-      .from("queue_entries")
-      .update({ status: "approved" })
-      .eq("id", entry.id);
+    await supabase.from("queue_entries").update({ status: "approved" }).eq("id", entry.id);
     fetchQueue();
   };
 
   const handleReject = async (entry: QueueEntry) => {
-    await supabase
-      .from("queue_entries")
-      .update({ status: "rejected", completed_at: new Date().toISOString() })
-      .eq("id", entry.id);
+    await supabase.from("queue_entries").update({ status: "rejected", completed_at: new Date().toISOString() }).eq("id", entry.id);
     fetchQueue();
   };
 
-  // Used logins today
   const [usedLoginsToday, setUsedLoginsToday] = useState<Set<string>>(new Set());
 
   const openProgramModal = async (entry: QueueEntry) => {
@@ -144,7 +144,6 @@ const QueuePanel = () => {
       const { data } = await supabase.from("unit_logins").select("id, login").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
       setUnitLogins(data ?? []);
 
-      // Check which logins were used today
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const { data: ridesData } = await supabase
@@ -176,10 +175,7 @@ const QueuePanel = () => {
       },
     });
 
-    if (error) {
-      console.error("Error creating ride:", error);
-      return;
-    }
+    if (error) { console.error("Error creating ride:", error); return; }
 
     setShowProgramModal(false);
     fetchQueue();
@@ -192,7 +188,6 @@ const QueuePanel = () => {
     const current = entries[idx];
     const neighbor = entries[targetIdx];
 
-    // Swap joined_at timestamps
     await Promise.all([
       supabase.from("queue_entries").update({ joined_at: neighbor.joined_at }).eq("id", current.id),
       supabase.from("queue_entries").update({ joined_at: current.joined_at }).eq("id", neighbor.id),
@@ -200,13 +195,9 @@ const QueuePanel = () => {
     fetchQueue();
   };
 
-  // Search driver by CPF
   const handleSearchDriver = async () => {
     const cpf = cpfSearch.replace(/\D/g, "");
-    if (cpf.length < 11) {
-      setSearchError("CPF deve ter 11 dígitos.");
-      return;
-    }
+    if (cpf.length < 11) { setSearchError("CPF deve ter 11 dígitos."); return; }
     setSearchLoading(true);
     setSearchError("");
     setFoundDriver(null);
@@ -218,15 +209,29 @@ const QueuePanel = () => {
       .eq("active", true)
       .maybeSingle();
 
-    if (error || !data) {
-      setSearchError("Motorista não encontrado.");
-    } else {
-      setFoundDriver(data as FoundDriver);
-    }
+    if (error || !data) { setSearchError("Motorista não encontrado."); }
+    else { setFoundDriver(data as FoundDriver); }
     setSearchLoading(false);
   };
 
-  // Add found driver to queue
+  // Name search with debounce
+  useEffect(() => {
+    if (!nameSearch.trim()) { setNameResults([]); return; }
+    if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
+    nameDebounceRef.current = setTimeout(async () => {
+      setNameSearchLoading(true);
+      const { data } = await supabase
+        .from("drivers_public")
+        .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+        .ilike("name", `%${nameSearch.trim()}%`)
+        .eq("active", true)
+        .limit(10);
+      setNameResults((data ?? []) as FoundDriver[]);
+      setNameSearchLoading(false);
+    }, 400);
+    return () => { if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current); };
+  }, [nameSearch]);
+
   const handleAddToQueue = async () => {
     if (!foundDriver || !unitId) return;
     setAddingToQueue(true);
@@ -253,6 +258,8 @@ const QueuePanel = () => {
 
     setShowAddModal(false);
     setCpfSearch("");
+    setNameSearch("");
+    setNameResults([]);
     setFoundDriver(null);
     setSearchError("");
     setAddingToQueue(false);
@@ -263,7 +270,6 @@ const QueuePanel = () => {
 
   return (
     <>
-      {/* Floating trigger with pulse animation */}
       <button
         onClick={handleOpenPanel}
         className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-all ${
@@ -289,7 +295,7 @@ const QueuePanel = () => {
                 size="icon"
                 variant="outline"
                 className="h-7 w-7"
-                onClick={() => { setShowAddModal(true); setCpfSearch(""); setFoundDriver(null); setSearchError(""); }}
+                onClick={() => { setShowAddModal(true); setCpfSearch(""); setNameSearch(""); setNameResults([]); setFoundDriver(null); setSearchError(""); }}
                 title="Adicionar motorista na fila"
               >
                 <Plus className="h-4 w-4" />
@@ -307,10 +313,7 @@ const QueuePanel = () => {
               </div>
             ) : (
               entries.map((entry, idx) => (
-                <div
-                  key={entry.id}
-                  className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card"
-                >
+                <div key={entry.id} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card">
                   <Avatar className="h-8 w-8 shrink-0">
                     {entry.driver_avatar && <AvatarImage src={entry.driver_avatar} />}
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
@@ -328,53 +331,23 @@ const QueuePanel = () => {
                   </div>
                   {entry.status === "waiting" ? (
                     <div className="flex items-center gap-1 shrink-0">
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="shrink-0 font-bold italic text-xs h-7 px-2"
-                        onClick={() => handleApprove(entry)}
-                      >
-                        <Check className="h-3 w-3 mr-1" />
-                        Aprovar
+                      <Button size="sm" variant="default" className="shrink-0 font-bold italic text-xs h-7 px-2" onClick={() => handleApprove(entry)}>
+                        <Check className="h-3 w-3 mr-1" /> Aprovar
                       </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="shrink-0 h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => handleReject(entry)}
-                        title="Recusar"
-                      >
+                      <Button size="icon" variant="ghost" className="shrink-0 h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleReject(entry)} title="Recusar">
                         <X className="h-4 w-4" />
                       </Button>
                     </div>
                   ) : (
-                    <Button
-                      size="sm"
-                      variant="default"
-                      className="shrink-0 font-bold italic text-xs h-7 px-2"
-                      onClick={() => openProgramModal(entry)}
-                    >
-                      <CalendarCheck className="h-3 w-3 mr-1" />
-                      Programar
+                    <Button size="sm" variant="default" className="shrink-0 font-bold italic text-xs h-7 px-2" onClick={() => openProgramModal(entry)}>
+                      <CalendarCheck className="h-3 w-3 mr-1" /> Programar
                     </Button>
                   )}
                   <div className="flex flex-col gap-0.5 shrink-0">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6"
-                      disabled={idx === 0}
-                      onClick={() => handleMoveEntry(idx, "up")}
-                    >
+                    <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === 0} onClick={() => handleMoveEntry(idx, "up")}>
                       <ChevronUp className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-6 w-6"
-                      disabled={idx === entries.length - 1}
-                      onClick={() => handleMoveEntry(idx, "down")}
-                    >
+                    <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === entries.length - 1} onClick={() => handleMoveEntry(idx, "down")}>
                       <ChevronDown className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -390,9 +363,7 @@ const QueuePanel = () => {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="font-bold italic">Programar Carregamento</DialogTitle>
-            <DialogDescription>
-              {selectedEntry?.driver_name} — Preencha as informações abaixo
-            </DialogDescription>
+            <DialogDescription>{selectedEntry?.driver_name} — Preencha as informações abaixo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
@@ -419,14 +390,12 @@ const QueuePanel = () => {
                 <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado. Cadastre em Configurações.</p>
               )}
             </div>
-            <Button onClick={handleDefinir} className="w-full font-bold italic">
-              Definir
-            </Button>
+            <Button onClick={handleDefinir} className="w-full font-bold italic">Definir</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Modal Adicionar Motorista por CPF */}
+      {/* Modal Adicionar Motorista */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -435,21 +404,52 @@ const QueuePanel = () => {
               Adicionar Motorista na Fila
             </DialogTitle>
             <DialogDescription>
-              Busque um motorista cadastrado pelo CPF
+              Busque um motorista cadastrado pelo nome ou CPF
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="flex gap-2">
+            {/* Name search */}
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar por Nome</Label>
               <Input
-                placeholder="Digite o CPF..."
-                value={cpfSearch}
-                onChange={(e) => setCpfSearch(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") handleSearchDriver(); }}
-                maxLength={14}
+                placeholder="Digite o nome..."
+                value={nameSearch}
+                onChange={(e) => { setNameSearch(e.target.value); setFoundDriver(null); }}
               />
-              <Button onClick={handleSearchDriver} disabled={searchLoading} size="icon">
-                {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
+              {nameSearchLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              {nameResults.length > 0 && !foundDriver && (
+                <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-1">
+                  {nameResults.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setFoundDriver(d); setNameResults([]); }}
+                      className="w-full text-left p-2 rounded hover:bg-muted text-xs space-y-0.5"
+                    >
+                      <p className="font-bold">{d.name}</p>
+                      <p className="text-muted-foreground">
+                        CPF: {maskCPF(d.cpf)} · {d.car_model} {d.car_color || ""} · {d.car_plate}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CPF search */}
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar por CPF</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Digite o CPF..."
+                  value={cpfSearch}
+                  onChange={(e) => setCpfSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSearchDriver(); }}
+                  maxLength={14}
+                />
+                <Button onClick={handleSearchDriver} disabled={searchLoading} size="icon">
+                  {searchLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
+              </div>
             </div>
 
             {searchError && (
@@ -467,18 +467,14 @@ const QueuePanel = () => {
                   </Avatar>
                   <div>
                     <p className="font-bold">{foundDriver.name}</p>
-                    <p className="text-xs text-muted-foreground">CPF: {foundDriver.cpf}</p>
+                    <p className="text-xs text-muted-foreground">CPF: {maskCPF(foundDriver.cpf)}</p>
                   </div>
                 </div>
                 <div className="text-sm space-y-1">
                   <p><strong>Veículo:</strong> {foundDriver.car_model} — {foundDriver.car_color || "N/A"}</p>
                   <p><strong>Placa:</strong> {foundDriver.car_plate}</p>
                 </div>
-                <Button
-                  onClick={handleAddToQueue}
-                  disabled={addingToQueue}
-                  className="w-full font-bold italic"
-                >
+                <Button onClick={handleAddToQueue} disabled={addingToQueue} className="w-full font-bold italic">
                   {addingToQueue && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Adicionar na Fila
                 </Button>

@@ -1,0 +1,1 @@
+ALTER TABLE drivers ADD COLUMN IF NOT EXISTS house_number text;
