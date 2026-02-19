@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2 } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -169,6 +169,9 @@ const ConferenciaCarregamentoPage = () => {
   const [driverModalLoading, setDriverModalLoading] = useState(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const tbrListRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const deletingRef = useRef<Set<string>>(new Set());
+  const skipRealtimeRef = useRef(false);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
@@ -195,6 +198,14 @@ const ConferenciaCarregamentoPage = () => {
   const [swapLoading, setSwapLoading] = useState(false);
   const [swapError, setSwapError] = useState("");
   const swapDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Swap password modal (for non-manager users)
+  const [showSwapPasswordModal, setShowSwapPasswordModal] = useState(false);
+  const [swapPasswordInput, setSwapPasswordInput] = useState("");
+  const [swapPasswordRideId, setSwapPasswordRideId] = useState<string | null>(null);
+
+  // Call driver
+  const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -378,8 +389,8 @@ const ConferenciaCarregamentoPage = () => {
     if (!unitId) return;
     const channel = supabase
       .channel("conferencia-" + unitId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { fetchRides(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs" }, () => { fetchRides(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (!skipRealtimeRef.current) fetchRides(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
@@ -405,12 +416,17 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
+    if (deletingRef.current.has(tbrId)) return;
+    deletingRef.current.add(tbrId);
+    skipRealtimeRef.current = true;
+
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
 
     setTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
     }));
+
     await supabase.from("ride_tbrs").delete().eq("id", tbrId);
 
     if (tbrToDelete) {
@@ -429,8 +445,17 @@ const ConferenciaCarregamentoPage = () => {
       }
     }
 
-    fetchRides();
-    fetchOpenRtos();
+    await fetchRides();
+    await fetchOpenRtos();
+    deletingRef.current.delete(tbrId);
+    skipRealtimeRef.current = false;
+  };
+
+  const scrollTbrList = (rideId: string) => {
+    setTimeout(() => {
+      const el = tbrListRefs.current[rideId];
+      if (el) el.scrollTop = el.scrollHeight;
+    }, 100);
   };
 
   // Save TBR logic (shared between scanner debounce and manual Enter)
@@ -496,7 +521,7 @@ const ConferenciaCarregamentoPage = () => {
           [rideId]: [...(prev[rideId] ?? []), newTbr],
         }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+        setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber } as any);
         fetchRides();
       } else if (count === 1) {
@@ -571,10 +596,10 @@ const ConferenciaCarregamentoPage = () => {
     // In manual mode, don't auto-save
     if (manualMode[rideId]) return;
 
-    // Scanner mode: fast 150ms debounce
+    // Scanner mode: fast 80ms debounce
     debounceTimers.current[rideId] = setTimeout(() => {
       saveTbr(rideId, value.trim());
-    }, 150);
+    }, 80);
   };
 
   const handleTbrKeyDown = (rideId: string, e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -595,17 +620,18 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleConfirmCancel = async () => {
-    if (!cancelRideId || !managerSession?.id || !unitId) return;
+    if (!cancelRideId || !unitId) return;
     setCancelLoading(true);
 
-    // Validate manager password
-    const { data: manager } = await supabase
+    // Validate manager password against all managers of this unit
+    const { data: managers } = await supabase
       .from("managers")
       .select("manager_password")
-      .eq("id", managerSession.id)
-      .maybeSingle();
+      .eq("unit_id", unitId)
+      .eq("active", true);
 
-    if (!manager || manager.manager_password !== cancelPassword) {
+    const passwordValid = (managers ?? []).some(m => m.manager_password === cancelPassword);
+    if (!passwordValid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", description: "A senha do gerente está incorreta.", variant: "destructive" });
       setCancelLoading(false);
@@ -643,8 +669,18 @@ const ConferenciaCarregamentoPage = () => {
     fetchRides();
   };
 
-  // Swap driver
+  // Swap driver - requires password for non-managers
   const handleOpenSwapModal = (rideId: string) => {
+    if (!managerSession) {
+      setSwapPasswordRideId(rideId);
+      setSwapPasswordInput("");
+      setShowSwapPasswordModal(true);
+      return;
+    }
+    openSwapModalDirect(rideId);
+  };
+
+  const openSwapModalDirect = (rideId: string) => {
     setSwapRideId(rideId);
     setSwapNameSearch("");
     setSwapCpfSearch("");
@@ -961,11 +997,28 @@ const ConferenciaCarregamentoPage = () => {
                       isCancelled && "bg-red-50 border-red-200"
                     )}>
                       <CardContent className="p-4 flex flex-col items-center gap-3">
-                        {/* TBR Counter badge (top-left) */}
-                        <Badge variant="secondary" className="absolute top-3 left-3 text-xs px-2 py-0.5 font-bold gap-1">
-                          <ScanBarcode className="h-3 w-3" />
-                          {rideTbrs.length}
-                        </Badge>
+                        {/* TBR Counter badge + Bell icon (top-left) */}
+                        <div className="absolute top-3 left-3 flex flex-col items-center gap-1">
+                          <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1">
+                            <ScanBarcode className="h-3 w-3" />
+                            {rideTbrs.length}
+                          </Badge>
+                          {ride.queue_entry_id && !isCancelled && !isFinished && (
+                            <button
+                              onClick={async () => {
+                                setCallingDriverId(ride.queue_entry_id!);
+                                await supabase.from("queue_entries").update({ called_at: new Date().toISOString() } as any).eq("id", ride.queue_entry_id!);
+                                const { toast } = await import("@/hooks/use-toast");
+                                toast({ title: "Motorista chamado!", description: "O motorista foi notificado." });
+                                setTimeout(() => setCallingDriverId(null), 2000);
+                              }}
+                              className={cn("h-6 w-6 flex items-center justify-center rounded-full transition-colors", callingDriverId === ride.queue_entry_id ? "bg-yellow-400 text-yellow-900 animate-pulse" : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground")}
+                              title="Chamar motorista"
+                            >
+                              <Bell className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
                           {isCancelled && (
@@ -1034,7 +1087,11 @@ const ConferenciaCarregamentoPage = () => {
 
                         {/* Conferente Select */}
                         <div className="w-full">
-                          <Select value={ride.conferente_id ?? ""} onValueChange={(val) => handleSelectConferente(ride.id, val)}>
+                          <Select 
+                            value={ride.conferente_id ?? ""} 
+                            onValueChange={(val) => handleSelectConferente(ride.id, val)}
+                            disabled={!!ride.conferente_id && !managerSession}
+                          >
                             <SelectTrigger className="w-full h-9 text-sm">
                               <div className="flex items-center gap-2">
                                 <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -1070,8 +1127,8 @@ const ConferenciaCarregamentoPage = () => {
                           </div>
                         )}
 
-                        {/* Cancel & Swap buttons (manager only) */}
-                        {managerSession && !isCancelled && (
+                        {/* Cancel & Swap buttons (visible to all, password required for non-managers) */}
+                        {!isCancelled && (
                           <div className="w-full flex gap-2">
                             <Button
                               size="sm"
@@ -1137,7 +1194,7 @@ const ConferenciaCarregamentoPage = () => {
                               TBRs Lidos ({rideTbrs.length})
                             </p>
                             {rideTbrs.length > 0 && (
-                              <div className="max-h-32 overflow-y-auto space-y-1">
+                              <div ref={(el) => { tbrListRefs.current[ride.id] = el; }} className="max-h-32 overflow-y-auto space-y-1">
                                 {rideTbrs.map((t, i) => (
                                   <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
                                     <span className="font-bold text-primary">{i + 1}.</span>
@@ -1155,15 +1212,20 @@ const ConferenciaCarregamentoPage = () => {
                             )}
                             {isLoadingStatus && (
                               <div className="flex gap-1">
-                                <Input
-                                  ref={(el) => { inputRefs.current[ride.id] = el; }}
-                                  className="h-8 text-sm font-mono flex-1"
-                                  placeholder={manualMode[ride.id] ? "Digite o TBR + Enter..." : "Escanear TBR..."}
-                                  value={tbrInputs[ride.id] ?? ""}
-                                  onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
-                                  onKeyDown={(e) => handleTbrKeyDown(ride.id, e)}
-                                  autoFocus
-                                />
+                                <div className="relative flex-1">
+                                  {!manualMode[ride.id] && (
+                                    <Lock className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                                  )}
+                                  <Input
+                                    ref={(el) => { inputRefs.current[ride.id] = el; }}
+                                    className={cn("h-8 text-sm font-mono", !manualMode[ride.id] && "pl-7 bg-muted/30")}
+                                    placeholder={manualMode[ride.id] ? "Digite o TBR + Enter..." : "Escanear TBR..."}
+                                    value={tbrInputs[ride.id] ?? ""}
+                                    onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
+                                    onKeyDown={(e) => handleTbrKeyDown(ride.id, e)}
+                                    autoFocus
+                                  />
+                                </div>
                                 <Button
                                   type="button"
                                   size="icon"
@@ -1347,6 +1409,63 @@ const ConferenciaCarregamentoPage = () => {
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Swap Password Modal (for non-managers) */}
+      <Dialog open={showSwapPasswordModal} onOpenChange={setShowSwapPasswordModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-primary" /> Trocar Motorista
+            </DialogTitle>
+            <DialogDescription>
+              Digite a senha do gerente para autorizar a troca.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="swap-pw" className="font-semibold">Senha do Gerente</Label>
+              <Input
+                id="swap-pw"
+                type="password"
+                value={swapPasswordInput}
+                onChange={(e) => setSwapPasswordInput(e.target.value)}
+                onKeyDown={async (e) => {
+                  if (e.key === "Enter" && swapPasswordInput) {
+                    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId!).eq("active", true);
+                    const valid = (managers ?? []).some(m => m.manager_password === swapPasswordInput);
+                    if (valid && swapPasswordRideId) {
+                      setShowSwapPasswordModal(false);
+                      openSwapModalDirect(swapPasswordRideId);
+                    } else {
+                      const { toast } = await import("@/hooks/use-toast");
+                      toast({ title: "Senha incorreta", variant: "destructive" });
+                    }
+                  }
+                }}
+                placeholder="Digite a senha..."
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={async () => {
+                const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId!).eq("active", true);
+                const valid = (managers ?? []).some(m => m.manager_password === swapPasswordInput);
+                if (valid && swapPasswordRideId) {
+                  setShowSwapPasswordModal(false);
+                  openSwapModalDirect(swapPasswordRideId);
+                } else {
+                  const { toast } = await import("@/hooks/use-toast");
+                  toast({ title: "Senha incorreta", variant: "destructive" });
+                }
+              }}
+              className="w-full font-bold italic"
+              disabled={!swapPasswordInput}
+            >
+              Autorizar Troca
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
