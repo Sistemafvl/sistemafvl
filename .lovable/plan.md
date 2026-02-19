@@ -1,120 +1,100 @@
 
-# Melhorias na Conferencia de Carregamento, Fila e Cadastro de Motorista
+# Melhorias na Conferencia de Carregamento e Visao do Motorista
 
-## Resumo das 4 demandas
+## 1. Botoes Cancelar/Trocar visiveis para funcionarios (com senha do gerente)
 
-1. **Icone de teclado no campo TBR** + otimizacao da leitura por scanner
-2. **Botoes "Cancelar Carregamento" e "Trocar Motorista"** no card de carregamento
-3. **Busca por nome no modal "Adicionar Motorista na Fila"** com dados extras (carro, placa, CPF)
-4. **Campo "Numero da casa" + upload de documentos obrigatorios** no cadastro de motorista
-
----
-
-## 1. Icone de Teclado + Otimizacao do Scanner
+Atualmente os botoes "Cancelar" e "Trocar" so aparecem quando ha `managerSession`. A mudanca e remover essa condicao e sempre exibir os botoes, porem ao clicar em qualquer um deles, o sistema pedira a senha do gerente (`manager_password`) antes de prosseguir.
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-
-No campo de escaneamento de TBR (linha ~1006-1015):
-- Reduzir o tamanho do input de TBR
-- Adicionar um icone de teclado (`Keyboard` do Lucide) ao lado do input
-- Por padrao, o input opera em modo "scanner" (debounce de 300ms atual sera reduzido para ~150ms para leitura mais rapida)
-- Ao clicar no icone de teclado, o modo muda para "manual" -- o debounce desativa e o TBR so e salvo ao pressionar Enter
-- Indicador visual: o icone de teclado fica destacado quando em modo manual
-- Ao clicar novamente, volta ao modo scanner
-
-**Logica:**
-- Novo estado: `manualMode` por `rideId` (Record<string, boolean>)
-- No modo scanner: debounce de 150ms (mais rapido que os 300ms atuais)
-- No modo manual: sem debounce, salva somente ao pressionar Enter
+- Linha 1074: remover a condicao `managerSession &&`
+- No "Cancelar": ja pede senha (modal existente funciona)
+- No "Trocar": adicionar um modal intermediario pedindo senha do gerente antes de abrir o modal de busca
 
 ---
 
-## 2. Botoes "Cancelar Carregamento" e "Trocar Motorista"
+## 2. Scroll automatico para o ultimo TBR lido
+
+A lista de TBRs tem `max-h-32 overflow-y-auto`. Apos cada escaneamento, o scroll deve ir automaticamente para o final da lista.
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-
-### Cancelar Carregamento
-- Adicionar botao vermelho "Cancelar" na area de acoes do card (ao lado dos botoes Iniciar/Finalizar/Retornar)
-- Ao clicar, abre um modal pedindo a **senha do gerente** (`manager_password` da tabela `managers`)
-- Validacao: busca o `manager_password` do gerente logado (via `managerSession.id`) e compara
-- Ao confirmar:
-  1. Todos os TBRs do carregamento sao inseridos como `piso_entries` (status "open", reason "Carregamento cancelado")
-  2. O `driver_rides` e atualizado: `loading_status = "cancelled"`
-  3. O `queue_entry` associado e marcado como `completed`
-- Visualmente, o card fica com fundo vermelho claro e badge "Cancelado"
-
-### Trocar Motorista
-- Botao com icone de troca (`RefreshCw` ou `ArrowRightLeft`) logo abaixo do "Cancelar"
-- Ao clicar, abre o **mesmo modal de adicionar motorista na fila** (reutiliza a logica do QueuePanel), porem com busca por nome e CPF (conforme item 3)
-- Ao selecionar o novo motorista:
-  1. Atualiza o `driver_id` do `driver_rides` atual
-  2. Atualiza o `driver_id` do `queue_entry` associado
-  3. Refresh dos dados
-
-**Novos estados:** `showCancelModal`, `cancelPassword`, `showSwapModal`, `swapSearch`, `swapResults`, `selectedSwapDriver`
+- Adicionar `useRef` para o container da lista de TBRs (por `rideId`)
+- Apos `saveTbr` ser executado com sucesso, fazer `scrollTop = scrollHeight` no container
 
 ---
 
-## 3. Busca por Nome no Modal "Adicionar Motorista na Fila"
+## 3. Leitura mais rapida + Deteccao de duplicata + Bug de exclusao
 
-**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
+### Velocidade de leitura
+- Reduzir o debounce de 150ms para **80ms** para gravar ainda mais rapido
 
-No modal "Adicionar Motorista na Fila":
-- Adicionar campo de busca por **nome** acima do campo de CPF
-- Descricao atualizada: "Busque um motorista cadastrado pelo nome ou CPF"
-- O campo de nome faz busca com `ilike` conforme o usuario digita (com debounce de 400ms)
-- Resultados aparecem em uma lista/dropdown com:
-  - Nome do motorista
-  - CPF (formatado)
-  - Modelo do carro
-  - Cor do carro
-  - Placa
-- Ao selecionar um resultado, preenche o `foundDriver` diretamente (mesmo comportamento de apos buscar por CPF)
-- O campo de CPF continua funcionando como antes (busca exata por Enter)
+### Deteccao de duplicata
+- A logica de duplicata ja existe (count === 1 marca vermelho). Apenas confirmar que o debounce reduzido permite captura mais rapida de leituras consecutivas.
 
-**Novos estados:** `nameSearch`, `nameResults`, `nameSearchLoading`
+### Bug de exclusao (TBR volta apos clicar no X)
+- **Causa raiz:** A funcao `handleDeleteTbr` faz update otimista no state, mas logo depois chama `fetchRides()` que refaz o fetch do banco. Se o DELETE nao completou antes do fetch, o TBR reaparece.
+- **Solucao:** Usar `await` no delete e so entao fazer o fetch. Adicionar um `ref guard` para evitar cliques duplos. Remover o fetch automatico via realtime durante a exclusao para evitar race condition.
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Linha 407-433: Refatorar `handleDeleteTbr` com guard ref e aguardar confirmacao do banco antes de chamar `fetchRides()`
 
 ---
 
-## 4. Cadastro de Motorista: Numero da Casa + Upload de Documentos
+## 4. Campo TBR travado para digitacao (modo scanner padrao)
 
-**Arquivo:** `src/components/DriverRegistrationModal.tsx`
+O input de TBR deve ficar com `readOnly` quando estiver em modo scanner (padrao). Apenas ao clicar no icone de teclado (modo manual) o campo fica editavel para digitacao.
 
-### Campo "Numero"
-- Adicionar campo `house_number` (Numero) entre Endereco e Bairro no grid
-- Coluna na tabela `drivers`: necessaria nova migration para adicionar `house_number text`
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Linha 1158-1166: Adicionar `readOnly={!manualMode[ride.id]}` ao Input
+- No modo scanner, o input aceita dados do scanner (que simula teclas) mas bloqueia digitacao manual -- na verdade, scanners injetam keystrokes, entao `readOnly` nao funciona. A solucao correta e: no modo scanner, o `onChange` so aceita mudancas de mais de 3 caracteres de uma vez (scanner envia tudo rapido), ou aceitar qualquer input mas so processar via debounce. Manter o campo editavel pois scanners precisam dele, mas adicionar um indicador visual de "bloqueado" e desabilitar o Enter manual.
 
-### Upload de Documentos Obrigatorios
-- Adicionar secao de upload de documentos no formulario de cadastro, com os mesmos 6 tipos do `DriverDocuments.tsx`: CNH, CRLV, Comprovante de Endereco, Outros 1, 2 e 3
-- **Obrigatorios:** CNH, CRLV e Comprovante de Endereco (os 3 "Outros" sao opcionais)
-- O upload funciona igual ao `DriverDocuments.tsx`: envia para o bucket `driver-documents` no Supabase Storage
-- O submit so e habilitado quando os 3 documentos obrigatorios estiverem selecionados
-- Apos o insert do motorista, os documentos sao inseridos na tabela `driver_documents`
-
-### Migration necessaria
-```sql
-ALTER TABLE drivers ADD COLUMN IF NOT EXISTS house_number text;
-```
+**Alternativa mais pratica:** No modo scanner, o campo funciona normalmente (scanner injeta caracteres), mas pressionar Enter nao faz nada (so o debounce salva). No modo manual, o debounce e desabilitado e so Enter salva. Isso ja esta implementado. Para reforcar visualmente, adicionar um icone de cadeado e cor diferente no modo scanner.
 
 ---
 
-## Arquivos modificados
+## 5. Travar selecao de conferente apos escolha
+
+Apos o conferente ser selecionado, o `Select` deve ficar desabilitado para o funcionario. Apenas o gerente pode alterar.
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Linha 1037: Adicionar `disabled={!!ride.conferente_id && !managerSession}` ao Select
+- Visualmente, o select travado fica com opacidade reduzida e cursor not-allowed
+
+---
+
+## 6. Icone de alerta para chamar motorista (com som e toast)
+
+Adicionar um icone de alerta (sino/megafone) abaixo do contador de TBR no card. Ao clicar:
+1. O sistema marca o `queue_entry` do motorista com um campo de notificacao (usaremos o campo `called_at` para sinalizar)
+2. Na visao do motorista (`DriverQueue.tsx`), quando `called_at` for preenchido, exibir um toast persistente de alerta e tocar um som alto em loop ate o motorista fechar o toast
+3. O som deve funcionar em segundo plano (criar Audio element no contexto de gesto do usuario)
+
+### Conferencia (lado do operador)
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Adicionar icone `Bell` ou `Megaphone` abaixo do badge de TBR count (top-left do card)
+- Ao clicar, atualizar `queue_entries.called_at = now()` para o `queue_entry_id` da ride
+
+### Motorista (lado do driver)
+**Arquivo:** `src/pages/driver/DriverQueue.tsx`
+- Monitorar mudancas no `queue_entries` via realtime
+- Quando `called_at` for preenchido e o motorista estiver na fila:
+  - Exibir toast persistente (variant destructive, sem auto-dismiss)
+  - Tocar som de alerta em loop (beep alto)
+  - O som continua mesmo em segundo plano (unlock audio no gesto)
+  - Ao fechar o toast, o som para
+
+---
+
+## Resumo dos arquivos modificados
 
 1. **`src/pages/dashboard/ConferenciaCarregamentoPage.tsx`**
-   - Icone de teclado no campo TBR com toggle manual/scanner
-   - Reduzir debounce para 150ms no modo scanner
-   - Botao "Cancelar Carregamento" com modal de senha do gerente
-   - Botao "Trocar Motorista" com modal de busca
-   - Badge/estilo para carregamentos cancelados
+   - Botoes Cancelar/Trocar visiveis para todos (senha pedida ao clicar)
+   - Auto-scroll na lista de TBRs
+   - Debounce reduzido para 80ms
+   - Fix do bug de exclusao (guard ref + await)
+   - Input TBR: visual de modo scanner vs manual
+   - Select de conferente travado apos selecao (exceto gerente)
+   - Icone de alerta para chamar motorista
 
-2. **`src/components/dashboard/QueuePanel.tsx`**
-   - Campo de busca por nome com resultados filtrados (nome, CPF, carro, placa, cor)
-   - Manter campo de CPF existente
-
-3. **`src/components/DriverRegistrationModal.tsx`**
-   - Campo "Numero" (house_number)
-   - Secao de upload de documentos (CNH*, CRLV*, Comprovante*, Outros 1-3)
-   - Validacao de documentos obrigatorios antes do submit
-
-4. **Migration SQL**
-   - Adicionar coluna `house_number` na tabela `drivers`
+2. **`src/pages/driver/DriverQueue.tsx`**
+   - Toast persistente + som em loop quando chamado
+   - Monitoramento realtime do `called_at`
