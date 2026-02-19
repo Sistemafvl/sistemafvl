@@ -6,11 +6,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,7 @@ interface RideWithDriver {
   car_color?: string;
   started_at?: string | null;
   finished_at?: string | null;
+  queue_entry_id?: string | null;
 }
 
 interface Conferente {
@@ -61,6 +63,16 @@ interface OpenRto {
   cep: string;
   description: string;
   driver_name: string | null;
+}
+
+interface SwapDriver {
+  id: string;
+  name: string;
+  cpf: string;
+  avatar_url: string | null;
+  car_model: string;
+  car_plate: string;
+  car_color: string | null;
 }
 
 const formatDuration = (startedAt: string, finishedAt: string) => {
@@ -131,6 +143,14 @@ const SkeletonCard = () => (
   </Card>
 );
 
+const maskCPF = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
+  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
+  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
 const ConferenciaCarregamentoPage = () => {
   const { unitSession, managerSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
@@ -144,7 +164,6 @@ const ConferenciaCarregamentoPage = () => {
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
   const [editingField, setEditingField] = useState<{ rideId: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState("");
-  // Driver info modal
   const [driverModalOpen, setDriverModalOpen] = useState(false);
   const [driverModalData, setDriverModalData] = useState<any>(null);
   const [driverModalLoading, setDriverModalLoading] = useState(false);
@@ -152,10 +171,30 @@ const ConferenciaCarregamentoPage = () => {
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
-  // Carousel
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
+
+  // Manual mode toggle per ride
+  const [manualMode, setManualMode] = useState<Record<string, boolean>>({});
+
+  // Cancel loading modal
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancelRideId, setCancelRideId] = useState<string | null>(null);
+  const [cancelPassword, setCancelPassword] = useState("");
+  const [cancelLoading, setCancelLoading] = useState(false);
+
+  // Swap driver modal
+  const [showSwapModal, setShowSwapModal] = useState(false);
+  const [swapRideId, setSwapRideId] = useState<string | null>(null);
+  const [swapNameSearch, setSwapNameSearch] = useState("");
+  const [swapCpfSearch, setSwapCpfSearch] = useState("");
+  const [swapResults, setSwapResults] = useState<SwapDriver[]>([]);
+  const [swapSearchLoading, setSwapSearchLoading] = useState(false);
+  const [selectedSwapDriver, setSelectedSwapDriver] = useState<SwapDriver | null>(null);
+  const [swapLoading, setSwapLoading] = useState(false);
+  const [swapError, setSwapError] = useState("");
+  const swapDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -169,7 +208,6 @@ const ConferenciaCarregamentoPage = () => {
     return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onSelect); };
   }, [emblaApi]);
 
-  // Search-specific rides (ignoring date filter)
   const [searchRides, setSearchRides] = useState<RideWithDriver[]>([]);
   const [searchTbrs, setSearchTbrs] = useState<Record<string, Tbr[]>>({});
 
@@ -224,7 +262,6 @@ const ConferenciaCarregamentoPage = () => {
         if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
         grouped[t.ride_id].push(t);
       });
-      // Map highlight from DB
       const result: Record<string, Tbr[]> = {};
       for (const [rideId, list] of Object.entries(grouped)) {
         result[rideId] = list.map((t: any) => ({
@@ -240,7 +277,6 @@ const ConferenciaCarregamentoPage = () => {
     setIsLoading(false);
   }, [unitId, startDate, endDate]);
 
-  // Search TBR ignoring date filter (item 3)
   const fetchSearchResults = useCallback(async (searchTerm: string) => {
     if (!unitId || !searchTerm.trim()) {
       setSearchRides([]);
@@ -248,7 +284,6 @@ const ConferenciaCarregamentoPage = () => {
       return;
     }
 
-    // Find all ride_tbrs matching the search for this unit's rides
     const { data: allUnitRides } = await supabase
       .from("driver_rides")
       .select("id")
@@ -301,7 +336,6 @@ const ConferenciaCarregamentoPage = () => {
 
     setSearchRides(mapped);
 
-    // Fetch ALL tbrs for these rides
     const { data: allTbrData } = await supabase
       .from("ride_tbrs")
       .select("*")
@@ -326,7 +360,6 @@ const ConferenciaCarregamentoPage = () => {
       .then(({ data }) => { if (data) setConferentes(data); });
   }, [unitId]);
 
-  // Fetch open RTOs with CEP for suggestion bubbles
   const fetchOpenRtos = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase
@@ -400,7 +433,131 @@ const ConferenciaCarregamentoPage = () => {
     fetchOpenRtos();
   };
 
-  // Auto-save TBR with debounce + optimistic insert + duplicate/triplicate detection
+  // Save TBR logic (shared between scanner debounce and manual Enter)
+  const saveTbr = async (rideId: string, code: string) => {
+    if (!code.trim()) return;
+    if (code.toUpperCase().startsWith("TBR")) {
+      const currentTbrs = tbrs[rideId] ?? [];
+      const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === code.toUpperCase());
+      const count = occurrences.length;
+
+      const tempId = crypto.randomUUID();
+      const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
+
+      if (count === 0) {
+        const { data: previousTbrs } = await supabase
+          .from("ride_tbrs")
+          .select("id")
+          .eq("code", code)
+          .neq("ride_id", rideId);
+
+        let tripNumber = 1;
+
+        if (previousTbrs && previousTbrs.length > 0) {
+          const { data: pisoEntries } = await supabase
+            .from("piso_entries")
+            .select("id, status")
+            .eq("tbr_code", code);
+
+          if (!pisoEntries || pisoEntries.length === 0) {
+            playErrorBeep();
+            const { toast } = await import("@/hooks/use-toast");
+            toast({
+              title: "TBR em viagem",
+              description: "Este TBR encontra-se em viagem. Registre-o no Retorno Piso antes de escaneá-lo novamente no carregamento.",
+              variant: "destructive",
+            });
+            setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+            setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+            return;
+          }
+
+          tripNumber = previousTbrs.length + 1;
+
+          await supabase
+            .from("piso_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .eq("tbr_code", code)
+            .eq("status", "open");
+
+          await supabase
+            .from("rto_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .eq("tbr_code", code)
+            .eq("status", "open");
+
+          playReincidenceBeep();
+        }
+
+        newTbr.trip_number = tripNumber;
+
+        setTbrs((prev) => ({
+          ...prev,
+          [rideId]: [...(prev[rideId] ?? []), newTbr],
+        }));
+        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber } as any);
+        fetchRides();
+      } else if (count === 1) {
+        newTbr._duplicate = true;
+        setTbrs((prev) => {
+          const updated = (prev[rideId] ?? []).map(t =>
+            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
+          );
+          return { ...prev, [rideId]: [...updated, newTbr] };
+        });
+        playErrorBeep();
+
+        setTimeout(() => {
+          setTbrs((prev) => {
+            const list = prev[rideId] ?? [];
+            const filtered = list
+              .filter(t => t.id !== tempId)
+              .map(t => t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: false } : t);
+            return { ...prev, [rideId]: filtered };
+          });
+        }, 1000);
+        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+      } else if (count >= 2) {
+        newTbr._triplicate = true;
+        setTbrs((prev) => {
+          const updated = (prev[rideId] ?? []).map(t =>
+            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _triplicate: true, _duplicate: false } : t
+          );
+          return { ...prev, [rideId]: [...updated, newTbr] };
+        });
+        playErrorBeep();
+
+        const firstTbr = occurrences[0];
+        const secondId = occurrences[1]?.id;
+        setTimeout(async () => {
+          if (firstTbr?.id) {
+            await supabase.from("ride_tbrs").update({ highlight: "yellow" } as any).eq("id", firstTbr.id);
+          }
+          setTbrs((prev) => {
+            const list = prev[rideId] ?? [];
+            const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());
+            const first = matching[0];
+            const idsToRemove = new Set([tempId, secondId].filter(Boolean));
+            const filtered = list
+              .filter(t => !idsToRemove.has(t.id))
+              .map(t => t.id === first?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
+            return { ...prev, [rideId]: filtered };
+          });
+        }, 1000);
+        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+      }
+    } else {
+      playErrorBeep();
+      setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+      setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+    }
+  };
+
+  // Auto-save TBR with debounce (scanner mode) or Enter (manual mode)
   const handleTbrInputChange = (rideId: string, value: string) => {
     if (value.length > 15) return;
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
@@ -411,156 +568,160 @@ const ConferenciaCarregamentoPage = () => {
 
     if (!value.trim()) return;
 
-    debounceTimers.current[rideId] = setTimeout(async () => {
-      const code = value.trim();
-      if (code.toUpperCase().startsWith("TBR")) {
-        const currentTbrs = tbrs[rideId] ?? [];
-        const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === code.toUpperCase());
-        const count = occurrences.length;
+    // In manual mode, don't auto-save
+    if (manualMode[rideId]) return;
 
-        // Optimistic insert
-        const tempId = crypto.randomUUID();
-        const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
+    // Scanner mode: fast 150ms debounce
+    debounceTimers.current[rideId] = setTimeout(() => {
+      saveTbr(rideId, value.trim());
+    }, 150);
+  };
 
-        if (count === 0) {
-          // Check lifecycle: does this TBR exist in other rides?
-          const { data: previousTbrs } = await supabase
-            .from("ride_tbrs")
-            .select("id")
-            .eq("code", code)
-            .neq("ride_id", rideId);
-
-          let tripNumber = 1;
-
-          if (previousTbrs && previousTbrs.length > 0) {
-            // TBR existed before — check if it was registered in Retorno Piso (any status)
-            const { data: pisoEntries } = await supabase
-              .from("piso_entries")
-              .select("id, status")
-              .eq("tbr_code", code);
-
-            if (!pisoEntries || pisoEntries.length === 0) {
-              // Block: TBR needs to go through Retorno Piso first
-              playErrorBeep();
-              const { toast } = await import("@/hooks/use-toast");
-              toast({
-                title: "TBR em viagem",
-                description: "Este TBR encontra-se em viagem. Registre-o no Retorno Piso antes de escaneá-lo novamente no carregamento.",
-                variant: "destructive",
-              });
-              setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-              setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-              return;
-            }
-
-            tripNumber = previousTbrs.length + 1;
-
-            // Close any open piso_entries for this TBR
-            await supabase
-              .from("piso_entries")
-              .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-              .eq("tbr_code", code)
-              .eq("status", "open");
-
-            // Close any open rto_entries for this TBR (Anexo 5)
-            await supabase
-              .from("rto_entries")
-              .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-              .eq("tbr_code", code)
-              .eq("status", "open");
-
-            playReincidenceBeep();
-          }
-
-          newTbr.trip_number = tripNumber;
-
-          // Normal insert — add to state + DB
-          setTbrs((prev) => ({
-            ...prev,
-            [rideId]: [...(prev[rideId] ?? []), newTbr],
-          }));
-          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-          await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber } as any);
-          fetchRides();
-        } else if (count === 1) {
-          // Duplicate (2nd read) — LOCAL ONLY, do NOT insert in DB
-          newTbr._duplicate = true;
-          setTbrs((prev) => {
-            const updated = (prev[rideId] ?? []).map(t =>
-              t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
-            );
-            return { ...prev, [rideId]: [...updated, newTbr] };
-          });
-          playErrorBeep();
-
-          // Auto-remove 2nd from state after 1s, clear duplicate flag on 1st
-          setTimeout(() => {
-            setTbrs((prev) => {
-              const list = prev[rideId] ?? [];
-              const filtered = list
-                .filter(t => t.id !== tempId)
-                .map(t => t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: false } : t);
-              return { ...prev, [rideId]: filtered };
-            });
-          }, 1000);
-          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-        } else if (count >= 2) {
-          // Triplicate (3rd read) — LOCAL ONLY, do NOT insert in DB
-          newTbr._triplicate = true;
-          setTbrs((prev) => {
-            const updated = (prev[rideId] ?? []).map(t =>
-              t.code.toUpperCase() === code.toUpperCase() ? { ...t, _triplicate: true, _duplicate: false } : t
-            );
-            return { ...prev, [rideId]: [...updated, newTbr] };
-          });
-          playErrorBeep();
-
-          // After 1s: remove 2nd and 3rd from state, highlight 1st yellow permanently + persist to DB
-          const firstTbr = occurrences[0];
-          const secondId = occurrences[1]?.id;
-          setTimeout(async () => {
-            // Persist yellow highlight to DB
-            if (firstTbr?.id) {
-              await supabase.from("ride_tbrs").update({ highlight: "yellow" } as any).eq("id", firstTbr.id);
-            }
-            setTbrs((prev) => {
-              const list = prev[rideId] ?? [];
-              const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());
-              const first = matching[0];
-              const idsToRemove = new Set([tempId, secondId].filter(Boolean));
-              const filtered = list
-                .filter(t => !idsToRemove.has(t.id))
-                .map(t => t.id === first?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
-              return { ...prev, [rideId]: filtered };
-            });
-          }, 1000);
-          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-        }
-      } else {
-        playErrorBeep();
-        setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-        setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+  const handleTbrKeyDown = (rideId: string, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && manualMode[rideId]) {
+      e.preventDefault();
+      const value = tbrInputs[rideId]?.trim();
+      if (value) {
+        saveTbr(rideId, value);
       }
-    }, 300);
+    }
+  };
+
+  // Cancel loading
+  const handleOpenCancelModal = (rideId: string) => {
+    setCancelRideId(rideId);
+    setCancelPassword("");
+    setShowCancelModal(true);
+  };
+
+  const handleConfirmCancel = async () => {
+    if (!cancelRideId || !managerSession?.id || !unitId) return;
+    setCancelLoading(true);
+
+    // Validate manager password
+    const { data: manager } = await supabase
+      .from("managers")
+      .select("manager_password")
+      .eq("id", managerSession.id)
+      .maybeSingle();
+
+    if (!manager || manager.manager_password !== cancelPassword) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Senha incorreta", description: "A senha do gerente está incorreta.", variant: "destructive" });
+      setCancelLoading(false);
+      return;
+    }
+
+    const ride = rides.find(r => r.id === cancelRideId);
+    if (!ride) { setCancelLoading(false); return; }
+
+    // Move all TBRs to piso_entries
+    const rideTbrs = tbrs[cancelRideId] ?? [];
+    if (rideTbrs.length > 0) {
+      const pisoInserts = rideTbrs.map(t => ({
+        tbr_code: t.code,
+        unit_id: unitId,
+        ride_id: cancelRideId,
+        reason: "Carregamento cancelado",
+        status: "open",
+        driver_name: ride.driver_name || null,
+        route: ride.route || null,
+      }));
+      await supabase.from("piso_entries").insert(pisoInserts as any);
+    }
+
+    // Update ride status
+    await supabase.from("driver_rides").update({ loading_status: "cancelled" } as any).eq("id", cancelRideId);
+
+    // Complete queue entry
+    if (ride.queue_entry_id) {
+      await supabase.from("queue_entries").update({ status: "completed", completed_at: new Date().toISOString() } as any).eq("id", ride.queue_entry_id);
+    }
+
+    setCancelLoading(false);
+    setShowCancelModal(false);
+    fetchRides();
+  };
+
+  // Swap driver
+  const handleOpenSwapModal = (rideId: string) => {
+    setSwapRideId(rideId);
+    setSwapNameSearch("");
+    setSwapCpfSearch("");
+    setSwapResults([]);
+    setSelectedSwapDriver(null);
+    setSwapError("");
+    setShowSwapModal(true);
+  };
+
+  // Name search with debounce
+  useEffect(() => {
+    if (!swapNameSearch.trim()) {
+      setSwapResults([]);
+      return;
+    }
+    if (swapDebounceRef.current) clearTimeout(swapDebounceRef.current);
+    swapDebounceRef.current = setTimeout(async () => {
+      setSwapSearchLoading(true);
+      const { data } = await supabase
+        .from("drivers_public")
+        .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+        .ilike("name", `%${swapNameSearch.trim()}%`)
+        .eq("active", true)
+        .limit(10);
+      setSwapResults((data ?? []) as SwapDriver[]);
+      setSwapSearchLoading(false);
+    }, 400);
+    return () => { if (swapDebounceRef.current) clearTimeout(swapDebounceRef.current); };
+  }, [swapNameSearch]);
+
+  const handleSwapCpfSearch = async () => {
+    const cpf = swapCpfSearch.replace(/\D/g, "");
+    if (cpf.length < 11) { setSwapError("CPF deve ter 11 dígitos."); return; }
+    setSwapSearchLoading(true);
+    setSwapError("");
+    const { data } = await supabase
+      .from("drivers_public")
+      .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+      .eq("cpf", cpf)
+      .eq("active", true)
+      .maybeSingle();
+    if (!data) {
+      setSwapError("Motorista não encontrado.");
+    } else {
+      setSelectedSwapDriver(data as SwapDriver);
+    }
+    setSwapSearchLoading(false);
+  };
+
+  const handleConfirmSwap = async () => {
+    if (!selectedSwapDriver || !swapRideId) return;
+    setSwapLoading(true);
+
+    const ride = rides.find(r => r.id === swapRideId);
+
+    // Update driver_rides
+    await supabase.from("driver_rides").update({ driver_id: selectedSwapDriver.id } as any).eq("id", swapRideId);
+
+    // Update queue_entry if exists
+    if (ride?.queue_entry_id) {
+      await supabase.from("queue_entries").update({ driver_id: selectedSwapDriver.id } as any).eq("id", ride.queue_entry_id);
+    }
+
+    setSwapLoading(false);
+    setShowSwapModal(false);
+    fetchRides();
   };
 
   const handleSaveEdit = async (rideId: string, field: string, value: string) => {
-    // Anexo 1: Validação de login único por dia (horário de Brasília)
     if (field === "login" && value && unitId) {
-      // Dia em Brasília (UTC-3): 00:00 BRT = 03:00 UTC
       const now = new Date();
-      // Obter data atual em Brasília
       const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
       const brasiliaDate = new Date(brasiliaStr);
       const year = brasiliaDate.getFullYear();
       const month = String(brasiliaDate.getMonth() + 1).padStart(2, "0");
       const day = String(brasiliaDate.getDate()).padStart(2, "0");
-      // Início do dia em Brasília = 00:00 BRT = 03:00 UTC
       const startUtc = `${year}-${month}-${day}T03:00:00.000Z`;
-      // Fim do dia em Brasília = 23:59:59 BRT = próximo dia 02:59:59 UTC
       const nextDay = new Date(brasiliaDate);
       nextDay.setDate(nextDay.getDate() + 1);
       const ny = nextDay.getFullYear();
@@ -603,7 +764,6 @@ const ConferenciaCarregamentoPage = () => {
     };
   }, []);
 
-  // Handle search by Enter (item 2)
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       const val = tbrSearch.trim();
@@ -621,23 +781,16 @@ const ConferenciaCarregamentoPage = () => {
     setSearchTbrs({});
   };
 
-  // Determine which rides/tbrs to display
   const isSearchActive = tbrSearchCommitted.trim().length > 0;
   const displayRides = isSearchActive ? searchRides : rides;
   const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
-    if (date) {
-      date.setHours(0, 0, 0, 0);
-      setStartDate(date);
-    }
+    if (date) { date.setHours(0, 0, 0, 0); setStartDate(date); }
   };
 
   const handleEndDateSelect = (date: Date | undefined) => {
-    if (date) {
-      date.setHours(23, 59, 59, 999);
-      setEndDate(date);
-    }
+    if (date) { date.setHours(23, 59, 59, 999); setEndDate(date); }
   };
 
   const renderEditableField = (ride: RideWithDriver, field: "route" | "login" | "password", icon: React.ReactNode, label: string) => {
@@ -699,11 +852,9 @@ const ConferenciaCarregamentoPage = () => {
   const getTbrItemClass = (tbr: Tbr) => {
     if (tbr._duplicate || tbr._triplicate) return "bg-red-100 text-red-700 border-red-300";
     if (tbr._yellowHighlight) return "bg-yellow-100 text-yellow-700 border-yellow-300";
-    // Green highlight when search matches
     if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
       return "bg-green-100 border-green-400 text-green-800";
     }
-    // Reincidence colors
     if (tbr.trip_number && tbr.trip_number >= 3) return "bg-orange-100 text-orange-700 border-orange-300";
     if (tbr.trip_number === 2) return "bg-purple-100 text-purple-700 border-purple-300";
     return "bg-muted/50";
@@ -739,13 +890,7 @@ const ConferenciaCarregamentoPage = () => {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={startDate}
-              onSelect={handleStartDateSelect}
-              initialFocus
-              className={cn("p-3 pointer-events-auto")}
-            />
+            <Calendar mode="single" selected={startDate} onSelect={handleStartDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
           </PopoverContent>
         </Popover>
 
@@ -757,13 +902,7 @@ const ConferenciaCarregamentoPage = () => {
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={endDate}
-              onSelect={handleEndDateSelect}
-              initialFocus
-              className={cn("p-3 pointer-events-auto")}
-            />
+            <Calendar mode="single" selected={endDate} onSelect={handleEndDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
           </PopoverContent>
         </Popover>
       </div>
@@ -780,28 +919,14 @@ const ConferenciaCarregamentoPage = () => {
         </p>
       ) : (
         <div>
-          {/* Carousel navigation arrows - between filters and cards, right-aligned */}
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full"
-              onClick={() => emblaApi?.scrollPrev()}
-              disabled={!canScrollPrev}
-            >
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollPrev()} disabled={!canScrollPrev}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="h-8 w-8 rounded-full"
-              onClick={() => emblaApi?.scrollNext()}
-              disabled={!canScrollNext}
-            >
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollNext()} disabled={!canScrollNext}>
               <ChevronRight className="h-4 w-4" />
             </Button>
 
-            {/* Legend */}
             <div className="flex items-center gap-3 ml-2 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm border bg-white" />
@@ -825,10 +950,16 @@ const ConferenciaCarregamentoPage = () => {
                 const rideTbrs = displayTbrs[ride.id] ?? [];
                 const isLoadingStatus = status === "loading";
                 const isFinished = status === "finished";
+                const isCancelled = status === "cancelled";
 
                 return (
                   <div key={ride.id} className="flex-[0_0_85vw] sm:flex-[0_0_320px] min-w-0 pl-4 first:pl-0">
-                    <Card className={cn("relative overflow-hidden h-full transition-colors", isLoadingStatus && "bg-blue-50 border-blue-200", isFinished && "bg-green-50 border-green-200")}>
+                    <Card className={cn(
+                      "relative overflow-hidden h-full transition-colors",
+                      isLoadingStatus && "bg-blue-50 border-blue-200",
+                      isFinished && "bg-green-50 border-green-200",
+                      isCancelled && "bg-red-50 border-red-200"
+                    )}>
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge (top-left) */}
                         <Badge variant="secondary" className="absolute top-3 left-3 text-xs px-2 py-0.5 font-bold gap-1">
@@ -837,6 +968,9 @@ const ConferenciaCarregamentoPage = () => {
                         </Badge>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          {isCancelled && (
+                            <Badge variant="destructive" className="text-[10px] px-2 py-0.5">Cancelado</Badge>
+                          )}
                           {isFinished && (
                             <CheckCircle className="h-5 w-5 text-green-600" />
                           )}
@@ -900,10 +1034,7 @@ const ConferenciaCarregamentoPage = () => {
 
                         {/* Conferente Select */}
                         <div className="w-full">
-                          <Select
-                            value={ride.conferente_id ?? ""}
-                            onValueChange={(val) => handleSelectConferente(ride.id, val)}
-                          >
+                          <Select value={ride.conferente_id ?? ""} onValueChange={(val) => handleSelectConferente(ride.id, val)}>
                             <SelectTrigger className="w-full h-9 text-sm">
                               <div className="flex items-center gap-2">
                                 <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
@@ -919,23 +1050,47 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         {/* Action Buttons */}
-                        <div className="w-full flex gap-2">
-                          {!isLoadingStatus && !isFinished && (
-                            <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
-                              <Play className="h-3.5 w-3.5" /> Iniciar
+                        {!isCancelled && (
+                          <div className="w-full flex gap-2">
+                            {!isLoadingStatus && !isFinished && (
+                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
+                                <Play className="h-3.5 w-3.5" /> Iniciar
+                              </Button>
+                            )}
+                            {isLoadingStatus && (
+                              <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
+                                <CheckCircle className="h-3.5 w-3.5" /> Finalizar
+                              </Button>
+                            )}
+                            {isFinished && (
+                              <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => handleRetornar(ride.id)}>
+                                <RotateCcw className="h-3.5 w-3.5" /> Retornar
+                              </Button>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Cancel & Swap buttons (manager only) */}
+                        {managerSession && !isCancelled && (
+                          <div className="w-full flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 gap-1 text-destructive border-destructive/30 hover:bg-destructive/10"
+                              onClick={() => handleOpenCancelModal(ride.id)}
+                            >
+                              <Ban className="h-3.5 w-3.5" /> Cancelar
                             </Button>
-                          )}
-                          {isLoadingStatus && (
-                            <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
-                              <CheckCircle className="h-3.5 w-3.5" /> Finalizar
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 gap-1"
+                              onClick={() => handleOpenSwapModal(ride.id)}
+                            >
+                              <ArrowRightLeft className="h-3.5 w-3.5" /> Trocar
                             </Button>
-                          )}
-                          {isFinished && (
-                            <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => handleRetornar(ride.id)}>
-                              <RotateCcw className="h-3.5 w-3.5" /> Retornar
-                            </Button>
-                          )}
-                        </div>
+                          </div>
+                        )}
 
                         {/* RTO Suggestion Bubble */}
                         {ride.route && openRtos.length > 0 && (() => {
@@ -945,7 +1100,6 @@ const ConferenciaCarregamentoPage = () => {
                             return routeText.includes(cepPrefix);
                           });
                           if (!matchingRto) return null;
-                          // Check if this TBR is already scanned in this ride
                           const alreadyIncluded = (displayTbrs[ride.id] ?? []).some(
                             t => t.code.toUpperCase() === matchingRto.tbr_code.toUpperCase()
                           );
@@ -963,11 +1117,8 @@ const ConferenciaCarregamentoPage = () => {
                                 variant="outline"
                                 className="w-full border-yellow-400 text-yellow-700 hover:bg-yellow-100"
                                 onClick={async () => {
-                                  // Insert TBR into this ride
                                   await supabase.from("ride_tbrs").insert({ ride_id: ride.id, code: matchingRto.tbr_code, trip_number: 1 } as any);
-                                  // Close the RTO
                                   await supabase.from("rto_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", matchingRto.id);
-                                  // Refresh
                                   fetchRides();
                                   fetchOpenRtos();
                                 }}
@@ -1003,15 +1154,26 @@ const ConferenciaCarregamentoPage = () => {
                               </div>
                             )}
                             {isLoadingStatus && (
-                              <div className="flex gap-2">
+                              <div className="flex gap-1">
                                 <Input
                                   ref={(el) => { inputRefs.current[ride.id] = el; }}
-                                  className="h-8 text-sm font-mono"
-                                  placeholder="Escanear TBR..."
+                                  className="h-8 text-sm font-mono flex-1"
+                                  placeholder={manualMode[ride.id] ? "Digite o TBR + Enter..." : "Escanear TBR..."}
                                   value={tbrInputs[ride.id] ?? ""}
                                   onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
+                                  onKeyDown={(e) => handleTbrKeyDown(ride.id, e)}
                                   autoFocus
                                 />
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant={manualMode[ride.id] ? "default" : "outline"}
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={() => setManualMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }))}
+                                  title={manualMode[ride.id] ? "Modo manual (Enter para salvar)" : "Modo scanner (automático)"}
+                                >
+                                  <Keyboard className="h-3.5 w-3.5" />
+                                </Button>
                               </div>
                             )}
                           </div>
@@ -1025,6 +1187,7 @@ const ConferenciaCarregamentoPage = () => {
           </div>
         </div>
       )}
+
       {/* Driver Info Modal */}
       <Dialog open={driverModalOpen} onOpenChange={setDriverModalOpen}>
         <DialogContent className="sm:max-w-md">
@@ -1066,6 +1229,125 @@ const ConferenciaCarregamentoPage = () => {
           ) : (
             <p className="text-muted-foreground italic text-sm py-4">Motorista não encontrado.</p>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Loading Modal */}
+      <Dialog open={showCancelModal} onOpenChange={setShowCancelModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
+              <Ban className="h-5 w-5" /> Cancelar Carregamento
+            </DialogTitle>
+            <DialogDescription>
+              Digite a senha do gerente para confirmar o cancelamento. Todos os TBRs serão movidos para o Retorno Piso.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="cancel-pw" className="font-semibold">Senha do Gerente</Label>
+              <Input
+                id="cancel-pw"
+                type="password"
+                value={cancelPassword}
+                onChange={(e) => setCancelPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmCancel(); }}
+                placeholder="Digite a senha..."
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleConfirmCancel}
+              variant="destructive"
+              className="w-full font-bold italic"
+              disabled={cancelLoading || !cancelPassword}
+            >
+              {cancelLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Cancelamento
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Swap Driver Modal */}
+      <Dialog open={showSwapModal} onOpenChange={setShowSwapModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <ArrowRightLeft className="h-5 w-5 text-primary" /> Trocar Motorista
+            </DialogTitle>
+            <DialogDescription>
+              Busque um motorista cadastrado pelo nome ou CPF
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {/* Name search */}
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar por Nome</Label>
+              <Input
+                placeholder="Digite o nome..."
+                value={swapNameSearch}
+                onChange={(e) => { setSwapNameSearch(e.target.value); setSelectedSwapDriver(null); }}
+              />
+              {swapSearchLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              {swapResults.length > 0 && !selectedSwapDriver && (
+                <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-1">
+                  {swapResults.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setSelectedSwapDriver(d); setSwapResults([]); }}
+                      className="w-full text-left p-2 rounded hover:bg-muted text-xs space-y-0.5"
+                    >
+                      <p className="font-bold">{d.name}</p>
+                      <p className="text-muted-foreground">CPF: {maskCPF(d.cpf)} · {d.car_model} {d.car_color || ""} · {d.car_plate}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* CPF search */}
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar por CPF</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Digite o CPF..."
+                  value={swapCpfSearch}
+                  onChange={(e) => setSwapCpfSearch(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleSwapCpfSearch(); }}
+                  maxLength={14}
+                />
+                <Button onClick={handleSwapCpfSearch} disabled={swapSearchLoading} size="icon">
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {swapError && <p className="text-sm text-destructive font-semibold">{swapError}</p>}
+
+            {selectedSwapDriver && (
+              <div className="p-3 rounded-lg border border-border bg-card space-y-2">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    {selectedSwapDriver.avatar_url && <AvatarImage src={selectedSwapDriver.avatar_url} />}
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">{selectedSwapDriver.name[0].toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-bold text-sm">{selectedSwapDriver.name}</p>
+                    <p className="text-xs text-muted-foreground">CPF: {maskCPF(selectedSwapDriver.cpf)}</p>
+                  </div>
+                </div>
+                <div className="text-xs space-y-0.5">
+                  <p><strong>Veículo:</strong> {selectedSwapDriver.car_model} — {selectedSwapDriver.car_color || "N/A"}</p>
+                  <p><strong>Placa:</strong> {selectedSwapDriver.car_plate}</p>
+                </div>
+                <Button onClick={handleConfirmSwap} disabled={swapLoading} className="w-full font-bold italic">
+                  {swapLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Confirmar Troca
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
