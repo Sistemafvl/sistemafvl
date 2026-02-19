@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Bell, AlertTriangle } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import { useToast } from "@/hooks/use-toast";
 
 interface QueueEntry {
   id: string;
@@ -32,8 +33,58 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
+// Generate alert beep using Web Audio API
+const createAlertAudio = () => {
+  let audioCtx: AudioContext | null = null;
+  let oscillator: OscillatorNode | null = null;
+  let gainNode: GainNode | null = null;
+  let isPlaying = false;
+  let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const startBeeping = () => {
+    if (isPlaying) return;
+    isPlaying = true;
+
+    const beep = () => {
+      try {
+        audioCtx = new AudioContext();
+        oscillator = audioCtx.createOscillator();
+        gainNode = audioCtx.createGain();
+        oscillator.type = "square";
+        oscillator.frequency.value = 1000;
+        gainNode.gain.value = 0.5;
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.start();
+        oscillator.stop(audioCtx.currentTime + 0.3);
+      } catch {}
+    };
+
+    beep();
+    intervalId = setInterval(beep, 1500);
+  };
+
+  const stopBeeping = () => {
+    isPlaying = false;
+    if (intervalId) {
+      clearInterval(intervalId);
+      intervalId = null;
+    }
+    try {
+      oscillator?.stop();
+      audioCtx?.close();
+    } catch {}
+    oscillator = null;
+    gainNode = null;
+    audioCtx = null;
+  };
+
+  return { startBeeping, stopBeeping };
+};
+
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
+  const { toast, dismiss } = useToast();
   const [loading, setLoading] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [myEntry, setMyEntry] = useState<QueueEntry | null>(null);
@@ -42,6 +93,10 @@ const DriverQueue = () => {
   const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [tbrCount, setTbrCount] = useState(0);
+
+  const alertAudioRef = useRef(createAlertAudio());
+  const lastCalledAtRef = useRef<string | null>(null);
+  const alertToastIdRef = useRef<string | null>(null);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -95,7 +150,6 @@ const DriverQueue = () => {
   const fetchQueue = useCallback(async () => {
     if (!unitId || !driverId) return;
 
-    // Fetch both waiting and approved entries
     const { data: allEntries } = await supabase
       .from("queue_entries")
       .select("*")
@@ -105,12 +159,17 @@ const DriverQueue = () => {
 
     const entries = (allEntries ?? []) as QueueEntry[];
     
-    // Count only approved for queue display
     const approvedEntries = entries.filter((e) => e.status === "approved");
     setQueueCount(approvedEntries.length);
 
     const mine = entries.find((e) => e.driver_id === driverId);
     setMyEntry(mine ?? null);
+
+    // Check if driver was called
+    if (mine && mine.called_at && mine.called_at !== lastCalledAtRef.current) {
+      lastCalledAtRef.current = mine.called_at;
+      triggerCallAlert();
+    }
 
     if (mine && mine.status === "approved") {
       const pos = approvedEntries.filter((e) => e.joined_at <= mine.joined_at).length;
@@ -134,6 +193,36 @@ const DriverQueue = () => {
       setAvgWaitMinutes(5);
     }
   }, [unitId, driverId]);
+
+  const triggerCallAlert = () => {
+    // Start beeping sound
+    alertAudioRef.current.startBeeping();
+
+    // Show persistent toast
+    const { id } = toast({
+      title: "🔔 É a sua vez!",
+      description: "Dirija-se ao local de carregamento. Estamos chamando você!",
+      variant: "destructive",
+      duration: Infinity,
+      onOpenChange: (open) => {
+        if (!open) {
+          alertAudioRef.current.stopBeeping();
+          alertToastIdRef.current = null;
+        }
+      },
+    });
+    alertToastIdRef.current = id;
+  };
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      alertAudioRef.current.stopBeeping();
+      if (alertToastIdRef.current) {
+        dismiss(alertToastIdRef.current);
+      }
+    };
+  }, [dismiss]);
 
   useEffect(() => {
     fetchQueue();
@@ -182,9 +271,7 @@ const DriverQueue = () => {
     }).select().single();
     setLoading(false);
     if (error) return;
-    // Optimistic update
     setMyEntry(data as QueueEntry);
-    // Refresh full queue
     fetchQueue();
   };
 
@@ -370,6 +457,19 @@ const DriverQueue = () => {
         </>
       ) : (
         <>
+          {/* Called alert banner */}
+          {myEntry?.called_at && (
+            <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 animate-pulse">
+              <CardContent className="flex items-center gap-3 pt-6 pb-6">
+                <Bell className="h-8 w-8 text-yellow-600 animate-bounce" />
+                <div>
+                  <p className="text-lg font-bold text-yellow-800 dark:text-yellow-200">É a sua vez!</p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-300">Dirija-se ao local de carregamento.</p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="border-primary">
             <CardHeader>
               <CardTitle className="text-primary">Você está na fila!</CardTitle>
