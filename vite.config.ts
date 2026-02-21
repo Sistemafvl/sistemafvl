@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "zustand", "next-themes", "recharts"],
   },
   optimizeDeps: {
-    include: ["react", "react-dom", "react-dom/client", "@tanstack/react-query", "recharts", "zustand", "next-themes"],
+    include: ["react", "react-dom", "react-dom/client", "react/jsx-runtime", "react/jsx-dev-runtime", "@tanstack/react-query", "recharts", "zustand", "zustand/middleware", "next-themes"],
     force: true,
   },
 }));
