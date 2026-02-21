@@ -492,12 +492,10 @@ const ConferenciaCarregamentoPage = () => {
 
     await fetchOpenRtos();
 
-    // Keep tbrId in deletingRef until after fetchRides completes
-    setTimeout(async () => {
-      skipRealtimeRef.current = false;
-      await fetchRides();
-      deletingRef.current.delete(tbrId);
-    }, 3000);
+    // Wait for all DB ops to settle, then re-fetch
+    await fetchRides();
+    deletingRef.current.delete(tbrId);
+    skipRealtimeRef.current = false;
   };
 
   const scrollTbrList = (rideId: string) => {

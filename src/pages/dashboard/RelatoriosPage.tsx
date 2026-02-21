@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2 } from "lucide-react";
+import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -25,6 +25,7 @@ const RelatoriosPage = () => {
     const d = new Date(); d.setHours(23, 59, 59, 999); return d;
   });
   const [loading, setLoading] = useState<string | null>(null);
+  const [showPayrollModal, setShowPayrollModal] = useState(false);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -67,122 +68,20 @@ const RelatoriosPage = () => {
     setLoading("payroll");
     try {
       const common = await ensureCommon();
-      if (!common) return;
+      if (!common) { setLoading(null); return; }
 
-      const { data: rides } = await supabase.from("driver_rides").select("*").eq("unit_id", unitId)
-        .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString());
+      const result = await fetchPayrollData(common);
+      if (!result) { setLoading(null); return; }
 
-      if (!rides?.length) { toast({ title: "Sem dados", description: "Nenhum carregamento no período.", variant: "destructive" }); setLoading(null); return; }
+      // Save to payroll_reports
+      await supabase.from("payroll_reports" as any).insert({
+        unit_id: unitId,
+        generated_by: generatedBy,
+        period_start: format(startDate, "yyyy-MM-dd"),
+        period_end: format(endDate, "yyyy-MM-dd"),
+        report_data: result,
+      } as any);
 
-      const driverIds = [...new Set(rides.map(r => r.driver_id))];
-      const rideIds = rides.map(r => r.id);
-
-      const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes] = await Promise.all([
-        supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
-        supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId),
-        supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId)
-          .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
-      ]);
-
-      const drivers = driversRes.data ?? [];
-      const allTbrs = tbrsRes.data ?? [];
-      const allPiso = pisoRes.data ?? [];
-      const allPs = psRes.data ?? [];
-      const allRto = rtoRes.data ?? [];
-      const driverMap = new Map(drivers.map(d => [d.id, d]));
-
-      // Custom TBR values map
-      const customValueMap = new Map<string, number>();
-      (customValuesRes.data ?? []).forEach((cv: any) => {
-        customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value));
-      });
-
-      // Bonus map
-      const bonusByDriver = new Map<string, number>();
-      (bonusRes.data ?? []).forEach((b: any) => {
-        bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount));
-      });
-
-      // Fetch discounted DNRs for the period
-      const { data: dnrData } = await supabase
-        .from("dnr_entries")
-        .select("driver_id, dnr_value")
-        .eq("unit_id", unitId)
-        .eq("status", "closed")
-        .eq("discounted", true)
-        .gte("closed_at", startDate.toISOString())
-        .lte("closed_at", endDate.toISOString());
-
-      const dnrByDriver = new Map<string, number>();
-      (dnrData ?? []).forEach((d: any) => {
-        if (d.driver_id) {
-          dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value));
-        }
-      });
-
-      // Fetch PIX keys for all drivers
-      const pixByDriver = new Map<string, string>();
-      await Promise.all(driverIds.map(async (did) => {
-        try {
-          const { data } = await supabase.functions.invoke("get-driver-details", { body: { driver_id: did, self_access: true } });
-          if (data?.pix_key) pixByDriver.set(did, data.pix_key);
-        } catch {}
-      }));
-
-      const result: DriverPayrollData[] = driverIds.map(driverId => {
-        const driver = driverMap.get(driverId)!;
-        const driverRides = rides.filter(r => r.driver_id === driverId);
-        const tbrVal = customValueMap.get(driverId) ?? common.tVal;
-        const dayMap = new Map<string, { login: string | null; rideIds: string[] }>();
-        driverRides.forEach(r => {
-          const dayKey = format(new Date(r.completed_at), "yyyy-MM-dd");
-          const existing = dayMap.get(dayKey);
-          if (existing) { existing.rideIds.push(r.id); if (r.login && !existing.login) existing.login = r.login; }
-          else dayMap.set(dayKey, { login: r.login, rideIds: [r.id] });
-        });
-
-        const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
-          const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-          const returnTbrSet = new Set<string>();
-          [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
-            if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
-          });
-          const rReturns = returnTbrSet.size;
-          return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * tbrVal };
-        });
-
-        const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
-        const totalReturns = days.reduce((s, d) => s + d.returns, 0);
-        const totalCompleted = totalTbrs - totalReturns;
-        const loginsUsed = [...new Set(driverRides.map(r => r.login).filter(Boolean) as string[])];
-        const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
-        const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
-        const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
-        const bonusAmount = bonusByDriver.get(driverId) ?? 0;
-
-        return {
-          driver: {
-            id: driver.id, name: driver.name, cpf: driver.cpf,
-            car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color,
-            pixKey: pixByDriver.get(driverId) ?? null,
-          },
-          days, totalTbrs, totalReturns, totalCompleted,
-          tbrValueUsed: tbrVal,
-          bonus: bonusAmount,
-          totalValue: (totalCompleted * tbrVal) - dnrDiscount + bonusAmount,
-          dnrDiscount,
-          daysWorked: days.length, loginsUsed,
-          bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
-          worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
-          avgDaily: days.length ? Math.round(totalTbrs / days.length) : 0,
-        };
-      }).sort((a, b) => b.totalTbrs - a.totalTbrs);
-
-      setPayrollData(result);
       setTimeout(async () => {
         if (payrollRef.current) {
           await generatePDFFromContainer(payrollRef.current, `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
@@ -368,8 +267,118 @@ const RelatoriosPage = () => {
     setLoading(null);
   };
 
+  // Consultar payroll (view only, no PDF)
+  const consultPayroll = async () => {
+    if (!unitId) return;
+    setLoading("consult");
+    try {
+      const common = await ensureCommon();
+      if (!common) { setLoading(null); return; }
+      // Reuse fetchPayroll logic but don't generate PDF
+      await fetchPayrollData(common);
+      setShowPayrollModal(true);
+    } catch { toast({ title: "Erro", description: "Erro ao consultar relatório.", variant: "destructive" }); }
+    setLoading(null);
+  };
+
+  // Separated data fetching for reuse
+  const fetchPayrollData = async (common: { uName: string; tVal: number; logo: string }) => {
+    const { data: rides } = await supabase.from("driver_rides").select("*").eq("unit_id", unitId!)
+      .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString());
+    if (!rides?.length) { toast({ title: "Sem dados", description: "Nenhum carregamento no período.", variant: "destructive" }); return; }
+
+    const driverIds = [...new Set(rides.map(r => r.driver_id))];
+    const rideIds = rides.map(r => r.id);
+
+    const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes] = await Promise.all([
+      supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
+      supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
+      supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
+      supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
+        .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
+    ]);
+
+    const drivers = driversRes.data ?? [];
+    const allTbrs = tbrsRes.data ?? [];
+    const allPiso = pisoRes.data ?? [];
+    const allPs = psRes.data ?? [];
+    const allRto = rtoRes.data ?? [];
+    const driverMap = new Map(drivers.map(d => [d.id, d]));
+    const customValueMap = new Map<string, number>();
+    (customValuesRes.data ?? []).forEach((cv: any) => { customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value)); });
+    const bonusByDriver = new Map<string, number>();
+    (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
+
+    const { data: dnrData } = await supabase.from("dnr_entries").select("driver_id, dnr_value")
+      .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
+      .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
+    const dnrByDriver = new Map<string, number>();
+    (dnrData ?? []).forEach((d: any) => { if (d.driver_id) dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value)); });
+
+    const pixByDriver = new Map<string, string>();
+    await Promise.all(driverIds.map(async (did) => {
+      try {
+        const { data } = await supabase.functions.invoke("get-driver-details", { body: { driver_id: did, self_access: true } });
+        if (data?.pix_key) pixByDriver.set(did, data.pix_key);
+      } catch {}
+    }));
+
+    const result: DriverPayrollData[] = driverIds.map(driverId => {
+      const driver = driverMap.get(driverId)!;
+      const driverRides = rides.filter(r => r.driver_id === driverId);
+      const tbrVal = customValueMap.get(driverId) ?? common.tVal;
+      const dayMap = new Map<string, { login: string | null; rideIds: string[] }>();
+      driverRides.forEach(r => {
+        const dayKey = format(new Date(r.completed_at), "yyyy-MM-dd");
+        const existing = dayMap.get(dayKey);
+        if (existing) { existing.rideIds.push(r.id); if (r.login && !existing.login) existing.login = r.login; }
+        else dayMap.set(dayKey, { login: r.login, rideIds: [r.id] });
+      });
+
+      const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
+        const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
+        const returnTbrSet = new Set<string>();
+        [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
+          if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
+        });
+        const rReturns = returnTbrSet.size;
+        return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * tbrVal };
+      });
+
+      const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
+      const totalReturns = days.reduce((s, d) => s + d.returns, 0);
+      const totalCompleted = totalTbrs - totalReturns;
+      const loginsUsed = [...new Set(driverRides.map(r => r.login).filter(Boolean) as string[])];
+      const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
+      const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
+      const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
+      const bonusAmount = bonusByDriver.get(driverId) ?? 0;
+
+      return {
+        driver: {
+          id: driver.id, name: driver.name, cpf: driver.cpf,
+          car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color,
+          pixKey: pixByDriver.get(driverId) ?? null,
+        },
+        days, totalTbrs, totalReturns, totalCompleted,
+        tbrValueUsed: tbrVal, bonus: bonusAmount,
+        totalValue: (totalCompleted * tbrVal) - dnrDiscount + bonusAmount,
+        dnrDiscount, daysWorked: days.length, loginsUsed,
+        bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
+        worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
+        avgDaily: days.length ? Math.round(totalTbrs / days.length) : 0,
+      };
+    }).sort((a, b) => b.totalTbrs - a.totalTbrs);
+
+    setPayrollData(result);
+    return result;
+  };
+
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll },
+    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll, secondAction: consultPayroll },
     { key: "daily", title: "Resumo Diário", description: "Consolidado operacional por dia do período", icon: BarChart3, action: fetchDailySummary },
     { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: fetchReturns },
     { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: fetchRanking },
@@ -421,10 +430,23 @@ const RelatoriosPage = () => {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
-                <Button className="w-full gap-2" onClick={r.action} disabled={loading === r.key}>
-                  {loading === r.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                  Gerar PDF
-                </Button>
+                {r.secondAction ? (
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="flex-1 gap-2" onClick={r.secondAction} disabled={loading === "consult"}>
+                      {loading === "consult" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      Consultar
+                    </Button>
+                    <Button className="flex-1 gap-2" onClick={r.action} disabled={loading === r.key}>
+                      {loading === r.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                      Gerar PDF
+                    </Button>
+                  </div>
+                ) : (
+                  <Button className="w-full gap-2" onClick={r.action} disabled={loading === r.key}>
+                    {loading === r.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    Gerar PDF
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -450,6 +472,46 @@ const RelatoriosPage = () => {
             startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
         )}
       </div>
+
+      {/* Payroll Consult Modal */}
+      {showPayrollModal && payrollData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80" onClick={() => setShowPayrollModal(false)} />
+          <div className="relative z-50 w-full max-w-4xl max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
+            <button onClick={() => setShowPayrollModal(false)} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+              <X className="h-4 w-4" />
+            </button>
+            <h2 className="text-lg font-bold italic mb-4">Consulta — Folha de Pagamento</h2>
+            <p className="text-sm text-muted-foreground mb-4">
+              {format(startDate, "dd/MM/yyyy")} até {format(endDate, "dd/MM/yyyy")} • {payrollData.length} motorista(s)
+            </p>
+            <div className="space-y-3">
+              {payrollData.map((d) => (
+                <Card key={d.driver.id}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-bold">{d.driver.name}</p>
+                        <p className="text-xs text-muted-foreground">{d.driver.cpf} • {d.driver.car_plate}</p>
+                        {d.driver.pixKey && <p className="text-xs text-muted-foreground">PIX: {d.driver.pixKey}</p>}
+                      </div>
+                      <p className="font-bold text-lg text-primary">{formatCurrency(d.totalValue)}</p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
+                      <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.totalTbrs}</strong></div>
+                      <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns}</strong></div>
+                      <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked}</strong></div>
+                      <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed)}</strong></div>
+                      {d.dnrDiscount > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount)}</strong></div>}
+                      {d.bonus > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus)}</strong></div>}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

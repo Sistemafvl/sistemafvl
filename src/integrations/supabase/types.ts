@@ -209,6 +209,47 @@ export type Database = {
           },
         ]
       }
+      driver_invoices: {
+        Row: {
+          created_at: string
+          driver_id: string
+          file_name: string | null
+          file_url: string | null
+          id: string
+          payroll_report_id: string
+          unit_id: string
+          uploaded_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          payroll_report_id: string
+          unit_id: string
+          uploaded_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          file_name?: string | null
+          file_url?: string | null
+          id?: string
+          payroll_report_id?: string
+          unit_id?: string
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_invoices_payroll_report_id_fkey"
+            columns: ["payroll_report_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_rides: {
         Row: {
           completed_at: string
@@ -434,6 +475,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      payroll_reports: {
+        Row: {
+          created_at: string
+          generated_by: string
+          id: string
+          period_end: string
+          period_start: string
+          report_data: Json
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          generated_by: string
+          id?: string
+          period_end: string
+          period_start: string
+          report_data: Json
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          generated_by?: string
+          id?: string
+          period_end?: string
+          period_start?: string
+          report_data?: Json
+          unit_id?: string
+        }
+        Relationships: []
       }
       piso_entries: {
         Row: {

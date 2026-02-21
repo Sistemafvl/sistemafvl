@@ -7,7 +7,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { RotateCcw, Search, ChevronLeft, ChevronRight } from "lucide-react";
-import { translateStatus } from "@/lib/status-labels";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -52,15 +51,13 @@ const ITEMS_PER_PAGE = 30;
 const RTOPage = () => {
   const { unitSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   const [isLoading, setIsLoading] = useState(true);
   const [tbrInput, setTbrInput] = useState("");
   const [searching, setSearching] = useState(false);
   const [history, setHistory] = useState<TbrHistory | null>(null);
   const [tbrCode, setTbrCode] = useState("");
-  const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [includeMode, setIncludeMode] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
   const [description, setDescription] = useState("");
   const [cepInput, setCepInput] = useState("");
   const [selectedConferente, setSelectedConferente] = useState("");
@@ -106,86 +103,69 @@ const RTOPage = () => {
     setIsLoading(false);
   };
 
-  const handleTbrInput = (value: string) => {
-    setTbrInput(value);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const code = value.trim();
-      if (code.toUpperCase().startsWith("TBR") && code.length >= 5) {
-        searchTbr(code);
-      }
-    }, 300);
-  };
-
-  const searchTbr = async (code: string) => {
+  const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || !tbrInput.trim()) return;
+    const code = tbrInput.trim();
     setSearching(true);
     setTbrCode(code);
 
+    // Optionally fetch history for informational display
     const { data: tbrData } = await supabase
       .from("ride_tbrs")
       .select("ride_id")
       .eq("code", code)
-      .maybeSingle();
+      .order("scanned_at", { ascending: false })
+      .limit(1);
 
-    if (!tbrData) {
-      setSearching(false);
-      setTbrInput("");
-      inputRef.current?.focus();
-      return;
+    let historyData: TbrHistory | null = null;
+
+    if (tbrData && tbrData.length > 0) {
+      const { data: ride } = await supabase
+        .from("driver_rides")
+        .select("id, route, login, loading_status, completed_at, conferente_id, driver_id")
+        .eq("id", tbrData[0].ride_id)
+        .maybeSingle();
+
+      if (ride) {
+        const { data: driver } = await supabase.from("drivers_public").select("name").eq("id", ride.driver_id).maybeSingle();
+        let confName: string | null = null;
+        if (ride.conferente_id) {
+          const { data: conf } = await supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle();
+          confName = conf?.name ?? null;
+        }
+        historyData = {
+          ride_id: ride.id,
+          driver_name: driver?.name ?? "Desconhecido",
+          route: ride.route,
+          login: ride.login,
+          conferente_name: confName,
+          completed_at: ride.completed_at,
+          loading_status: ride.loading_status,
+        };
+      }
     }
 
-    const { data: ride } = await supabase
-      .from("driver_rides")
-      .select("id, route, login, loading_status, completed_at, conferente_id, driver_id")
-      .eq("id", tbrData.ride_id)
-      .maybeSingle();
-
-    if (!ride) {
-      setSearching(false);
-      setTbrInput("");
-      return;
-    }
-
-    const { data: driver } = await supabase.from("drivers_public").select("name").eq("id", ride.driver_id).maybeSingle();
-    let confName: string | null = null;
-    if (ride.conferente_id) {
-      const { data: conf } = await supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle();
-      confName = conf?.name ?? null;
-    }
-
-    setHistory({
-      ride_id: ride.id,
-      driver_name: driver?.name ?? "Desconhecido",
-      route: ride.route,
-      login: ride.login,
-      conferente_name: confName,
-      completed_at: ride.completed_at,
-      loading_status: ride.loading_status,
-    });
-    setHistoryModalOpen(true);
+    setHistory(historyData);
+    setDescription("");
+    setCepInput("");
+    setSelectedConferente("");
+    setModalOpen(true);
     setSearching(false);
     setTbrInput("");
   };
 
-  const handleIncludeRTO = () => {
-    setIncludeMode(true);
-    setDescription("");
-    setCepInput("");
-    setSelectedConferente("");
-  };
-
   const handleSave = async () => {
-    if (!unitSession || !history || !description.trim()) return;
+    if (!unitSession || !description.trim()) return;
     setSaving(true);
 
     const entry = {
       tbr_code: tbrCode,
-      ride_id: history.ride_id,
+      ride_id: history?.ride_id ?? null,
       unit_id: unitSession.id,
       conferente_id: selectedConferente || null,
       description: description.trim(),
-      driver_name: history.driver_name,
-      route: history.route,
+      driver_name: history?.driver_name ?? null,
+      route: history?.route ?? null,
       cep: cepInput.trim() || null,
     };
 
@@ -193,16 +173,14 @@ const RTOPage = () => {
     setSaving(false);
 
     if (error) return;
-    setHistoryModalOpen(false);
-    setIncludeMode(false);
+    setModalOpen(false);
     setHistory(null);
     loadEntries();
     inputRef.current?.focus();
   };
 
   const closeModal = () => {
-    setHistoryModalOpen(false);
-    setIncludeMode(false);
+    setModalOpen(false);
     setHistory(null);
     inputRef.current?.focus();
   };
@@ -225,8 +203,9 @@ const RTOPage = () => {
             <Input
               ref={inputRef}
               value={tbrInput}
-              onChange={(e) => handleTbrInput(e.target.value)}
-              placeholder="Leia ou digite o código TBR..."
+              onChange={(e) => setTbrInput(e.target.value)}
+              onKeyDown={handleTbrKeyDown}
+              placeholder="Leia ou digite o código TBR e pressione Enter..."
               className="pl-9 h-11"
               disabled={searching}
               autoFocus
@@ -293,55 +272,55 @@ const RTOPage = () => {
         </CardContent>
       </Card>
 
-      <Dialog open={historyModalOpen} onOpenChange={(open) => !open && closeModal()}>
+      <Dialog open={modalOpen} onOpenChange={(open) => !open && closeModal()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
-              <RotateCcw className="h-5 w-5 text-primary" /> Histórico TBR - {tbrCode}
+              <RotateCcw className="h-5 w-5 text-primary" /> Novo RTO — {tbrCode}
             </DialogTitle>
-            <DialogDescription>Informações do carregamento vinculado a este TBR.</DialogDescription>
+            <DialogDescription>Registre o RTO para devolução ao vendedor.</DialogDescription>
           </DialogHeader>
-          {history && (
-            <div className="space-y-3 text-sm">
-              <div><span className="font-semibold text-muted-foreground">Motorista:</span> <span className="font-bold">{history.driver_name}</span></div>
-              <div><span className="font-semibold text-muted-foreground">Rota:</span> {history.route ?? "-"}</div>
-              <div><span className="font-semibold text-muted-foreground">Login:</span> {history.login ?? "-"}</div>
-              <div><span className="font-semibold text-muted-foreground">Conferente:</span> {history.conferente_name ?? "-"}</div>
-              <div><span className="font-semibold text-muted-foreground">Status:</span> {translateStatus(history.loading_status)}</div>
-              <div><span className="font-semibold text-muted-foreground">Data:</span> {new Date(history.completed_at).toLocaleString("pt-BR")}</div>
 
-              {!includeMode ? (
-                <Button className="w-full mt-2" onClick={handleIncludeRTO}>
-                  <RotateCcw className="h-4 w-4 mr-2" /> Incluir RTO
-                </Button>
-              ) : (
-                <div className="space-y-3 pt-2 border-t">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Conferente</label>
-                    <Select value={selectedConferente} onValueChange={setSelectedConferente}>
-                      <SelectTrigger><SelectValue placeholder="Selecione o conferente" /></SelectTrigger>
-                      <SelectContent>
-                        {conferentes.map(c => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">CEP do destino</label>
-                    <Input value={cepInput} onChange={(e) => setCepInput(e.target.value)} placeholder="Ex: 08141180" maxLength={9} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold">Descrição do problema</label>
-                    <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descreva o problema..." rows={3} />
-                  </div>
-                  <Button className="w-full" onClick={handleSave} disabled={saving || !description.trim()}>
-                    {saving ? "Gravando..." : "Gravar RTO"}
-                  </Button>
-                </div>
-              )}
+          {history && (
+            <div className="space-y-2 text-sm border rounded-md p-3 bg-muted/30">
+              <p className="text-xs font-bold text-muted-foreground uppercase">Histórico (informativo)</p>
+              <div className="grid grid-cols-2 gap-1">
+                <div><span className="font-semibold">Motorista:</span> {history.driver_name}</div>
+                <div><span className="font-semibold">Rota:</span> {history.route ?? "-"}</div>
+                <div><span className="font-semibold">Login:</span> {history.login ?? "-"}</div>
+                <div><span className="font-semibold">Data:</span> {new Date(history.completed_at).toLocaleString("pt-BR")}</div>
+              </div>
             </div>
           )}
+
+          {!history && (
+            <p className="text-sm text-muted-foreground italic">TBR sem histórico de carregamento vinculado.</p>
+          )}
+
+          <div className="space-y-3 pt-2 border-t">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Conferente</label>
+              <Select value={selectedConferente} onValueChange={setSelectedConferente}>
+                <SelectTrigger><SelectValue placeholder="Selecione o conferente" /></SelectTrigger>
+                <SelectContent>
+                  {conferentes.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">CEP do destino</label>
+              <Input value={cepInput} onChange={(e) => setCepInput(e.target.value)} placeholder="Ex: 08141180" maxLength={9} />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Descrição do problema</label>
+              <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Descreva o problema..." rows={3} />
+            </div>
+            <Button className="w-full" onClick={handleSave} disabled={saving || !description.trim()}>
+              {saving ? "Gravando..." : "Gravar RTO"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

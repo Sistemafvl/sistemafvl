@@ -13,6 +13,7 @@ import RetornoPisoPage from "./pages/dashboard/RetornoPisoPage";
 import OperacaoPage from "./pages/dashboard/OperacaoPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import FeedbacksPage from "./pages/dashboard/FeedbacksPage";
+import FinanceiroPage from "./pages/dashboard/FinanceiroPage";
 import DriverLayout from "./components/dashboard/DriverLayout";
 import DriverHome from "./pages/driver/DriverHome";
 import DriverQueue from "./pages/driver/DriverQueue";
@@ -23,6 +24,7 @@ import DriverSettings from "./pages/driver/DriverSettings";
 import DriverDocuments from "./pages/driver/DriverDocuments";
 import DNRPage from "./pages/dashboard/DNRPage";
 import DriverDNR from "./pages/driver/DriverDNR";
+import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import AdminLayout from "./components/admin/AdminLayout";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
@@ -52,6 +54,7 @@ const App = () => (
             <Route path="operacao" element={<OperacaoPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="feedbacks" element={<FeedbacksPage />} />
+            <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="dnr" element={<DNRPage />} />
           </Route>
@@ -62,6 +65,7 @@ const App = () => (
             <Route path="perfil" element={<DriverProfile />} />
             <Route path="documentos" element={<DriverDocuments />} />
             <Route path="dnr" element={<DriverDNR />} />
+            <Route path="recebiveis" element={<DriverRecebiveis />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />
           </Route>
