@@ -1,5 +1,5 @@
 import { useAuthStore } from "@/stores/auth-store";
-import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -54,6 +54,10 @@ const DashboardHome = () => {
   const [tbrNotFound, setTbrNotFound] = useState(false);
   const [tbrError, setTbrError] = useState("");
 
+  // DNR stats
+  const [dnrOpen, setDnrOpen] = useState({ count: 0, value: 0 });
+  const [dnrAnalyzing, setDnrAnalyzing] = useState({ count: 0, value: 0 });
+  const [dnrClosed, setDnrClosed] = useState(0);
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
@@ -72,6 +76,25 @@ const DashboardHome = () => {
       setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
     };
     fetchFeedback();
+  }, [unitSession?.id]);
+
+  // Fetch DNR stats
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    const fetchDnr = async () => {
+      const { data } = await supabase
+        .from("dnr_entries")
+        .select("status, dnr_value")
+        .eq("unit_id", unitSession.id);
+      const all = (data ?? []) as any[];
+      const open = all.filter(e => e.status === "open");
+      const analyzing = all.filter(e => e.status === "analyzing");
+      const closed = all.filter(e => e.status === "closed");
+      setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(closed.length);
+    };
+    fetchDnr();
   }, [unitSession?.id]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -253,6 +276,39 @@ const DashboardHome = () => {
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}
+      </div>
+
+      {/* DNR Cards */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/dashboard/dnr")}>
+          <CardContent className="p-3 flex items-center gap-2">
+            <FileWarning className="h-5 w-5 text-destructive shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Abertos</p>
+              <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
+              <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/dashboard/dnr")}>
+          <CardContent className="p-3 flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Analisando</p>
+              <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
+              <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => navigate("/dashboard/dnr")}>
+          <CardContent className="p-3 flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Finalizados</p>
+              <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Métricas e Gráficos BI */}

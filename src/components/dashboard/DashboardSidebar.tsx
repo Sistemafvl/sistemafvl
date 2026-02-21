@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -44,6 +44,7 @@ const menuItems = [
   { title: "Retorno Piso", url: "/dashboard/retorno-piso", icon: PackageX },
   { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
   { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
+  { title: "DNR", url: "/dashboard/dnr", icon: FileWarning },
 ];
 
 const managerMenuItems = [

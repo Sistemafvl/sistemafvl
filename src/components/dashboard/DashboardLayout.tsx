@@ -38,7 +38,7 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
-      {managerSession && <QueuePanel />}
+      <QueuePanel />
     </SidebarProvider>
   );
 };

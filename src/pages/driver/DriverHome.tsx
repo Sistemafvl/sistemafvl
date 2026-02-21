@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Package, DollarSign, Target, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb } from "lucide-react";
+import { Car, Package, DollarSign, Target, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -29,6 +29,9 @@ const DriverHome = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // DNR stats
+  const [dnrOpen, setDnrOpen] = useState({ count: 0, value: 0 });
+  const [dnrClosed, setDnrClosed] = useState(0);
   useEffect(() => {
     if (!driverId) return;
     const fetch = async () => {
@@ -75,6 +78,23 @@ const DriverHome = () => {
     };
     fetch();
   }, [driverId, startDate, endDate]);
+
+  // Fetch DNR stats
+  useEffect(() => {
+    if (!driverId) return;
+    const fetchDnr = async () => {
+      const { data } = await supabase
+        .from("dnr_entries")
+        .select("status, dnr_value")
+        .eq("driver_id", driverId);
+      const all = (data ?? []) as any[];
+      const open = all.filter(e => e.status === "analyzing");
+      const closed = all.filter(e => e.status === "closed");
+      setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(closed.length);
+    };
+    fetchDnr();
+  }, [driverId]);
 
   const metrics = useMemo(() => {
     const totalRides = rides.length;
@@ -235,8 +255,30 @@ const DriverHome = () => {
                 </CardContent>
               </Card>
             ))}
-          </div>
+           </div>
 
+           {/* DNR Cards */}
+           <div className="grid grid-cols-2 gap-2">
+             <Card>
+               <CardContent className="p-3 flex items-center gap-2">
+                 <FileWarning className="h-5 w-5 text-amber-500 shrink-0" />
+                 <div className="min-w-0">
+                   <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Abertos</p>
+                   <p className="text-lg font-bold text-amber-500">{dnrOpen.count}</p>
+                   <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
+                 </div>
+               </CardContent>
+             </Card>
+             <Card>
+               <CardContent className="p-3 flex items-center gap-2">
+                 <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
+                 <div className="min-w-0">
+                   <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Finalizados</p>
+                   <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
+                 </div>
+               </CardContent>
+             </Card>
+           </div>
           {/* Insights */}
           {insights && (
             <Card>

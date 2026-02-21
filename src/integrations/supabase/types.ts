@@ -14,6 +14,75 @@ export type Database = {
   }
   public: {
     Tables: {
+      dnr_entries: {
+        Row: {
+          approved_at: string | null
+          car_color: string | null
+          car_model: string | null
+          car_plate: string | null
+          closed_at: string | null
+          conferente_name: string | null
+          created_at: string
+          created_by_name: string | null
+          dnr_value: number
+          driver_id: string | null
+          driver_name: string | null
+          id: string
+          loaded_at: string | null
+          login: string | null
+          observations: string | null
+          ride_id: string | null
+          route: string | null
+          status: string
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          approved_at?: string | null
+          car_color?: string | null
+          car_model?: string | null
+          car_plate?: string | null
+          closed_at?: string | null
+          conferente_name?: string | null
+          created_at?: string
+          created_by_name?: string | null
+          dnr_value?: number
+          driver_id?: string | null
+          driver_name?: string | null
+          id?: string
+          loaded_at?: string | null
+          login?: string | null
+          observations?: string | null
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          approved_at?: string | null
+          car_color?: string | null
+          car_model?: string | null
+          car_plate?: string | null
+          closed_at?: string | null
+          conferente_name?: string | null
+          created_at?: string
+          created_by_name?: string | null
+          dnr_value?: number
+          driver_id?: string | null
+          driver_name?: string | null
+          id?: string
+          loaded_at?: string | null
+          login?: string | null
+          observations?: string | null
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       domains: {
         Row: {
           active: boolean
