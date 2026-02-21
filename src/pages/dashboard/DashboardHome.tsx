@@ -37,6 +37,9 @@ interface TbrResult {
   car_color: string | null;
   ps_status: { open: boolean; description: string } | null;
   rto_status: { open: boolean; description: string } | null;
+  dnr_status: { status: string; value: number } | null;
+  piso_status: { status: string; reason: string } | null;
+  composite_status: string;
 }
 
 const DashboardHome = () => {
@@ -144,8 +147,8 @@ const DashboardHome = () => {
         return;
       }
 
-      // Parallel: driver, unit, conferente, ps, rto
-      const [driverRes, unitRes, confRes, psRes, rtoRes] = await Promise.all([
+      // Parallel: driver, unit, conferente, ps, rto, dnr, piso
+      const [driverRes, unitRes, confRes, psRes, rtoRes, dnrRes, pisoRes] = await Promise.all([
         supabase.from("drivers_public").select("name, car_model, car_plate, car_color").eq("id", ride.driver_id).maybeSingle(),
         supabase.from("units").select("name").eq("id", ride.unit_id).maybeSingle(),
         ride.conferente_id
@@ -153,7 +156,31 @@ const DashboardHome = () => {
           : Promise.resolve({ data: null }),
         supabase.from("ps_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
         supabase.from("rto_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("dnr_entries").select("status, dnr_value").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("piso_entries").select("status, reason").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
+
+      // Compute composite status
+      const computeCompositeStatus = (): string => {
+        const dnr = dnrRes.data;
+        const ps = psRes.data;
+        const rto = rtoRes.data;
+        const piso = pisoRes.data;
+
+        // DNR takes priority if open/analyzing
+        if (dnr) {
+          if (dnr.status === "open") return "DNR Aberto";
+          if (dnr.status === "analyzing") return "Em Análise DNR";
+        }
+        // PS open
+        if (ps && ps.status === "open") return "PS Aberto";
+        // RTO open
+        if (rto && rto.status === "open") return "RTO Aberto";
+        // Piso open
+        if (piso && piso.status === "open") return "Retorno Piso";
+        // Fallback to ride loading_status translated
+        return translateStatus(ride.loading_status);
+      };
 
       setTbrResult({
         code: tbr.code,
@@ -173,6 +200,9 @@ const DashboardHome = () => {
         car_color: driverRes.data?.car_color ?? null,
         ps_status: psRes.data ? { open: psRes.data.status === "open", description: psRes.data.description } : null,
         rto_status: rtoRes.data ? { open: rtoRes.data.status === "open", description: rtoRes.data.description } : null,
+        dnr_status: dnrRes.data ? { status: dnrRes.data.status, value: Number(dnrRes.data.dnr_value) } : null,
+        piso_status: pisoRes.data ? { status: pisoRes.data.status, reason: pisoRes.data.reason } : null,
+        composite_status: computeCompositeStatus(),
       });
       setTbrLoading(false);
     }
@@ -346,9 +376,35 @@ const DashboardHome = () => {
                 <p className="text-sm text-muted-foreground italic text-center py-4">TBR não encontrado.</p>
               ) : tbrResult ? (
                 <div className="space-y-3 text-sm">
-                   {/* Badges PS / RTO */}
-                   {(tbrResult.ps_status || tbrResult.rto_status) && (
+                   {/* Badges PS / RTO / DNR / Piso */}
+                   {(tbrResult.ps_status || tbrResult.rto_status || tbrResult.dnr_status || tbrResult.piso_status) && (
                      <div className="flex flex-wrap gap-2">
+                       {tbrResult.dnr_status && (
+                         tbrResult.dnr_status.status === "open" ? (
+                           <Badge variant="destructive" className="text-xs">
+                             DNR Aberto — R${tbrResult.dnr_status.value.toFixed(2)}
+                           </Badge>
+                         ) : tbrResult.dnr_status.status === "analyzing" ? (
+                           <Badge className="bg-amber-600 text-white text-xs">
+                             DNR Em Análise — R${tbrResult.dnr_status.value.toFixed(2)}
+                           </Badge>
+                         ) : (
+                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
+                             DNR Finalizado — R${tbrResult.dnr_status.value.toFixed(2)}
+                           </Badge>
+                         )
+                       )}
+                       {tbrResult.piso_status && (
+                         tbrResult.piso_status.status === "open" ? (
+                           <Badge className="bg-purple-600 text-white text-xs">
+                             Retorno Piso — {tbrResult.piso_status.reason}
+                           </Badge>
+                         ) : (
+                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
+                             Piso Finalizado — {tbrResult.piso_status.reason}
+                           </Badge>
+                         )
+                       )}
                        {tbrResult.ps_status && (
                          tbrResult.ps_status.open ? (
                            <Badge variant="destructive" className="text-xs">
@@ -382,7 +438,7 @@ const DashboardHome = () => {
                     <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
                     <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
                     <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
-                    <div><strong>Status:</strong> {translateStatus(tbrResult.loading_status)}</div>
+                    <div><strong>Status:</strong> <span className="font-semibold">{tbrResult.composite_status}</span></div>
                     <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                     <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                   </div>
