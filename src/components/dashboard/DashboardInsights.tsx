@@ -268,7 +268,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} dates={driverDates} setDates={setDriverDates} />
-        <PaginatedRankingCard title="Top Retornos (Piso + RTO)" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} />
+        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} />
         <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} dates={confDates} setDates={setConfDates} />
       </div>
 

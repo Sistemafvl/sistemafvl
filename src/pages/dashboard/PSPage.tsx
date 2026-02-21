@@ -91,7 +91,7 @@ const PSPage = () => {
   const [page, setPage] = useState(1);
 
   // Filters
-  const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setDate(d.getDate() - 30); d.setHours(0,0,0,0); return d; });
+  const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
   const [statusFilter, setStatusFilter] = useState("all");
   const [reasonFilter, setReasonFilter] = useState("all");
@@ -381,7 +381,25 @@ const PSPage = () => {
   };
 
   // PDF generation
-  const generatePDF = () => {
+  const loadImageAsBase64 = (url: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas.toDataURL("image/jpeg", 0.7));
+      };
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  };
+
+  const generatePDF = async () => {
     const doc = new jsPDF();
     doc.setFontSize(16);
     doc.text("Relatório PS - Problem Solve", 14, 20);
@@ -391,26 +409,36 @@ const PSPage = () => {
     doc.text(`Total de registros: ${entries.length}`, 14, 40);
 
     let y = 50;
-    doc.setFontSize(8);
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.text("TBR", 14, y);
-    doc.text("Motorista", 40, y);
-    doc.text("Rota", 80, y);
-    doc.text("Motivo", 100, y);
-    doc.text("Data", 150, y);
-    doc.text("Status", 180, y);
-    doc.setFont("helvetica", "normal");
-    y += 6;
 
     for (const e of entries) {
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(e.tbr_code, 14, y);
-      doc.text((e.driver_name ?? "-").slice(0, 20), 40, y);
-      doc.text((e.route ?? "-").slice(0, 10), 80, y);
-      doc.text((e.reason ?? e.description ?? "-").slice(0, 25), 100, y);
-      doc.text(format(new Date(e.created_at), "dd/MM HH:mm"), 150, y);
-      doc.text(e.status === "open" ? "Aberto" : "Finalizado", 180, y);
+      // Check if we need a new page (info takes ~30px, photo ~70px)
+      if (y > 240) { doc.addPage(); y = 20; }
+
+      doc.setFontSize(9);
+      doc.setFont("helvetica", "bold");
+      doc.text(`TBR: ${e.tbr_code}`, 14, y);
+      doc.setFont("helvetica", "normal");
+      y += 5;
+      doc.text(`Motorista: ${e.driver_name ?? "-"}  |  Rota: ${e.route ?? "-"}`, 14, y);
+      y += 5;
+      doc.text(`Motivo: ${(e.reason ?? e.description ?? "-").slice(0, 50)}`, 14, y);
+      y += 5;
+      doc.text(`Data: ${format(new Date(e.created_at), "dd/MM/yyyy HH:mm")}  |  Status: ${e.status === "open" ? "Aberto" : "Finalizado"}`, 14, y);
+      y += 3;
+
+      if (e.photo_url) {
+        const imgData = await loadImageAsBase64(e.photo_url);
+        if (imgData) {
+          if (y + 65 > 280) { doc.addPage(); y = 20; }
+          doc.addImage(imgData, "JPEG", 14, y, 80, 60);
+          y += 63;
+        }
+      }
+
+      // Separator line
+      y += 3;
+      doc.setDrawColor(200);
+      doc.line(14, y, 196, y);
       y += 5;
     }
 

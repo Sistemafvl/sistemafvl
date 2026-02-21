@@ -510,7 +510,7 @@ const RetornoPisoPage = () => {
 
       {/* PS Modal */}
       <Dialog open={psModalOpen} onOpenChange={(open) => !open && closePsModal()}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
               <AlertTriangle className="h-5 w-5 text-primary" /> Migrar para PS — {psEntry?.tbr_code}
