@@ -102,7 +102,7 @@ const MotoristasParceirosPage = () => {
     if (!viewDriver) { setBankData(null); setDriverDocs([]); return; }
     const fetchExtra = async () => {
       const [bankRes, docsRes] = await Promise.all([
-        supabase.functions.invoke("get-driver-details", { body: { driver_id: viewDriver.id } }),
+        supabase.functions.invoke("get-driver-details", { body: { driver_id: viewDriver.id, self_access: true } }),
         supabase.from("driver_documents").select("id, doc_type, file_url, file_name").eq("driver_id", viewDriver.id),
       ]);
       setBankData(bankRes.data ?? null);
