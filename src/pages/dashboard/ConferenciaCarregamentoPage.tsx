@@ -1275,7 +1275,7 @@ const ConferenciaCarregamentoPage = () => {
                               );
                             }
                             return (
-                              <Select value={ride.conferente_id ?? ""} onValueChange={(val) => handleSelectConferente(ride.id, val)} disabled={isLocked}>
+                              <Select value={ride.conferente_id ?? undefined} onValueChange={(val) => handleSelectConferente(ride.id, val)} disabled={isLocked}>
                                 <SelectTrigger className="w-full h-9">
                                   <SelectValue placeholder="Selecionar Conferente" />
                                 </SelectTrigger>
