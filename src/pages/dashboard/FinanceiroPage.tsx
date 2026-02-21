@@ -1,11 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp } from "lucide-react";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface PayrollReport {
@@ -25,6 +30,9 @@ const FinanceiroPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<PayrollReport | null>(null);
   const [invoices, setInvoices] = useState<Record<string, { file_url: string; file_name: string } | null>>({});
+  const [searchFilter, setSearchFilter] = useState("");
+  const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
+  const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
 
   const unitId = unitSession?.id;
 
@@ -60,6 +68,49 @@ const FinanceiroPage = () => {
     setSelectedReport(report);
     loadInvoices(report.id);
   };
+
+  const filteredReports = useMemo(() => {
+    return reports.filter((r) => {
+      // Date filter
+      if (filterStart) {
+        const rStart = new Date(r.period_start + "T00:00:00");
+        if (rStart < filterStart) return false;
+      }
+      if (filterEnd) {
+        const rEnd = new Date(r.period_end + "T23:59:59");
+        if (rEnd > filterEnd) return false;
+      }
+      // Text filter
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase();
+        const drivers = r.report_data as any[];
+        const matchesDriver = drivers.some((d: any) =>
+          d.driver?.name?.toLowerCase().includes(q) ||
+          d.driver?.cpf?.toLowerCase().includes(q) ||
+          d.driver?.car_plate?.toLowerCase().includes(q)
+        );
+        const matchesMeta = r.generated_by?.toLowerCase().includes(q);
+        return matchesDriver || matchesMeta;
+      }
+      return true;
+    });
+  }, [reports, searchFilter, filterStart, filterEnd]);
+
+  // Summary stats
+  const totalReportsValue = useMemo(() => {
+    return filteredReports.reduce((sum, r) => {
+      const drivers = r.report_data as any[];
+      return sum + drivers.reduce((s: number, d: any) => s + (d.totalValue ?? 0), 0);
+    }, 0);
+  }, [filteredReports]);
+
+  const totalDrivers = useMemo(() => {
+    const ids = new Set<string>();
+    filteredReports.forEach((r) => {
+      (r.report_data as any[]).forEach((d: any) => { if (d.driver?.id) ids.add(d.driver.id); });
+    });
+    return ids.size;
+  }, [filteredReports]);
 
   if (selectedReport) {
     const drivers = selectedReport.report_data as any[];
@@ -131,41 +182,122 @@ const FinanceiroPage = () => {
         <DollarSign className="h-6 w-6 text-primary" /> Financeiro
       </h1>
 
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <Card>
+          <CardContent className="p-3 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileText className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Relatórios</p>
+              <p className="text-lg font-bold">{filteredReports.length}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-3 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <Users className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Motoristas</p>
+              <p className="text-lg font-bold">{totalDrivers}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="col-span-2 sm:col-span-1">
+          <CardContent className="p-3 flex items-center gap-3">
+            <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-lg font-bold">{formatCurrency(totalReportsValue)}</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-wrap gap-2 items-center">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {filterStart ? format(filterStart, "dd/MM/yyyy") : "De"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterStart} onSelect={(d) => { if (d) { d.setHours(0,0,0,0); setFilterStart(d); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="gap-2">
+              <CalendarIcon className="h-3.5 w-3.5" />
+              {filterEnd ? format(filterEnd, "dd/MM/yyyy") : "Até"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={filterEnd} onSelect={(d) => { if (d) { d.setHours(23,59,59,999); setFilterEnd(d); } }} initialFocus className={cn("p-3 pointer-events-auto")} />
+          </PopoverContent>
+        </Popover>
+        {(filterStart || filterEnd) && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStart(undefined); setFilterEnd(undefined); }} className="text-xs text-muted-foreground">
+            Limpar datas
+          </Button>
+        )}
+        <Input
+          value={searchFilter}
+          onChange={(e) => setSearchFilter(e.target.value)}
+          placeholder="Buscar por motorista, CPF, placa..."
+          className="h-8 text-sm flex-1 min-w-[200px]"
+        />
+      </div>
+
+      {/* Reports list */}
       {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full" />)}
+        <div className="space-y-2">
+          {[1, 2, 3].map(i => <Skeleton key={i} className="h-16 w-full" />)}
         </div>
-      ) : reports.length === 0 ? (
+      ) : filteredReports.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground italic">Nenhum relatório gerado ainda.</p>
-            <p className="text-xs text-muted-foreground mt-1">Gere um PDF na seção Relatórios para criar registros aqui.</p>
+            <p className="text-muted-foreground italic">
+              {reports.length === 0 ? "Nenhum relatório gerado ainda." : "Nenhum relatório encontrado com os filtros aplicados."}
+            </p>
+            {reports.length === 0 && <p className="text-xs text-muted-foreground mt-1">Gere um PDF na seção Relatórios para criar registros aqui.</p>}
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {reports.map((r) => {
+        <div className="space-y-2">
+          {filteredReports.map((r) => {
             const drivers = r.report_data as any[];
             const totalValue = drivers.reduce((s: number, d: any) => s + (d.totalValue ?? 0), 0);
+            const nfCount = drivers.length; // total drivers
             return (
-              <Card key={r.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => handleSelectReport(r)}>
-                <CardHeader className="pb-2">
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-base font-bold italic">
-                      {format(new Date(r.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(r.period_end + "T12:00:00"), "dd/MM/yyyy")}
-                    </CardTitle>
-                    <Badge variant="outline" className="text-xs">{drivers.length} motorista(s)</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Total: <strong className="text-foreground">{formatCurrency(totalValue)}</strong></span>
-                    <span className="text-xs text-muted-foreground">{format(new Date(r.created_at), "dd/MM HH:mm")}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Gerado por {r.generated_by}</p>
-                </CardContent>
-              </Card>
+              <div
+                key={r.id}
+                className="flex items-center gap-4 p-3 rounded-lg border bg-card hover:bg-accent/50 transition-colors cursor-pointer"
+                onClick={() => handleSelectReport(r)}
+              >
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <FileText className="h-4 w-4 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-bold text-sm truncate">
+                    {format(new Date(r.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(r.period_end + "T12:00:00"), "dd/MM/yyyy")}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">Gerado por {r.generated_by}</p>
+                </div>
+                <div className="text-right shrink-0 space-y-0.5">
+                  <p className="font-bold text-sm text-primary">{formatCurrency(totalValue)}</p>
+                  <p className="text-xs text-muted-foreground">{format(new Date(r.created_at), "dd/MM HH:mm")}</p>
+                </div>
+                <Badge variant="outline" className="shrink-0 text-xs">{nfCount} mot.</Badge>
+              </div>
             );
           })}
         </div>
