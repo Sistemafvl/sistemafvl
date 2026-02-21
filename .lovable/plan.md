@@ -1,143 +1,110 @@
 
-# Plano de Melhorias - 10 Itens
 
-## 1. DNR - Mostrar "Com Desconto" ou "Sem Desconto" no card finalizado (Anexo 1)
-**Arquivo:** `src/pages/dashboard/DNRPage.tsx`
-- Na interface `DnrEntry`, adicionar campo `discounted: boolean`
-- No `statusBadge()`, quando status === "closed", verificar o campo `discounted`:
-  - Se `discounted === true`: Badge vermelho "Finalizado c/ Desconto"
-  - Se `discounted === false`: Badge verde "Finalizado s/ Desconto"
+# Plano de Correções e Melhorias - 8 Itens
 
-## 2. Relatório Resumo Geral - Chave PIX abaixo do nome do motorista (Anexo 2)
-**Arquivos:** `src/pages/dashboard/RelatoriosPage.tsx`, `src/pages/dashboard/reports/PayrollReportContent.tsx`
-- No `fetchPayroll`, buscar dados bancarios (pix_key, pix_key_type) dos motoristas via edge function `get-driver-details` ou diretamente da tabela `drivers` (usando service role via edge function)
-- Adicionar campo `pixKey` e `pixKeyType` na interface `DriverPayrollData.driver`
-- No `PayrollReportContent`, na tabela resumo geral, a celula "Motorista" exibira o nome na primeira linha e a chave PIX formatada na segunda linha (fonte menor, cor cinza), ambos na mesma celula
+## 1. Adicionais: Trocar periodo por data unica (Anexo 1)
 
-## 3. Configuracoes - Valores diferenciados por motorista (Anexo 3)
-**Arquivos:** Migration SQL, `src/pages/dashboard/ConfiguracoesPage.tsx`
+**Arquivo:** `src/pages/dashboard/ConfiguracoesPage.tsx`
 
-### 3.1 Migration - Nova tabela `driver_custom_values`
-```
-CREATE TABLE public.driver_custom_values (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  unit_id uuid NOT NULL,
-  driver_id uuid NOT NULL,
-  custom_tbr_value numeric NOT NULL DEFAULT 0,
-  created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE(unit_id, driver_id)
-);
-ALTER TABLE public.driver_custom_values ENABLE ROW LEVEL SECURITY;
--- Policies: Anyone can read/insert/update/delete
-```
+- Substituir os dois campos de data (period_start e period_end) por um unico campo "Data" referente ao dia da corrida
+- Ao salvar, gravar `period_start = period_end = data_selecionada` na tabela `driver_bonus`
+- Atualizar o label de "Inicio/Fim do Periodo" para "Data da Corrida"
+- Na listagem de bonus, exibir apenas a data unica em vez do intervalo
 
-### 3.2 UI em ConfiguracoesPage
-- Abaixo de "Valor por TBR", novo card "Valores Diferenciados"
-- Campo de busca para selecionar motorista (por nome/CPF) dentre os que ja passaram pela unidade
-- Ao selecionar, campo para definir o valor customizado por TBR
-- Lista dos motoristas com valor customizado, com opcao de remover
-- Na geracao do relatorio, usar `custom_tbr_value` em vez de `tbrValue` padrao quando existir
+**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
+- Ajustar a query de bonus para buscar por `period_start` dentro do range do relatorio (entre startDate e endDate)
 
-## 4. Configuracoes - Adicionais por motorista (Anexo 3 continuacao)
-**Arquivos:** Migration SQL, `src/pages/dashboard/ConfiguracoesPage.tsx`, `RelatoriosPage.tsx`, `PayrollReportContent.tsx`
+## 2. Valores Diferenciados no Relatorio (Anexo 2)
 
-### 4.1 Migration - Nova tabela `driver_bonus`
-```
-CREATE TABLE public.driver_bonus (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  unit_id uuid NOT NULL,
-  driver_id uuid NOT NULL,
-  driver_name text,
-  amount numeric NOT NULL DEFAULT 0,
-  description text,
-  period_start date NOT NULL,
-  period_end date NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-ALTER TABLE public.driver_bonus ENABLE ROW LEVEL SECURITY;
--- Policies: Anyone can read/insert/update/delete
-```
+**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
 
-### 4.2 UI em ConfiguracoesPage
-- Novo card "Adicionais" abaixo do anterior
-- Selecao de motorista, valor do adicional, descricao e periodo
-- Lista de adicionais cadastrados com opcao de remover
+O problema: na linha 131, o calculo do valor usa `common.tVal` (valor padrao) para todos os motoristas, ignorando `driver_custom_values`.
 
-### 4.3 Integracao com Relatorio
-- No `fetchPayroll`, buscar bonus do periodo para cada motorista
-- Somar ao `totalValue` do motorista
-- Exibir metricBox "Adicional" no relatorio individual
-- Coluna "Adicional" na tabela resumo geral
+Correções:
+- No `fetchPayroll`, buscar `driver_custom_values` da tabela para o `unit_id` atual
+- Criar um `Map<driver_id, custom_tbr_value>`
+- No calculo de cada motorista (linha 131), usar `customValueMap.get(driverId) ?? common.tVal` em vez de `common.tVal`
+- Tambem no calculo do `totalValue` (linha 145), usar o valor correto
 
-## 5. Alerta sonoro para o motorista (Anexo 4 - ainda nao toca)
+**Arquivo:** `src/pages/dashboard/reports/PayrollReportContent.tsx`
+- Adicionar campo `tbrValueUsed` em `DriverPayrollData` para exibir o valor por TBR correto na ficha individual (linha 126)
+
+## 3. Contador de Fila para o Motorista (Anexo 3)
+
 **Arquivo:** `src/pages/driver/DriverQueue.tsx`
-- O problema persiste porque o `AudioContext` requer interacao previa do usuario
-- Solucao: criar um `AudioContext` global que e inicializado no primeiro toque/clique do usuario na pagina
-- Adicionar um event listener `click` no `document` que faz `audioCtx.resume()` uma vez
-- Usar `setInterval` com `oscillator` para o beep continuo
-- Adicionar fallback com `Audio()` e um data URI WAV real (o atual e invalido/truncado)
-- Gerar um WAV PCM valido em base64 programaticamente
 
-## 6. Exclusao de TBR - Corrigir definitivamente (Anexo 5 e 6)
+- Na tela "Em Carregamento" (quando `activeRide` existe), adicionar um card mostrando a posicao na fila de finalizacao
+- Buscar quantos carregamentos ativos (status "loading" ou "pending") na unidade tem `completed_at` anterior ao do motorista atual
+- Exibir como "Posicao na Fila: Xo" com atualizacao via Realtime
+
+## 4. Travar Seletor de Conferente (Anexo 4)
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (linha 1114)
+
+O seletor ja tem `disabled={!!ride.conferente_id && !managerSession}` mas o problema e que apos a atualizacao otimista, o `fetchRides()` pode resetar o estado antes do banco confirmar.
+
+Correção:
+- Adicionar um `lockedConferentes` ref/state que marca rides com conferente recem-selecionado
+- Ao selecionar conferente, adicionar o `rideId` ao set de travados
+- Na renderizacao, verificar tambem se o ride esta no set de travados (alem do `conferente_id`)
+- O `fetchRides` mantem o lock pois o dado vem do banco com o conferente salvo
+
+## 5. Bloquear TBR duplicado entre carregamentos ativos (Anexo 5)
+
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-- O problema e que o Realtime listener na linha 393 escuta TODOS os eventos de `ride_tbrs` sem filtro de `ride_id`
-- Quando o DELETE propaga, o Realtime dispara `fetchRides()` que re-busca tudo incluindo cache stale
-- Solucao:
-  1. Manter uma lista de IDs deletados em `deletingRef` e nao remove-los do set ate o fetchRides pos-delay
-  2. No `fetchRides`, filtrar os TBRs que estao no `deletingRef` antes de setar o estado
-  3. Aumentar o delay para 3000ms
-  4. Adicionar filtro no listener Realtime para ignorar eventos DELETE (somente reagir a INSERT/UPDATE)
-- Tambem: ao excluir TBR, reabrir a entrada no retorno piso (ja implementado, manter)
 
-## 7. Retorno Piso - Somente gerente pode excluir TBRs
-**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx`
-- Adicionar botao "Excluir" (icone lixeira) na coluna Acoes, visivel somente quando `managerSession` existe
-- Ao clicar, excluir o registro de `piso_entries` (DELETE)
-- Confirmar com dialog simples antes de excluir
+O problema: a validacao na linha 480-484 verifica `previousTbrs` em OUTROS rides, mas so bloqueia se nao houver piso_entry. Se o ride anterior ainda esta ativo (nao excluiu o TBR), o sistema permite a leitura.
 
-## 8. PS - 30 registros por pagina (Anexo 7)
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
-- Implementar paginacao com 30 itens por pagina
-- Adicionar estado `page` e botoes "Anterior" / "Proxima"
-- Usar `.range()` na query ou fatiar o array localmente
-- Exibir contagem "Pagina X de Y"
+Correção:
+- Apos buscar `previousTbrs`, verificar se algum desses rides esta com status "pending" ou "loading" (carregamento ativo)
+- Se o TBR pertence a um carregamento ativo, bloquear a leitura com mensagem "TBR ja esta em outro carregamento ativo"
+- Apenas permitir re-leitura se todos os rides anteriores com esse TBR estiverem finalizados/cancelados E houver registro no Retorno Piso
 
-## 9. RTO - 30 registros por pagina (Anexo 8)
-**Arquivo:** `src/pages/dashboard/RTOPage.tsx`
-- Mesma implementacao de paginacao do PS
-- 30 itens por pagina com navegacao
+## 6. Exclusao de TBR - Fix definitivo (Anexo 6)
 
-## 10. Motoristas Parceiros - Visao global com filtros (Anexo 9)
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+O problema persiste pois o `skipRealtimeRef` com delay de 2000ms nao e suficiente. O `deletingRef` limpa o ID antes do fetchRides ser chamado.
+
+Correções:
+- Aumentar delay para 3000ms
+- Manter o `tbrId` no `deletingRef` ate APOS o fetchRides completar
+- No `fetchRides`, filtrar TBRs que estao no `deletingRef` antes de setar o estado
+- Ao excluir TBR, criar/reabrir entrada no `piso_entries` com motivo "Removido do carregamento"
+
+## 7. Chave PIX no Resumo Geral do Relatorio (Anexo 7)
+
+**Arquivos:** `src/pages/dashboard/RelatoriosPage.tsx`, `src/pages/dashboard/reports/PayrollReportContent.tsx`
+
+Correções no `RelatoriosPage.tsx`:
+- No `fetchPayroll`, buscar `pix_key` e `pix_key_type` de cada motorista via `get-driver-details` (self_access: true) ou query batch
+- Adicionar campo `pixKey` na interface `DriverPayrollData.driver`
+
+Correções no `PayrollReportContent.tsx`:
+- Na celula "Motorista" da tabela resumo geral (linha 215), exibir o nome na primeira linha e a chave PIX na segunda linha (fonte menor, cor cinza) dentro da mesma celula `<td>`
+- Tambem adicionar colunas "Adicional" e "Valor Liquido" integrando os bonus
+
+## 8. Foto do Motorista no Modal de Motoristas Parceiros (Anexo 8)
+
 **Arquivo:** `src/pages/dashboard/MotoristasParceirosPage.tsx`
-- Mudar de "motoristas que passaram pela unidade" para TODOS os motoristas cadastrados globalmente
-- Buscar de `drivers_public` sem filtro por unit_id
-- 50 registros por pagina com paginacao
-- Adicionar filtros acima da busca: Estado, Cidade, Bairro, CEP
-- Para cada motorista, buscar a data do ultimo carregamento (`driver_rides` ordenado por `completed_at DESC LIMIT 1`)
-- Adicionar coluna "Ultima Operacao" com a data do ultimo carregamento
 
-## 11. Corridas do motorista - Trocar "Tempo" por "Qtd TBRs" (Anexo 10)
-**Arquivo:** `src/pages/driver/DriverRides.tsx`
-- No mini-card roxo (4o card), trocar:
-  - Icone: de `Timer` para `ScanBarcode` (ou `Package`)
-  - Label: de "Tempo" para "TBRs"
-  - Valor: de `tempo` (duracao) para `ride.tbrCount` (quantidade de TBRs)
+O problema: a query na linha 118 nao inclui `avatar_url` no SELECT, e o modal usa um icone estatico em vez da foto.
+
+Correções:
+- Adicionar `avatar_url` ao SELECT da query `drivers_public` (linha 118)
+- Adicionar `avatar_url: string | null` na interface `DriverGlobal`
+- No modal, trocar o div estatico com icone `<Truck>` por um componente `<Avatar>` que usa `viewDriver.avatar_url`
 
 ---
 
-## Resumo de Arquivos e Migrations
+## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| Migration SQL | Criar tabelas `driver_custom_values` e `driver_bonus` |
-| `DNRPage.tsx` | Badge com/sem desconto nos finalizados |
-| `RelatoriosPage.tsx` | Buscar PIX, custom values e bonus |
-| `PayrollReportContent.tsx` | PIX na celula do nome, colunas DNR/Adicional |
-| `ConfiguracoesPage.tsx` | Cards de valores diferenciados e adicionais |
-| `DriverQueue.tsx` | Fix audio com AudioContext global e WAV valido |
-| `ConferenciaCarregamentoPage.tsx` | Fix definitivo exclusao TBR |
-| `RetornoPisoPage.tsx` | Botao excluir so para gerente |
-| `PSPage.tsx` | Paginacao 30/pagina |
-| `RTOPage.tsx` | Paginacao 30/pagina |
-| `MotoristasParceirosPage.tsx` | Visao global + filtros + ultima operacao + paginacao 50 |
-| `DriverRides.tsx` | Trocar Tempo por Qtd TBRs |
+| `ConfiguracoesPage.tsx` | Trocar periodo por data unica nos Adicionais |
+| `RelatoriosPage.tsx` | Integrar custom values, bonus e PIX no payroll |
+| `PayrollReportContent.tsx` | PIX abaixo do nome + colunas bonus/valor liquido |
+| `DriverQueue.tsx` | Contador de posicao na fila de carregamento |
+| `ConferenciaCarregamentoPage.tsx` | Lock conferente, bloquear TBR entre ativos, fix exclusao |
+| `MotoristasParceirosPage.tsx` | Exibir avatar do motorista no modal |
+
