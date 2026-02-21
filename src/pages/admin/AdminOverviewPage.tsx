@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Truck, Package, Users, AlertTriangle, RotateCcw, Star, ClipboardCheck, BarChart3 } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, subDays, parseISO, startOfDay, endOfDay } from "date-fns";
+import SystemUpdates from "@/components/dashboard/SystemUpdates";
 import { ptBR } from "date-fns/locale";
 
 const CHART_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "#8884d8", "#82ca9d", "#ffc658"];
@@ -319,6 +320,8 @@ const AdminOverviewPage = () => {
           </div>
         </>
       )}
+
+      <SystemUpdates />
     </div>
   );
 };

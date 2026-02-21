@@ -28,6 +28,7 @@ import AdminDriversPage from "./pages/admin/AdminDriversPage";
 import DatabasePage from "./pages/admin/DatabasePage";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import SecurityPage from "./pages/admin/SecurityPage";
+import AdminUpdatesPage from "./pages/admin/AdminUpdatesPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 const queryClient = new QueryClient();
@@ -68,6 +69,7 @@ const App = () => (
             <Route path="drivers" element={<AdminDriversPage />} />
             <Route path="database" element={<DatabasePage />} />
             <Route path="security" element={<SecurityPage />} />
+            <Route path="updates" element={<AdminUpdatesPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
