@@ -1,63 +1,76 @@
 
-# Plano de Correcoes - 3 Itens
 
-## 1. Filtros de busca na pagina RTO (Anexo 1)
+# Plano de Implementacao - 4 Itens
 
-**Arquivo:** `src/pages/dashboard/RTOPage.tsx`
+## 1. Alerta animado no menu "Recebiveis" do motorista (Anexo 1)
 
-Adicionar filtros de busca na listagem de entradas RTO existentes, alem do campo de input para novo TBR:
+**Arquivos:** `src/components/dashboard/DriverSidebar.tsx`, `src/pages/driver/DriverRecebiveis.tsx`
 
-- Adicionar um campo de busca textual abaixo do input de novo TBR (ou acima da tabela) com placeholder "Buscar por TBR, rota, conferente, CEP..."
-- O filtro atua localmente sobre `entries`, filtrando por:
-  - `tbr_code` (contém)
-  - `route` (contém) 
-  - `conferente_name` (contém)
-  - `cep` (contém)
-  - `description` (contém)
-  - `driver_name` (contém)
-- Estado: `searchFilter` string
-- A paginacao deve operar sobre os resultados filtrados
+No sidebar do motorista, ao lado do item "Recebiveis", exibir um ponto de exclamacao animado (icone `AlertCircle` com `animate-pulse` em vermelho) quando existir pelo menos 1 relatorio de pagamento (`payroll_reports`) que inclui o motorista e que ainda NAO tem NF enviada (`driver_invoices`).
 
-## 2. Botao de editar NF no Recebiveis do Motorista (Anexo 2)
+**Logica:**
+- No `DriverSidebar`, ao carregar, buscar `payroll_reports` e `driver_invoices` para o `driverId`
+- Contar quantos relatorios incluem o motorista (via `report_data` JSON) mas nao tem invoice correspondente
+- Se `pendingCount > 0`, renderizar um indicador vermelho animado ao lado do titulo "Recebiveis" no menu
+- Quando o motorista faz upload da NF em `DriverRecebiveis`, ao chamar `loadEntries()` apos sucesso, o sidebar deve atualizar (via re-render ou estado global)
+- Para simplificar, o sidebar fara a consulta no mount e o estado sera local; ao navegar de volta ao sidebar, ele re-consulta
 
-**Arquivo:** `src/pages/driver/DriverRecebiveis.tsx`
+**Visual:** Bolinha vermelha com `animate-bounce` ou icone `!` com `animate-pulse` posicionado ao lado direito do texto "Recebiveis".
 
-Quando o motorista ja enviou a NF (`invoiceUploaded === true`), atualmente so exibe "NF Enviada: nome.pdf". O usuario precisa de um botao para reenviar caso tenha anexado errado.
-
-- Na secao onde `entry.invoiceUploaded` e true (linhas 173-176), adicionar um botao "Editar" (icone Pencil) ao lado do texto "NF Enviada"
-- Ao clicar, abre um input file identico ao de upload original
-- Ao selecionar novo arquivo, chama `handleUpload(entry.reportId, file)` que ja trata o caso de update (linhas 108-111 verificam `existing` e fazem UPDATE)
-- O fluxo de upload ja esta preparado para substituir o arquivo existente
-
-## 3. Fix definitivo da exclusao de TBR (Anexo 3 e 4) - URGENTE
+## 2. Fix DEFINITIVO da exclusao de TBR (Anexo 2) - URGENTE
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-**Problema raiz identificado:** O `handleDeleteTbr` (linha 426) aguarda todas as operacoes e chama `fetchRides()`, mas logo apos (linhas 497-498) limpa o `deletingRef` e desativa o `skipRealtimeRef`. O problema e que eventos Realtime sao **asincronos** - eles podem chegar a qualquer momento apos as operacoes de banco (piso_entries insert, rto_entries update). Quando o `skipRealtimeRef` e resetado para `false` na linha 498, eventos Realtime pendentes que ja estavam na fila sao processados e chamam `fetchRides()` novamente, agora SEM o filtro do `deletingRef` (ja foi limpo).
+O problema persiste mesmo apos o delay de 1500ms. A causa raiz e que o canal Realtime escuta `event: "*"` na tabela `driver_rides` (linha 395), e QUALQUER atualizacao nessa tabela (incluindo as operacoes em piso_entries que podem triggerar side-effects) causa `fetchRides()`. O `fetchRides()` re-busca ride_tbrs do banco, e como o DELETE ja propagou, o TBR nao deveria voltar - MAS o problema real e que existem MULTIPLOS listeners Realtime (INSERT, UPDATE, DELETE em ride_tbrs + wildcard em driver_rides), e cada um pode chamar `fetchRides()` em momentos diferentes, causando race conditions.
 
-**Solucao:**
-- Adicionar um **delay de seguranca** (1500ms) APOS o `fetchRides()` completar, ANTES de limpar `deletingRef` e resetar `skipRealtimeRef`
-- Isso garante que quaisquer eventos Realtime em cascata (provocados pelo insert em piso_entries ou update em rto_entries) sejam ignorados pelo `skipRealtimeRef` que ainda esta ativo
-- O `deletingRef` permanece preenchido durante esse periodo, servindo como filtro de seguranca extra no `fetchRides` (linha 275)
-- Tambem adicionar listener de DELETE no canal Realtime para ride_tbrs (atualmente so escuta INSERT e UPDATE) - sem isso, o Supabase nao notifica o cliente sobre delecoes, forçando re-fetches desnecessarios
+**Solucao definitiva - Abordagem de lock temporal robusto:**
+1. Substituir `skipRealtimeRef` (boolean) por um **timestamp de lock**: `realtimeLockUntil = useRef<number>(0)`
+2. No handler de cada evento Realtime, verificar `Date.now() < realtimeLockUntil.current` - se sim, ignorar
+3. No `handleDeleteTbr`:
+   - Setar `realtimeLockUntil.current = Date.now() + 5000` (lock por 5 segundos)
+   - Remocao otimista da UI
+   - Aguardar TODAS as operacoes sequenciais (delete, piso, rto)
+   - `await fetchRides()` (filtra via `deletingRef`)
+   - `deletingRef.current.delete(tbrId)` imediatamente apos fetchRides
+   - NAO resetar o lock - ele expira sozinho apos 5s
+4. Manter o filtro `deletingRef` no `fetchRides` como seguranca extra (linha 275)
 
-**Logica revisada:**
-```
-handleDeleteTbr:
-  1. Add to deletingRef, skip realtime
-  2. Optimistic UI removal
-  3. await DELETE from ride_tbrs
-  4. await create/reopen piso_entry
-  5. await reopen RTO if exists
-  6. await fetchOpenRtos()
-  7. await fetchRides()  // filtra via deletingRef (linha 275)
-  8. await delay(1500ms) // espera eventos Realtime em cascata passarem
-  9. deletingRef.delete(tbrId)
-  10. skipRealtimeRef = false
-```
+Essa abordagem elimina qualquer race condition porque:
+- O lock temporal NAO depende de ordem de execucao
+- Eventos Realtime que cheguem ate 5s apos a exclusao sao ignorados automaticamente
+- Apos 5s, o TBR ja foi removido do banco e qualquer fetchRides trara os dados corretos
 
-Tambem no canal Realtime (linhas 393-398):
-- Adicionar listener para DELETE em `ride_tbrs` que tambem verifica `skipRealtimeRef`
+## 3. Filtros de data em Corridas do Motorista (Anexo 3)
+
+**Arquivo:** `src/pages/driver/DriverRides.tsx`
+
+Adicionar filtros de data (De / Ate) na pagina de Corridas do motorista, similar ao que ja existe na Visao Geral:
+
+- Adicionar estados `startDate` e `endDate` (default: 30 dias atras ate hoje)
+- Adicionar dois `Popover` + `Calendar` para selecao de datas
+- Filtrar a query do Supabase com `.gte("completed_at", startDate)` e `.lte("completed_at", endDate)`
+- Re-buscar ao alterar datas
+- Atualizar o contador "Total de corridas" para refletir o periodo filtrado
+
+## 4. Busca nos logins + Conferente travado definitivamente (Anexo 4)
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+### 4a. Travar conferente apos selecao
+A logica atual (linha 1178) ja tenta travar: `disabled={(!!ride.conferente_id || lockedConferentes.current.has(ride.id)) && !managerSession}`
+
+O problema e que o `lockedConferentes` usa um `useRef<Set>` que nao causa re-render. Quando `handleSelectConferente` faz o update otimista no state `rides`, o `ride.conferente_id` deveria estar preenchido - mas pode haver um timing issue.
+
+**Correcao:** Apos `handleSelectConferente`:
+- Usar um estado `lockedConferenteIds` (useState<Set>) em vez de useRef, para forcar re-render
+- Adicionar o rideId ao set ANTES do update otimista
+- Manter a condicao: se `ride.conferente_id` ou `lockedConferenteIds.has(ride.id)` e NAO e gerente -> disabled
+
+### 4b. Campo de busca na selecao de conferente
+Substituir o `Select` por um `Popover` + `Command` (cmdk) com campo de busca integrado, permitindo digitar para filtrar os conferentes por nome. Isso segue o padrao de "combobox" ja disponivel via shadcn/ui.
+
+### 4c. Campo de busca na selecao de logins
+Se houver um seletor de logins em algum lugar, adicionar busca. Pela imagem, o campo "Login" e editavel inline (campo de texto). Se o usuario se refere a busca dentro da lista de conferentes (ja coberto em 4b), nao ha acao adicional.
 
 ---
 
@@ -65,6 +78,8 @@ Tambem no canal Realtime (linhas 393-398):
 
 | Arquivo | Alteracao |
 |---|---|
-| `RTOPage.tsx` | Adicionar campo de busca/filtro na listagem de entradas |
-| `DriverRecebiveis.tsx` | Botao editar para reenviar NF de servico |
-| `ConferenciaCarregamentoPage.tsx` | Delay pos-fetchRides antes de limpar refs + listener DELETE |
+| `DriverSidebar.tsx` | Indicador animado de NF pendente no menu Recebiveis |
+| `DriverRecebiveis.tsx` | Nenhuma alteracao (fluxo de upload ja funciona) |
+| `DriverRides.tsx` | Filtros de data (De/Ate) com Calendar |
+| `ConferenciaCarregamentoPage.tsx` | Lock temporal 5s para Realtime + conferente com useState + busca combobox |
+
