@@ -1,60 +1,107 @@
 
-# Plano de Correcoes - 3 Itens
 
-## 1. Campo de busca no seletor de Login (modal Programar Carregamento) + Remover combobox do Conferente
+# Plano - 3 Itens
 
-**Arquivos:** `src/components/dashboard/QueuePanel.tsx`, `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+## 1. Atualizacoes do Sistema automaticas
 
-### O que sera feito:
-- **QueuePanel.tsx**: Substituir o `Select` de logins no modal "Programar Carregamento" por um `Popover` + `Command` (combobox com busca), permitindo digitar para filtrar logins por nome. Manter o indicador de check verde para logins ja usados no dia.
-- **ConferenciaCarregamentoPage.tsx**: Remover o componente `ConferenteCombobox` e reverter o seletor de conferente para um `Select` simples (sem campo de busca). Manter a logica de travamento (`lockedConferenteIds` via useState) que ja funciona corretamente - quando conferente e selecionado, o campo fica travado (exibe texto com icone de cadeado).
+O feed de atualizacoes ja funciona corretamente (os dados estao na tabela `system_updates` e o componente `SystemUpdates` os exibe). O problema e que as atualizacoes so aparecem quando cadastradas manualmente pelo painel Admin.
 
-## 2. Fix DEFINITIVO da exclusao de TBR - CAUSA RAIZ ENCONTRADA
+A partir de agora, toda vez que eu (Lovable) fizer uma implementacao, melhoria ou correcao, vou inserir automaticamente um registro na tabela `system_updates` com o tipo (`create`, `update` ou `config`), o modulo afetado e a descricao da mudanca. Isso sera feito via ferramenta de insercao de dados ao final de cada implementacao.
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` + migracao de banco de dados
+Nenhuma alteracao de codigo e necessaria - o componente `SystemUpdates.tsx` ja busca e exibe os dados com Realtime. A mudanca e apenas no fluxo de trabalho: registrar as atualizacoes automaticamente a cada deploy.
 
-### Causa raiz real:
-A politica RLS da tabela `ride_tbrs` para DELETE exige o role `authenticated`, mas o sistema usa o role `anon` (chave anonima do Supabase). O DELETE retorna status 204 (sucesso), mas **nenhuma linha e realmente deletada** no banco de dados. Por isso o TBR sempre "volta" - ele nunca foi deletado de verdade.
-
-### Solucao:
-1. **Migracao SQL**: Alterar a politica RLS de DELETE na tabela `ride_tbrs` para permitir o role `anon` (ou `public`), igual as outras politicas da tabela (INSERT, SELECT, UPDATE ja permitem `public`)
-2. Remover o `deletingRef` e o `realtimeLockUntil` que eram workarounds para um problema que nao existia - a exclusao simplesmente nao estava funcionando no banco
-3. Simplificar o `handleDeleteTbr` para: deletar do banco, verificar sucesso, criar piso_entry, e chamar fetchRides normalmente
-
-```sql
-DROP POLICY "Authenticated can delete ride_tbrs" ON ride_tbrs;
-CREATE POLICY "Anyone can delete ride_tbrs" ON ride_tbrs FOR DELETE USING (true);
-```
-
-**Nota importante:** Manter o lock temporal de 5 segundos como seguranca contra race conditions de Realtime, mesmo apos corrigir a RLS. O lock previne re-fetches desnecessarios durante as operacoes em cascata (piso_entries, rto_entries).
-
-## 3. Leitura por camera (scanner de codigo de barras / QR Code) - Anexo 6
+## 2. Busca global de TBR (todas as unidades)
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
+Atualmente o `fetchSearchResults` filtra TBRs apenas pela unidade atual (`unit_id`). A busca sera expandida para pesquisar em TODAS as unidades do sistema.
+
 ### O que sera feito:
-- Adicionar um botao de camera (icone `Camera`) ao lado do campo de input TBR, visivel quando o carregamento esta no status "loading"
-- Ao clicar, abre um modal com a camera do celular usando `navigator.mediaDevices.getUserMedia`
-- Utilizar a API `BarcodeDetector` (nativa em navegadores modernos) para decodificar codigos de barras e QR codes em tempo real a partir do stream de video
-- Para navegadores que nao suportam `BarcodeDetector`, exibir mensagem informando que o recurso nao esta disponivel nesse dispositivo
-- Cada leitura bem-sucedida emite um som de beep agudo (frequencia 1000Hz, 150ms) e registra o TBR automaticamente via `saveTbr`
-- Leituras com erro (TBR duplicado, bloqueado, etc.) emitem o som de erro ja existente (`playErrorBeep`)
-- O modal da camera permanece aberto para leituras consecutivas, com um indicador visual do ultimo codigo lido
-- Botao para fechar a camera e voltar ao modo manual
+- Remover o filtro `.eq("unit_id", unitId)` da busca de rides no `fetchSearchResults`
+- Buscar diretamente na tabela `ride_tbrs` com `.ilike("code", searchTerm)` sem filtro de unidade
+- Para os resultados de outras unidades, exibir o nome da unidade ao lado do carregamento (buscar da tabela `units_public`)
+- Destacar visualmente os resultados da unidade atual vs outras unidades (ex: badge "Outra Unidade" em laranja)
+- Manter o highlight verde no TBR que corresponde a busca
 
 ### Fluxo:
-1. Usuario clica no icone de camera no card do carregamento (status loading)
-2. Modal abre com preview da camera
-3. Camera detecta codigo de barras/QR automaticamente
-4. Beep de sucesso + TBR registrado
-5. Continua escaneando ate fechar o modal
+1. Usuario digita TBR e pressiona Enter
+2. Sistema busca em `ride_tbrs` globalmente (sem filtro de unidade)
+3. Resultados mostram carregamentos de todas as unidades
+4. Cards de outras unidades exibem badge com nome da unidade de origem
+
+## 3. Modo Offline (Leitura + Escrita com sincronizacao)
+
+**Arquivos novos:** `src/lib/offline-store.ts`, `src/hooks/use-offline-sync.ts`, `src/components/OfflineIndicator.tsx`
+**Arquivos modificados:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`, `src/App.tsx`
+
+### Arquitetura:
+
+O sistema ja e um PWA com Service Worker. Para suportar escrita offline, sera implementado:
+
+**a) Armazenamento local com IndexedDB (via wrapper simples):**
+- Criar um store `offline-store.ts` usando a API nativa `IndexedDB` para armazenar:
+  - Dados carregados (rides, tbrs, conferentes) como cache local
+  - Fila de operacoes pendentes (inserts, updates, deletes) que falharam por falta de conexao
+
+**b) Hook `use-offline-sync.ts`:**
+- Detectar estado de conexao via `navigator.onLine` + eventos `online`/`offline`
+- Quando offline: interceptar operacoes de escrita (saveTbr, deleteTbr, etc.), salvar na fila do IndexedDB
+- Quando online: processar a fila de pendentes em ordem cronologica, sincronizando com o banco
+- Emitir eventos para atualizar a UI apos sincronizacao
+
+**c) Componente `OfflineIndicator.tsx`:**
+- Banner fixo no topo da tela quando offline (icone de wifi cortado + "Modo Offline - dados serao sincronizados ao reconectar")
+- Badge com contador de operacoes pendentes
+- Animacao de sincronizacao quando reconectar
+
+**d) Integracao com ConferenciaCarregamentoPage:**
+- Ao carregar a pagina, salvar dados no cache local (IndexedDB)
+- Funcoes de escrita (saveTbr, deleteTbr, handleSelectConferente) verificam `navigator.onLine`
+  - Se online: comportamento normal (banco de dados)
+  - Se offline: salva no IndexedDB + atualiza UI otimisticamente
+- Ao reconectar: sincroniza fila e faz fetchRides para garantir consistencia
+
+### Limitacoes conhecidas:
+- Realtime nao funciona offline (desconecta automaticamente)
+- Conflitos de dados (ex: mesmo TBR inserido por duas pessoas offline) serao resolvidos por ordem cronologica (first-come-first-served)
+- O cache local tera limite de 24h para evitar dados desatualizados
 
 ---
+
+## Detalhes Tecnicos
+
+### IndexedDB Schema:
+```text
+Database: fvl-offline
+  Store: cached-rides     (key: id)
+  Store: cached-tbrs      (key: id)
+  Store: pending-ops      (key: autoIncrement)
+    { type: "insert"|"update"|"delete", table: string, data: object, timestamp: number }
+```
+
+### Fluxo de sincronizacao:
+```text
+[Offline]                          [Online]
+  |                                   |
+  |--> Salva operacao no IndexedDB    |
+  |--> Atualiza UI otimisticamente    |
+  |                                   |
+  |--- Reconexao detectada ---------->|
+  |                                   |--> Le fila de pendentes
+  |                                   |--> Executa cada operacao no Supabase
+  |                                   |--> Remove da fila se sucesso
+  |                                   |--> fetchRides() para sincronizar
+  |                                   |--> Toast "X operacoes sincronizadas"
+```
 
 ## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `QueuePanel.tsx` | Substituir Select por Combobox com busca no seletor de login |
-| `ConferenciaCarregamentoPage.tsx` | Reverter conferente para Select simples + camera scanner + simplificar delete |
-| Migracao SQL | Corrigir politica RLS de DELETE em ride_tbrs |
+| `ConferenciaCarregamentoPage.tsx` | Busca global de TBR + integracao offline |
+| `src/lib/offline-store.ts` | Novo - wrapper IndexedDB para cache e fila |
+| `src/hooks/use-offline-sync.ts` | Novo - hook de deteccao e sincronizacao |
+| `src/components/OfflineIndicator.tsx` | Novo - indicador visual de modo offline |
+| `src/App.tsx` | Adicionar OfflineIndicator global |
+| Insercao de dados | Registrar atualizacoes na tabela system_updates |
+
