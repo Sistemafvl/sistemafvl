@@ -121,7 +121,7 @@ const DriverRides = () => {
               {startDate ? format(startDate, "dd/MM/yyyy") : "De"}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0 z-[9999] bg-popover" align="start">
             <Calendar mode="single" selected={startDate} onSelect={(d) => d && setStartDate(d)} initialFocus className="p-3 pointer-events-auto" />
           </PopoverContent>
         </Popover>
@@ -133,7 +133,7 @@ const DriverRides = () => {
               {endDate ? format(endDate, "dd/MM/yyyy") : "Até"}
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
+          <PopoverContent className="w-auto p-0 z-[9999] bg-popover" align="start">
             <Calendar mode="single" selected={endDate} onSelect={(d) => d && setEndDate(d)} initialFocus className="p-3 pointer-events-auto" />
           </PopoverContent>
         </Popover>
