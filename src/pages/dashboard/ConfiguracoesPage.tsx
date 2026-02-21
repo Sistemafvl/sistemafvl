@@ -61,8 +61,7 @@ const ConfiguracoesPage = () => {
   const [bonusSelectedDriver, setBonusSelectedDriver] = useState<DriverOption | null>(null);
   const [bonusAmount, setBonusAmount] = useState("");
   const [bonusDescription, setBonusDescription] = useState("");
-  const [bonusPeriodStart, setBonusPeriodStart] = useState("");
-  const [bonusPeriodEnd, setBonusPeriodEnd] = useState("");
+  const [bonusDate, setBonusDate] = useState("");
   const [bonusSaving, setBonusSaving] = useState(false);
 
   const fetchLogins = useCallback(async () => {
@@ -165,7 +164,7 @@ const ConfiguracoesPage = () => {
   };
 
   const handleAddBonus = async () => {
-    if (!unitId || !bonusSelectedDriver || !bonusAmount || !bonusPeriodStart || !bonusPeriodEnd) return;
+    if (!unitId || !bonusSelectedDriver || !bonusAmount || !bonusDate) return;
     setBonusSaving(true);
     await supabase.from("driver_bonus").insert({
       unit_id: unitId,
@@ -173,10 +172,10 @@ const ConfiguracoesPage = () => {
       driver_name: bonusSelectedDriver.name,
       amount: parseCurrency(bonusAmount),
       description: bonusDescription || null,
-      period_start: bonusPeriodStart,
-      period_end: bonusPeriodEnd,
+      period_start: bonusDate,
+      period_end: bonusDate,
     } as any);
-    setBonusSelectedDriver(null); setBonusDriverSearch(""); setBonusAmount(""); setBonusDescription(""); setBonusDriverResults([]);
+    setBonusSelectedDriver(null); setBonusDriverSearch(""); setBonusAmount(""); setBonusDescription(""); setBonusDate(""); setBonusDriverResults([]);
     await fetchBonuses();
     setBonusSaving(false);
     toast({ title: "Adicional cadastrado!" });
@@ -368,17 +367,11 @@ const ConfiguracoesPage = () => {
                   <Input value={bonusAmount} onChange={handleBonusAmountChange} placeholder="0,00" className="max-w-[140px] text-right font-mono" />
                 </div>
                 <Input value={bonusDescription} onChange={(e) => setBonusDescription(e.target.value)} placeholder="Descrição (opcional)" />
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <label className="text-xs text-muted-foreground">Início do Período</label>
-                    <Input type="date" value={bonusPeriodStart} onChange={(e) => setBonusPeriodStart(e.target.value)} />
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-xs text-muted-foreground">Fim do Período</label>
-                    <Input type="date" value={bonusPeriodEnd} onChange={(e) => setBonusPeriodEnd(e.target.value)} />
-                  </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Data da Corrida</label>
+                  <Input type="date" value={bonusDate} onChange={(e) => setBonusDate(e.target.value)} />
                 </div>
-                <Button onClick={handleAddBonus} disabled={bonusSaving || !bonusAmount || !bonusPeriodStart || !bonusPeriodEnd} className="w-full" size="sm">
+                <Button onClick={handleAddBonus} disabled={bonusSaving || !bonusAmount || !bonusDate} className="w-full" size="sm">
                   {bonusSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                   Adicionar
                 </Button>
@@ -392,7 +385,7 @@ const ConfiguracoesPage = () => {
                   <div className="flex-1">
                     <span className="font-semibold">{b.driver_name ?? "—"}</span>
                     {b.description && <span className="text-muted-foreground ml-2 text-xs">({b.description})</span>}
-                    <p className="text-xs text-muted-foreground">{b.period_start} a {b.period_end}</p>
+                    <p className="text-xs text-muted-foreground">Data: {b.period_start}</p>
                   </div>
                   <span className="text-green-600 font-mono font-bold">+R$ {formatCurrency(Number(b.amount))}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteBonus(b.id)}>

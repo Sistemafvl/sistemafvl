@@ -144,7 +144,7 @@ const DriverQueue = () => {
   const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [tbrCount, setTbrCount] = useState(0);
-
+  const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const alertAudioRef = useRef(createAlertAudio());
   const lastCalledAtRef = useRef<string | null>(null);
   const alertToastIdRef = useRef<string | null>(null);
@@ -188,14 +188,28 @@ const DriverQueue = () => {
 
     const { data } = await supabase
       .from("driver_rides")
-      .select("id, route, login, password, sequence_number, loading_status")
+      .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id")
       .eq("driver_id", driverId)
       .in("loading_status", ["pending", "loading"])
       .gte("completed_at", today.toISOString())
       .order("completed_at", { ascending: false })
       .limit(1);
 
-    setActiveRide(data && data.length > 0 ? data[0] as ActiveRide : null);
+    const ride = data && data.length > 0 ? data[0] : null;
+    setActiveRide(ride as ActiveRide | null);
+
+    // Calculate queue position
+    if (ride) {
+      const { count } = await supabase
+        .from("driver_rides")
+        .select("*", { count: "exact", head: true })
+        .eq("unit_id", ride.unit_id)
+        .in("loading_status", ["pending", "loading"])
+        .lte("completed_at", ride.completed_at);
+      setQueuePosition(count ?? null);
+    } else {
+      setQueuePosition(null);
+    }
   }, [driverId]);
 
   const fetchQueue = useCallback(async () => {
@@ -420,6 +434,18 @@ const DriverQueue = () => {
                   <p className="text-lg font-semibold">{activeRide.password}</p>
                 </div>
               </div>
+            )}
+
+            {queuePosition !== null && (
+              <Card className="border-primary/50 bg-primary/5">
+                <CardContent className="flex items-center gap-3 pt-6">
+                  <Hash className="h-6 w-6 text-primary" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Posição na Fila</p>
+                    <p className="text-3xl font-bold text-primary">{queuePosition}º</p>
+                  </div>
+                </CardContent>
+              </Card>
             )}
           </CardContent>
         </Card>

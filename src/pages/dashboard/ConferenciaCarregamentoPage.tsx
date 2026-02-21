@@ -172,6 +172,7 @@ const ConferenciaCarregamentoPage = () => {
   const tbrListRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const deletingRef = useRef<Set<string>>(new Set());
   const skipRealtimeRef = useRef(false);
+  const lockedConferentes = useRef<Set<string>>(new Set());
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
@@ -270,6 +271,8 @@ const ConferenciaCarregamentoPage = () => {
 
       const grouped: Record<string, Tbr[]> = {};
       (tbrData ?? []).forEach((t: any) => {
+        // Filter out TBRs currently being deleted
+        if (deletingRef.current.has(t.id)) return;
         if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
         grouped[t.ride_id].push(t);
       });
@@ -397,6 +400,8 @@ const ConferenciaCarregamentoPage = () => {
   }, [unitId, fetchRides]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
+    // Lock immediately to prevent re-selection
+    lockedConferentes.current.add(rideId);
     // Optimistic update to lock dropdown immediately
     setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, conferente_id: conferenteId } : r));
     await supabase.from("driver_rides").update({ conferente_id: conferenteId } as any).eq("id", rideId);
@@ -425,6 +430,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
 
+    // Optimistic UI removal
     setTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
@@ -433,7 +439,45 @@ const ConferenciaCarregamentoPage = () => {
     const { error } = await supabase.from("ride_tbrs").delete().eq("id", tbrId);
     if (error) console.error("Delete TBR error:", error);
 
-    if (tbrToDelete) {
+    // Create/reopen piso_entry for removed TBR
+    if (tbrToDelete && unitId) {
+      const ride = rides.find(r => r.id === rideId);
+      // Check if open piso_entry already exists
+      const { data: existingPiso } = await supabase
+        .from("piso_entries")
+        .select("id")
+        .eq("tbr_code", tbrToDelete.code)
+        .eq("unit_id", unitId)
+        .eq("status", "open")
+        .maybeSingle();
+
+      if (!existingPiso) {
+        // Check for closed entry to reopen
+        const { data: closedPiso } = await supabase
+          .from("piso_entries")
+          .select("id")
+          .eq("tbr_code", tbrToDelete.code)
+          .eq("unit_id", unitId)
+          .eq("status", "closed")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (closedPiso) {
+          await supabase.from("piso_entries").update({ status: "open", closed_at: null, reason: "Removido do carregamento" } as any).eq("id", closedPiso.id);
+        } else {
+          await supabase.from("piso_entries").insert({
+            tbr_code: tbrToDelete.code,
+            unit_id: unitId,
+            reason: "Removido do carregamento",
+            driver_name: ride?.driver_name ?? null,
+            route: ride?.route ?? null,
+            ride_id: rideId,
+          } as any);
+        }
+      }
+
+      // Reopen RTO if exists
       const { data: rtoMatch } = await supabase
         .from("rto_entries")
         .select("id")
@@ -442,20 +486,18 @@ const ConferenciaCarregamentoPage = () => {
         .eq("unit_id", unitId)
         .maybeSingle();
       if (rtoMatch) {
-        await supabase
-          .from("rto_entries")
-          .update({ status: "open", closed_at: null })
-          .eq("id", rtoMatch.id);
+        await supabase.from("rto_entries").update({ status: "open", closed_at: null }).eq("id", rtoMatch.id);
       }
     }
 
     await fetchOpenRtos();
-    deletingRef.current.delete(tbrId);
-    // Delay resetting skipRealtime to avoid race condition with Realtime
-    setTimeout(() => {
+
+    // Keep tbrId in deletingRef until after fetchRides completes
+    setTimeout(async () => {
       skipRealtimeRef.current = false;
-      fetchRides();
-    }, 2000);
+      await fetchRides();
+      deletingRef.current.delete(tbrId);
+    }, 3000);
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -479,13 +521,34 @@ const ConferenciaCarregamentoPage = () => {
       if (count === 0) {
         const { data: previousTbrs } = await supabase
           .from("ride_tbrs")
-          .select("id")
+          .select("id, ride_id")
           .eq("code", code)
           .neq("ride_id", rideId);
 
         let tripNumber = 1;
 
         if (previousTbrs && previousTbrs.length > 0) {
+          // Check if any of those TBRs belong to ACTIVE loads
+          const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
+          const { data: prevRides } = await supabase
+            .from("driver_rides")
+            .select("id, loading_status")
+            .in("id", prevRideIds)
+            .in("loading_status", ["pending", "loading"]);
+
+          if (prevRides && prevRides.length > 0) {
+            playErrorBeep();
+            const { toast } = await import("@/hooks/use-toast");
+            toast({
+              title: "TBR em carregamento ativo",
+              description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
+              variant: "destructive",
+            });
+            setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+            setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+            return;
+          }
+
           const { data: pisoEntries } = await supabase
             .from("piso_entries")
             .select("id, status")
@@ -1111,7 +1174,7 @@ const ConferenciaCarregamentoPage = () => {
                           <Select 
                             value={ride.conferente_id ?? ""} 
                             onValueChange={(val) => handleSelectConferente(ride.id, val)}
-                            disabled={!!ride.conferente_id && !managerSession}
+                            disabled={(!!ride.conferente_id || lockedConferentes.current.has(ride.id)) && !managerSession}
                           >
                             <SelectTrigger className="w-full h-9 text-sm">
                               <div className="flex items-center gap-2">

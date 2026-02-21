@@ -77,12 +77,15 @@ const RelatoriosPage = () => {
       const driverIds = [...new Set(rides.map(r => r.driver_id))];
       const rideIds = rides.map(r => r.id);
 
-      const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
+      const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes] = await Promise.all([
         supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
         supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
         supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId),
+        supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId)
+          .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
       ]);
 
       const drivers = driversRes.data ?? [];
@@ -91,6 +94,18 @@ const RelatoriosPage = () => {
       const allPs = psRes.data ?? [];
       const allRto = rtoRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d]));
+
+      // Custom TBR values map
+      const customValueMap = new Map<string, number>();
+      (customValuesRes.data ?? []).forEach((cv: any) => {
+        customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value));
+      });
+
+      // Bonus map
+      const bonusByDriver = new Map<string, number>();
+      (bonusRes.data ?? []).forEach((b: any) => {
+        bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount));
+      });
 
       // Fetch discounted DNRs for the period
       const { data: dnrData } = await supabase
@@ -109,9 +124,19 @@ const RelatoriosPage = () => {
         }
       });
 
+      // Fetch PIX keys for all drivers
+      const pixByDriver = new Map<string, string>();
+      await Promise.all(driverIds.map(async (did) => {
+        try {
+          const { data } = await supabase.functions.invoke("get-driver-details", { body: { driver_id: did, self_access: true } });
+          if (data?.pix_key) pixByDriver.set(did, data.pix_key);
+        } catch {}
+      }));
+
       const result: DriverPayrollData[] = driverIds.map(driverId => {
         const driver = driverMap.get(driverId)!;
         const driverRides = rides.filter(r => r.driver_id === driverId);
+        const tbrVal = customValueMap.get(driverId) ?? common.tVal;
         const dayMap = new Map<string, { login: string | null; rideIds: string[] }>();
         driverRides.forEach(r => {
           const dayKey = format(new Date(r.completed_at), "yyyy-MM-dd");
@@ -122,13 +147,12 @@ const RelatoriosPage = () => {
 
         const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
           const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-          // Unique tbr_code returns
           const returnTbrSet = new Set<string>();
           [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
             if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
           });
           const rReturns = returnTbrSet.size;
-          return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * common.tVal };
+          return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * tbrVal };
         });
 
         const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
@@ -138,11 +162,18 @@ const RelatoriosPage = () => {
         const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
         const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
         const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
+        const bonusAmount = bonusByDriver.get(driverId) ?? 0;
 
         return {
-          driver: { id: driver.id, name: driver.name, cpf: driver.cpf, car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color },
-          days, totalTbrs, totalReturns, totalCompleted, 
-          totalValue: (totalCompleted * common.tVal) - dnrDiscount,
+          driver: {
+            id: driver.id, name: driver.name, cpf: driver.cpf,
+            car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color,
+            pixKey: pixByDriver.get(driverId) ?? null,
+          },
+          days, totalTbrs, totalReturns, totalCompleted,
+          tbrValueUsed: tbrVal,
+          bonus: bonusAmount,
+          totalValue: (totalCompleted * tbrVal) - dnrDiscount + bonusAmount,
           dnrDiscount,
           daysWorked: days.length, loginsUsed,
           bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,

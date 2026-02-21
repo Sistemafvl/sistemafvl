@@ -13,6 +13,7 @@ export interface DriverPayrollData {
     car_plate: string;
     car_model: string;
     car_color: string | null;
+    pixKey?: string | null;
   };
   days: {
     date: string;
@@ -25,6 +26,8 @@ export interface DriverPayrollData {
   totalReturns: number;
   totalCompleted: number;
   totalValue: number;
+  tbrValueUsed?: number;
+  bonus?: number;
   dnrDiscount?: number;
   daysWorked: number;
   loginsUsed: string[];
@@ -52,6 +55,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     const grandTotalCompleted = data.reduce((s, d) => s + d.totalCompleted, 0);
     const grandTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
     const grandTotalDnr = data.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
+    const grandTotalBonus = data.reduce((s, d) => s + (d.bonus ?? 0), 0);
 
     const metricBox = (value: string | number, label: string, bg: string, textColor?: string) => (
       <div
@@ -123,7 +127,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   </div>
                 </div>
                 <div style={{ fontSize: "9px", opacity: 0.8 }}>
-                  Valor TBR: {formatCurrency(tbrValue)}
+                  Valor TBR: {formatCurrency(d.tbrValueUsed ?? tbrValue)}
                 </div>
               </div>
 
@@ -135,6 +139,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 {metricBox(`${completionRate}%`, "Taxa", COLORS.gold)}
                 {metricBox(d.avgDaily, "Média/Dia", COLORS.silver)}
                 {dnrDiscount > 0 && metricBox(`-${formatCurrency(dnrDiscount)}`, "DNR", "#fee2e2", "#dc2626")}
+                {(d.bonus ?? 0) > 0 && metricBox(`+${formatCurrency(d.bonus!)}`, "Adicional", COLORS.green)}
                 {metricBox(formatCurrency(d.totalValue), "Valor Total", COLORS.tealLight)}
               </div>
 
@@ -206,13 +211,17 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <th style={headerCellStyle()}>Ret.</th>
                 <th style={headerCellStyle()}>Conc.</th>
                 <th style={headerCellStyle()}>DNR</th>
+                <th style={headerCellStyle()}>Adic.</th>
                 <th style={headerCellStyle()}>Valor</th>
               </tr>
             </thead>
             <tbody>
               {data.map((d, idx) => (
                 <tr key={d.driver.id}>
-                  <td style={cellStyle({ fontWeight: 600, textAlign: "left", whiteSpace: "nowrap", background: altRowBg(idx) })}>{d.driver.name}</td>
+                  <td style={cellStyle({ fontWeight: 600, textAlign: "left", whiteSpace: "nowrap", background: altRowBg(idx) })}>
+                    <div>{d.driver.name}</div>
+                    {d.driver.pixKey && <div style={{ fontSize: "8px", color: "#888", fontWeight: 400 }}>PIX: {d.driver.pixKey}</div>}
+                  </td>
                   {allDates.map((date) => {
                     const val = d.days.find((day) => day.date === date)?.tbrCount ?? 0;
                     return <td key={date} style={cellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>{val || "—"}</td>;
@@ -222,6 +231,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   <td style={cellStyle({ background: altRowBg(idx) })}>{d.totalCompleted}</td>
                   <td style={cellStyle({ background: altRowBg(idx), color: (d.dnrDiscount ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: (d.dnrDiscount ?? 0) > 0 ? 700 : undefined })}>
                     {(d.dnrDiscount ?? 0) > 0 ? `-${formatCurrency(d.dnrDiscount!)}` : "—"}
+                  </td>
+                  <td style={cellStyle({ background: altRowBg(idx), color: (d.bonus ?? 0) > 0 ? "#16a34a" : undefined, fontWeight: (d.bonus ?? 0) > 0 ? 700 : undefined })}>
+                    {(d.bonus ?? 0) > 0 ? `+${formatCurrency(d.bonus!)}` : "—"}
                   </td>
                   <td style={cellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(d.totalValue)}</td>
                 </tr>
@@ -237,6 +249,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>{grandTotalCompleted}</td>
                 <td style={cellStyle({ fontWeight: 800, background: "#fee2e2", color: "#dc2626" })}>
                   {grandTotalDnr > 0 ? `-${formatCurrency(grandTotalDnr)}` : "—"}
+                </td>
+                <td style={cellStyle({ fontWeight: 800, background: COLORS.green, color: "#16a34a" })}>
+                  {grandTotalBonus > 0 ? `+${formatCurrency(grandTotalBonus)}` : "—"}
                 </td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{formatCurrency(grandTotalValue)}</td>
               </tr>
