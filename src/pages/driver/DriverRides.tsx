@@ -176,7 +176,7 @@ const DriverRides = () => {
                       </p>
                       <p className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                         <span className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
+                          <CalendarIcon className="h-3 w-3" />
                           {formatDate(ride.completed_at)}
                         </span>
                         <span className="flex items-center gap-1">
