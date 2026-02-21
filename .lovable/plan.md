@@ -1,53 +1,127 @@
 
-## Plano - Busca de TBR mais abrangente (DashboardHome.tsx)
 
-### Problema
+## Plano - Nova pagina "Ciclos"
 
-Atualmente, a busca de TBR comeca pela tabela `ride_tbrs`. Se o codigo nao for encontrado la, retorna "TBR nao encontrado" imediatamente. Porem, um PS (ou RTO, DNR, Piso) pode ser registrado diretamente pelo codigo TBR sem que esse codigo esteja na tabela `ride_tbrs`. O resultado e que registros existentes ficam invisiveis na busca.
+### 1. Rota e Menu
 
-### Solucao
+**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx`
+- Adicionar item `{ title: "Ciclos", url: "/dashboard/ciclos", icon: RefreshCw }` no array `managerMenuItems`, logo apos "Operacao" (posicao index 1)
 
-Reestruturar a logica de busca para usar uma abordagem em cascata:
+**Arquivo:** `src/App.tsx`
+- Importar `CiclosPage` de `src/pages/dashboard/CiclosPage.tsx`
+- Adicionar rota `<Route path="ciclos" element={<CiclosPage />} />`
 
-1. **Primeiro**, buscar em `ride_tbrs` (caminho atual - fluxo completo com dados do carregamento)
-2. **Se nao encontrar**, buscar em paralelo nas tabelas `ps_entries`, `rto_entries`, `dnr_entries` e `piso_entries` pelo `tbr_code`
-3. **Se encontrar em qualquer uma dessas tabelas**, montar o resultado com os dados disponiveis (sem dados de carregamento/motorista, mas com os status PS/RTO/DNR/Piso)
-4. **Somente se nao encontrar em nenhuma tabela**, mostrar "TBR nao encontrado"
+### 2. Tabela no banco de dados
 
-### Detalhes tecnicos
+Criar tabela `cycle_records` para armazenar os campos manuais preenchidos pelo gerente:
 
-**Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
+```sql
+CREATE TABLE public.cycle_records (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  record_date date NOT NULL DEFAULT CURRENT_DATE,
+  qtd_pacotes integer DEFAULT 0,
+  abertura_galpao time DEFAULT NULL,
+  hora_inicio_descarregamento time DEFAULT NULL,
+  hora_termino_descarregamento time DEFAULT NULL,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(unit_id, record_date)
+);
 
-**Alteracao na funcao `handleTbrKeyDown`** (linhas 125-207):
+ALTER TABLE public.cycle_records ENABLE ROW LEVEL SECURITY;
 
-Apos o bloco que verifica `ride_tbrs` (linhas 131-134), em vez de retornar "nao encontrado", adicionar fallback:
-
+CREATE POLICY "Anyone can read cycle_records" ON public.cycle_records FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert cycle_records" ON public.cycle_records FOR INSERT WITH CHECK (true);
+CREATE POLICY "Anyone can update cycle_records" ON public.cycle_records FOR UPDATE USING (true);
+CREATE POLICY "Anyone can delete cycle_records" ON public.cycle_records FOR DELETE USING (true);
 ```
-// Se nao achou em ride_tbrs, buscar nas tabelas de ocorrencias
-const [psCheck, rtoCheck, dnrCheck, pisoCheck] = await Promise.all([
-  supabase.from("ps_entries").select("*").eq("tbr_code", code)
-    .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-  supabase.from("rto_entries").select("*").eq("tbr_code", code)
-    .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-  supabase.from("dnr_entries").select("*").eq("tbr_code", code)
-    .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-  supabase.from("piso_entries").select("*").eq("tbr_code", code)
-    .order("created_at", { ascending: false }).limit(1).maybeSingle(),
-]);
-```
 
-Se qualquer uma retornar dados, montar o `tbrResult` com:
-- `driver_name`: extraido de `ps_entries.driver_name`, `rto_entries.driver_name`, `dnr_entries.driver_name` ou `piso_entries.driver_name` (o primeiro disponivel)
-- `route`: de qualquer entrada que tenha
-- `unit_name`: buscar da `units` usando o `unit_id` da entrada encontrada
-- `conferente_name`: buscar do `conferente_id` se disponivel
-- Campos de carregamento (`login`, `started_at`, `finished_at`, `sequence_number`, `loading_status`): ficam como null/vazio
-- Campos de veiculo (`car_model`, `car_plate`, `car_color`): extraidos de `dnr_entries` se disponivel
-- Status compostos (PS/RTO/DNR/Piso): preenchidos normalmente a partir dos dados encontrados
-- `composite_status`: calculado pela mesma hierarquia (DNR > PS > RTO > Piso), com fallback "Sem carregamento"
+### 3. Nova pagina CiclosPage
 
-### Resumo
+**Arquivo:** `src/pages/dashboard/CiclosPage.tsx`
 
-| Arquivo | Alteracao |
+**Layout principal:**
+- Titulo "Ciclos" com icone RefreshCw
+- Botao "Relatorio" no topo direito que abre o modal de resumo
+- Filtro de data (igual ao padrao do projeto com Popover + Calendar)
+
+**Campos manuais (formulario editavel):**
+- Qtd de pacotes (Input numerico)
+- Abertura Galpao (Input tipo time - HH:mm)
+- Hora Inicio Descarregamento (Input tipo time)
+- Hora Termino Descarregamento (Input tipo time)
+- Botao "Salvar" que faz upsert na tabela `cycle_records` com base em `unit_id + record_date`
+
+**Ciclos automaticos:**
+- Ciclo 1: conta carregamentos da tabela `driver_rides` com `completed_at` ate as 08:30 (11:30 UTC) do dia selecionado
+- Ciclo 2: conta carregamentos ate as 09:30 (12:30 UTC), somando com ciclo 1 (acumulado)
+- Ciclo 3: conta todos os carregamentos do dia (sem hora limite), acumulado total
+
+A contagem usa a mesma logica da OperacaoPage: filtra `driver_rides` por `unit_id` e range do dia em horario de Brasilia (UTC-3).
+
+**Exibicao dos ciclos:**
+- 3 cards lado a lado: Ciclo 1, Ciclo 2, Ciclo 3
+- Cada card mostra: quantidade de carregamentos do ciclo, horario limite, e o acumulado
+
+### 4. Modal de Relatorio
+
+Ao clicar em "Relatorio", abre-se um Dialog com:
+
+**Cabecalho:** "Resumo Operacao [dd/MM/yyyy]"
+
+**Indicadores BI (cards em grid):**
+- Tempo medio de carregamento (media de `finished_at - started_at` das rides do dia)
+- Total TBRs lidos (soma de ride_tbrs do dia)
+- Total carregamentos
+- Liberacao motorista (quantidade de rides com status "finished")
+- Taxa de conclusao (TBRs - retornos / TBRs)
+- Total retornos (piso + ps + rto por TBR unico)
+- Comparacao com dia anterior: diferenca percentual em carregamentos e TBRs (seta verde/vermelha)
+- Tempo medio por TBR (tempo total / total TBRs)
+
+**Dados manuais do dia:**
+- Qtd pacotes, abertura galpao, inicio/termino descarregamento
+
+**Ciclos:**
+- Resumo dos 3 ciclos com valores
+
+**Botao "Gerar PDF":**
+- Usa jsPDF + html2canvas (mesmo padrao do projeto)
+- Layout horizontal A4 (landscape)
+- Renderiza o conteudo do modal em um container off-screen e captura com html2canvas
+- Usa os mesmos estilos de `pdf-styles.ts` (COLORS, headerCellStyle, etc.)
+- Nome do arquivo: `Resumo_Operacao_[data].pdf`
+
+### Resumo dos arquivos
+
+| Arquivo | Acao |
 |---|---|
-| `src/pages/dashboard/DashboardHome.tsx` | Busca em cascata: ride_tbrs -> ps/rto/dnr/piso_entries -> nao encontrado |
+| `src/components/dashboard/DashboardSidebar.tsx` | Adicionar item "Ciclos" no menu gerente |
+| `src/App.tsx` | Adicionar rota /dashboard/ciclos |
+| `src/pages/dashboard/CiclosPage.tsx` | **Novo** - pagina completa com campos manuais, ciclos automaticos, modal relatorio e PDF |
+| Migration SQL | Criar tabela `cycle_records` |
+
+### Detalhes tecnicos dos ciclos
+
+```text
+Dia selecionado: 2026-02-21
+Horario Brasilia (UTC-3):
+
+Ciclo 1: completed_at <= "2026-02-21T11:30:00.000Z" (08:30 BRT)
+  -> Conta: 10 carregamentos
+
+Ciclo 2: completed_at <= "2026-02-21T12:30:00.000Z" (09:30 BRT)
+  -> Conta: 19 (acumulado, inclui ciclo 1)
+
+Ciclo 3: completed_at <= fim do dia
+  -> Conta: 25 (acumulado total)
+```
+
+### Comparacao com dia anterior
+
+Para os indicadores do modal, buscar dados do dia anterior (D-1) e calcular:
+- Delta carregamentos: `((hoje - ontem) / ontem * 100)` com seta verde (positivo) ou vermelha (negativo)
+- Delta TBRs: mesma logica
+- Exibir como badge ao lado do valor principal
+
