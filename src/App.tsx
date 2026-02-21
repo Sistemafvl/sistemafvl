@@ -21,6 +21,8 @@ import DriverProfile from "./pages/driver/DriverProfile";
 import DriverReviews from "./pages/driver/DriverReviews";
 import DriverSettings from "./pages/driver/DriverSettings";
 import DriverDocuments from "./pages/driver/DriverDocuments";
+import DNRPage from "./pages/dashboard/DNRPage";
+import DriverDNR from "./pages/driver/DriverDNR";
 import AdminLayout from "./components/admin/AdminLayout";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
@@ -51,6 +53,7 @@ const App = () => (
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="feedbacks" element={<FeedbacksPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
+            <Route path="dnr" element={<DNRPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
@@ -58,6 +61,7 @@ const App = () => (
             <Route path="corridas" element={<DriverRides />} />
             <Route path="perfil" element={<DriverProfile />} />
             <Route path="documentos" element={<DriverDocuments />} />
+            <Route path="dnr" element={<DriverDNR />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />
           </Route>

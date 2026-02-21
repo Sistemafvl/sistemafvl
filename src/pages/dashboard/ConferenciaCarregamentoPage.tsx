@@ -396,6 +396,8 @@ const ConferenciaCarregamentoPage = () => {
   }, [unitId, fetchRides]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
+    // Optimistic update to lock dropdown immediately
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, conferente_id: conferenteId } : r));
     await supabase.from("driver_rides").update({ conferente_id: conferenteId } as any).eq("id", rideId);
     await fetchRides();
   };
@@ -427,7 +429,8 @@ const ConferenciaCarregamentoPage = () => {
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
     }));
 
-    await supabase.from("ride_tbrs").delete().eq("id", tbrId);
+    const { error } = await supabase.from("ride_tbrs").delete().eq("id", tbrId);
+    if (error) console.error("Delete TBR error:", error);
 
     if (tbrToDelete) {
       const { data: rtoMatch } = await supabase
@@ -448,7 +451,8 @@ const ConferenciaCarregamentoPage = () => {
     await fetchRides();
     await fetchOpenRtos();
     deletingRef.current.delete(tbrId);
-    skipRealtimeRef.current = false;
+    // Delay resetting skipRealtime to avoid race condition
+    setTimeout(() => { skipRealtimeRef.current = false; }, 500);
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -582,9 +586,16 @@ const ConferenciaCarregamentoPage = () => {
     }
   };
 
+  // Processing lock per ride to prevent double-reads
+  const processingRef = useRef<Record<string, boolean>>({});
+
   // Auto-save TBR with debounce (scanner mode) or Enter (manual mode)
   const handleTbrInputChange = (rideId: string, value: string) => {
     if (value.length > 15) return;
+
+    // Block input while processing previous TBR
+    if (processingRef.current[rideId]) return;
+
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
 
     if (debounceTimers.current[rideId]) {
@@ -596,10 +607,17 @@ const ConferenciaCarregamentoPage = () => {
     // In manual mode, don't auto-save
     if (manualMode[rideId]) return;
 
-    // Scanner mode: fast 80ms debounce
-    debounceTimers.current[rideId] = setTimeout(() => {
-      saveTbr(rideId, value.trim());
-    }, 80);
+    // Scanner mode: fast 50ms debounce
+    debounceTimers.current[rideId] = setTimeout(async () => {
+      const code = value.trim();
+      // Lock processing and clear input immediately
+      processingRef.current[rideId] = true;
+      setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+      // Force DOM update before async work
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      await saveTbr(rideId, code);
+      processingRef.current[rideId] = false;
+    }, 50);
   };
 
   const handleTbrKeyDown = (rideId: string, e: React.KeyboardEvent<HTMLInputElement>) => {
