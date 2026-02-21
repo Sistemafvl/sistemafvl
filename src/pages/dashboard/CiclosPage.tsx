@@ -306,7 +306,7 @@ const CiclosPage = () => {
             <>
               {/* Manual fields */}
               <div className="rounded-lg border p-4 space-y-4">
-                <h3 className="font-bold italic text-sm">Dados Manuais</h3>
+                <h3 className="font-bold italic text-sm">Informações Complementares</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
                     <Label className="text-xs font-semibold">Qtd Pacotes</Label>
@@ -455,7 +455,7 @@ const CiclosPage = () => {
 
                 {/* Manual data */}
                 <div className="rounded-lg border p-2 space-y-1">
-                  <h4 className="font-bold italic text-xs">Dados Manuais</h4>
+                  <h4 className="font-bold italic text-xs">Informações Complementares</h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes</p>
