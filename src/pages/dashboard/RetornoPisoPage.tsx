@@ -5,16 +5,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, RotateCcw, MapPin, Trash2 } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
+} from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
 import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -23,6 +27,15 @@ const DEFAULT_REASONS = [
   "2ª tentativa de entrega",
   "3ª tentativa de entrega",
   "Endereço não localizado",
+];
+
+const DEFAULT_PS_REASONS = [
+  "3 tentativas de entrega",
+  "Produto danificado",
+  "Embalagem danificada",
+  "Endereço não localizado",
+  "Cliente ausente",
+  "Recusado pelo cliente",
 ];
 
 interface TbrTrackInfo {
@@ -52,6 +65,9 @@ interface PisoEntry {
 const RetornoPisoPage = () => {
   const { unitSession, managerSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const [tbrInput, setTbrInput] = useState("");
   const [searching, setSearching] = useState(false);
@@ -67,23 +83,36 @@ const RetornoPisoPage = () => {
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // RTO CEP Modal (removed)
+  // PS Modal state
+  const [psModalOpen, setPsModalOpen] = useState(false);
+  const [psEntry, setPsEntry] = useState<PisoEntry | null>(null);
+  const [psReason, setPsReason] = useState("");
+  const [psCustomReasons, setPsCustomReasons] = useState<{ id: string; label: string }[]>([]);
+  const [psNewReasonInput, setPsNewReasonInput] = useState("");
+  const [psShowNewReason, setPsShowNewReason] = useState(false);
+  const [psSaving, setPsSaving] = useState(false);
+  const [psCameraActive, setPsCameraActive] = useState(false);
+  const [psCapturedPhoto, setPsCapturedPhoto] = useState<Blob | null>(null);
+  const [psPhotoPreview, setPsPhotoPreview] = useState<string | null>(null);
 
   useEffect(() => {
     if (unitSession) {
       loadEntries();
       loadCustomReasons();
+      loadPsCustomReasons();
     }
   }, [unitSession]);
 
   const loadCustomReasons = async () => {
     if (!unitSession) return;
-    const { data } = await supabase
-      .from("piso_reasons")
-      .select("id, label")
-      .eq("unit_id", unitSession.id)
-      .order("created_at");
+    const { data } = await supabase.from("piso_reasons").select("id, label").eq("unit_id", unitSession.id).order("created_at");
     if (data) setCustomReasons(data);
+  };
+
+  const loadPsCustomReasons = async () => {
+    if (!unitSession) return;
+    const { data } = await supabase.from("ps_reasons").select("id, label").eq("unit_id", unitSession.id).order("created_at");
+    if (data) setPsCustomReasons(data);
   };
 
   const loadEntries = async () => {
@@ -176,13 +205,14 @@ const RetornoPisoPage = () => {
       setSelectedReason(data.label);
       setNewReasonInput("");
       setShowNewReason(false);
+      toast({ title: "Motivo adicionado" });
     }
   };
 
   const handleSave = async () => {
     if (!unitSession || !selectedReason) return;
     setSaving(true);
-    await supabase.from("piso_entries").insert({
+    const { error } = await supabase.from("piso_entries").insert({
       tbr_code: tbrCode,
       ride_id: trackInfo?.ride_id ?? null,
       unit_id: unitSession.id,
@@ -191,29 +221,131 @@ const RetornoPisoPage = () => {
       reason: selectedReason,
     } as any);
     setSaving(false);
+    if (error) {
+      toast({ title: "Erro ao gravar", variant: "destructive" });
+      return;
+    }
+    toast({ title: "Retorno Piso registrado" });
     setModalOpen(false);
     setTrackInfo(null);
     loadEntries();
     inputRef.current?.focus();
   };
 
-  const handleMigratePs = async (entry: PisoEntry) => {
-    if (!unitSession) return;
-    await supabase.from("ps_entries").insert({
-      tbr_code: entry.tbr_code,
-      ride_id: entry.ride_id,
-      unit_id: unitSession.id,
-      driver_name: entry.driver_name,
-      route: entry.route,
-      description: entry.reason,
-    } as any);
-    await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", entry.id);
-    setEntries((prev) => prev.filter((e) => e.id !== entry.id));
+  // PS Modal handlers
+  const openPsModal = (entry: PisoEntry) => {
+    setPsEntry(entry);
+    setPsReason("");
+    setPsCapturedPhoto(null);
+    setPsPhotoPreview(null);
+    setPsShowNewReason(false);
+    setPsModalOpen(true);
   };
 
-  // RTO functionality removed from this page
+  const closePsModal = () => {
+    setPsModalOpen(false);
+    setPsEntry(null);
+    stopPsCamera();
+    setPsCapturedPhoto(null);
+    setPsPhotoPreview(null);
+  };
+
+  const startPsCamera = async () => {
+    setPsCameraActive(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+    } catch {
+      toast({ title: "Erro ao acessar câmera", variant: "destructive" });
+      setPsCameraActive(false);
+    }
+  };
+
+  const stopPsCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    }
+    setPsCameraActive(false);
+  };
+
+  const capturePsPhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.drawImage(video, 0, 0);
+    canvas.toBlob((blob) => {
+      if (blob) {
+        setPsCapturedPhoto(blob);
+        setPsPhotoPreview(URL.createObjectURL(blob));
+        stopPsCamera();
+      }
+    }, "image/jpeg", 0.8);
+  };
+
+  const handleAddPsReason = async () => {
+    if (!unitSession || !psNewReasonInput.trim()) return;
+    const { data } = await supabase
+      .from("ps_reasons")
+      .insert({ unit_id: unitSession.id, label: psNewReasonInput.trim() } as any)
+      .select("id, label")
+      .single();
+    if (data) {
+      setPsCustomReasons(prev => [...prev, data]);
+      setPsReason(data.label);
+      setPsNewReasonInput("");
+      setPsShowNewReason(false);
+      toast({ title: "Motivo PS adicionado" });
+    }
+  };
+
+  const handleConfirmPs = async () => {
+    if (!unitSession || !psEntry || !psReason) return;
+    setPsSaving(true);
+
+    let photoUrl: string | null = null;
+    if (psCapturedPhoto) {
+      const fileName = `ps_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
+      const { error: uploadErr } = await supabase.storage.from("ps-photos").upload(fileName, psCapturedPhoto, { contentType: "image/jpeg" });
+      if (!uploadErr) {
+        const { data: urlData } = supabase.storage.from("ps-photos").getPublicUrl(fileName);
+        photoUrl = urlData.publicUrl;
+      }
+    }
+
+    const { error } = await supabase.from("ps_entries").insert({
+      tbr_code: psEntry.tbr_code,
+      ride_id: psEntry.ride_id,
+      unit_id: unitSession.id,
+      driver_name: psEntry.driver_name,
+      route: psEntry.route,
+      description: psReason,
+      reason: psReason,
+      photo_url: photoUrl,
+    } as any);
+
+    if (!error) {
+      await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", psEntry.id);
+      setEntries(prev => prev.filter(e => e.id !== psEntry.id));
+      toast({ title: "PS registrado com sucesso" });
+    } else {
+      toast({ title: "Erro ao registrar PS", variant: "destructive" });
+    }
+
+    setPsSaving(false);
+    closePsModal();
+  };
 
   const allReasons = [...DEFAULT_REASONS, ...customReasons.map((r) => r.label)];
+  const allPsReasons = [...DEFAULT_PS_REASONS, ...psCustomReasons.map(r => r.label)];
 
   return (
     <div className="space-y-4">
@@ -266,7 +398,7 @@ const RetornoPisoPage = () => {
                       <TableCell className="text-xs">{format(new Date(e.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
                       <TableCell className="text-center">
                         <div className="flex gap-1 justify-center">
-                          <Button variant="outline" size="sm" onClick={() => handleMigratePs(e)}>
+                          <Button variant="outline" size="sm" onClick={() => openPsModal(e)}>
                             <AlertTriangle className="h-3 w-3 mr-1" /> PS
                           </Button>
                           {managerSession && (
@@ -276,6 +408,7 @@ const RetornoPisoPage = () => {
                                   await supabase.from("piso_entries").delete().eq("id", e.id);
                                   setEntries((prev) => prev.filter((p) => p.id !== e.id));
                                   setDeleteConfirmId(null);
+                                  toast({ title: "Registro excluído" });
                                 }}>
                                   Confirmar
                                 </Button>
@@ -300,7 +433,7 @@ const RetornoPisoPage = () => {
         </CardContent>
       </Card>
 
-      {/* Modal */}
+      {/* Piso Modal */}
       {modalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="fixed inset-0 bg-black/80" onClick={() => setModalOpen(false)} />
@@ -375,6 +508,89 @@ const RetornoPisoPage = () => {
         </div>
       )}
 
+      {/* PS Modal */}
+      <Dialog open={psModalOpen} onOpenChange={(open) => !open && closePsModal()}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <AlertTriangle className="h-5 w-5 text-primary" /> Migrar para PS — {psEntry?.tbr_code}
+            </DialogTitle>
+            <DialogDescription>Informe o motivo e tire uma foto antes de confirmar.</DialogDescription>
+          </DialogHeader>
+
+          {psEntry && (
+            <div className="space-y-2 text-sm">
+              <div><strong>TBR:</strong> {psEntry.tbr_code}</div>
+              <div><strong>Motorista:</strong> {psEntry.driver_name ?? "-"}</div>
+              <div><strong>Rota:</strong> {psEntry.route ?? "-"}</div>
+              <div><strong>Motivo Piso:</strong> {psEntry.reason}</div>
+            </div>
+          )}
+
+          <div className="space-y-3 pt-2 border-t">
+            {/* PS Reason */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Motivo do PS</label>
+              <Select value={psReason} onValueChange={setPsReason}>
+                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
+                <SelectContent>
+                  {allPsReasons.map(r => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!psShowNewReason ? (
+                <Button variant="ghost" size="sm" className="text-xs" onClick={() => setPsShowNewReason(true)}>
+                  <Plus className="h-3 w-3 mr-1" /> Novo motivo
+                </Button>
+              ) : (
+                <div className="flex gap-2">
+                  <Input
+                    value={psNewReasonInput}
+                    onChange={(e) => setPsNewReasonInput(e.target.value)}
+                    placeholder="Novo motivo PS..."
+                    className="flex-1 h-9 text-sm"
+                  />
+                  <Button size="sm" onClick={handleAddPsReason} disabled={!psNewReasonInput.trim()}>Adicionar</Button>
+                </div>
+              )}
+            </div>
+
+            {/* Photo */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold">Foto</label>
+              {!psCameraActive && !psPhotoPreview && (
+                <Button variant="outline" size="sm" className="w-full gap-2" onClick={startPsCamera}>
+                  <Camera className="h-4 w-4" /> Tirar Foto
+                </Button>
+              )}
+              {psCameraActive && (
+                <div className="space-y-2">
+                  <video ref={videoRef} className="w-full rounded-md border" autoPlay playsInline muted />
+                  <canvas ref={canvasRef} className="hidden" />
+                  <div className="flex gap-2">
+                    <Button size="sm" className="flex-1" onClick={capturePsPhoto}>Capturar</Button>
+                    <Button variant="outline" size="sm" onClick={stopPsCamera}>Cancelar</Button>
+                  </div>
+                </div>
+              )}
+              {psPhotoPreview && (
+                <div className="space-y-2">
+                  <img src={psPhotoPreview} alt="Preview" className="w-full rounded-md border max-h-48 object-cover" />
+                  <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => { setPsCapturedPhoto(null); setPsPhotoPreview(null); startPsCamera(); }}>
+                    <RefreshCw className="h-3 w-3" /> Refazer
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            <Button className="w-full" onClick={handleConfirmPs} disabled={psSaving || !psReason}>
+              {psSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+              Confirmar PS
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

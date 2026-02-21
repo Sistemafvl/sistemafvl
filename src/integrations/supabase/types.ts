@@ -577,6 +577,8 @@ export type Database = {
           description: string
           driver_name: string | null
           id: string
+          photo_url: string | null
+          reason: string | null
           ride_id: string | null
           route: string | null
           status: string
@@ -590,6 +592,8 @@ export type Database = {
           description: string
           driver_name?: string | null
           id?: string
+          photo_url?: string | null
+          reason?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -603,6 +607,8 @@ export type Database = {
           description?: string
           driver_name?: string | null
           id?: string
+          photo_url?: string | null
+          reason?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -633,6 +639,42 @@ export type Database = {
           },
           {
             foreignKeyName: "ps_entries_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ps_reasons: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ps_reasons_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ps_reasons_unit_id_fkey"
             columns: ["unit_id"]
             isOneToOne: false
             referencedRelation: "units_public"
