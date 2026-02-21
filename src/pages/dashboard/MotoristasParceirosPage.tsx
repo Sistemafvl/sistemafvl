@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Truck, Eye, Search, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -24,6 +25,7 @@ interface DriverGlobal {
   car_model: string;
   car_plate: string;
   car_color: string | null;
+  avatar_url: string | null;
   email: string | null;
   whatsapp: string | null;
   cep: string | null;
@@ -115,7 +117,7 @@ const MotoristasParceirosPage = () => {
     setLoading(true);
     const { data: driversData } = await supabase
       .from("drivers_public")
-      .select("id, name, cpf, car_model, car_plate, car_color, email, whatsapp, cep, address, neighborhood, city, state, active, created_at")
+      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at")
       .order("name");
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
@@ -326,9 +328,10 @@ const MotoristasParceirosPage = () => {
           {viewDriver && (
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-center pb-2">
-                <div className="h-20 w-20 rounded-full bg-muted flex items-center justify-center">
-                  <Truck className="h-8 w-8 text-muted-foreground" />
-                </div>
+                <Avatar className="h-20 w-20">
+                  <AvatarImage src={viewDriver.avatar_url ?? undefined} alt={viewDriver.name} />
+                  <AvatarFallback className="text-2xl font-bold">{viewDriver.name.charAt(0)}</AvatarFallback>
+                </Avatar>
               </div>
               <div><span className="font-semibold text-muted-foreground">Nome:</span> <span className="font-bold">{viewDriver.name}</span></div>
               <div><span className="font-semibold text-muted-foreground">CPF:</span> {maskCPF(viewDriver.cpf)}</div>
