@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ const RelatoriosPage = () => {
   });
   const [loading, setLoading] = useState<string | null>(null);
   const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [payrollSearch, setPayrollSearch] = useState("");
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -485,8 +487,26 @@ const RelatoriosPage = () => {
             <p className="text-sm text-muted-foreground mb-4">
               {format(startDate, "dd/MM/yyyy")} até {format(endDate, "dd/MM/yyyy")} • {payrollData.length} motorista(s)
             </p>
+            <Input
+              value={payrollSearch}
+              onChange={(e) => setPayrollSearch(e.target.value)}
+              placeholder="Buscar por nome, CPF, placa..."
+              className="mb-4 h-9 text-sm"
+            />
             <div className="space-y-3">
-              {payrollData.map((d) => (
+              {payrollData
+                .filter((d) => {
+                  if (!payrollSearch.trim()) return true;
+                  const q = payrollSearch.toLowerCase();
+                  return (
+                    d.driver.name?.toLowerCase().includes(q) ||
+                    d.driver.cpf?.toLowerCase().includes(q) ||
+                    d.driver.car_plate?.toLowerCase().includes(q) ||
+                    d.driver.car_model?.toLowerCase().includes(q) ||
+                    d.driver.pixKey?.toLowerCase().includes(q)
+                  );
+                })
+                .map((d) => (
                 <Card key={d.driver.id}>
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start">
