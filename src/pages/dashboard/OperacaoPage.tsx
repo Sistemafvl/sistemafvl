@@ -12,6 +12,7 @@ import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { translateStatus } from "@/lib/status-labels";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -256,7 +257,7 @@ const OperacaoPage = () => {
                         <div className="flex-1 min-w-0 space-y-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-bold text-sm">{c.driver_name}</p>
-                            <Badge variant="outline" className="text-[10px]">{c.loading_status ?? "—"}</Badge>
+                            <Badge variant="outline" className="text-[10px]">{translateStatus(c.loading_status)}</Badge>
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                             <span className="flex items-center gap-1"><Car className="h-3 w-3" /> {[c.car_model, c.car_color].filter(Boolean).join(" • ")}</span>

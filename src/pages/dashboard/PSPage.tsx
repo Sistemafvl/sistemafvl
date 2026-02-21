@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle, Search, CheckCircle, X } from "lucide-react";
+import { translateStatus } from "@/lib/status-labels";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
@@ -294,7 +295,7 @@ const PSPage = () => {
               <div><span className="font-semibold text-muted-foreground">Rota:</span> {history.route ?? "-"}</div>
               <div><span className="font-semibold text-muted-foreground">Login:</span> {history.login ?? "-"}</div>
               <div><span className="font-semibold text-muted-foreground">Conferente:</span> {history.conferente_name ?? "-"}</div>
-              <div><span className="font-semibold text-muted-foreground">Status:</span> {history.loading_status ?? "-"}</div>
+              <div><span className="font-semibold text-muted-foreground">Status:</span> {translateStatus(history.loading_status)}</div>
               <div><span className="font-semibold text-muted-foreground">Data:</span> {new Date(history.completed_at).toLocaleString("pt-BR")}</div>
 
               {!includeMode ? (() => {

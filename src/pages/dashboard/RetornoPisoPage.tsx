@@ -13,6 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
+import { translateStatus } from "@/lib/status-labels";
 import { cn } from "@/lib/utils";
 
 const MAX_TBR_LENGTH = 15;
@@ -370,7 +371,7 @@ const RetornoPisoPage = () => {
                   <div><strong>Placa:</strong> {trackInfo.car_plate || "—"}</div>
                   <div><strong>Login:</strong> {trackInfo.login || "—"}</div>
                   <div><strong>Conferente:</strong> {trackInfo.conferente_name || "—"}</div>
-                  <div><strong>Status:</strong> {trackInfo.loading_status || "—"}</div>
+                  <div><strong>Status:</strong> {translateStatus(trackInfo.loading_status)}</div>
                   <div><strong>Data:</strong> {format(new Date(trackInfo.completed_at), "dd/MM/yyyy HH:mm")}</div>
                 </div>
               </div>
