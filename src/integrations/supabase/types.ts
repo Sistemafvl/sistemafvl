@@ -107,6 +107,66 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_bonus: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          driver_id: string
+          driver_name: string | null
+          id: string
+          period_end: string
+          period_start: string
+          unit_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          driver_id: string
+          driver_name?: string | null
+          id?: string
+          period_end: string
+          period_start: string
+          unit_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          driver_id?: string
+          driver_name?: string | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
+      driver_custom_values: {
+        Row: {
+          created_at: string
+          custom_tbr_value: number
+          driver_id: string
+          id: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_tbr_value?: number
+          driver_id: string
+          id?: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_tbr_value?: number
+          driver_id?: string
+          id?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       driver_documents: {
         Row: {
           created_at: string

@@ -30,6 +30,7 @@ interface DnrEntry {
   created_at: string;
   approved_at: string | null;
   closed_at: string | null;
+  discounted: boolean;
 }
 
 interface TbrInfo {
@@ -184,10 +185,11 @@ const DNRPage = () => {
     return true;
   });
 
-  const statusBadge = (status: string) => {
-    if (status === "open") return <Badge variant="destructive" className="text-xs">Aberto</Badge>;
-    if (status === "analyzing") return <Badge className="bg-amber-500 text-white text-xs">Analisando</Badge>;
-    return <Badge variant="outline" className="text-xs">Finalizado</Badge>;
+  const statusBadge = (entry: DnrEntry) => {
+    if (entry.status === "open") return <Badge variant="destructive" className="text-xs">Aberto</Badge>;
+    if (entry.status === "analyzing") return <Badge className="bg-amber-500 text-white text-xs">Analisando</Badge>;
+    if (entry.discounted) return <Badge className="bg-red-600 text-white text-xs">Finalizado c/ Desconto</Badge>;
+    return <Badge className="bg-green-600 text-white text-xs">Finalizado s/ Desconto</Badge>;
   };
 
   return (
@@ -287,7 +289,7 @@ const DNRPage = () => {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="font-mono font-bold text-sm">{entry.tbr_code}</span>
-                      {statusBadge(entry.status)}
+                      {statusBadge(entry)}
                     </div>
                     <span className="text-lg font-bold text-destructive">R${Number(entry.dnr_value).toFixed(2)}</span>
                   </div>

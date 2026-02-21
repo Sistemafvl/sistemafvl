@@ -390,7 +390,8 @@ const ConferenciaCarregamentoPage = () => {
     const channel = supabase
       .channel("conferencia-" + unitId)
       .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (!skipRealtimeRef.current) fetchRides(); })
-      .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
