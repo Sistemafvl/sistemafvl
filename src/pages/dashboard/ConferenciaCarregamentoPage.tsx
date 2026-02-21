@@ -395,6 +395,7 @@ const ConferenciaCarregamentoPage = () => {
       .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (!skipRealtimeRef.current) fetchRides(); })
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
@@ -494,6 +495,8 @@ const ConferenciaCarregamentoPage = () => {
 
     // Wait for all DB ops to settle, then re-fetch
     await fetchRides();
+    // Safety delay: wait for cascading Realtime events to pass before re-enabling
+    await new Promise(resolve => setTimeout(resolve, 1500));
     deletingRef.current.delete(tbrId);
     skipRealtimeRef.current = false;
   };
