@@ -8,11 +8,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -152,39 +151,6 @@ const maskCPF = (v: string) => {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 };
 
-const ConferenteCombobox = ({ conferentes, value, onSelect, disabled }: { conferentes: Conferente[]; value: string; onSelect: (val: string) => void; disabled: boolean }) => {
-  const [open, setOpen] = useState(false);
-  const selected = conferentes.find(c => c.id === value);
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="w-full h-9 justify-between text-sm font-normal">
-          <div className="flex items-center gap-2 truncate">
-            <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-            <span className="truncate">{selected ? selected.name : "Selecionar Conferente"}</span>
-          </div>
-          <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[220px] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Buscar conferente..." className="h-9" />
-          <CommandList>
-            <CommandEmpty>Nenhum conferente encontrado.</CommandEmpty>
-            <CommandGroup>
-              {conferentes.map((c) => (
-                <CommandItem key={c.id} value={c.name} onSelect={() => { onSelect(c.id); setOpen(false); }}>
-                  {c.name}
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-};
-
 const ConferenciaCarregamentoPage = () => {
   const { unitSession, managerSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
@@ -241,6 +207,86 @@ const ConferenciaCarregamentoPage = () => {
 
   // Call driver
   const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
+
+  // Camera scanner state
+  const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
+  const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const saveTbrRef = useRef<(rideId: string, code: string) => Promise<void>>();
+
+  const playSuccessBeep = () => {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 1000;
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {}
+  };
+
+  const stopCamera = useCallback(() => {
+    if (scanIntervalRef.current) { clearInterval(scanIntervalRef.current); scanIntervalRef.current = null; }
+    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
+    setCameraOpen(null);
+    setLastScannedCode("");
+  }, []);
+
+  const startCamera = useCallback(async (rideId: string) => {
+    setCameraOpen(rideId);
+    setLastScannedCode("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play();
+      }
+
+      // Check BarcodeDetector support
+      if (!("BarcodeDetector" in window)) {
+        const { toast } = await import("@/hooks/use-toast");
+        toast({ title: "Scanner não suportado", description: "Seu navegador não suporta leitura de código de barras pela câmera.", variant: "destructive" });
+        return;
+      }
+
+      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "codabar", "itf"] });
+      const recentCodes = new Set<string>();
+
+      scanIntervalRef.current = setInterval(async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(videoRef.current);
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue;
+            if (recentCodes.has(code)) return;
+            recentCodes.add(code);
+            setTimeout(() => recentCodes.delete(code), 3000);
+            setLastScannedCode(code);
+            if (code.toUpperCase().startsWith("TBR")) {
+              playSuccessBeep();
+              await saveTbrRef.current?.(rideId, code);
+            } else {
+              playErrorBeep();
+            }
+          }
+        } catch {}
+      }, 300);
+    } catch (err) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Erro ao acessar câmera", description: "Permita o acesso à câmera nas configurações do navegador.", variant: "destructive" });
+      stopCamera();
+    }
+  }, [stopCamera]);
+
+  // Cleanup camera on unmount
+  useEffect(() => { return () => { stopCamera(); }; }, [stopCamera]);
 
   useEffect(() => {
     if (!emblaApi) return;
@@ -684,6 +730,9 @@ const ConferenciaCarregamentoPage = () => {
       setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
     }
   };
+
+  // Keep ref updated for camera scanner callback
+  saveTbrRef.current = saveTbr;
 
   // Processing lock per ride to prevent double-reads
   const processingRef = useRef<Record<string, boolean>>({});
@@ -1202,7 +1251,7 @@ const ConferenciaCarregamentoPage = () => {
                           {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
                         </div>
 
-                        {/* Conferente Combobox */}
+                        {/* Conferente Select */}
                         <div className="w-full">
                           {(() => {
                             const isLocked = (!!ride.conferente_id || lockedConferenteIds.has(ride.id)) && !managerSession;
@@ -1217,12 +1266,16 @@ const ConferenciaCarregamentoPage = () => {
                               );
                             }
                             return (
-                              <ConferenteCombobox
-                                conferentes={conferentes}
-                                value={ride.conferente_id ?? ""}
-                                onSelect={(val) => handleSelectConferente(ride.id, val)}
-                                disabled={isLocked}
-                              />
+                              <Select value={ride.conferente_id ?? ""} onValueChange={(val) => handleSelectConferente(ride.id, val)} disabled={isLocked}>
+                                <SelectTrigger className="w-full h-9">
+                                  <SelectValue placeholder="Selecionar Conferente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {conferentes.map((c) => (
+                                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                             );
                           })()}
                         </div>
@@ -1347,6 +1400,16 @@ const ConferenciaCarregamentoPage = () => {
                                     autoFocus
                                   />
                                 </div>
+                                <Button
+                                  type="button"
+                                  size="icon"
+                                  variant="outline"
+                                  className="h-8 w-8 shrink-0"
+                                  onClick={() => startCamera(ride.id)}
+                                  title="Abrir câmera para escanear"
+                                >
+                                  <Camera className="h-3.5 w-3.5" />
+                                </Button>
                                 <Button
                                   type="button"
                                   size="icon"
@@ -1586,6 +1649,33 @@ const ConferenciaCarregamentoPage = () => {
               disabled={!swapPasswordInput}
             >
               Autorizar Troca
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Camera Scanner Modal */}
+      <Dialog open={!!cameraOpen} onOpenChange={(open) => { if (!open) stopCamera(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <Camera className="h-5 w-5 text-primary" /> Scanner de Câmera
+            </DialogTitle>
+            <DialogDescription>Aponte a câmera para o código de barras ou QR Code do TBR</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative w-full aspect-[4/3] bg-black rounded-lg overflow-hidden">
+              <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+              <div className="absolute inset-0 border-2 border-primary/50 rounded-lg pointer-events-none" />
+            </div>
+            {lastScannedCode && (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-sm">
+                <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                <span className="font-mono font-bold">{lastScannedCode}</span>
+              </div>
+            )}
+            <Button variant="destructive" className="w-full font-bold italic" onClick={stopCamera}>
+              Fechar Câmera
             </Button>
           </div>
         </DialogContent>

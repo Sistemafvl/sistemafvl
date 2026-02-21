@@ -8,8 +8,9 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X } from "lucide-react";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -40,6 +41,39 @@ const maskCPF = (v: string) => {
   if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
   if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
+const LoginCombobox = ({ logins, usedLoginsToday, value, onSelect }: { logins: { id: string; login: string }[]; usedLoginsToday: Set<string>; value: string; onSelect: (val: string) => void }) => {
+  const [open, setOpen] = useState(false);
+  const selected = logins.find(l => l.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full h-10 justify-between text-sm font-normal">
+          <span className="truncate">{selected ? selected.login : "Selecionar login..."}</span>
+          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[280px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar login..." className="h-9" />
+          <CommandList>
+            <CommandEmpty>Nenhum login encontrado.</CommandEmpty>
+            <CommandGroup>
+              {logins.map((l) => (
+                <CommandItem key={l.id} value={l.login} onSelect={() => { onSelect(l.id); setOpen(false); }}>
+                  <span className="flex items-center gap-2 flex-1">
+                    {l.login}
+                    {usedLoginsToday.has(l.login) && <Check className="h-3.5 w-3.5 text-emerald-500" />}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
 };
 
 const QueuePanel = () => {
@@ -373,19 +407,12 @@ const QueuePanel = () => {
             <div className="space-y-2">
               <Label htmlFor="login" className="font-semibold">Login</Label>
               {unitLogins.length > 0 ? (
-                <Select value={selectedLoginId} onValueChange={setSelectedLoginId}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="Selecionar login..." /></SelectTrigger>
-                  <SelectContent>
-                    {unitLogins.map((l) => (
-                      <SelectItem key={l.id} value={l.id}>
-                        <span className="flex items-center gap-2">
-                          {l.login}
-                          {usedLoginsToday.has(l.login) && <Check className="h-3.5 w-3.5 text-emerald-500" />}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <LoginCombobox
+                  logins={unitLogins}
+                  usedLoginsToday={usedLoginsToday}
+                  value={selectedLoginId}
+                  onSelect={setSelectedLoginId}
+                />
               ) : (
                 <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado. Cadastre em Configurações.</p>
               )}
