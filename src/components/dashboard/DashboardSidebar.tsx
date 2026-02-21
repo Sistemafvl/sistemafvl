@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -49,6 +49,7 @@ const menuItems = [
 
 const managerMenuItems = [
   { title: "Operação", url: "/dashboard/operacao", icon: Activity },
+  { title: "Ciclos", url: "/dashboard/ciclos", icon: RefreshCw },
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Financeiro", url: "/dashboard/financeiro", icon: DollarSign },
   { title: "Feedbacks", url: "/dashboard/feedbacks", icon: MessageSquare },

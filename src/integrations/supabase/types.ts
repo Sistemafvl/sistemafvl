@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      cycle_records: {
+        Row: {
+          abertura_galpao: string | null
+          created_at: string
+          hora_inicio_descarregamento: string | null
+          hora_termino_descarregamento: string | null
+          id: string
+          qtd_pacotes: number | null
+          record_date: string
+          unit_id: string
+          updated_at: string
+        }
+        Insert: {
+          abertura_galpao?: string | null
+          created_at?: string
+          hora_inicio_descarregamento?: string | null
+          hora_termino_descarregamento?: string | null
+          id?: string
+          qtd_pacotes?: number | null
+          record_date?: string
+          unit_id: string
+          updated_at?: string
+        }
+        Update: {
+          abertura_galpao?: string | null
+          created_at?: string
+          hora_inicio_descarregamento?: string | null
+          hora_termino_descarregamento?: string | null
+          id?: string
+          qtd_pacotes?: number | null
+          record_date?: string
+          unit_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dnr_entries: {
         Row: {
           approved_at: string | null
