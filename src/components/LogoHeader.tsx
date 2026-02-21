@@ -7,10 +7,10 @@ interface LogoHeaderProps {
 }
 
 const sizeClasses = {
-  sm: "h-10 sm:h-12",
-  md: "h-16 sm:h-20",
-  lg: "h-24 sm:h-32",
-  xl: "h-24 sm:h-40",
+  sm: "h-8 sm:h-10",
+  md: "h-12 sm:h-16",
+  lg: "h-16 sm:h-24",
+  xl: "h-20 sm:h-32",
 };
 
 const LogoHeader = ({ onTripleClick, size = "md" }: LogoHeaderProps) => {
