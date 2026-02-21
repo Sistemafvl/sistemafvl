@@ -2,7 +2,12 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, MapPin, Clock, Calendar, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package } from "lucide-react";
+import { format, subDays } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Ride {
   id: string;
@@ -25,6 +30,8 @@ const DriverRides = () => {
   const { unitSession } = useAuthStore();
   const [rides, setRides] = useState<Ride[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startDate, setStartDate] = useState<Date>(() => subDays(new Date(), 30));
+  const [endDate, setEndDate] = useState<Date>(() => new Date());
 
   const driverId = unitSession?.user_profile_id;
 
@@ -36,6 +43,8 @@ const DriverRides = () => {
         .from("driver_rides")
         .select("*")
         .eq("driver_id", driverId)
+        .gte("completed_at", startDate.toISOString())
+        .lte("completed_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString())
         .order("completed_at", { ascending: false });
 
       if (!data) { setRides([]); setLoading(false); return; }
@@ -79,7 +88,7 @@ const DriverRides = () => {
       setLoading(false);
     };
     fetchRides();
-  }, [driverId]);
+  }, [driverId, startDate, endDate]);
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -104,10 +113,36 @@ const DriverRides = () => {
         Corridas
       </h1>
 
+      <div className="flex flex-wrap gap-2 items-center">
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !startDate && "text-muted-foreground")}>
+              <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+              {startDate ? format(startDate, "dd/MM/yyyy") : "De"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={startDate} onSelect={(d) => d && setStartDate(d)} initialFocus className="p-3 pointer-events-auto" />
+          </PopoverContent>
+        </Popover>
+        <span className="text-xs text-muted-foreground">até</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className={cn("justify-start text-left font-normal", !endDate && "text-muted-foreground")}>
+              <CalendarIcon className="h-3.5 w-3.5 mr-1" />
+              {endDate ? format(endDate, "dd/MM/yyyy") : "Até"}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar mode="single" selected={endDate} onSelect={(d) => d && setEndDate(d)} initialFocus className="p-3 pointer-events-auto" />
+          </PopoverContent>
+        </Popover>
+      </div>
+
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-semibold text-muted-foreground">
-            Total de corridas: <span className="text-primary font-bold">{rides.length}</span>
+            Total de corridas no período: <span className="text-primary font-bold">{rides.length}</span>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">

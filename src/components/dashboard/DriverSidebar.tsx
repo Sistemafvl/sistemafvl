@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Car, User, Star, Settings, LogOut, FileText, FileWarning, DollarSign } from "lucide-react";
+import { LayoutDashboard, Users, Car, User, Star, Settings, LogOut, FileText, FileWarning, DollarSign, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
@@ -37,6 +37,7 @@ const DriverSidebar = () => {
   const driverName = unitSession?.user_name ?? "Motorista";
   const driverId = unitSession?.user_profile_id;
   const [avatarUrl, setAvatarUrl] = useState("");
+  const [hasPendingInvoice, setHasPendingInvoice] = useState(false);
   const initials = driverName
     .split(" ")
     .map((n) => n[0])
@@ -50,6 +51,37 @@ const DriverSidebar = () => {
       .then(({ data }) => {
         if (data && (data as any).avatar_url) setAvatarUrl((data as any).avatar_url);
       });
+  }, [driverId]);
+
+  useEffect(() => {
+    if (!driverId) return;
+    const checkPending = async () => {
+      const { data: reports } = await supabase
+        .from("payroll_reports")
+        .select("id, report_data");
+      if (!reports) { setHasPendingInvoice(false); return; }
+
+      // Filter reports that include this driver
+      const driverReportIds = reports
+        .filter((r) => {
+          const data = r.report_data as any[];
+          return Array.isArray(data) && data.some((d: any) => d.driver?.id === driverId);
+        })
+        .map((r) => r.id);
+
+      if (driverReportIds.length === 0) { setHasPendingInvoice(false); return; }
+
+      const { data: invoices } = await supabase
+        .from("driver_invoices")
+        .select("payroll_report_id")
+        .eq("driver_id", driverId)
+        .in("payroll_report_id", driverReportIds);
+
+      const invoicedIds = new Set((invoices ?? []).map((i) => i.payroll_report_id));
+      const pending = driverReportIds.some((id) => !invoicedIds.has(id));
+      setHasPendingInvoice(pending);
+    };
+    checkPending();
   }, [driverId]);
 
   return (
@@ -90,6 +122,9 @@ const DriverSidebar = () => {
                     >
                       <item.icon className="h-4 w-4 shrink-0" />
                       <span>{item.title}</span>
+                      {item.title === "Recebíveis" && hasPendingInvoice && (
+                        <AlertCircle className="h-4 w-4 text-red-500 animate-pulse ml-auto shrink-0" />
+                      )}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
