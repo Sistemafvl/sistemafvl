@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Upload, CheckCircle, Loader2, FileText } from "lucide-react";
+import { DollarSign, Upload, CheckCircle, Loader2, FileText, Pencil } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
@@ -171,10 +171,32 @@ const DriverRecebiveis = () => {
 
                   <div className="flex items-center gap-2 pt-2 border-t">
                     {entry.invoiceUploaded ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                        <span className="text-xs text-green-600 font-semibold">NF Enviada: {entry.invoiceFileName}</span>
-                      </>
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span className="text-xs text-green-600 font-semibold">NF Enviada: {entry.invoiceFileName}</span>
+                        </div>
+                        <label className="cursor-pointer">
+                          <input
+                            type="file"
+                            className="hidden"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) handleUpload(entry.reportId, file);
+                            }}
+                          />
+                          <Button variant="ghost" size="sm" asChild disabled={uploading === entry.reportId}>
+                            <span>
+                              {uploading === entry.reportId ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Pencil className="h-3 w-3" />
+                              )}
+                            </span>
+                          </Button>
+                        </label>
+                      </div>
                     ) : (
                       <>
                         <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">NF Pendente</Badge>

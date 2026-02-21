@@ -65,6 +65,7 @@ const RTOPage = () => {
   const [entries, setEntries] = useState<RtoEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
+  const [searchFilter, setSearchFilter] = useState("");
 
   useEffect(() => {
     if (unitSession) {
@@ -185,8 +186,22 @@ const RTOPage = () => {
     inputRef.current?.focus();
   };
 
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
-  const paginatedEntries = entries.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const filteredEntries = searchFilter.trim()
+    ? entries.filter((e) => {
+        const q = searchFilter.toLowerCase();
+        return (
+          e.tbr_code?.toLowerCase().includes(q) ||
+          e.route?.toLowerCase().includes(q) ||
+          e.conferente_name?.toLowerCase().includes(q) ||
+          e.cep?.toLowerCase().includes(q) ||
+          e.description?.toLowerCase().includes(q) ||
+          e.driver_name?.toLowerCase().includes(q)
+        );
+      })
+    : entries;
+
+  const totalPages = Math.ceil(filteredEntries.length / ITEMS_PER_PAGE);
+  const paginatedEntries = filteredEntries.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   return (
     <div className="space-y-4">
@@ -211,6 +226,13 @@ const RTOPage = () => {
               autoFocus
             />
           </div>
+
+          <Input
+            value={searchFilter}
+            onChange={(e) => { setSearchFilter(e.target.value); setPage(1); }}
+            placeholder="Buscar por TBR, rota, conferente, CEP, motorista..."
+            className="h-9 text-sm"
+          />
 
           {isLoading ? (
             <div className="space-y-2">
@@ -256,7 +278,7 @@ const RTOPage = () => {
               </div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-between pt-2">
-                  <span className="text-sm text-muted-foreground">Página {page} de {totalPages} ({entries.length} registros)</span>
+                  <span className="text-sm text-muted-foreground">Página {page} de {totalPages} ({filteredEntries.length} registros)</span>
                   <div className="flex gap-2">
                     <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
                       <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
