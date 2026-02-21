@@ -1023,21 +1023,17 @@ const ConferenciaCarregamentoPage = () => {
       );
     }
 
-    if (!value && !managerSession) return null;
-
     return (
       <div className="flex items-center gap-2">
         {icon}
         <span><strong>{label}:</strong> {value || "—"}</span>
-        {managerSession && (
-          <button
-            onClick={() => { setEditingField({ rideId: ride.id, field }); setEditValue(value ?? ""); }}
-            className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
-            title={`Editar ${label.toLowerCase()}`}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-          </button>
-        )}
+        <button
+          onClick={() => { setEditingField({ rideId: ride.id, field }); setEditValue(value ?? ""); }}
+          className="ml-auto text-muted-foreground hover:text-foreground shrink-0"
+          title={`Editar ${label.toLowerCase()}`}
+        >
+          <Pencil className="h-3.5 w-3.5" />
+        </button>
       </div>
     );
   };
