@@ -164,9 +164,17 @@ const DNRPage = () => {
     fetchEntries();
   };
 
-  const handleFinalize = async (id: string) => {
-    await supabase.from("dnr_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", id);
+  const handleFinalize = async (id: string, withDiscount: boolean) => {
+    await supabase.from("dnr_entries").update({ 
+      status: "closed", 
+      closed_at: new Date().toISOString(),
+      discounted: withDiscount,
+    } as any).eq("id", id);
     fetchEntries();
+    toast({ 
+      title: withDiscount ? "DNR finalizado com desconto" : "DNR finalizado sem desconto",
+      description: withDiscount ? "O valor será descontado do motorista." : "Nenhum desconto aplicado.",
+    });
   };
 
   const filtered = entries.filter(e => {
@@ -301,9 +309,14 @@ const DNRPage = () => {
                     </Button>
                   )}
                   {managerSession && entry.status === "analyzing" && (
-                    <Button size="sm" variant="outline" onClick={() => handleFinalize(entry.id)} className="w-full font-bold italic gap-1">
-                      <CheckCircle className="h-3.5 w-3.5" /> Finalizar
-                    </Button>
+                    <div className="flex gap-2 w-full">
+                      <Button size="sm" variant="outline" onClick={() => handleFinalize(entry.id, false)} className="flex-1 font-bold italic gap-1 border-green-500 text-green-700 hover:bg-green-50">
+                        <CheckCircle className="h-3.5 w-3.5" /> Sem Desconto
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleFinalize(entry.id, true)} className="flex-1 font-bold italic gap-1">
+                        <DollarSign className="h-3.5 w-3.5" /> Com Desconto
+                      </Button>
+                    </div>
                   )}
                 </CardContent>
               </Card>

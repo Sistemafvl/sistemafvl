@@ -25,6 +25,7 @@ export interface DriverPayrollData {
   totalReturns: number;
   totalCompleted: number;
   totalValue: number;
+  dnrDiscount?: number;
   daysWorked: number;
   loginsUsed: string[];
   bestDay: { date: string; tbrs: number } | null;
@@ -50,8 +51,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     const grandTotalReturns = data.reduce((s, d) => s + d.totalReturns, 0);
     const grandTotalCompleted = data.reduce((s, d) => s + d.totalCompleted, 0);
     const grandTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
+    const grandTotalDnr = data.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
 
-    const metricBox = (value: string | number, label: string, bg: string) => (
+    const metricBox = (value: string | number, label: string, bg: string, textColor?: string) => (
       <div
         style={{
           display: "flex",
@@ -67,7 +69,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
           border: `1px solid ${COLORS.grayBorder}`,
         }}
       >
-        <div style={{ fontSize: "22px", fontWeight: 800, color: COLORS.tealDark, lineHeight: "1.2" }}>{String(value)}</div>
+        <div style={{ fontSize: "22px", fontWeight: 800, color: textColor || COLORS.tealDark, lineHeight: "1.2" }}>{String(value)}</div>
         <div style={{ fontSize: "10px", color: COLORS.dark, textTransform: "uppercase", fontWeight: 700, marginTop: "2px" }}>{label}</div>
       </div>
     );
@@ -87,6 +89,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
           });
           const logins = [...loginDayMap.keys()].sort();
           const completionRate = d.totalTbrs > 0 ? ((d.totalCompleted / d.totalTbrs) * 100).toFixed(1) : "0.0";
+          const dnrDiscount = d.dnrDiscount ?? 0;
 
           return (
             <div key={d.driver.id} style={{ padding: "16px", display: "flex", flexDirection: "column", minHeight: "680px" }}>
@@ -131,6 +134,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 {metricBox(d.totalCompleted, "Concluídos", COLORS.green)}
                 {metricBox(`${completionRate}%`, "Taxa", COLORS.gold)}
                 {metricBox(d.avgDaily, "Média/Dia", COLORS.silver)}
+                {dnrDiscount > 0 && metricBox(`-${formatCurrency(dnrDiscount)}`, "DNR", "#fee2e2", "#dc2626")}
                 {metricBox(formatCurrency(d.totalValue), "Valor Total", COLORS.tealLight)}
               </div>
 
@@ -201,6 +205,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <th style={headerCellStyle()}>TBRs</th>
                 <th style={headerCellStyle()}>Ret.</th>
                 <th style={headerCellStyle()}>Conc.</th>
+                <th style={headerCellStyle()}>DNR</th>
                 <th style={headerCellStyle()}>Valor</th>
               </tr>
             </thead>
@@ -215,6 +220,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   <td style={cellStyle({ background: altRowBg(idx) })}>{d.totalTbrs}</td>
                   <td style={cellStyle({ background: altRowBg(idx) })}>{d.totalReturns}</td>
                   <td style={cellStyle({ background: altRowBg(idx) })}>{d.totalCompleted}</td>
+                  <td style={cellStyle({ background: altRowBg(idx), color: (d.dnrDiscount ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: (d.dnrDiscount ?? 0) > 0 ? 700 : undefined })}>
+                    {(d.dnrDiscount ?? 0) > 0 ? `-${formatCurrency(d.dnrDiscount!)}` : "—"}
+                  </td>
                   <td style={cellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(d.totalValue)}</td>
                 </tr>
               ))}
@@ -227,6 +235,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>{grandTotalTbrs}</td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>{grandTotalReturns}</td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>{grandTotalCompleted}</td>
+                <td style={cellStyle({ fontWeight: 800, background: "#fee2e2", color: "#dc2626" })}>
+                  {grandTotalDnr > 0 ? `-${formatCurrency(grandTotalDnr)}` : "—"}
+                </td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{formatCurrency(grandTotalValue)}</td>
               </tr>
             </tbody>

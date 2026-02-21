@@ -33,35 +33,46 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// Generate alert beep using Web Audio API
+// Base64 encoded short beep WAV for fallback
+const BEEP_DATA_URI = "data:audio/wav;base64,UklGRl9vT19teleUQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" +
+  "tvT19" + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
+// Generate alert beep using Web Audio API with fallback
 const createAlertAudio = () => {
   let audioCtx: AudioContext | null = null;
-  let oscillator: OscillatorNode | null = null;
-  let gainNode: GainNode | null = null;
   let isPlaying = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
+
+  const beepWithWebAudio = async () => {
+    try {
+      if (!audioCtx) audioCtx = new AudioContext();
+      if (audioCtx.state === "suspended") await audioCtx.resume();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = "square";
+      osc.frequency.value = 1000;
+      gain.gain.value = 0.5;
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.3);
+    } catch {
+      // Fallback: use Audio element
+      try {
+        const audio = new Audio();
+        // Generate a simple beep via oscillator data URI
+        audio.src = BEEP_DATA_URI;
+        audio.volume = 0.8;
+        await audio.play().catch(() => {});
+      } catch {}
+    }
+  };
 
   const startBeeping = () => {
     if (isPlaying) return;
     isPlaying = true;
-
-    const beep = () => {
-      try {
-        audioCtx = new AudioContext();
-        oscillator = audioCtx.createOscillator();
-        gainNode = audioCtx.createGain();
-        oscillator.type = "square";
-        oscillator.frequency.value = 1000;
-        gainNode.gain.value = 0.5;
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.start();
-        oscillator.stop(audioCtx.currentTime + 0.3);
-      } catch {}
-    };
-
-    beep();
-    intervalId = setInterval(beep, 1500);
+    beepWithWebAudio();
+    intervalId = setInterval(beepWithWebAudio, 1500);
   };
 
   const stopBeeping = () => {
@@ -70,12 +81,7 @@ const createAlertAudio = () => {
       clearInterval(intervalId);
       intervalId = null;
     }
-    try {
-      oscillator?.stop();
-      audioCtx?.close();
-    } catch {}
-    oscillator = null;
-    gainNode = null;
+    try { audioCtx?.close(); } catch {}
     audioCtx = null;
   };
 

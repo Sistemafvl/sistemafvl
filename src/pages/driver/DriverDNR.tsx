@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FileWarning, Clock, DollarSign, AlertTriangle } from "lucide-react";
+import { FileWarning, DollarSign, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface DnrEntry {
   id: string;
@@ -14,6 +15,7 @@ interface DnrEntry {
   status: string;
   created_at: string;
   route: string | null;
+  discounted: boolean;
 }
 
 const DriverDNR = () => {
@@ -23,11 +25,12 @@ const DriverDNR = () => {
 
   const fetchEntries = useCallback(async () => {
     if (!driverId) return;
+    // Fetch analyzing + closed with discount
     const { data } = await supabase
       .from("dnr_entries")
-      .select("id, conferente_name, loaded_at, dnr_value, status, created_at, route")
+      .select("id, conferente_name, loaded_at, dnr_value, status, created_at, route, discounted")
       .eq("driver_id", driverId)
-      .eq("status", "analyzing")
+      .or("status.eq.analyzing,and(status.eq.closed,discounted.eq.true)")
       .order("created_at", { ascending: false });
     setEntries((data ?? []) as DnrEntry[]);
   }, [driverId]);
@@ -43,6 +46,9 @@ const DriverDNR = () => {
     return () => { supabase.removeChannel(channel); };
   }, [driverId, fetchEntries]);
 
+  const analyzingEntries = entries.filter(e => e.status === "analyzing");
+  const discountedEntries = entries.filter(e => e.status === "closed" && e.discounted);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -54,7 +60,8 @@ const DriverDNR = () => {
         <p className="text-sm text-muted-foreground italic text-center py-12">Nenhum DNR pendente.</p>
       ) : (
         <div className="space-y-3">
-          {entries.map((entry) => (
+          {/* DNRs em análise */}
+          {analyzingEntries.map((entry) => (
             <Card key={entry.id} className="border-amber-300 bg-amber-50 dark:bg-amber-950/20">
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-center justify-between">
@@ -65,12 +72,35 @@ const DriverDNR = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                   <div><strong>Carregado em:</strong> {entry.loaded_at ? format(new Date(entry.loaded_at), "dd/MM/yyyy") : "—"}</div>
-                  <div><strong>Dia:</strong> {entry.loaded_at ? format(new Date(entry.loaded_at), "EEEE", { locale: undefined }) : "—"}</div>
+                  <div><strong>Dia:</strong> {entry.loaded_at ? format(new Date(entry.loaded_at), "EEEE", { locale: ptBR }) : "—"}</div>
                   <div><strong>Conferente:</strong> {entry.conferente_name || "—"}</div>
                   <div><strong>Rota:</strong> {entry.route || "—"}</div>
                 </div>
                 <p className="text-xs text-amber-700 dark:text-amber-300 font-semibold italic mt-2">
-                  ⚠️ Procure o gerente para tratar este DNR antes que seja descontado.
+                  ⚠️ Procure o gerente para tratar este DNR Urgente!
+                </p>
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* DNRs fechados com desconto */}
+          {discountedEntries.map((entry) => (
+            <Card key={entry.id} className="border-red-300 bg-red-50 dark:bg-red-950/20">
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <Badge variant="destructive" className="text-xs gap-1">
+                    <DollarSign className="h-3 w-3" /> Descontado
+                  </Badge>
+                  <span className="text-lg font-bold text-destructive">-R${Number(entry.dnr_value).toFixed(2)}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
+                  <div><strong>Carregado em:</strong> {entry.loaded_at ? format(new Date(entry.loaded_at), "dd/MM/yyyy") : "—"}</div>
+                  <div><strong>Dia:</strong> {entry.loaded_at ? format(new Date(entry.loaded_at), "EEEE", { locale: ptBR }) : "—"}</div>
+                  <div><strong>Conferente:</strong> {entry.conferente_name || "—"}</div>
+                  <div><strong>Rota:</strong> {entry.route || "—"}</div>
+                </div>
+                <p className="text-xs text-red-700 dark:text-red-300 font-semibold italic mt-2">
+                  💰 Este valor será descontado do seu pagamento.
                 </p>
               </CardContent>
             </Card>

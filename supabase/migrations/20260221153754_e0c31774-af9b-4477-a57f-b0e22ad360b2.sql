@@ -1,0 +1,1 @@
+ALTER TABLE public.dnr_entries ADD COLUMN discounted boolean NOT NULL DEFAULT false;

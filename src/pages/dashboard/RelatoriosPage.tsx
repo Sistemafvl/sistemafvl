@@ -92,6 +92,23 @@ const RelatoriosPage = () => {
       const allRto = rtoRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d]));
 
+      // Fetch discounted DNRs for the period
+      const { data: dnrData } = await supabase
+        .from("dnr_entries")
+        .select("driver_id, dnr_value")
+        .eq("unit_id", unitId)
+        .eq("status", "closed")
+        .eq("discounted", true)
+        .gte("closed_at", startDate.toISOString())
+        .lte("closed_at", endDate.toISOString());
+
+      const dnrByDriver = new Map<string, number>();
+      (dnrData ?? []).forEach((d: any) => {
+        if (d.driver_id) {
+          dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value));
+        }
+      });
+
       const result: DriverPayrollData[] = driverIds.map(driverId => {
         const driver = driverMap.get(driverId)!;
         const driverRides = rides.filter(r => r.driver_id === driverId);
@@ -120,10 +137,13 @@ const RelatoriosPage = () => {
         const loginsUsed = [...new Set(driverRides.map(r => r.login).filter(Boolean) as string[])];
         const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
         const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
+        const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
 
         return {
           driver: { id: driver.id, name: driver.name, cpf: driver.cpf, car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color },
-          days, totalTbrs, totalReturns, totalCompleted, totalValue: totalCompleted * common.tVal,
+          days, totalTbrs, totalReturns, totalCompleted, 
+          totalValue: (totalCompleted * common.tVal) - dnrDiscount,
+          dnrDiscount,
           daysWorked: days.length, loginsUsed,
           bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
           worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,

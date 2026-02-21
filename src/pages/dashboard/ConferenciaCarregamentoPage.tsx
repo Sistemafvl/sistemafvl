@@ -448,11 +448,13 @@ const ConferenciaCarregamentoPage = () => {
       }
     }
 
-    await fetchRides();
     await fetchOpenRtos();
     deletingRef.current.delete(tbrId);
-    // Delay resetting skipRealtime to avoid race condition
-    setTimeout(() => { skipRealtimeRef.current = false; }, 500);
+    // Delay resetting skipRealtime to avoid race condition with Realtime
+    setTimeout(() => {
+      skipRealtimeRef.current = false;
+      fetchRides();
+    }, 2000);
   };
 
   const scrollTbrList = (rideId: string) => {

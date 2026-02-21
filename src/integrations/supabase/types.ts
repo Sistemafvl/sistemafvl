@@ -24,6 +24,7 @@ export type Database = {
           conferente_name: string | null
           created_at: string
           created_by_name: string | null
+          discounted: boolean
           dnr_value: number
           driver_id: string | null
           driver_name: string | null
@@ -46,6 +47,7 @@ export type Database = {
           conferente_name?: string | null
           created_at?: string
           created_by_name?: string | null
+          discounted?: boolean
           dnr_value?: number
           driver_id?: string | null
           driver_name?: string | null
@@ -68,6 +70,7 @@ export type Database = {
           conferente_name?: string | null
           created_at?: string
           created_by_name?: string | null
+          discounted?: boolean
           dnr_value?: number
           driver_id?: string | null
           driver_name?: string | null
