@@ -316,9 +316,11 @@ const PSPage = () => {
 
   const handleAddReason = async () => {
     if (!unitSession || !newReasonInput.trim()) return;
+    const text = newReasonInput.trim();
+    const formatted = text.charAt(0).toUpperCase() + text.slice(1);
     const { data } = await supabase
       .from("ps_reasons")
-      .insert({ unit_id: unitSession.id, label: newReasonInput.trim() } as any)
+      .insert({ unit_id: unitSession.id, label: formatted } as any)
       .select("id, label")
       .single();
     if (data) {

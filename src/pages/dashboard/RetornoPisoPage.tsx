@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -15,6 +15,12 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
+} from "@/components/ui/command";
 import { format } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
 import { cn } from "@/lib/utils";
@@ -82,6 +88,7 @@ const RetornoPisoPage = () => {
   const [entries, setEntries] = useState<PisoEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [reasonSearchOpen, setReasonSearchOpen] = useState(false);
 
   // PS Modal state
   const [psModalOpen, setPsModalOpen] = useState(false);
@@ -195,9 +202,11 @@ const RetornoPisoPage = () => {
 
   const handleAddReason = async () => {
     if (!unitSession || !newReasonInput.trim()) return;
+    const text = newReasonInput.trim();
+    const formatted = text.charAt(0).toUpperCase() + text.slice(1);
     const { data } = await supabase
       .from("piso_reasons")
-      .insert({ unit_id: unitSession.id, label: newReasonInput.trim() } as any)
+      .insert({ unit_id: unitSession.id, label: formatted } as any)
       .select("id, label")
       .single();
     if (data) {
@@ -293,9 +302,11 @@ const RetornoPisoPage = () => {
 
   const handleAddPsReason = async () => {
     if (!unitSession || !psNewReasonInput.trim()) return;
+    const text = psNewReasonInput.trim();
+    const formatted = text.charAt(0).toUpperCase() + text.slice(1);
     const { data } = await supabase
       .from("ps_reasons")
-      .insert({ unit_id: unitSession.id, label: psNewReasonInput.trim() } as any)
+      .insert({ unit_id: unitSession.id, label: formatted } as any)
       .select("id, label")
       .single();
     if (data) {
@@ -474,14 +485,30 @@ const RetornoPisoPage = () => {
 
             <div className="space-y-3 mt-4 border-t pt-4">
               <label className="text-xs font-semibold">Motivo do insucesso</label>
-              <Select value={selectedReason} onValueChange={setSelectedReason}>
-                <SelectTrigger><SelectValue placeholder="Selecione o motivo" /></SelectTrigger>
-                <SelectContent>
-                  {allReasons.map((r) => (
-                    <SelectItem key={r} value={r}>{r}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Popover open={reasonSearchOpen} onOpenChange={setReasonSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" aria-expanded={reasonSearchOpen} className="w-full justify-between font-normal">
+                    {selectedReason || "Selecione o motivo"}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar motivo..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum motivo encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {allReasons.map((r) => (
+                          <CommandItem key={r} value={r} onSelect={() => { setSelectedReason(r); setReasonSearchOpen(false); }}>
+                            <Check className={cn("mr-2 h-4 w-4", selectedReason === r ? "opacity-100" : "opacity-0")} />
+                            {r}
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
 
               {!showNewReason ? (
                 <Button variant="ghost" size="sm" className="text-xs" onClick={() => setShowNewReason(true)}>
