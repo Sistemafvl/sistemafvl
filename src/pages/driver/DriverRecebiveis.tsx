@@ -92,7 +92,7 @@ const DriverRecebiveis = () => {
     }
 
     const { data: urlData } = await supabase.functions.invoke("get-signed-url", {
-      body: { bucket: "driver-documents", path: filePath },
+      body: { bucket: "driver-documents", path: filePath, driver_id: driverId },
     });
 
     const fileUrl = urlData?.signedUrl || filePath;
