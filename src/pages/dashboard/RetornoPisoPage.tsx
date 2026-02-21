@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, RotateCcw, MapPin } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, RotateCcw, MapPin, Trash2 } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -50,7 +50,7 @@ interface PisoEntry {
 }
 
 const RetornoPisoPage = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, managerSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const [tbrInput, setTbrInput] = useState("");
@@ -65,6 +65,7 @@ const RetornoPisoPage = () => {
   const [saving, setSaving] = useState(false);
   const [entries, setEntries] = useState<PisoEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // RTO CEP Modal
   const [rtoModalOpen, setRtoModalOpen] = useState(false);
@@ -329,6 +330,26 @@ const RetornoPisoPage = () => {
                           <Button variant="outline" size="sm" onClick={() => handleOpenRtoModal(e)}>
                             <RotateCcw className="h-3 w-3 mr-1" /> RTO
                           </Button>
+                          {managerSession && (
+                            deleteConfirmId === e.id ? (
+                              <div className="flex gap-1">
+                                <Button variant="destructive" size="sm" onClick={async () => {
+                                  await supabase.from("piso_entries").delete().eq("id", e.id);
+                                  setEntries((prev) => prev.filter((p) => p.id !== e.id));
+                                  setDeleteConfirmId(null);
+                                }}>
+                                  Confirmar
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => setDeleteConfirmId(null)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            ) : (
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteConfirmId(e.id)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            )
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>

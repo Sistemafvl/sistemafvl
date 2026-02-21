@@ -33,35 +33,81 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
-// Base64 encoded short beep WAV for fallback
-const BEEP_DATA_URI = "data:audio/wav;base64,UklGRl9vT19teleUQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YU" +
-  "tvT19" + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+// Generate a valid PCM WAV beep programmatically
+const generateBeepWav = (): string => {
+  const sampleRate = 8000;
+  const duration = 0.3;
+  const frequency = 1000;
+  const numSamples = Math.floor(sampleRate * duration);
+  const dataSize = numSamples;
+  const fileSize = 44 + dataSize;
+  const buffer = new ArrayBuffer(fileSize);
+  const view = new DataView(buffer);
+  // RIFF header
+  const writeString = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+  writeString(0, "RIFF"); view.setUint32(4, fileSize - 8, true); writeString(8, "WAVE");
+  writeString(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+  writeString(36, "data"); view.setUint32(40, dataSize, true);
+  for (let i = 0; i < numSamples; i++) {
+    const sample = 128 + Math.round(80 * Math.sin(2 * Math.PI * frequency * i / sampleRate));
+    view.setUint8(44 + i, sample);
+  }
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return "data:audio/wav;base64," + btoa(binary);
+};
+
+const BEEP_DATA_URI = generateBeepWav();
+
+// Global AudioContext - initialized on first user interaction
+let globalAudioCtx: AudioContext | null = null;
+let audioCtxInitialized = false;
+
+const initAudioContext = () => {
+  if (audioCtxInitialized) return;
+  audioCtxInitialized = true;
+  const handler = () => {
+    try {
+      if (!globalAudioCtx) globalAudioCtx = new AudioContext();
+      if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
+    } catch {}
+    document.removeEventListener("click", handler);
+    document.removeEventListener("touchstart", handler);
+  };
+  document.addEventListener("click", handler, { once: true });
+  document.addEventListener("touchstart", handler, { once: true });
+  // Try immediately in case we're already in an interaction
+  try {
+    globalAudioCtx = new AudioContext();
+    if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
+  } catch {}
+};
 
 // Generate alert beep using Web Audio API with fallback
 const createAlertAudio = () => {
-  let audioCtx: AudioContext | null = null;
   let isPlaying = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
 
   const beepWithWebAudio = async () => {
     try {
-      if (!audioCtx) audioCtx = new AudioContext();
-      if (audioCtx.state === "suspended") await audioCtx.resume();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
+      if (!globalAudioCtx) globalAudioCtx = new AudioContext();
+      if (globalAudioCtx.state === "suspended") await globalAudioCtx.resume();
+      const osc = globalAudioCtx.createOscillator();
+      const gain = globalAudioCtx.createGain();
       osc.type = "square";
       osc.frequency.value = 1000;
       gain.gain.value = 0.5;
       osc.connect(gain);
-      gain.connect(audioCtx.destination);
+      gain.connect(globalAudioCtx.destination);
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
+      osc.stop(globalAudioCtx.currentTime + 0.3);
     } catch {
-      // Fallback: use Audio element
+      // Fallback: use Audio element with valid WAV
       try {
-        const audio = new Audio();
-        // Generate a simple beep via oscillator data URI
-        audio.src = BEEP_DATA_URI;
+        const audio = new Audio(BEEP_DATA_URI);
         audio.volume = 0.8;
         await audio.play().catch(() => {});
       } catch {}
@@ -71,6 +117,7 @@ const createAlertAudio = () => {
   const startBeeping = () => {
     if (isPlaying) return;
     isPlaying = true;
+    initAudioContext();
     beepWithWebAudio();
     intervalId = setInterval(beepWithWebAudio, 1500);
   };
@@ -81,8 +128,6 @@ const createAlertAudio = () => {
       clearInterval(intervalId);
       intervalId = null;
     }
-    try { audioCtx?.close(); } catch {}
-    audioCtx = null;
   };
 
   return { startBeeping, stopBeeping };

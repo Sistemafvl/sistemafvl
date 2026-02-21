@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Car, MapPin, Clock, Calendar, User, KeyRound, Route, DollarSign, TrendingUp, Target, Timer } from "lucide-react";
+import { Car, MapPin, Clock, Calendar, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package } from "lucide-react";
 
 interface Ride {
   id: string;
@@ -191,9 +191,9 @@ const DriverRides = () => {
                       <span className="text-xs font-bold text-amber-600">{performance.toFixed(0)}%</span>
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
-                      <Timer className="h-3 w-3 text-purple-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Tempo</span>
-                      <span className="text-xs font-bold text-purple-600">{tempo}</span>
+                      <Package className="h-3 w-3 text-purple-600 mb-0.5" />
+                      <span className="text-[10px] text-muted-foreground leading-none">TBRs</span>
+                      <span className="text-xs font-bold text-purple-600">{ride.tbrCount ?? 0}</span>
                     </div>
                   </div>
                 </div>

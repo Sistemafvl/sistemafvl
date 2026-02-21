@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { AlertTriangle, Search, CheckCircle, X } from "lucide-react";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
@@ -46,6 +46,8 @@ interface Conferente {
   name: string;
 }
 
+const ITEMS_PER_PAGE = 30;
+
 const PSPage = () => {
   const { unitSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,6 +65,7 @@ const PSPage = () => {
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [entries, setEntries] = useState<PsEntry[]>([]);
   const [saving, setSaving] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     if (unitSession) {
@@ -205,6 +208,9 @@ const PSPage = () => {
     inputRef.current?.focus();
   };
 
+  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
+  const paginatedEntries = entries.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
   return (
     <div className="space-y-4">
       <Card>
@@ -235,48 +241,63 @@ const PSPage = () => {
           ) : entries.length === 0 ? (
             <p className="text-center text-muted-foreground italic py-8">Nenhum PS registrado</p>
           ) : (
-            <div className="rounded-md border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="font-bold">TBR</TableHead>
-                    <TableHead className="font-bold">Motorista</TableHead>
-                    <TableHead className="font-bold">Rota</TableHead>
-                    <TableHead className="font-bold">Conferente</TableHead>
-                    <TableHead className="font-bold">Problema</TableHead>
-                     <TableHead className="font-bold">Data</TableHead>
-                     <TableHead className="font-bold text-center">Status</TableHead>
-                     <TableHead className="font-bold text-center">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {entries.map((e) => (
-                    <TableRow key={e.id}>
-                      <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
-                      <TableCell>{e.driver_name ?? "-"}</TableCell>
-                      <TableCell>{e.route ?? "-"}</TableCell>
-                      <TableCell>{e.conferente_name ?? "-"}</TableCell>
-                      <TableCell className="max-w-[200px] truncate">{e.description}</TableCell>
-                      <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
-                       <TableCell className="text-center">
-                         {e.status === "open" ? (
-                           <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-xs font-semibold">Aberto</span>
-                         ) : (
-                           <span className="inline-flex items-center rounded-full bg-green-100 text-green-800 px-2 py-0.5 text-xs font-semibold">Finalizado</span>
-                         )}
-                       </TableCell>
-                       <TableCell className="text-center">
-                         {e.status === "open" && (
-                           <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
-                             <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
-                           </Button>
-                         )}
-                       </TableCell>
+            <>
+              <div className="rounded-md border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="font-bold">TBR</TableHead>
+                      <TableHead className="font-bold">Motorista</TableHead>
+                      <TableHead className="font-bold">Rota</TableHead>
+                      <TableHead className="font-bold">Conferente</TableHead>
+                      <TableHead className="font-bold">Problema</TableHead>
+                       <TableHead className="font-bold">Data</TableHead>
+                       <TableHead className="font-bold text-center">Status</TableHead>
+                       <TableHead className="font-bold text-center">Ações</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                  </TableHeader>
+                  <TableBody>
+                    {paginatedEntries.map((e) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
+                        <TableCell>{e.driver_name ?? "-"}</TableCell>
+                        <TableCell>{e.route ?? "-"}</TableCell>
+                        <TableCell>{e.conferente_name ?? "-"}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">{e.description}</TableCell>
+                        <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
+                         <TableCell className="text-center">
+                           {e.status === "open" ? (
+                             <span className="inline-flex items-center rounded-full bg-destructive/10 text-destructive px-2 py-0.5 text-xs font-semibold">Aberto</span>
+                           ) : (
+                             <span className="inline-flex items-center rounded-full bg-green-100 text-green-800 px-2 py-0.5 text-xs font-semibold">Finalizado</span>
+                           )}
+                         </TableCell>
+                         <TableCell className="text-center">
+                           {e.status === "open" && (
+                             <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
+                               <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
+                             </Button>
+                           )}
+                         </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-sm text-muted-foreground">Página {page} de {totalPages} ({entries.length} registros)</span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
+                      <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
+                    </Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
+                      Próxima <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -4,10 +4,35 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2 } from "lucide-react";
+import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+
+interface CustomValue {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  custom_tbr_value: number;
+}
+
+interface Bonus {
+  id: string;
+  driver_id: string;
+  driver_name: string | null;
+  amount: number;
+  description: string | null;
+  period_start: string;
+  period_end: string;
+}
+
+interface DriverOption {
+  id: string;
+  name: string;
+  cpf: string;
+}
 
 const ConfiguracoesPage = () => {
   const { unitSession } = useAuthStore();
+  const { toast } = useToast();
   const unitId = unitSession?.id;
 
   // Logins
@@ -21,6 +46,25 @@ const ConfiguracoesPage = () => {
   const [tbrSaving, setTbrSaving] = useState(false);
   const [tbrLoaded, setTbrLoaded] = useState(false);
 
+  // Custom Values
+  const [customValues, setCustomValues] = useState<CustomValue[]>([]);
+  const [cvDriverSearch, setCvDriverSearch] = useState("");
+  const [cvDriverResults, setCvDriverResults] = useState<DriverOption[]>([]);
+  const [cvSelectedDriver, setCvSelectedDriver] = useState<DriverOption | null>(null);
+  const [cvValue, setCvValue] = useState("");
+  const [cvSaving, setCvSaving] = useState(false);
+
+  // Bonus
+  const [bonuses, setBonuses] = useState<Bonus[]>([]);
+  const [bonusDriverSearch, setBonusDriverSearch] = useState("");
+  const [bonusDriverResults, setBonusDriverResults] = useState<DriverOption[]>([]);
+  const [bonusSelectedDriver, setBonusSelectedDriver] = useState<DriverOption | null>(null);
+  const [bonusAmount, setBonusAmount] = useState("");
+  const [bonusDescription, setBonusDescription] = useState("");
+  const [bonusPeriodStart, setBonusPeriodStart] = useState("");
+  const [bonusPeriodEnd, setBonusPeriodEnd] = useState("");
+  const [bonusSaving, setBonusSaving] = useState(false);
+
   const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -30,20 +74,47 @@ const ConfiguracoesPage = () => {
   const fetchTbrValue = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitId).maybeSingle();
-    if (data) {
-      setTbrValue(formatCurrency(Number(data.tbr_value)));
-    }
+    if (data) setTbrValue(formatCurrency(Number(data.tbr_value)));
     setTbrLoaded(true);
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); }, [fetchLogins, fetchTbrValue]);
+  const fetchCustomValues = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase.from("driver_custom_values").select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
+    if (!data) { setCustomValues([]); return; }
+    const driverIds = data.map(d => d.driver_id);
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setCustomValues(data.map(d => ({ ...d, driver_name: nameMap.get(d.driver_id) ?? "—" })));
+  }, [unitId]);
+
+  const fetchBonuses = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase.from("driver_bonus").select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
+    setBonuses((data ?? []) as Bonus[]);
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses]);
+
+  // Search drivers that have been to this unit
+  const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
+    if (!unitId || !term.trim()) { setter([]); return; }
+    const { data: rides } = await supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId);
+    if (!rides) { setter([]); return; }
+    const driverIds = [...new Set(rides.map(r => r.driver_id))];
+    if (driverIds.length === 0) { setter([]); return; }
+    const { data } = await supabase.from("drivers_public").select("id, name, cpf").in("id", driverIds).or(`name.ilike.%${term}%,cpf.ilike.%${term}%`).limit(10);
+    setter((data ?? []).map(d => ({ id: d.id!, name: d.name!, cpf: d.cpf! })));
+  };
+
+  useEffect(() => { const t = setTimeout(() => searchDrivers(cvDriverSearch, setCvDriverResults), 300); return () => clearTimeout(t); }, [cvDriverSearch]);
+  useEffect(() => { const t = setTimeout(() => searchDrivers(bonusDriverSearch, setBonusDriverResults), 300); return () => clearTimeout(t); }, [bonusDriverSearch]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
     setLoginsLoading(true);
     await supabase.from("unit_logins").insert({ unit_id: unitId, login: newLogin.trim(), password: newPassword.trim() } as any);
-    setNewLogin("");
-    setNewPassword("");
+    setNewLogin(""); setNewPassword("");
     await fetchLogins();
     setLoginsLoading(false);
   };
@@ -53,15 +124,8 @@ const ConfiguracoesPage = () => {
     await fetchLogins();
   };
 
-  // Currency formatting
-  const formatCurrency = (value: number) => {
-    return value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
-
-  const parseCurrency = (str: string): number => {
-    const cleaned = str.replace(/[^\d,]/g, "").replace(",", ".");
-    return parseFloat(cleaned) || 0;
-  };
+  const formatCurrency = (value: number) => value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const parseCurrency = (str: string): number => { const cleaned = str.replace(/[^\d,]/g, "").replace(",", "."); return parseFloat(cleaned) || 0; };
 
   const handleTbrValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let raw = e.target.value.replace(/[^\d]/g, "");
@@ -81,6 +145,58 @@ const ConfiguracoesPage = () => {
       await supabase.from("unit_settings").insert({ unit_id: unitId, tbr_value: numValue } as any);
     }
     setTbrSaving(false);
+    toast({ title: "Valor salvo!" });
+  };
+
+  const handleAddCustomValue = async () => {
+    if (!unitId || !cvSelectedDriver || !cvValue) return;
+    setCvSaving(true);
+    const numValue = parseCurrency(cvValue);
+    await supabase.from("driver_custom_values").upsert({ unit_id: unitId, driver_id: cvSelectedDriver.id, custom_tbr_value: numValue } as any, { onConflict: "unit_id,driver_id" });
+    setCvSelectedDriver(null); setCvDriverSearch(""); setCvValue(""); setCvDriverResults([]);
+    await fetchCustomValues();
+    setCvSaving(false);
+    toast({ title: "Valor customizado salvo!" });
+  };
+
+  const handleDeleteCustomValue = async (id: string) => {
+    await supabase.from("driver_custom_values").delete().eq("id", id);
+    await fetchCustomValues();
+  };
+
+  const handleAddBonus = async () => {
+    if (!unitId || !bonusSelectedDriver || !bonusAmount || !bonusPeriodStart || !bonusPeriodEnd) return;
+    setBonusSaving(true);
+    await supabase.from("driver_bonus").insert({
+      unit_id: unitId,
+      driver_id: bonusSelectedDriver.id,
+      driver_name: bonusSelectedDriver.name,
+      amount: parseCurrency(bonusAmount),
+      description: bonusDescription || null,
+      period_start: bonusPeriodStart,
+      period_end: bonusPeriodEnd,
+    } as any);
+    setBonusSelectedDriver(null); setBonusDriverSearch(""); setBonusAmount(""); setBonusDescription(""); setBonusDriverResults([]);
+    await fetchBonuses();
+    setBonusSaving(false);
+    toast({ title: "Adicional cadastrado!" });
+  };
+
+  const handleDeleteBonus = async (id: string) => {
+    await supabase.from("driver_bonus").delete().eq("id", id);
+    await fetchBonuses();
+  };
+
+  const handleCvValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setCvValue(""); return; }
+    setCvValue(formatCurrency(parseInt(raw, 10) / 100));
+  };
+
+  const handleBonusAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setBonusAmount(""); return; }
+    setBonusAmount(formatCurrency(parseInt(raw, 10) / 100));
   };
 
   if (!unitId) return null;
@@ -137,18 +253,155 @@ const ConfiguracoesPage = () => {
           </p>
           <div className="flex gap-2 items-center">
             <span className="text-sm font-semibold text-muted-foreground">R$</span>
-            <Input
-              value={tbrValue}
-              onChange={handleTbrValueChange}
-              placeholder="0,00"
-              className="max-w-[160px] text-right font-mono"
-              disabled={!tbrLoaded}
-            />
+            <Input value={tbrValue} onChange={handleTbrValueChange} placeholder="0,00" className="max-w-[160px] text-right font-mono" disabled={!tbrLoaded} />
             <Button onClick={handleSaveTbrValue} disabled={tbrSaving || !tbrValue} size="sm">
               {tbrSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Valores Diferenciados */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <Users className="h-5 w-5 text-primary" />
+            Valores Diferenciados por Motorista
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Defina um valor por TBR diferente para motoristas específicos. Este valor substitui o padrão na geração do relatório.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={cvSelectedDriver ? cvSelectedDriver.name : cvDriverSearch}
+                onChange={(e) => { setCvDriverSearch(e.target.value); setCvSelectedDriver(null); }}
+                placeholder="Buscar motorista por nome ou CPF..."
+                className="pl-9"
+              />
+              {cvSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setCvSelectedDriver(null); setCvDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {cvDriverResults.length > 0 && !cvSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {cvDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setCvSelectedDriver(d); setCvDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {cvSelectedDriver && (
+              <div className="flex gap-2 items-center">
+                <span className="text-sm font-semibold text-muted-foreground">R$</span>
+                <Input value={cvValue} onChange={handleCvValueChange} placeholder="0,00" className="max-w-[140px] text-right font-mono" />
+                <Button onClick={handleAddCustomValue} disabled={cvSaving || !cvValue} size="sm">
+                  {cvSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+              </div>
+            )}
+          </div>
+          {customValues.length > 0 && (
+            <div className="space-y-2">
+              {customValues.map(cv => (
+                <div key={cv.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <span className="font-semibold flex-1">{cv.driver_name}</span>
+                  <span className="text-primary font-mono font-bold">R$ {formatCurrency(Number(cv.custom_tbr_value))}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteCustomValue(cv.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Adicionais */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <Gift className="h-5 w-5 text-primary" />
+            Adicionais por Motorista
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Adicione valores extras para motoristas que serão incluídos no próximo relatório de pagamento do período selecionado.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={bonusSelectedDriver ? bonusSelectedDriver.name : bonusDriverSearch}
+                onChange={(e) => { setBonusDriverSearch(e.target.value); setBonusSelectedDriver(null); }}
+                placeholder="Buscar motorista..."
+                className="pl-9"
+              />
+              {bonusSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setBonusSelectedDriver(null); setBonusDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {bonusDriverResults.length > 0 && !bonusSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {bonusDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setBonusSelectedDriver(d); setBonusDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {bonusSelectedDriver && (
+              <div className="space-y-2">
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm font-semibold text-muted-foreground">R$</span>
+                  <Input value={bonusAmount} onChange={handleBonusAmountChange} placeholder="0,00" className="max-w-[140px] text-right font-mono" />
+                </div>
+                <Input value={bonusDescription} onChange={(e) => setBonusDescription(e.target.value)} placeholder="Descrição (opcional)" />
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <label className="text-xs text-muted-foreground">Início do Período</label>
+                    <Input type="date" value={bonusPeriodStart} onChange={(e) => setBonusPeriodStart(e.target.value)} />
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs text-muted-foreground">Fim do Período</label>
+                    <Input type="date" value={bonusPeriodEnd} onChange={(e) => setBonusPeriodEnd(e.target.value)} />
+                  </div>
+                </div>
+                <Button onClick={handleAddBonus} disabled={bonusSaving || !bonusAmount || !bonusPeriodStart || !bonusPeriodEnd} className="w-full" size="sm">
+                  {bonusSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                  Adicionar
+                </Button>
+              </div>
+            )}
+          </div>
+          {bonuses.length > 0 && (
+            <div className="space-y-2">
+              {bonuses.map(b => (
+                <div key={b.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <div className="flex-1">
+                    <span className="font-semibold">{b.driver_name ?? "—"}</span>
+                    {b.description && <span className="text-muted-foreground ml-2 text-xs">({b.description})</span>}
+                    <p className="text-xs text-muted-foreground">{b.period_start} a {b.period_end}</p>
+                  </div>
+                  <span className="text-green-600 font-mono font-bold">+R$ {formatCurrency(Number(b.amount))}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteBonus(b.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
