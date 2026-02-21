@@ -1,133 +1,143 @@
 
-# Plano de Correcoes e Melhorias
+# Plano de Melhorias - 10 Itens
 
-## 1. Corrigir exclusao de TBR (Anexo 1)
+## 1. DNR - Mostrar "Com Desconto" ou "Sem Desconto" no card finalizado (Anexo 1)
+**Arquivo:** `src/pages/dashboard/DNRPage.tsx`
+- Na interface `DnrEntry`, adicionar campo `discounted: boolean`
+- No `statusBadge()`, quando status === "closed", verificar o campo `discounted`:
+  - Se `discounted === true`: Badge vermelho "Finalizado c/ Desconto"
+  - Se `discounted === false`: Badge verde "Finalizado s/ Desconto"
 
-**Problema raiz:** O listener Realtime na linha 393 (`ride_tbrs`) nao tem filtro, entao qualquer mudanca em qualquer TBR dispara `fetchRides()`. Mesmo com `skipRealtimeRef`, o `fetchRides()` chamado na linha 451 (dentro do proprio `handleDeleteTbr`) pode estar re-buscando o TBR antes que o DELETE seja propagado no banco.
+## 2. Relatório Resumo Geral - Chave PIX abaixo do nome do motorista (Anexo 2)
+**Arquivos:** `src/pages/dashboard/RelatoriosPage.tsx`, `src/pages/dashboard/reports/PayrollReportContent.tsx`
+- No `fetchPayroll`, buscar dados bancarios (pix_key, pix_key_type) dos motoristas via edge function `get-driver-details` ou diretamente da tabela `drivers` (usando service role via edge function)
+- Adicionar campo `pixKey` e `pixKeyType` na interface `DriverPayrollData.driver`
+- No `PayrollReportContent`, na tabela resumo geral, a celula "Motorista" exibira o nome na primeira linha e a chave PIX formatada na segunda linha (fonte menor, cor cinza), ambos na mesma celula
 
-**Solucao:**
-- Remover o `await fetchRides()` de dentro de `handleDeleteTbr`. A remocao otimista do estado ja e suficiente.
-- Manter apenas o `fetchOpenRtos()` caso necessario.
-- Aumentar o delay do `skipRealtimeRef` de 500ms para 2000ms para garantir que o Realtime nao traga o TBR de volta.
-- Apos o timeout, chamar `fetchRides()` uma unica vez para sincronizar.
+## 3. Configuracoes - Valores diferenciados por motorista (Anexo 3)
+**Arquivos:** Migration SQL, `src/pages/dashboard/ConfiguracoesPage.tsx`
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` (linhas 420-456)
+### 3.1 Migration - Nova tabela `driver_custom_values`
+```
+CREATE TABLE public.driver_custom_values (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  driver_id uuid NOT NULL,
+  custom_tbr_value numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(unit_id, driver_id)
+);
+ALTER TABLE public.driver_custom_values ENABLE ROW LEVEL SECURITY;
+-- Policies: Anyone can read/insert/update/delete
+```
+
+### 3.2 UI em ConfiguracoesPage
+- Abaixo de "Valor por TBR", novo card "Valores Diferenciados"
+- Campo de busca para selecionar motorista (por nome/CPF) dentre os que ja passaram pela unidade
+- Ao selecionar, campo para definir o valor customizado por TBR
+- Lista dos motoristas com valor customizado, com opcao de remover
+- Na geracao do relatorio, usar `custom_tbr_value` em vez de `tbrValue` padrao quando existir
+
+## 4. Configuracoes - Adicionais por motorista (Anexo 3 continuacao)
+**Arquivos:** Migration SQL, `src/pages/dashboard/ConfiguracoesPage.tsx`, `RelatoriosPage.tsx`, `PayrollReportContent.tsx`
+
+### 4.1 Migration - Nova tabela `driver_bonus`
+```
+CREATE TABLE public.driver_bonus (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  driver_id uuid NOT NULL,
+  driver_name text,
+  amount numeric NOT NULL DEFAULT 0,
+  description text,
+  period_start date NOT NULL,
+  period_end date NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+ALTER TABLE public.driver_bonus ENABLE ROW LEVEL SECURITY;
+-- Policies: Anyone can read/insert/update/delete
+```
+
+### 4.2 UI em ConfiguracoesPage
+- Novo card "Adicionais" abaixo do anterior
+- Selecao de motorista, valor do adicional, descricao e periodo
+- Lista de adicionais cadastrados com opcao de remover
+
+### 4.3 Integracao com Relatorio
+- No `fetchPayroll`, buscar bonus do periodo para cada motorista
+- Somar ao `totalValue` do motorista
+- Exibir metricBox "Adicional" no relatorio individual
+- Coluna "Adicional" na tabela resumo geral
+
+## 5. Alerta sonoro para o motorista (Anexo 4 - ainda nao toca)
+**Arquivo:** `src/pages/driver/DriverQueue.tsx`
+- O problema persiste porque o `AudioContext` requer interacao previa do usuario
+- Solucao: criar um `AudioContext` global que e inicializado no primeiro toque/clique do usuario na pagina
+- Adicionar um event listener `click` no `document` que faz `audioCtx.resume()` uma vez
+- Usar `setInterval` com `oscillator` para o beep continuo
+- Adicionar fallback com `Audio()` e um data URI WAV real (o atual e invalido/truncado)
+- Gerar um WAV PCM valido em base64 programaticamente
+
+## 6. Exclusao de TBR - Corrigir definitivamente (Anexo 5 e 6)
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- O problema e que o Realtime listener na linha 393 escuta TODOS os eventos de `ride_tbrs` sem filtro de `ride_id`
+- Quando o DELETE propaga, o Realtime dispara `fetchRides()` que re-busca tudo incluindo cache stale
+- Solucao:
+  1. Manter uma lista de IDs deletados em `deletingRef` e nao remove-los do set ate o fetchRides pos-delay
+  2. No `fetchRides`, filtrar os TBRs que estao no `deletingRef` antes de setar o estado
+  3. Aumentar o delay para 3000ms
+  4. Adicionar filtro no listener Realtime para ignorar eventos DELETE (somente reagir a INSERT/UPDATE)
+- Tambem: ao excluir TBR, reabrir a entrada no retorno piso (ja implementado, manter)
+
+## 7. Retorno Piso - Somente gerente pode excluir TBRs
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx`
+- Adicionar botao "Excluir" (icone lixeira) na coluna Acoes, visivel somente quando `managerSession` existe
+- Ao clicar, excluir o registro de `piso_entries` (DELETE)
+- Confirmar com dialog simples antes de excluir
+
+## 8. PS - 30 registros por pagina (Anexo 7)
+**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+- Implementar paginacao com 30 itens por pagina
+- Adicionar estado `page` e botoes "Anterior" / "Proxima"
+- Usar `.range()` na query ou fatiar o array localmente
+- Exibir contagem "Pagina X de Y"
+
+## 9. RTO - 30 registros por pagina (Anexo 8)
+**Arquivo:** `src/pages/dashboard/RTOPage.tsx`
+- Mesma implementacao de paginacao do PS
+- 30 itens por pagina com navegacao
+
+## 10. Motoristas Parceiros - Visao global com filtros (Anexo 9)
+**Arquivo:** `src/pages/dashboard/MotoristasParceirosPage.tsx`
+- Mudar de "motoristas que passaram pela unidade" para TODOS os motoristas cadastrados globalmente
+- Buscar de `drivers_public` sem filtro por unit_id
+- 50 registros por pagina com paginacao
+- Adicionar filtros acima da busca: Estado, Cidade, Bairro, CEP
+- Para cada motorista, buscar a data do ultimo carregamento (`driver_rides` ordenado por `completed_at DESC LIMIT 1`)
+- Adicionar coluna "Ultima Operacao" com a data do ultimo carregamento
+
+## 11. Corridas do motorista - Trocar "Tempo" por "Qtd TBRs" (Anexo 10)
+**Arquivo:** `src/pages/driver/DriverRides.tsx`
+- No mini-card roxo (4o card), trocar:
+  - Icone: de `Timer` para `ScanBarcode` (ou `Package`)
+  - Label: de "Tempo" para "TBRs"
+  - Valor: de `tempo` (duracao) para `ride.tbrCount` (quantidade de TBRs)
 
 ---
 
-## 2. Alerta sonoro para o motorista (sino)
+## Resumo de Arquivos e Migrations
 
-**Problema:** O codigo do `DriverQueue.tsx` ja possui a logica de alerta sonoro (`triggerCallAlert` linha 197) e o listener Realtime (linha 169). O problema e que o `createAlertAudio()` usa Web Audio API que requer interacao do usuario para debloquear o `AudioContext` em browsers modernos.
-
-**Solucao:**
-- Ao detectar `called_at` atualizado, se o `AudioContext` estiver bloqueado (state === 'suspended'), tentar `resume()` antes de tocar.
-- Adicionar fallback com `new Audio()` usando data URI de um beep caso o AudioContext falhe.
-- Garantir que o toast persista com `duration: Infinity` e que o som so pare quando o toast for fechado (ja implementado, mas precisa funcionar sem interacao previa).
-- Melhorar a funcao `startBeeping` para usar um unico `AudioContext` persistente com `resume()` em vez de criar um novo a cada beep.
-
-**Arquivo:** `src/pages/driver/DriverQueue.tsx` (linhas 37-83, 197-215)
-
----
-
-## 3. DNR - Dois botoes de finalizacao (com/sem desconto)
-
-**Problema:** Atualmente existe apenas um botao "Finalizar". Precisa ser dividido em dois:
-- "Finalizar sem desconto" (status = 'closed', discounted = false)
-- "Finalizar com desconto" (status = 'closed', discounted = true)
-
-**Solucao:**
-
-### 3.1 Banco de Dados (Migration)
-Adicionar coluna `discounted` (boolean, default false) na tabela `dnr_entries`.
-
-### 3.2 DNRPage.tsx (Gerente)
-- Substituir o botao "Finalizar" por dois botoes:
-  - "Finalizar sem desconto" (verde/outline) - seta `status='closed'`, `discounted=false`
-  - "Finalizar com desconto" (vermelho/destructive) - seta `status='closed'`, `discounted=true`
-
-### 3.3 DriverDNR.tsx (Motorista)
-- Buscar tambem DNRs com status = 'closed' e `discounted = true`.
-- DNRs em analise: card amarelo com "Procure o gerente para tratar este DNR Urgente!"
-- DNRs fechados com desconto: card vermelho com mensagem informando que o valor sera descontado do pagamento.
-
-### 3.4 Relatorios - PayrollReportContent
-- Na geracao do relatorio (`RelatoriosPage.tsx`), buscar DNRs `discounted=true` e `closed` do periodo para cada motorista.
-- Subtrair o valor total de DNRs do `totalValue` do motorista.
-- Adicionar linha/card no relatorio individual mostrando DNRs descontados.
-- Adicionar coluna "DNR" na tabela resumo geral.
-
-### 3.5 DriverPayrollData Interface
-- Adicionar campo `dnrDiscount: number` (valor total de DNRs descontados).
-
-**Arquivos:**
-- Migration SQL (adicionar coluna `discounted`)
-- `src/pages/dashboard/DNRPage.tsx` (botoes)
-- `src/pages/driver/DriverDNR.tsx` (exibir descontados + mudar frase)
-- `src/pages/dashboard/RelatoriosPage.tsx` (buscar DNRs no relatorio)
-- `src/pages/dashboard/reports/PayrollReportContent.tsx` (exibir DNR no relatorio)
-
----
-
-## 4. Traduzir textos em ingles para PT-BR
-
-**Alteracoes:**
-- `src/pages/driver/DriverDNR.tsx` linha 68: adicionar `import { ptBR } from "date-fns/locale"` e usar `{ locale: ptBR }` no `format(date, "EEEE")` para exibir "Sabado" em vez de "Saturday".
-- Verificar e corrigir qualquer outro texto em ingles que apareça na interface (como "finished" nos cards de status da Conferencia).
-
-**Arquivos:** `src/pages/driver/DriverDNR.tsx`, verificacao geral em outros componentes.
-
----
-
-## 5. Mudar frase do motorista no DNR
-
-**De:** "Procure o gerente para tratar este DNR antes que seja descontado."
-**Para:** "Procure o gerente para tratar este DNR Urgente!"
-
-**Arquivo:** `src/pages/driver/DriverDNR.tsx` (linha 73)
-
----
-
-## Resumo de Arquivos
-
-| Arquivo | Acao |
+| Arquivo | Alteracao |
 |---|---|
-| Migration SQL | Adicionar coluna `discounted` boolean na `dnr_entries` |
-| `ConferenciaCarregamentoPage.tsx` | Fix exclusao TBR (remover fetchRides do handleDeleteTbr, aumentar delay) |
-| `DriverQueue.tsx` | Melhorar audio alert com AudioContext.resume() e fallback |
-| `DNRPage.tsx` | 2 botoes: "Finalizar com desconto" e "Finalizar sem desconto" |
-| `DriverDNR.tsx` | Exibir DNRs descontados, traduzir dia para PT-BR, trocar frase |
-| `RelatoriosPage.tsx` | Buscar DNRs descontados e subtrair do total do motorista |
-| `PayrollReportContent.tsx` | Adicionar campo DNR no relatorio individual e resumo |
-
----
-
-## Detalhes Tecnicos
-
-### handleDeleteTbr corrigido:
-```text
-1. Adicionar ao deletingRef (bloquear duplo clique)
-2. Setar skipRealtimeRef = true
-3. Remover otimisticamente do estado
-4. await supabase.delete (aguardar confirmacao)
-5. await fetchOpenRtos()
-6. deletingRef.delete
-7. setTimeout 2000ms -> skipRealtimeRef = false, fetchRides()
-```
-
-### AudioContext fix:
-```text
-- Criar AudioContext uma unica vez
-- Antes de tocar: verificar audioCtx.state === 'suspended' -> await audioCtx.resume()
-- Fallback: usar Audio() com data URI base64 de um beep WAV
-- setInterval com beep a cada 1.5s
-```
-
-### DNR no relatorio:
-```text
-- Buscar dnr_entries where unit_id, discounted=true, status='closed', periodo
-- Agrupar por driver_id, somar dnr_value
-- DriverPayrollData.dnrDiscount = soma
-- totalValue = (totalCompleted * tbrValue) - dnrDiscount
-- Exibir metricBox "DNR" com valor negativo em vermelho
-- Na tabela resumo: coluna "DNR" com valor descontado
-```
+| Migration SQL | Criar tabelas `driver_custom_values` e `driver_bonus` |
+| `DNRPage.tsx` | Badge com/sem desconto nos finalizados |
+| `RelatoriosPage.tsx` | Buscar PIX, custom values e bonus |
+| `PayrollReportContent.tsx` | PIX na celula do nome, colunas DNR/Adicional |
+| `ConfiguracoesPage.tsx` | Cards de valores diferenciados e adicionais |
+| `DriverQueue.tsx` | Fix audio com AudioContext global e WAV valido |
+| `ConferenciaCarregamentoPage.tsx` | Fix definitivo exclusao TBR |
+| `RetornoPisoPage.tsx` | Botao excluir so para gerente |
+| `PSPage.tsx` | Paginacao 30/pagina |
+| `RTOPage.tsx` | Paginacao 30/pagina |
+| `MotoristasParceirosPage.tsx` | Visao global + filtros + ultima operacao + paginacao 50 |
+| `DriverRides.tsx` | Trocar Tempo por Qtd TBRs |
