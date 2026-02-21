@@ -1,46 +1,45 @@
 
 
-## Plano de Implementacao - 4 Ajustes Solicitados
+## Plano - 4 Ajustes
 
-### 1. Filtro de data do PS abrindo no dia de hoje (PSPage.tsx)
+### 1. Campo de busca nos motivos de insucesso (RetornoPisoPage.tsx)
 
-Atualmente o `startDate` inicia com 30 dias atras. Sera alterado para iniciar no dia de hoje (00:00) e o `endDate` tambem no dia de hoje (23:59), assim ao abrir a pagina o filtro ja mostra apenas os registros do dia.
+O dropdown `<Select>` de "Motivo do insucesso" (linhas 477-484) sera substituido por um componente `Popover` + `Command` com campo de busca digitavel, permitindo filtrar rapidamente os motivos disponiveis.
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx` (linha 94-95)
-- `startDate`: `new Date()` com horas zeradas (hoje 00:00)
-- `endDate`: `new Date()` com horas 23:59:59 (hoje 23:59)
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx`
+- Importar `Popover`, `PopoverContent`, `PopoverTrigger` de `@/components/ui/popover`
+- Importar `Command`, `CommandInput`, `CommandItem`, `CommandList`, `CommandEmpty`, `CommandGroup` de `@/components/ui/command`
+- Importar `Check` e `ChevronsUpDown` de `lucide-react`
+- Adicionar estado `reasonSearchOpen` (boolean)
+- Substituir o `<Select>` (linhas 477-484) por Popover+Command com busca integrada
+- Ao selecionar um motivo, fechar o popover automaticamente (conforme padrao UI do projeto)
 
----
+### 2. Auto-correcao ao adicionar novo motivo - Retorno Piso (RetornoPisoPage.tsx)
 
-### 2. PDF do PS com foto de cada registro (PSPage.tsx)
+Na funcao `handleAddReason` (linha 200), antes de inserir no banco, aplicar formatacao automatica: primeira letra maiuscula, restante preservado.
 
-O PDF atual usa jsPDF com texto puro. Sera modificado para:
-- Apos cada linha de informacoes do PS (TBR, Motorista, Rota, Motivo, Data, Status), se o registro tiver `photo_url`, carregar a imagem e inseri-la no PDF logo abaixo da linha
-- Cada PS sera listado sequencialmente: informacoes + foto + proximo PS + foto, etc.
-- Controle de quebra de pagina considerando a altura da imagem
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` (linha 200)
+- Trocar `newReasonInput.trim()` por uma versao formatada:
+  ```
+  const text = newReasonInput.trim();
+  const formatted = text.charAt(0).toUpperCase() + text.slice(1);
+  ```
+- Usar `formatted` no insert e no `setSelectedReason`
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx` (funcao `generatePDF`, linhas 384-418)
-- Tornar a funcao `async` para carregar imagens
-- Para cada entry com `photo_url`, carregar como base64 e usar `doc.addImage()`
-- Foto com largura proporcional (~80mm) abaixo das informacoes
+### 3. Auto-correcao ao adicionar novo motivo - PS (RetornoPisoPage.tsx e PSPage.tsx)
 
----
+Mesma logica de capitalizacao aplicada em dois locais:
 
-### 3. Barra de rolagem no modal PS do Retorno Piso (RetornoPisoPage.tsx)
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` - funcao `handleAddPsReason` (linha 298)
+- Aplicar `text.charAt(0).toUpperCase() + text.slice(1)` no `psNewReasonInput.trim()`
 
-O modal PS usa o componente `<Dialog>` do Radix, que nao tem scroll por padrao quando o conteudo ultrapassa a tela. Sera adicionado `max-h-[85vh] overflow-y-auto` ao `DialogContent` para garantir rolagem em dispositivos menores.
+**Arquivo:** `src/pages/dashboard/PSPage.tsx` - funcao `handleAddReason` (linha 321)
+- Aplicar mesma formatacao no `newReasonInput.trim()`
 
-**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` (linha 513)
-- Adicionar classes `max-h-[85vh] overflow-y-auto` ao `<DialogContent>`
+### 4. Paginacao de 5 itens nos 3 cards de ranking (DashboardInsights.tsx)
 
----
-
-### 4. Renomear "Top Retornos (Piso + RTO)" (DashboardInsights.tsx)
-
-Alterar o titulo do card de ranking de `"Top Retornos (Piso + RTO)"` para `"Maiores Ofensores de Retorno TBRs"`.
-
-**Arquivo:** `src/components/dashboard/DashboardInsights.tsx` (linha 271)
-- Trocar a string do `title`
+**Arquivo:** `src/components/dashboard/DashboardInsights.tsx` (linha 34)
+- Alterar `PAGE_SIZE` de `10` para `5`
 
 ---
 
@@ -48,7 +47,7 @@ Alterar o titulo do card de ranking de `"Top Retornos (Piso + RTO)"` para `"Maio
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/dashboard/PSPage.tsx` | Data padrao = hoje; PDF com fotos |
-| `src/pages/dashboard/RetornoPisoPage.tsx` | Scroll no modal PS |
-| `src/components/dashboard/DashboardInsights.tsx` | Renomear titulo do card |
+| `src/pages/dashboard/RetornoPisoPage.tsx` | Busca nos motivos de insucesso + auto-correcao piso + auto-correcao PS |
+| `src/pages/dashboard/PSPage.tsx` | Auto-correcao no campo de novo motivo |
+| `src/components/dashboard/DashboardInsights.tsx` | PAGE_SIZE de 10 para 5 |
 
