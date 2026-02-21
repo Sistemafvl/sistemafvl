@@ -401,49 +401,169 @@ const PSPage = () => {
 
   const generatePDF = async () => {
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Relatório PS - Problem Solve", 14, 20);
-    doc.setFontSize(10);
-    doc.text(`Período: ${format(startDate, "dd/MM/yyyy")} - ${format(endDate, "dd/MM/yyyy")}`, 14, 28);
-    doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy HH:mm")}`, 14, 34);
-    doc.text(`Total de registros: ${entries.length}`, 14, 40);
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
 
-    let y = 50;
+    const openCount = entries.filter(e => e.status === "open").length;
+    const closedCount = entries.filter(e => e.status === "closed").length;
+    const uniqueDrivers = new Set(entries.map(e => e.driver_name).filter(Boolean)).size;
+    const uniqueRoutes = new Set(entries.map(e => e.route).filter(Boolean)).size;
+    const reasonCount: Record<string, number> = {};
+    entries.forEach(e => { const r = e.reason ?? e.description ?? "-"; reasonCount[r] = (reasonCount[r] || 0) + 1; });
+    const topReason = Object.entries(reasonCount).sort((a, b) => b[1] - a[1])[0];
 
-    for (const e of entries) {
-      // Check if we need a new page (info takes ~30px, photo ~70px)
-      if (y > 240) { doc.addPage(); y = 20; }
+    // ── Header banner ──
+    doc.setFillColor(30, 58, 138); // dark blue
+    doc.rect(0, 0, pageW, 42, "F");
+    doc.setFillColor(37, 99, 235); // lighter blue accent
+    doc.rect(0, 42, pageW, 3, "F");
 
-      doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont("helvetica", "bold");
+    doc.text("RELATÓRIO PS - PROBLEM SOLVE", margin, 18);
+
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Unidade: ${unitSession?.name ?? "—"}`, margin, 27);
+    doc.text(`Domínio: ${unitSession?.domain_name ?? "—"}`, margin, 32);
+    doc.text(`Gerado por: ${unitSession?.user_name ?? "—"}`, margin, 37);
+
+    doc.text(`Período: ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`, pageW - margin, 27, { align: "right" });
+    doc.text(`Data/Hora: ${format(new Date(), "dd/MM/yyyy HH:mm")}`, pageW - margin, 32, { align: "right" });
+    doc.text(`Total: ${entries.length} registros`, pageW - margin, 37, { align: "right" });
+
+    // ── Stats cards ──
+    let y = 52;
+    doc.setTextColor(0, 0, 0);
+
+    const cardW = (pageW - margin * 2 - 12) / 4;
+    const cards = [
+      { label: "Abertos", value: String(openCount), color: [254, 243, 199] as [number, number, number], textColor: [180, 83, 9] as [number, number, number] },
+      { label: "Finalizados", value: String(closedCount), color: [209, 250, 229] as [number, number, number], textColor: [5, 122, 85] as [number, number, number] },
+      { label: "Motoristas", value: String(uniqueDrivers), color: [219, 234, 254] as [number, number, number], textColor: [30, 64, 175] as [number, number, number] },
+      { label: "Rotas", value: String(uniqueRoutes), color: [243, 232, 255] as [number, number, number], textColor: [107, 33, 168] as [number, number, number] },
+    ];
+
+    cards.forEach((card, i) => {
+      const x = margin + i * (cardW + 4);
+      doc.setFillColor(card.color[0], card.color[1], card.color[2]);
+      doc.roundedRect(x, y, cardW, 18, 2, 2, "F");
+      doc.setTextColor(card.textColor[0], card.textColor[1], card.textColor[2]);
+      doc.setFontSize(14);
       doc.setFont("helvetica", "bold");
-      doc.text(`TBR: ${e.tbr_code}`, 14, y);
+      doc.text(card.value, x + cardW / 2, y + 10, { align: "center" });
+      doc.setFontSize(7);
       doc.setFont("helvetica", "normal");
-      y += 5;
-      doc.text(`Motorista: ${e.driver_name ?? "-"}  |  Rota: ${e.route ?? "-"}`, 14, y);
-      y += 5;
-      doc.text(`Motivo: ${(e.reason ?? e.description ?? "-").slice(0, 50)}`, 14, y);
-      y += 5;
-      doc.text(`Data: ${format(new Date(e.created_at), "dd/MM/yyyy HH:mm")}  |  Status: ${e.status === "open" ? "Aberto" : "Finalizado"}`, 14, y);
+      doc.text(card.label, x + cardW / 2, y + 15, { align: "center" });
+    });
+
+    y += 24;
+
+    // Top reason line
+    if (topReason) {
+      doc.setTextColor(100, 100, 100);
+      doc.setFontSize(8);
+      doc.text(`Motivo mais recorrente: "${topReason[0]}" (${topReason[1]}x)`, margin, y);
+      y += 6;
+    }
+
+    // ── Separator ──
+    doc.setDrawColor(37, 99, 235);
+    doc.setLineWidth(0.5);
+    doc.line(margin, y, pageW - margin, y);
+    y += 6;
+
+    // ── Entries ──
+    let entryIndex = 0;
+    for (const e of entries) {
+      entryIndex++;
+      const needsSpace = e.photo_url ? 90 : 30;
+      if (y + needsSpace > pageH - 20) {
+        // Footer before new page
+        addFooter(doc, pageW, pageH);
+        doc.addPage();
+        y = 15;
+      }
+
+      // Entry number badge
+      doc.setFillColor(37, 99, 235);
+      doc.roundedRect(margin, y - 3, 8, 6, 1, 1, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7);
+      doc.setFont("helvetica", "bold");
+      doc.text(String(entryIndex), margin + 4, y + 1, { align: "center" });
+
+      // TBR code
+      doc.setTextColor(30, 58, 138);
+      doc.setFontSize(10);
+      doc.text(e.tbr_code, margin + 11, y + 1);
+
+      // Status badge
+      const statusText = e.status === "open" ? "ABERTO" : "FINALIZADO";
+      const statusColor = e.status === "open" ? [234, 179, 8] : [34, 197, 94];
+      doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+      const statusW = doc.getTextWidth(statusText) + 6;
+      doc.roundedRect(pageW - margin - statusW, y - 3, statusW, 6, 1, 1, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(7);
+      doc.text(statusText, pageW - margin - statusW + 3, y + 1);
+
+      y += 6;
+      doc.setTextColor(60, 60, 60);
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.text(`Motorista: ${e.driver_name ?? "—"}`, margin + 4, y);
+      doc.text(`Rota: ${e.route ?? "—"}`, margin + 90, y);
+      y += 4;
+      doc.text(`Motivo: ${(e.reason ?? e.description ?? "—").slice(0, 60)}`, margin + 4, y);
+      y += 4;
+      doc.setTextColor(130, 130, 130);
+      doc.setFontSize(7);
+      doc.text(`Registrado em: ${format(new Date(e.created_at), "dd/MM/yyyy 'às' HH:mm")}`, margin + 4, y);
+      if (e.conferente_name) {
+        doc.text(`Conferente: ${e.conferente_name}`, margin + 90, y);
+      }
       y += 3;
 
       if (e.photo_url) {
         const imgData = await loadImageAsBase64(e.photo_url);
         if (imgData) {
-          if (y + 65 > 280) { doc.addPage(); y = 20; }
-          doc.addImage(imgData, "JPEG", 14, y, 80, 60);
-          y += 63;
+          if (y + 65 > pageH - 20) {
+            addFooter(doc, pageW, pageH);
+            doc.addPage();
+            y = 15;
+          }
+          doc.setDrawColor(200, 200, 200);
+          doc.roundedRect(margin + 4, y, 82, 62, 1, 1, "S");
+          doc.addImage(imgData, "JPEG", margin + 5, y + 1, 80, 60);
+          y += 64;
         }
       }
 
-      // Separator line
+      // Separator
       y += 3;
-      doc.setDrawColor(200);
-      doc.line(14, y, 196, y);
+      doc.setDrawColor(220, 220, 220);
+      doc.setLineWidth(0.3);
+      doc.line(margin, y, pageW - margin, y);
       y += 5;
     }
 
+    addFooter(doc, pageW, pageH);
     doc.save(`PS_Relatorio_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
     toast({ title: "PDF gerado com sucesso" });
+  };
+
+  const addFooter = (doc: jsPDF, pageW: number, pageH: number) => {
+    doc.setFillColor(240, 240, 240);
+    doc.rect(0, pageH - 12, pageW, 12, "F");
+    doc.setTextColor(130, 130, 130);
+    doc.setFontSize(7);
+    doc.setFont("helvetica", "normal");
+    doc.text(`FVL Logística — ${unitSession?.name ?? ""}`, 14, pageH - 5);
+    const pageNum = (doc as any).internal.getCurrentPageInfo().pageNumber;
+    doc.text(`Página ${pageNum}`, pageW - 14, pageH - 5, { align: "right" });
   };
 
   const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
