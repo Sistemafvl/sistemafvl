@@ -67,11 +67,7 @@ const RetornoPisoPage = () => {
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // RTO CEP Modal
-  const [rtoModalOpen, setRtoModalOpen] = useState(false);
-  const [rtoEntry, setRtoEntry] = useState<PisoEntry | null>(null);
-  const [rtoCep, setRtoCep] = useState("");
-  const [rtoSaving, setRtoSaving] = useState(false);
+  // RTO CEP Modal (removed)
 
   useEffect(() => {
     if (unitSession) {
@@ -215,61 +211,7 @@ const RetornoPisoPage = () => {
     setEntries((prev) => prev.filter((e) => e.id !== entry.id));
   };
 
-  const handleOpenRtoModal = (entry: PisoEntry) => {
-    setRtoEntry(entry);
-    setRtoCep("");
-    setRtoModalOpen(true);
-  };
-
-  const handleCepChange = (value: string) => {
-    const digits = value.replace(/\D/g, "").slice(0, 8);
-    if (digits.length > 5) {
-      setRtoCep(`${digits.slice(0, 5)}-${digits.slice(5)}`);
-    } else {
-      setRtoCep(digits);
-    }
-  };
-
-  const handleConfirmRto = async () => {
-    if (!unitSession || !rtoEntry) return;
-    setRtoSaving(true);
-
-    // Check if RTO already exists for this TBR code — reuse same row
-    const { data: existingRto } = await supabase
-      .from("rto_entries")
-      .select("id")
-      .eq("tbr_code", rtoEntry.tbr_code)
-      .eq("unit_id", unitSession.id)
-      .limit(1);
-
-    if (existingRto && existingRto.length > 0) {
-      await supabase.from("rto_entries").update({
-        status: "open",
-        closed_at: null,
-        ride_id: rtoEntry.ride_id,
-        driver_name: rtoEntry.driver_name,
-        route: rtoEntry.route,
-        description: rtoEntry.reason,
-        cep: rtoCep.replace("-", "") || null,
-      } as any).eq("id", existingRto[0].id);
-    } else {
-      await supabase.from("rto_entries").insert({
-        tbr_code: rtoEntry.tbr_code,
-        ride_id: rtoEntry.ride_id,
-        unit_id: unitSession.id,
-        driver_name: rtoEntry.driver_name,
-        route: rtoEntry.route,
-        description: rtoEntry.reason,
-        cep: rtoCep.replace("-", "") || null,
-      } as any);
-    }
-
-    await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", rtoEntry.id);
-    setEntries((prev) => prev.filter((e) => e.id !== rtoEntry.id));
-    setRtoModalOpen(false);
-    setRtoEntry(null);
-    setRtoSaving(false);
-  };
+  // RTO functionality removed from this page
 
   const allReasons = [...DEFAULT_REASONS, ...customReasons.map((r) => r.label)];
 
@@ -326,9 +268,6 @@ const RetornoPisoPage = () => {
                         <div className="flex gap-1 justify-center">
                           <Button variant="outline" size="sm" onClick={() => handleMigratePs(e)}>
                             <AlertTriangle className="h-3 w-3 mr-1" /> PS
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleOpenRtoModal(e)}>
-                            <RotateCcw className="h-3 w-3 mr-1" /> RTO
                           </Button>
                           {managerSession && (
                             deleteConfirmId === e.id ? (
@@ -436,36 +375,6 @@ const RetornoPisoPage = () => {
         </div>
       )}
 
-      {/* RTO CEP Modal */}
-      {rtoModalOpen && rtoEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/80" onClick={() => setRtoModalOpen(false)} />
-          <div className="relative z-50 w-full max-w-sm border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
-            <button onClick={() => setRtoModalOpen(false)} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
-              <X className="h-4 w-4" />
-            </button>
-            <h2 className="text-lg font-bold italic mb-1 flex items-center gap-2">
-              <MapPin className="h-5 w-5 text-primary" />
-              RTO — {rtoEntry.tbr_code}
-            </h2>
-            <p className="text-sm text-muted-foreground mb-4">Informe o CEP do RTO para incluí-lo na lista.</p>
-            <div className="space-y-3">
-              <Input
-                value={rtoCep}
-                onChange={(e) => handleCepChange(e.target.value)}
-                placeholder="00000-000"
-                className="text-center font-mono text-lg tracking-widest"
-                maxLength={9}
-                autoFocus
-              />
-              <Button className="w-full" onClick={handleConfirmRto} disabled={rtoSaving || rtoCep.replace(/\D/g, "").length < 8}>
-                {rtoSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RotateCcw className="h-4 w-4 mr-1" />}
-                Incluir RTO
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
