@@ -37,11 +37,13 @@ import AdminUpdatesPage from "./pages/admin/AdminUpdatesPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
+import { Toaster } from "./components/ui/sonner";
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
       <OfflineIndicator />
+      <Toaster />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
