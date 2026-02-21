@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -151,6 +152,39 @@ const maskCPF = (v: string) => {
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
 };
 
+const ConferenteCombobox = ({ conferentes, value, onSelect, disabled }: { conferentes: Conferente[]; value: string; onSelect: (val: string) => void; disabled: boolean }) => {
+  const [open, setOpen] = useState(false);
+  const selected = conferentes.find(c => c.id === value);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="outline" role="combobox" aria-expanded={open} disabled={disabled} className="w-full h-9 justify-between text-sm font-normal">
+          <div className="flex items-center gap-2 truncate">
+            <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="truncate">{selected ? selected.name : "Selecionar Conferente"}</span>
+          </div>
+          <Search className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[220px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder="Buscar conferente..." className="h-9" />
+          <CommandList>
+            <CommandEmpty>Nenhum conferente encontrado.</CommandEmpty>
+            <CommandGroup>
+              {conferentes.map((c) => (
+                <CommandItem key={c.id} value={c.name} onSelect={() => { onSelect(c.id); setOpen(false); }}>
+                  {c.name}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+};
+
 const ConferenciaCarregamentoPage = () => {
   const { unitSession, managerSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
@@ -171,8 +205,8 @@ const ConferenciaCarregamentoPage = () => {
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const tbrListRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const deletingRef = useRef<Set<string>>(new Set());
-  const skipRealtimeRef = useRef(false);
-  const lockedConferentes = useRef<Set<string>>(new Set());
+  const realtimeLockUntil = useRef<number>(0);
+  const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
@@ -392,17 +426,17 @@ const ConferenciaCarregamentoPage = () => {
     if (!unitId) return;
     const channel = supabase
       .channel("conferencia-" + unitId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (!skipRealtimeRef.current) fetchRides(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, () => { if (!skipRealtimeRef.current) fetchRides(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
-    // Lock immediately to prevent re-selection
-    lockedConferentes.current.add(rideId);
+    // Lock immediately using state to force re-render
+    setLockedConferenteIds((prev) => new Set(prev).add(rideId));
     // Optimistic update to lock dropdown immediately
     setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, conferente_id: conferenteId } : r));
     await supabase.from("driver_rides").update({ conferente_id: conferenteId } as any).eq("id", rideId);
@@ -427,7 +461,7 @@ const ConferenciaCarregamentoPage = () => {
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
     if (deletingRef.current.has(tbrId)) return;
     deletingRef.current.add(tbrId);
-    skipRealtimeRef.current = true;
+    realtimeLockUntil.current = Date.now() + 5000;
 
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
 
@@ -495,10 +529,8 @@ const ConferenciaCarregamentoPage = () => {
 
     // Wait for all DB ops to settle, then re-fetch
     await fetchRides();
-    // Safety delay: wait for cascading Realtime events to pass before re-enabling
-    await new Promise(resolve => setTimeout(resolve, 1500));
     deletingRef.current.delete(tbrId);
-    skipRealtimeRef.current = false;
+    // Lock expires automatically after 5s - no need to reset
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -1170,25 +1202,29 @@ const ConferenciaCarregamentoPage = () => {
                           {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
                         </div>
 
-                        {/* Conferente Select */}
+                        {/* Conferente Combobox */}
                         <div className="w-full">
-                          <Select 
-                            value={ride.conferente_id ?? ""} 
-                            onValueChange={(val) => handleSelectConferente(ride.id, val)}
-                            disabled={(!!ride.conferente_id || lockedConferentes.current.has(ride.id)) && !managerSession}
-                          >
-                            <SelectTrigger className="w-full h-9 text-sm">
-                              <div className="flex items-center gap-2">
-                                <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
-                                <SelectValue placeholder="Selecionar Conferente" />
-                              </div>
-                            </SelectTrigger>
-                            <SelectContent>
-                              {conferentes.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                          {(() => {
+                            const isLocked = (!!ride.conferente_id || lockedConferenteIds.has(ride.id)) && !managerSession;
+                            const selectedConferente = conferentes.find(c => c.id === ride.conferente_id);
+                            if (isLocked && selectedConferente) {
+                              return (
+                                <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted text-sm">
+                                  <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                                  <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                                  <span className="truncate">{selectedConferente.name}</span>
+                                </div>
+                              );
+                            }
+                            return (
+                              <ConferenteCombobox
+                                conferentes={conferentes}
+                                value={ride.conferente_id ?? ""}
+                                onSelect={(val) => handleSelectConferente(ride.id, val)}
+                                disabled={isLocked}
+                              />
+                            );
+                          })()}
                         </div>
 
                         {/* Action Buttons */}
