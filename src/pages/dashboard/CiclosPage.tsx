@@ -387,7 +387,7 @@ const CiclosPage = () => {
 
       {/* Report Modal */}
       <Dialog open={reportOpen} onOpenChange={setReportOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 font-bold italic">
               <BarChart3 className="h-5 w-5 text-primary" />
@@ -396,67 +396,67 @@ const CiclosPage = () => {
           </DialogHeader>
 
           {/* PDF capture container */}
-          <div ref={reportRef} className="space-y-4 p-4 bg-background">
+          <div ref={reportRef} className="space-y-2 p-3 bg-background">
             {/* Header for PDF */}
-            <div className="text-center pb-2 border-b">
-              <h2 className="text-lg font-bold italic">Resumo Operação — {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}</h2>
+            <div className="text-center pb-1 border-b">
+              <h2 className="text-base font-bold italic">Resumo Operação — {format(selectedDate, "dd/MM/yyyy", { locale: ptBR })}</h2>
               <p className="text-xs text-muted-foreground">{unitSession?.name} • {unitSession?.domain_name}</p>
             </div>
 
             {metrics && (
               <>
                 {/* BI Indicators */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <Clock className="h-4 w-4 mx-auto text-primary" />
-                    <p className="text-xl font-bold">{formatMin(metrics.avgLoadingMinutes)}</p>
-                    <p className="text-[10px] text-muted-foreground">Tempo Médio Carregamento</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <Clock className="h-3 w-3 mx-auto text-primary" />
+                    <p className="text-base font-bold">{formatMin(metrics.avgLoadingMinutes)}</p>
+                    <p className="text-[9px] text-muted-foreground">Tempo Médio Carreg.</p>
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <Package className="h-4 w-4 mx-auto text-primary" />
-                    <p className="text-xl font-bold">{metrics.totalTbrs}</p>
-                    <p className="text-[10px] text-muted-foreground">Total TBRs Lidos</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <Package className="h-3 w-3 mx-auto text-primary" />
+                    <p className="text-base font-bold">{metrics.totalTbrs}</p>
+                    <p className="text-[9px] text-muted-foreground">Total TBRs Lidos</p>
                     {prevMetrics && <DeltaBadge value={delta(metrics.totalTbrs, prevMetrics.totalTbrs)} />}
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <Truck className="h-4 w-4 mx-auto text-primary" />
-                    <p className="text-xl font-bold">{metrics.totalRides}</p>
-                    <p className="text-[10px] text-muted-foreground">Total Carregamentos</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <Truck className="h-3 w-3 mx-auto text-primary" />
+                    <p className="text-base font-bold">{metrics.totalRides}</p>
+                    <p className="text-[9px] text-muted-foreground">Total Carregamentos</p>
                     {prevMetrics && <DeltaBadge value={delta(metrics.totalRides, prevMetrics.totalRides)} />}
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <CheckCircle className="h-4 w-4 mx-auto text-green-600" />
-                    <p className="text-xl font-bold">{metrics.finishedRides}</p>
-                    <p className="text-[10px] text-muted-foreground">Liberação Motorista</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <CheckCircle className="h-3 w-3 mx-auto text-green-600" />
+                    <p className="text-base font-bold">{metrics.finishedRides}</p>
+                    <p className="text-[9px] text-muted-foreground">Liberação Motorista</p>
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <TrendingUp className="h-4 w-4 mx-auto text-green-600" />
-                    <p className="text-xl font-bold">{taxaConclusao}%</p>
-                    <p className="text-[10px] text-muted-foreground">Taxa de Conclusão</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <TrendingUp className="h-3 w-3 mx-auto text-green-600" />
+                    <p className="text-base font-bold">{taxaConclusao}%</p>
+                    <p className="text-[9px] text-muted-foreground">Taxa de Conclusão</p>
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <RotateCcw className="h-4 w-4 mx-auto text-destructive" />
-                    <p className="text-xl font-bold">{metrics.totalReturns}</p>
-                    <p className="text-[10px] text-muted-foreground">Total Retornos</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <RotateCcw className="h-3 w-3 mx-auto text-destructive" />
+                    <p className="text-base font-bold">{metrics.totalReturns}</p>
+                    <p className="text-[9px] text-muted-foreground">Total Retornos</p>
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <Timer className="h-4 w-4 mx-auto text-primary" />
-                    <p className="text-xl font-bold">{formatMin(metrics.avgPerTbr)}</p>
-                    <p className="text-[10px] text-muted-foreground">Tempo Médio/TBR</p>
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <Timer className="h-3 w-3 mx-auto text-primary" />
+                    <p className="text-base font-bold">{formatMin(metrics.avgPerTbr)}</p>
+                    <p className="text-[9px] text-muted-foreground">Tempo Médio/TBR</p>
                   </div>
-                  <div className="rounded-lg border p-3 text-center space-y-1">
-                    <TrendingDown className="h-4 w-4 mx-auto text-muted-foreground" />
-                    <p className="text-xl font-bold">
+                  <div className="rounded-lg border p-2 text-center space-y-0.5">
+                    <TrendingDown className="h-3 w-3 mx-auto text-muted-foreground" />
+                    <p className="text-base font-bold">
                       {prevMetrics ? prevMetrics.totalRides : "—"}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">Carreg. Dia Anterior</p>
+                    <p className="text-[9px] text-muted-foreground">Carreg. Dia Anterior</p>
                   </div>
                 </div>
 
                 {/* Manual data */}
-                <div className="rounded-lg border p-3 space-y-2">
-                  <h4 className="font-bold italic text-sm">Dados Manuais</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                <div className="rounded-lg border p-2 space-y-1">
+                  <h4 className="font-bold italic text-xs">Dados Manuais</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes</p>
                       <p className="font-bold">{record.qtd_pacotes || "—"}</p>
@@ -477,18 +477,18 @@ const CiclosPage = () => {
                 </div>
 
                 {/* Cycles summary */}
-                <div className="rounded-lg border p-3 space-y-2">
-                  <h4 className="font-bold italic text-sm">Ciclos</h4>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="text-center rounded-md border p-2">
+                <div className="rounded-lg border p-2 space-y-1">
+                  <h4 className="font-bold italic text-xs">Ciclos</h4>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 1 (até 08:30)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle1}</p>
                     </div>
-                    <div className="text-center rounded-md border p-2">
+                    <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 2 (até 09:30)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle2}</p>
                     </div>
-                    <div className="text-center rounded-md border p-2">
+                    <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 3 (total)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle3}</p>
                     </div>
