@@ -1,4 +1,5 @@
 import { useAuthStore } from "@/stores/auth-store";
+import { translateStatus } from "@/lib/status-labels";
 import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -381,7 +382,7 @@ const DashboardHome = () => {
                     <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
                     <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
                     <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
-                    <div><strong>Status:</strong> {tbrResult.loading_status || "—"}</div>
+                    <div><strong>Status:</strong> {translateStatus(tbrResult.loading_status)}</div>
                     <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                     <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                   </div>
