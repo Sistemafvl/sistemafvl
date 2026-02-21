@@ -25,6 +25,7 @@ import useEmblaCarousel from "embla-carousel-react";
 
 interface RideWithDriver {
   id: string;
+  unit_id: string;
   route: string | null;
   login: string | null;
   password: string | null;
@@ -371,29 +372,24 @@ const ConferenciaCarregamentoPage = () => {
     setIsLoading(false);
   }, [unitId, startDate, endDate]);
 
+  const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
+
   const fetchSearchResults = useCallback(async (searchTerm: string) => {
-    if (!unitId || !searchTerm.trim()) {
+    if (!searchTerm.trim()) {
       setSearchRides([]);
       setSearchTbrs({});
+      setSearchUnitNames({});
       return;
     }
 
-    const { data: allUnitRides } = await supabase
-      .from("driver_rides")
-      .select("id")
-      .eq("unit_id", unitId);
-
-    if (!allUnitRides || allUnitRides.length === 0) { setSearchRides([]); setSearchTbrs({}); return; }
-
-    const allRideIds = allUnitRides.map(r => r.id);
+    // Global search: find TBRs across ALL units
     const { data: matchingTbrs } = await supabase
       .from("ride_tbrs")
       .select("*")
-      .in("ride_id", allRideIds)
       .ilike("code", `%${searchTerm.trim()}%`)
       .order("scanned_at", { ascending: true });
 
-    if (!matchingTbrs || matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); return; }
+    if (!matchingTbrs || matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
 
     const matchingRideIds = [...new Set(matchingTbrs.map(t => t.ride_id))];
 
@@ -403,7 +399,18 @@ const ConferenciaCarregamentoPage = () => {
       .in("id", matchingRideIds)
       .order("sequence_number", { ascending: true });
 
-    if (!ridesData) { setSearchRides([]); setSearchTbrs({}); return; }
+    if (!ridesData) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
+
+    // Fetch unit names for results from other units
+    const otherUnitIds = [...new Set(ridesData.filter(r => r.unit_id !== unitId).map(r => r.unit_id))];
+    if (otherUnitIds.length > 0) {
+      const { data: units } = await supabase.from("units_public").select("id, name").in("id", otherUnitIds);
+      const map: Record<string, string> = {};
+      (units ?? []).forEach(u => { if (u.id && u.name) map[u.id] = u.name; });
+      setSearchUnitNames(map);
+    } else {
+      setSearchUnitNames({});
+    }
 
     const driverIds = [...new Set(ridesData.map(r => r.driver_id))];
     const { data: drivers } = await supabase
@@ -981,6 +988,7 @@ const ConferenciaCarregamentoPage = () => {
     setTbrSearchCommitted("");
     setSearchRides([]);
     setSearchTbrs({});
+    setSearchUnitNames({});
   };
 
   const isSearchActive = tbrSearchCommitted.trim().length > 0;
@@ -1214,6 +1222,11 @@ const ConferenciaCarregamentoPage = () => {
                         </Avatar>
 
                         <h3 className="text-lg font-bold text-center">{ride.driver_name}</h3>
+                        {isSearchActive && ride.unit_id !== unitId && (
+                          <Badge className="bg-orange-500 text-white hover:bg-orange-600 text-[10px]">
+                            {searchUnitNames[ride.unit_id] || "Outra Unidade"}
+                          </Badge>
+                        )}
 
                         <div className="w-full space-y-1.5 text-sm">
                           {(ride.car_model || ride.car_color) && (

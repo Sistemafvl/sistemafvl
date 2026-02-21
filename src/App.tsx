@@ -35,10 +35,12 @@ import SecurityPage from "./pages/admin/SecurityPage";
 import AdminUpdatesPage from "./pages/admin/AdminUpdatesPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
+import OfflineIndicator from "./components/OfflineIndicator";
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+      <OfflineIndicator />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
