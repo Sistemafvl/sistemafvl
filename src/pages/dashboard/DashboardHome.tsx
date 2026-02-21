@@ -129,7 +129,71 @@ const DashboardHome = () => {
         .limit(1);
 
       if (!tbrData || tbrData.length === 0) {
-        setTbrNotFound(true);
+        // Fallback: buscar nas tabelas de ocorrências
+        const [psCheck, rtoCheck, dnrCheck, pisoCheck] = await Promise.all([
+          supabase.from("ps_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("rto_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("dnr_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("piso_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        ]);
+
+        const foundEntry = dnrCheck.data || psCheck.data || rtoCheck.data || pisoCheck.data;
+
+        if (!foundEntry) {
+          setTbrNotFound(true);
+          setTbrLoading(false);
+          return;
+        }
+
+        // Get unit name
+        const unitId = (foundEntry as any).unit_id;
+        const unitRes = unitId
+          ? await supabase.from("units").select("name").eq("id", unitId).maybeSingle()
+          : { data: null };
+
+        // Get conferente name if available
+        const confId = (foundEntry as any).conferente_id;
+        const confRes = confId
+          ? await supabase.from("user_profiles").select("name").eq("id", confId).maybeSingle()
+          : { data: null };
+
+        const driverName = dnrCheck.data?.driver_name || psCheck.data?.driver_name || rtoCheck.data?.driver_name || pisoCheck.data?.driver_name || null;
+        const route = dnrCheck.data?.route || psCheck.data?.route || rtoCheck.data?.route || pisoCheck.data?.route || null;
+
+        const computeFallbackStatus = (): string => {
+          if (dnrCheck.data) {
+            if (dnrCheck.data.status === "open") return "DNR Aberto";
+            if (dnrCheck.data.status === "analyzing") return "Em Análise DNR";
+            if (dnrCheck.data.status === "closed") return "DNR Finalizado";
+          }
+          if (psCheck.data && psCheck.data.status === "open") return "PS Aberto";
+          if (rtoCheck.data && rtoCheck.data.status === "open") return "RTO Aberto";
+          if (pisoCheck.data && pisoCheck.data.status === "open") return "Retorno Piso";
+          return "Sem carregamento";
+        };
+
+        setTbrResult({
+          code,
+          scanned_at: (foundEntry as any).created_at ?? "",
+          ride_id: (foundEntry as any).ride_id ?? "",
+          driver_name: driverName ?? "Desconhecido",
+          route,
+          login: dnrCheck.data?.login ?? null,
+          unit_name: unitRes.data?.name ?? "—",
+          conferente_name: confRes.data?.name ?? dnrCheck.data?.conferente_name ?? null,
+          started_at: null,
+          finished_at: null,
+          loading_status: null,
+          sequence_number: null,
+          car_model: dnrCheck.data?.car_model ?? null,
+          car_plate: dnrCheck.data?.car_plate ?? null,
+          car_color: dnrCheck.data?.car_color ?? null,
+          ps_status: psCheck.data ? { open: psCheck.data.status === "open", description: psCheck.data.description } : null,
+          rto_status: rtoCheck.data ? { open: rtoCheck.data.status === "open", description: rtoCheck.data.description } : null,
+          dnr_status: dnrCheck.data ? { status: dnrCheck.data.status, value: Number(dnrCheck.data.dnr_value) } : null,
+          piso_status: pisoCheck.data ? { status: pisoCheck.data.status, reason: pisoCheck.data.reason } : null,
+          composite_status: computeFallbackStatus(),
+        });
         setTbrLoading(false);
         return;
       }
