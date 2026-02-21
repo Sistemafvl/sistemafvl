@@ -605,6 +605,33 @@ export type Database = {
           },
         ]
       }
+      system_updates: {
+        Row: {
+          created_at: string
+          description: string
+          id: string
+          module: string
+          published_at: string
+          type: string
+        }
+        Insert: {
+          created_at?: string
+          description: string
+          id?: string
+          module: string
+          published_at?: string
+          type?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string
+          id?: string
+          module?: string
+          published_at?: string
+          type?: string
+        }
+        Relationships: []
+      }
       unit_logins: {
         Row: {
           active: boolean

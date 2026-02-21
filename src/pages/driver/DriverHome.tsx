@@ -9,6 +9,7 @@ import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr } from "@/lib/utils";
+import SystemUpdates from "@/components/dashboard/SystemUpdates";
 
 const COLORS = ["#f59e0b", "#3b82f6", "#ef4444"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -348,6 +349,8 @@ const DriverHome = () => {
           )}
         </>
       )}
+
+      <SystemUpdates />
     </div>
   );
 };

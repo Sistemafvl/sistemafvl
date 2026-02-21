@@ -1,4 +1,4 @@
-import { Building2, Users, Truck, LogOut, Database, BarChart3, Shield } from "lucide-react";
+import { Building2, Users, Truck, LogOut, Database, BarChart3, Shield, Megaphone } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ const menuItems = [
   { title: "Gerenciamento de Motoristas", url: "/admin/drivers", icon: Truck },
   { title: "Banco de Dados", url: "/admin/database", icon: Database },
   { title: "Segurança Geral", url: "/admin/security", icon: Shield },
+  { title: "Atualizações", url: "/admin/updates", icon: Megaphone },
 ];
 
 const AdminSidebar = () => {
