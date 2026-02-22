@@ -26,6 +26,8 @@ const DriverHome = () => {
   const [psEntries, setPsEntries] = useState<any[]>([]);
   const [rtoEntries, setRtoEntries] = useState<any[]>([]);
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
+  const [customValues, setCustomValues] = useState<any[]>([]);
+  const [bonuses, setBonuses] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -59,13 +61,18 @@ const DriverHome = () => {
       const rideIds = r.map((x) => x.id);
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
-      const [t, pi, ps, rto, us, un] = await Promise.all([
+      const [t, pi, ps, rto, us, un, cv, bn] = await Promise.all([
         supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
         supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("units").select("id, name").in("id", unitIds),
+        supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
+        supabase.from("driver_bonus").select("amount, period_start")
+          .eq("driver_id", driverId)
+          .gte("period_start", startDate)
+          .lte("period_start", endDate),
       ]);
 
       setTbrs(t.data ?? []);
@@ -74,6 +81,8 @@ const DriverHome = () => {
       setRtoEntries(rto.data ?? []);
       setUnitSettings(us.data ?? []);
       setUnits(un.data ?? []);
+      setCustomValues(cv.data ?? []);
+      setBonuses(bn.data ?? []);
       setLoading(false);
     };
     fetch();
@@ -115,6 +124,7 @@ const DriverHome = () => {
     const concluidos = Math.max(0, totalTbrs - totalReturns);
 
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
+    const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
     let totalGanho = 0;
     const tbrsByRide = new Map<string, number>();
     tbrs.forEach((t: any) => tbrsByRide.set(t.ride_id, (tbrsByRide.get(t.ride_id) ?? 0) + 1));
@@ -123,8 +133,14 @@ const DriverHome = () => {
       const rTbrs = tbrsByRide.get(ride.id) ?? 0;
       const rReturns = returnsByRide.get(ride.id) ?? 0;
       const rConcluidos = Math.max(0, rTbrs - rReturns);
-      totalGanho += rConcluidos * (settingsMap.get(ride.unit_id) ?? 0);
+      // Use custom value if available, otherwise unit default
+      const tbrVal = customMap.get(ride.unit_id) ?? settingsMap.get(ride.unit_id) ?? 0;
+      totalGanho += rConcluidos * tbrVal;
     });
+
+    // Add bonuses
+    const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
+    totalGanho += totalBonus;
 
     const taxaConclusao = totalTbrs > 0 ? (concluidos / totalTbrs) * 100 : 0;
     const startD = parseISO(startDate);
@@ -134,7 +150,7 @@ const DriverHome = () => {
     const mediaTbrsDia = workedDays > 0 ? totalTbrs / workedDays : 0;
 
     return { totalRides, totalTbrs, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
-  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, startDate, endDate]);
+  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
 
   const chartData = useMemo(() => {
     const ridesByDay = new Map<string, number>();
