@@ -68,6 +68,7 @@ export type Database = {
           loaded_at: string | null
           login: string | null
           observations: string | null
+          reported_in_payroll_id: string | null
           ride_id: string | null
           route: string | null
           status: string
@@ -91,6 +92,7 @@ export type Database = {
           loaded_at?: string | null
           login?: string | null
           observations?: string | null
+          reported_in_payroll_id?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -114,13 +116,22 @@ export type Database = {
           loaded_at?: string | null
           login?: string | null
           observations?: string | null
+          reported_in_payroll_id?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
           tbr_code?: string
           unit_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "dnr_entries_reported_in_payroll_id_fkey"
+            columns: ["reported_in_payroll_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_reports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       domains: {
         Row: {

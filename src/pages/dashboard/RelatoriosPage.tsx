@@ -76,13 +76,34 @@ const RelatoriosPage = () => {
       if (!result) { setLoading(null); return; }
 
       // Save to payroll_reports
-      await supabase.from("payroll_reports" as any).insert({
+      const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
         unit_id: unitId,
         generated_by: generatedBy,
         period_start: format(startDate, "yyyy-MM-dd"),
         period_end: format(endDate, "yyyy-MM-dd"),
         report_data: result,
-      } as any);
+      } as any).select("id").single();
+
+      // Mark DNRs as reported in this payroll
+      if (savedReport && (savedReport as any).id) {
+        const reportId = (savedReport as any).id;
+        // Get dnrIdsUsed from the fetched data
+        const { data: usedDnrs } = await supabase.from("dnr_entries")
+          .select("id")
+          .eq("unit_id", unitId!)
+          .eq("status", "closed")
+          .eq("discounted", true)
+          .is("reported_in_payroll_id" as any, null)
+          .gte("closed_at", startDate.toISOString())
+          .lte("closed_at", endDate.toISOString());
+        if (usedDnrs?.length) {
+          for (const dnr of usedDnrs) {
+            await supabase.from("dnr_entries")
+              .update({ reported_in_payroll_id: reportId } as any)
+              .eq("id", dnr.id);
+          }
+        }
+      }
 
       setTimeout(async () => {
         if (payrollRef.current) {
@@ -314,11 +335,18 @@ const RelatoriosPage = () => {
     const bonusByDriver = new Map<string, number>();
     (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
 
-    const { data: dnrData } = await supabase.from("dnr_entries").select("driver_id, dnr_value")
+    const { data: dnrData } = await supabase.from("dnr_entries").select("id, driver_id, dnr_value")
       .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
+      .is("reported_in_payroll_id" as any, null)
       .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
     const dnrByDriver = new Map<string, number>();
-    (dnrData ?? []).forEach((d: any) => { if (d.driver_id) dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value)); });
+    const dnrIdsUsed: string[] = [];
+    (dnrData ?? []).forEach((d: any) => { 
+      if (d.driver_id) {
+        dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value));
+        dnrIdsUsed.push(d.id);
+      }
+    });
 
     const pixByDriver = new Map<string, string>();
     await Promise.all(driverIds.map(async (did) => {
