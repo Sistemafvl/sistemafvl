@@ -95,7 +95,8 @@ const DriverRecebiveis = () => {
       body: { bucket: "driver-documents", path: filePath, driver_id: driverId },
     });
 
-    const fileUrl = urlData?.signedUrl || filePath;
+    // Store only the storage path, not the signed URL (signed URLs expire)
+    const fileUrl = filePath;
 
     // Check if invoice record already exists
     const { data: existing } = await supabase

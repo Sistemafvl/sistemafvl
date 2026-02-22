@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp } from "lucide-react";
+import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { toast } from "@/hooks/use-toast";
 
 interface PayrollReport {
   id: string;
@@ -30,9 +31,11 @@ const FinanceiroPage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<PayrollReport | null>(null);
   const [invoices, setInvoices] = useState<Record<string, { file_url: string; file_name: string } | null>>({});
+  const [allInvoiceCounts, setAllInvoiceCounts] = useState<Record<string, number>>({});
   const [searchFilter, setSearchFilter] = useState("");
   const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
   const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
+  const [downloading, setDownloading] = useState<string | null>(null);
 
   const unitId = unitSession?.id;
 
@@ -48,7 +51,23 @@ const FinanceiroPage = () => {
       .select("*")
       .eq("unit_id", unitId)
       .order("created_at", { ascending: false });
-    setReports((data as any) ?? []);
+    const reportsData = (data as any) ?? [];
+    setReports(reportsData);
+
+    // Load invoice counts for all reports
+    const { data: allInvoices } = await supabase
+      .from("driver_invoices" as any)
+      .select("payroll_report_id, file_url")
+      .eq("unit_id", unitId);
+
+    const counts: Record<string, number> = {};
+    ((allInvoices as any[]) ?? []).forEach((inv: any) => {
+      if (inv.file_url) {
+        counts[inv.payroll_report_id] = (counts[inv.payroll_report_id] ?? 0) + 1;
+      }
+    });
+    setAllInvoiceCounts(counts);
+
     setLoading(false);
   };
 
@@ -67,6 +86,48 @@ const FinanceiroPage = () => {
   const handleSelectReport = (report: PayrollReport) => {
     setSelectedReport(report);
     loadInvoices(report.id);
+  };
+
+  const handleDownload = async (driverId: string) => {
+    const inv = invoices[driverId];
+    if (!inv) return;
+    setDownloading(driverId);
+
+    try {
+      // The file_url might be a signed URL (expired) or a storage path
+      // Always generate a fresh signed URL
+      let storagePath = inv.file_url;
+      
+      // If it's a full URL, extract the path portion
+      if (storagePath.startsWith("http")) {
+        // It's an expired signed URL, try to extract path from it
+        // The path format is: driverId/nf_reportId_timestamp_filename
+        // We need the storage path which is after /object/sign/driver-documents/
+        const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
+        if (match) {
+          storagePath = decodeURIComponent(match[1]);
+        } else {
+          toast({ title: "Erro", description: "Não foi possível localizar o arquivo.", variant: "destructive" });
+          setDownloading(null);
+          return;
+        }
+      }
+
+      const { data, error } = await supabase.functions.invoke("get-signed-url", {
+        body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
+      });
+
+      if (error || !data?.signedUrl) {
+        toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
+        setDownloading(null);
+        return;
+      }
+
+      window.open(data.signedUrl, "_blank");
+    } catch {
+      toast({ title: "Erro", description: "Erro ao baixar arquivo.", variant: "destructive" });
+    }
+    setDownloading(null);
   };
 
   const filteredReports = useMemo(() => {
@@ -154,11 +215,20 @@ const FinanceiroPage = () => {
                       <>
                         <CheckCircle className="h-4 w-4 text-green-500" />
                         <span className="text-xs text-green-600 font-semibold">NF Anexada</span>
-                        <a href={inv.file_url} target="_blank" rel="noopener noreferrer" className="ml-auto">
-                          <Button variant="outline" size="sm">
-                            <Download className="h-3 w-3 mr-1" /> Baixar
-                          </Button>
-                        </a>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="ml-auto"
+                          disabled={downloading === d.driver?.id}
+                          onClick={() => handleDownload(d.driver?.id)}
+                        >
+                          {downloading === d.driver?.id ? (
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                          ) : (
+                            <Download className="h-3 w-3 mr-1" />
+                          )}
+                          Baixar
+                        </Button>
                       </>
                     ) : (
                       <>
@@ -276,7 +346,9 @@ const FinanceiroPage = () => {
           {filteredReports.map((r) => {
             const drivers = r.report_data as any[];
             const totalValue = drivers.reduce((s: number, d: any) => s + (d.totalValue ?? 0), 0);
-            const nfCount = drivers.length; // total drivers
+            const totalDriversInReport = drivers.length;
+            const nfReceived = allInvoiceCounts[r.id] ?? 0;
+            const allNfDone = nfReceived >= totalDriversInReport && totalDriversInReport > 0;
             return (
               <div
                 key={r.id}
@@ -296,7 +368,20 @@ const FinanceiroPage = () => {
                   <p className="font-bold text-sm text-primary">{formatCurrency(totalValue)}</p>
                   <p className="text-xs text-muted-foreground">{format(new Date(r.created_at), "dd/MM HH:mm")}</p>
                 </div>
-                <Badge variant="outline" className="shrink-0 text-xs">{nfCount} mot.</Badge>
+                <div className="shrink-0 flex flex-col items-center gap-0.5">
+                  <span className="text-[10px] text-muted-foreground font-medium">NF Receb.</span>
+                  <Badge 
+                    variant="outline" 
+                    className={cn(
+                      "text-xs",
+                      allNfDone 
+                        ? "border-green-500 text-green-600 bg-green-50" 
+                        : "border-yellow-500 text-yellow-600"
+                    )}
+                  >
+                    {nfReceived}/{totalDriversInReport}
+                  </Badge>
+                </div>
               </div>
             );
           })}
