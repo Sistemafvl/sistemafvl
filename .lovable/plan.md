@@ -1,55 +1,55 @@
 
-# Plano de Correção - Numeração, Duplicação e Cancelamentos
+# Plano: Botao X para Excluir/Resetar Carregamento
 
-## Problemas Identificados
+## O que sera feito
 
-### 1. Numeração sequencial incorreta (começa em #3 ao invés de #1)
-A edge function `create-ride-with-login` calcula o `sequence_number` contando TODOS os carregamentos do dia, incluindo cancelados. Quando existem carregamentos cancelados anteriores, o próximo carregamento recebe um número inflado (ex: 2 cancelados + 1 novo = #3).
+Adicionar um botao "X" no canto superior direito de cada card de carregamento (ao lado do badge de sequencia). Ao clicar:
 
-### 2. Duplicação de cards e numeração repetida (#2 e #2)
-O mesmo problema da contagem: como cancelados são incluidos na contagem, a numeração pula ou repete dependendo da ordem de criação.
+1. Exige a senha do gerente (mesmo fluxo do Cancelar)
+2. Move todos os TBRs lidos para o Retorno Piso com motivo "Carregamento resetado"
+3. Deleta os registros de `ride_tbrs` do carregamento
+4. Deleta o registro de `driver_rides` (o card desaparece completamente)
+5. Libera a `queue_entry` associada (se houver)
+6. Ao chamar `fetchRides()`, os contadores do dashboard recalculam automaticamente
 
-### 3. Card "Carregamentos hoje" conta cancelados
-Na Visao Geral (`DashboardMetrics.tsx`), o contador de carregamentos do dia usa `count: "exact"` sem filtrar `loading_status != 'cancelled'`.
+## Diferenca entre Cancelar e Excluir
 
-### 4. Conferente ainda selecionavel após cancelamento
-O select do conferente nao esta sendo travado quando o carregamento esta cancelado.
-
----
-
-## Correções Planejadas
-
-### A. Edge Function `create-ride-with-login/index.ts`
-Alterar a query de contagem para excluir carregamentos cancelados:
-
-```text
-Antes:
-  .eq("unit_id", unit_id)
-  .gte("completed_at", today.toISOString())
-
-Depois:
-  .eq("unit_id", unit_id)
-  .gte("completed_at", today.toISOString())
-  .neq("loading_status", "cancelled")
-```
-
-### B. `DashboardMetrics.tsx` - Contador de carregamentos hoje
-Adicionar filtro `.neq("loading_status", "cancelled")` na query que conta os carregamentos do dia (linha 89).
-
-### C. `ConferenciaCarregamentoPage.tsx` - Conferente travado em cancelados
-Na seção do conferente (linha ~1304), adicionar `isCancelled` como condição para travar o select, impedindo seleção quando o carregamento esta cancelado.
-
-### D. Resequenciar carregamentos existentes
-Nao sera necessaria migração. Os carregamentos futuros ja terao a numeração correta. Para os carregamentos existentes com numeração errada, os cards exibirao o `sequence_number` armazenado - se desejar corrigir, sera feito manualmente.
-
----
+- **Cancelar**: O card permanece visivel (vermelho), status muda para "cancelled"
+- **Excluir (X)**: O card desaparece completamente do sistema. TBRs vao para o Retorno Piso marcados como "resetados"
 
 ## Detalhes Tecnicos
 
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/create-ride-with-login/index.ts` | Filtrar `cancelled` na contagem do sequence_number |
-| `src/components/dashboard/DashboardMetrics.tsx` | Filtrar `cancelled` no todayRides |
-| `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` | Travar conferente quando `isCancelled` |
+### 1. Migracao SQL
+Adicionar politica RLS de DELETE na tabela `driver_rides` (atualmente nao permite DELETE):
 
-Todas as alterações sao cirurgicas e nao afetam layouts ou estruturas existentes.
+```sql
+CREATE POLICY "Anyone can delete driver_rides"
+  ON driver_rides FOR DELETE USING (true);
+```
+
+### 2. `ConferenciaCarregamentoPage.tsx`
+
+**Novos estados:**
+- `showDeleteModal` / `deleteRideId` / `deletePassword` / `deleteLoading`
+
+**Novo handler `handleConfirmDelete`:**
+- Valida senha do gerente (mesmo fluxo do cancelar)
+- Busca TBRs do carregamento via estado local `tbrs[deleteRideId]`
+- Insere TBRs no `piso_entries` com reason "Carregamento resetado"
+- Deleta `ride_tbrs` onde `ride_id = deleteRideId`
+- Deleta `driver_rides` onde `id = deleteRideId`
+- Libera `queue_entry` se existir
+- Chama `fetchRides()` para atualizar a lista
+
+**UI - Botao X no card:**
+Posicionar na area `top-3 right-3` (linha ~1232), antes dos outros elementos. Botao circular pequeno com icone `X`, visivel apenas quando nao esta cancelado.
+
+**Modal de confirmacao:**
+Identico ao modal de cancelamento, com titulo "Excluir Carregamento" e descricao avisando que TBRs serao enviados ao Retorno Piso.
+
+### Arquivos modificados
+
+| Arquivo | Alteracao |
+|---|---|
+| Migracao SQL | Adicionar politica DELETE em `driver_rides` |
+| `ConferenciaCarregamentoPage.tsx` | Botao X, modal, handler de delete |
