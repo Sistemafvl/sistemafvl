@@ -86,7 +86,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
 
     const [ridesRes, tbrsRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
-      supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd),
+      supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
       supabase.from("ride_tbrs").select("id, ride_id", { count: "exact" }).gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd),
       supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
       supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),

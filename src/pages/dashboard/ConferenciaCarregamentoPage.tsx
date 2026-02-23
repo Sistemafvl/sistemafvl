@@ -1302,7 +1302,7 @@ const ConferenciaCarregamentoPage = () => {
                         {/* Conferente Select */}
                         <div className="w-full">
                           {(() => {
-                            const isLocked = (!!ride.conferente_id || lockedConferenteIds.has(ride.id)) && !managerSession;
+                            const isLocked = isCancelled || ((!!ride.conferente_id || lockedConferenteIds.has(ride.id)) && !managerSession);
                             const selectedConferente = conferentes.find(c => c.id === ride.conferente_id);
                             if (isLocked && selectedConferente) {
                               return (
