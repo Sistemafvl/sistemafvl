@@ -30,31 +30,36 @@ interface CardDateRange {
   end?: Date;
 }
 
-const DateRangeFilter = ({ value, onChange }: { value: CardDateRange; onChange: (v: CardDateRange) => void }) => (
-  <div className="flex items-center gap-1">
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
-          <CalendarIcon className="h-3 w-3 mr-1" />
-          {value.start ? format(value.start, "dd/MM") : "De"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="end">
-        <Calendar mode="single" selected={value.start} onSelect={(d) => onChange({ ...value, start: d ?? undefined })} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
-      </PopoverContent>
-    </Popover>
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
-          {value.end ? format(value.end, "dd/MM") : "Até"}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-auto p-0" align="end">
-        <Calendar mode="single" selected={value.end} onSelect={(d) => onChange({ ...value, end: d ?? undefined })} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
-      </PopoverContent>
-    </Popover>
-  </div>
-);
+const DateRangeFilter = ({ value, onChange }: { value: CardDateRange; onChange: (v: CardDateRange) => void }) => {
+  const [startOpen, setStartOpen] = useState(false);
+  const [endOpen, setEndOpen] = useState(false);
+  
+  return (
+    <div className="flex items-center gap-1">
+      <Popover open={startOpen} onOpenChange={setStartOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
+            <CalendarIcon className="h-3 w-3 mr-1" />
+            {value.start ? format(value.start, "dd/MM") : "De"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0 z-50" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <Calendar mode="single" selected={value.start} onSelect={(d) => { onChange({ ...value, start: d ?? undefined }); setStartOpen(false); }} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+        </PopoverContent>
+      </Popover>
+      <Popover open={endOpen} onOpenChange={setEndOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
+            {value.end ? format(value.end, "dd/MM") : "Até"}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-auto p-0 z-50" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <Calendar mode="single" selected={value.end} onSelect={(d) => { onChange({ ...value, end: d ?? undefined }); setEndOpen(false); }} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+};
 
 const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [loading, setLoading] = useState(true);

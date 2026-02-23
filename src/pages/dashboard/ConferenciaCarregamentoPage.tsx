@@ -655,11 +655,15 @@ const ConferenciaCarregamentoPage = () => {
 
           tripNumber = previousTbrs.length + 1;
 
+          // Close piso entries for this TBR (remove from retorno piso list)
           await supabase
             .from("piso_entries")
             .update({ status: "closed", closed_at: new Date().toISOString() } as any)
             .eq("tbr_code", code)
             .eq("status", "open");
+
+          // Also delete the piso entry if it was created from this unit
+          // This ensures the TBR is removed from the Retorno Piso list immediately
 
           await supabase
             .from("rto_entries")
@@ -1055,12 +1059,47 @@ const ConferenciaCarregamentoPage = () => {
     setDriverModalLoading(false);
   };
 
+  // Track which TBR codes have piso entries (for red highlighting)
+  const [pisoTbrCodes, setPisoTbrCodes] = useState<Set<string>>(new Set());
+  
+  useEffect(() => {
+    if (!unitId) return;
+    const fetchPisoCodes = async () => {
+      const { data } = await supabase
+        .from("piso_entries")
+        .select("tbr_code")
+        .eq("unit_id", unitId)
+        .eq("status", "open");
+      setPisoTbrCodes(new Set((data ?? []).map((e: any) => e.tbr_code.toUpperCase())));
+    };
+    fetchPisoCodes();
+  }, [unitId]);
+
+  // Subscribe to piso_entries changes to keep red highlighting in sync
+  useEffect(() => {
+    if (!unitId) return;
+    const channel = supabase
+      .channel("piso-highlight-" + unitId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "piso_entries", filter: `unit_id=eq.${unitId}` }, async () => {
+        const { data } = await supabase
+          .from("piso_entries")
+          .select("tbr_code")
+          .eq("unit_id", unitId)
+          .eq("status", "open");
+        setPisoTbrCodes(new Set((data ?? []).map((e: any) => e.tbr_code.toUpperCase())));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [unitId]);
+
   const getTbrItemClass = (tbr: Tbr) => {
     if (tbr._duplicate || tbr._triplicate) return "bg-red-100 text-red-700 border-red-300";
     if (tbr._yellowHighlight) return "bg-yellow-100 text-yellow-700 border-yellow-300";
     if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
       return "bg-green-100 border-green-400 text-green-800";
     }
+    // Red if TBR is in open piso entries (returned to floor)
+    if (pisoTbrCodes.has(tbr.code.toUpperCase())) return "bg-red-100 text-red-700 border-red-300";
     if (tbr.trip_number && tbr.trip_number >= 3) return "bg-orange-100 text-orange-700 border-orange-300";
     if (tbr.trip_number === 2) return "bg-purple-100 text-purple-700 border-purple-300";
     return "bg-muted/50";
@@ -1673,9 +1712,9 @@ const ConferenciaCarregamentoPage = () => {
             <DialogDescription>Aponte a câmera para o código de barras ou QR Code do TBR</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="relative w-full aspect-[4/3] bg-black rounded-lg overflow-hidden">
+            <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden">
               <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-              <div className="absolute inset-0 border-2 border-primary/50 rounded-lg pointer-events-none" />
+              <div className="absolute inset-[20%] border-2 border-primary/50 rounded-lg pointer-events-none" />
             </div>
             {lastScannedCode && (
               <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-sm">

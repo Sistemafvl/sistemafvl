@@ -94,15 +94,10 @@ const FinanceiroPage = () => {
     setDownloading(driverId);
 
     try {
-      // The file_url might be a signed URL (expired) or a storage path
-      // Always generate a fresh signed URL
       let storagePath = inv.file_url;
       
       // If it's a full URL, extract the path portion
       if (storagePath.startsWith("http")) {
-        // It's an expired signed URL, try to extract path from it
-        // The path format is: driverId/nf_reportId_timestamp_filename
-        // We need the storage path which is after /object/sign/driver-documents/
         const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
         if (match) {
           storagePath = decodeURIComponent(match[1]);
@@ -113,17 +108,25 @@ const FinanceiroPage = () => {
         }
       }
 
-      const { data, error } = await supabase.functions.invoke("get-signed-url", {
-        body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
-      });
+      // Use createSignedUrl directly from the client
+      const { data, error } = await supabase.storage
+        .from("driver-documents")
+        .createSignedUrl(storagePath, 3600);
 
       if (error || !data?.signedUrl) {
-        toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
-        setDownloading(null);
-        return;
+        // Fallback to edge function
+        const { data: efData, error: efError } = await supabase.functions.invoke("get-signed-url", {
+          body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
+        });
+        if (efError || !efData?.signedUrl) {
+          toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
+          setDownloading(null);
+          return;
+        }
+        window.open(efData.signedUrl, "_blank");
+      } else {
+        window.open(data.signedUrl, "_blank");
       }
-
-      window.open(data.signedUrl, "_blank");
     } catch {
       toast({ title: "Erro", description: "Erro ao baixar arquivo.", variant: "destructive" });
     }
