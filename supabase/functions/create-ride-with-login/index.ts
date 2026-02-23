@@ -55,7 +55,8 @@ Deno.serve(async (req) => {
       .from("driver_rides")
       .select("*", { count: "exact", head: true })
       .eq("unit_id", unit_id)
-      .gte("completed_at", today.toISOString());
+      .gte("completed_at", today.toISOString())
+      .neq("loading_status", "cancelled");
 
     const sequenceNumber = (count ?? 0) + 1;
 
