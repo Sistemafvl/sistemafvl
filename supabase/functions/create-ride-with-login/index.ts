@@ -57,14 +57,17 @@ Deno.serve(async (req) => {
     const dd = String(brNow.getDate()).padStart(2, "0");
     const todayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
 
-    const { count } = await supabase
+    const { data: maxData } = await supabase
       .from("driver_rides")
-      .select("*", { count: "exact", head: true })
+      .select("sequence_number")
       .eq("unit_id", unit_id)
       .gte("completed_at", todayStart)
-      .neq("loading_status", "cancelled");
+      .neq("loading_status", "cancelled")
+      .order("sequence_number", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    const sequenceNumber = (count ?? 0) + 1;
+    const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
     // Complete queue entry
     if (queue_entry_id) {
