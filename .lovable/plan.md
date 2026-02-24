@@ -1,140 +1,106 @@
 
+# Correcao: Contagem Duplicada de TBRs na Folha de Pagamento
 
-# Melhorias: Campo de Busca TBR, Icones de Ajuda e Botoes Folha de Pagamento
+## Problema Identificado
 
-## 1. Campo de busca TBR com visual destacado (Anexo 1)
+Na geracao da folha de pagamento, o sistema conta TBRs por dia usando `rTbrs.length` (total de entradas em `ride_tbrs`). Quando um pacote retorna e sai novamente no mesmo dia, ele e escaneado duas vezes (uma por corrida), inflando a contagem.
 
-**Problema**: O campo "Buscar TBR..." parece um input comum, sem destaque visual.
+**Exemplo do dia 23/02 - Vitoria Santana:**
+- Corrida 1: 9 TBRs escaneados, 1 retornou (8 concluidos)
+- Corrida 2: 1 TBR escaneado (o que retornou), 0 retornos (1 concluido)
+- `rTbrs.length` = 9 + 1 = **10** (ERRADO)
+- Correto: 9 TBRs unicos, 9 concluidos (o retorno foi resolvido)
 
-**Solucao**: Aplicar estilo com sombra, gradiente de borda e animacao de pulse sutil no icone de busca. Adicionar `shadow-lg`, borda colorida com `ring` e uma animacao de glow pulsante via CSS customizado.
+## Causa Raiz
 
-**Arquivo**: `src/pages/dashboard/DashboardHome.tsx` (linhas 306-316)
-- Envolver o input em um container com `shadow-lg border-2 border-primary/30 rounded-xl` e animacao de glow
-- Aumentar levemente o tamanho do icone Search e adicionar animacao de pulse
-- Adicionar classe CSS customizada em `src/index.css` para o efeito de glow/vibration
+Duas falhas no calculo por dia (linhas 371-378 de `RelatoriosPage.tsx`):
 
-**Arquivo**: `src/index.css`
-- Adicionar keyframe `@keyframes tbr-glow` com box-shadow pulsante verde/teal
-- Classe `.tbr-search-glow` que aplica a animacao
+1. **tbrCount usa contagem bruta** em vez de codigos unicos
+2. **Retornos nao consideram re-tentativas**: um TBR que retornou mas saiu novamente com sucesso ainda e contado como retorno
 
-## 2. Icones "?" com textos explicativos (Anexos 2-7)
+## Solucao
 
-**Problema**: Os cards e graficos nao tem contexto explicativo para usuarios novos.
+Alterar a logica de calculo por dia para:
 
-**Solucao**: Criar um componente `InfoButton` reutilizavel que exibe um icone "?" pequeno. Ao clicar, abre um Popover com texto explicativo detalhado. Nao usar Tooltip (conforme memoria do projeto).
+1. Contar TBRs unicos por dia usando `Set` de codigos
+2. Para retornos, verificar se o TBR foi re-entregue em uma corrida posterior no mesmo dia. Se sim, nao contar como retorno (retorno liquido)
 
-**Componente**: `src/components/dashboard/InfoButton.tsx` (novo arquivo)
-- Icone `HelpCircle` de 14px, cor `text-muted-foreground`
-- Ao clicar, abre um `Popover` com texto explicativo
-- Props: `text: string`
-
-**Arquivos que recebem o InfoButton**:
-
-| Local | Texto explicativo |
-|---|---|
-| DNR Abertos (DashboardHome) | "Total de DNRs (Did Not Receive) abertos na unidade. Representam pacotes que o cliente declarou nao ter recebido e estao pendentes de analise." |
-| DNR Analisando (DashboardHome) | "DNRs em processo de analise pela equipe. Esses pacotes estao sendo investigados para confirmar ou negar a entrega." |
-| DNR Finalizados (DashboardHome) | "DNRs finalizados no periodo. Inclui casos confirmados e descartados." |
-| Carregamentos (DashboardMetrics) | "Total de carregamentos realizados no periodo. Cada carregamento representa uma viagem de entrega iniciada por um motorista." |
-| TBRs escaneados (DashboardMetrics) | "Total de pacotes (TBRs) escaneados no periodo. Cada TBR e um pacote individual conferido antes do carregamento." |
-| PS abertos (DashboardMetrics) | "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolucao manual." |
-| RTO abertos (DashboardMetrics) | "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuicao." |
-| Retornos Piso (DashboardMetrics) | "Pacotes que retornaram ao piso da unidade sem serem entregues." |
-| Carregando agora (DashboardMetrics) | "Motoristas com carregamento em andamento neste momento." |
-| Grafico Carregamentos (DashboardMetrics) | "Evolucao diaria do numero de carregamentos realizados na unidade." |
-| Grafico TBRs (DashboardMetrics) | "Evolucao diaria do numero de TBRs escaneados na unidade." |
-| Grafico Status (DashboardMetrics) | "Distribuicao dos carregamentos por status: Pendente, Em carregamento e Finalizado." |
-| Top Motoristas (DashboardInsights) | "Ranking dos motoristas com mais entregas (TBRs concluidos) no periodo." |
-| Maiores Ofensores (DashboardInsights) | "Motoristas com mais TBRs retornados (Piso, PS, RTO) no periodo." |
-| Conferentes mais ativos (DashboardInsights) | "Conferentes que mais escanearam TBRs no periodo." |
-| Media TBRs (DashboardInsights) | "Media de TBRs por carregamento no periodo." |
-| Taxa de Retorno (DashboardInsights) | "Percentual de TBRs que retornaram em relacao ao total escaneado." |
-| Tempo Medio (DashboardInsights) | "Tempo medio entre inicio e fim do carregamento." |
-| Dia Mais Movimentado (DashboardInsights) | "Dia da semana com maior volume de carregamentos no periodo." |
-| Operacao cards (OperacaoPage) | Cards de resumo com icone de ajuda nos titulos |
-| Financeiro cards (FinanceiroPage) | Cards de resumo do financeiro |
-| Feedbacks cards (FeedbacksPage) | Cards de media, total e distribuicao |
-
-## 3. Compactar botoes da Folha de Pagamento (Anexo 8)
-
-**Problema**: O terceiro botao (Gerar) esta saindo do card.
-
-**Solucao**: Reduzir o texto e tamanho dos botoes no card "Folha de Pagamento".
-
-**Arquivo**: `src/pages/dashboard/RelatoriosPage.tsx` (linhas 483-497)
-- Adicionar `text-xs` nos botoes
-- Reduzir padding com `px-2`
-- Remover gap dos icones para economizar espaco
-- Usar `size="sm"` nos botoes
+**Arquivo**: `src/pages/dashboard/RelatoriosPage.tsx` (linhas 371-378)
 
 ## Detalhes Tecnicos
 
-### index.css - Animacao do campo TBR
+### Logica atual (com bug)
 
-```css
-@keyframes tbr-glow {
-  0%, 100% { box-shadow: 0 0 8px 2px rgba(0, 128, 128, 0.15); }
-  50% { box-shadow: 0 0 16px 4px rgba(0, 128, 128, 0.3); }
-}
-.tbr-search-glow {
-  animation: tbr-glow 2s ease-in-out infinite;
-  border: 2px solid hsl(var(--primary) / 0.4);
-  border-radius: 0.75rem;
-  transition: box-shadow 0.3s, border-color 0.3s;
-}
-.tbr-search-glow:focus-within {
-  border-color: hsl(var(--primary));
-  box-shadow: 0 0 20px 6px rgba(0, 128, 128, 0.35);
-}
+```typescript
+const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
+const returnTbrSet = new Set<string>();
+[...allPiso, ...allPs, ...allRto].forEach((p: any) => {
+  if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
+});
+return { tbrCount: rTbrs.length, returns: returnTbrSet.size, ... };
 ```
 
-### InfoButton.tsx
+### Logica corrigida
 
-```tsx
-import { HelpCircle } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+```typescript
+const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
+// 1. Contar TBRs unicos por codigo
+const uniqueTbrCodes = new Set(rTbrs.map((t: any) => t.code));
 
-const InfoButton = ({ text }: { text: string }) => (
-  <Popover>
-    <PopoverTrigger asChild>
-      <button className="ml-1 inline-flex items-center text-muted-foreground hover:text-primary transition-colors">
-        <HelpCircle className="h-3.5 w-3.5" />
-      </button>
-    </PopoverTrigger>
-    <PopoverContent className="text-xs max-w-[260px] p-3">{text}</PopoverContent>
-  </Popover>
-);
+// 2. Coletar codigos que retornaram
+const returnCodesForDay = new Set<string>();
+[...allPiso, ...allPs, ...allRto].forEach((p: any) => {
+  if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) {
+    returnCodesForDay.add(p.tbr_code);
+  }
+});
 
-export default InfoButton;
+// 3. Calcular retornos liquidos (excluir re-tentativas bem-sucedidas)
+// Ordenar corridas do dia por horario
+const sortedDayRides = driverRides
+  .filter(r => info.rideIds.includes(r.id))
+  .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
+
+const netReturns = new Set<string>();
+returnCodesForDay.forEach(code => {
+  // Encontrar a ultima corrida onde esse codigo aparece
+  let lastRideId: string | null = null;
+  for (const ride of sortedDayRides) {
+    if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code === code)) {
+      lastRideId = ride.id;
+    }
+  }
+  // Se o codigo tem retorno na sua ultima corrida do dia, e retorno liquido
+  if (lastRideId) {
+    const hasReturnInLast = [...allPiso, ...allPs, ...allRto].some(
+      (p: any) => p.ride_id === lastRideId && p.tbr_code === code
+    );
+    if (hasReturnInLast) netReturns.add(code);
+  }
+});
+
+return {
+  date,
+  login: info.login,
+  tbrCount: uniqueTbrCodes.size,     // 9 (nao 10)
+  returns: netReturns.size,           // 0 (o retorno foi resolvido)
+  value: (uniqueTbrCodes.size - netReturns.size) * tbrVal  // 9 * 2.20 = 19.80
+};
 ```
 
-### RelatoriosPage.tsx - Botoes compactos
+### Resultado esperado para Vitoria no dia 23/02
 
-```tsx
-<div className="flex gap-1.5">
-  <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.secondAction}>
-    <Search className="h-3.5 w-3.5" /> Consultar
-  </Button>
-  <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs px-2" onClick={espelhoAction}>
-    <Eye className="h-3.5 w-3.5" /> Espelho
-  </Button>
-  <Button size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.action}>
-    <FileText className="h-3.5 w-3.5" /> Gerar
-  </Button>
-</div>
-```
+| Antes (errado) | Depois (correto) |
+|---|---|
+| tbrCount = 10 | tbrCount = 9 |
+| returns = 1 | returns = 0 (re-tentativa bem-sucedida) |
+| concluidos = 9 | concluidos = 9 |
+| valor = 9 x R$2,20 = R$19,80 | valor = 9 x R$2,20 = R$19,80 |
 
-### Resumo de arquivos modificados
+O valor final coincide neste caso, mas a contagem de TBRs (70 total) e retornos (9 total) no cabecalho tambem serao corrigidos, pois sao somados a partir dos dados diarios.
+
+### Arquivo modificado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/index.css` | Adicionar animacao tbr-glow |
-| `src/pages/dashboard/DashboardHome.tsx` | Estilo do campo TBR + InfoButtons nos DNR cards |
-| `src/components/dashboard/InfoButton.tsx` | Novo componente reutilizavel |
-| `src/components/dashboard/DashboardMetrics.tsx` | InfoButtons nos 6 cards e 3 graficos |
-| `src/components/dashboard/DashboardInsights.tsx` | InfoButtons nos rankings e metricas |
-| `src/pages/dashboard/OperacaoPage.tsx` | InfoButtons nos cards de resumo |
-| `src/pages/dashboard/FinanceiroPage.tsx` | InfoButtons nos cards de resumo |
-| `src/pages/dashboard/FeedbacksPage.tsx` | InfoButtons nos cards de resumo |
-| `src/pages/dashboard/RelatoriosPage.tsx` | Compactar botoes da Folha de Pagamento |
-
+| `src/pages/dashboard/RelatoriosPage.tsx` | Deduplicar TBRs por codigo e calcular retornos liquidos por dia |
