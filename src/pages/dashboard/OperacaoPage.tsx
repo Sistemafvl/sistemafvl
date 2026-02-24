@@ -52,7 +52,8 @@ const OperacaoPage = () => {
   const [tbrModalCard, setTbrModalCard] = useState<DriverCard | null>(null);
   const [tbrModalList, setTbrModalList] = useState<TbrDetail[]>([]);
   const [tbrModalLoading, setTbrModalLoading] = useState(false);
-
+  const [customValueMap, setCustomValueMap] = useState<Map<string, number>>(new Map());
+  
   useEffect(() => {
     if (unitSession) loadData();
   }, [unitSession, selectedDate]);
@@ -82,7 +83,7 @@ const OperacaoPage = () => {
     const confIds = [...new Set(rides.filter((r) => r.conferente_id).map((r) => r.conferente_id!))];
     const rideIds = rides.map((r) => r.id);
 
-    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes] = await Promise.all([
+    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes, customValuesRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
@@ -92,9 +93,17 @@ const OperacaoPage = () => {
       supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitSession.id).maybeSingle(),
+      supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitSession.id),
     ]);
 
-    setTbrValue(Number(settingsRes.data?.tbr_value ?? 0));
+    const baseTbrValue = Number(settingsRes.data?.tbr_value ?? 0);
+    setTbrValue(baseTbrValue);
+
+    const cvMap = new Map<string, number>();
+    ((customValuesRes.data as any[]) ?? []).forEach((cv: any) => {
+      cvMap.set(cv.driver_id, Number(cv.custom_tbr_value));
+    });
+    setCustomValueMap(cvMap);
 
     const driverMap = Object.fromEntries((driversRes.data ?? []).map((d) => [d.id, d]));
     const confMap = Object.fromEntries((confsRes.data ?? []).map((c) => [c.id, c.name]));
@@ -230,7 +239,8 @@ const OperacaoPage = () => {
             <div className="grid gap-3">
               {filteredCards.map((c) => {
                   const concluidos = c.total_tbrs - c.piso_returns;
-                  const totalGanho = concluidos * tbrValue;
+                  const driverTbrValue = customValueMap.get(c.driver_id) ?? tbrValue;
+                  const totalGanho = concluidos * driverTbrValue;
                   const mediaTbr = c.total_tbrs > 0 ? totalGanho / c.total_tbrs : 0;
                   const performance = c.total_tbrs > 0 ? (concluidos / c.total_tbrs) * 100 : 0;
                   const tempoMin = c.started_at && c.finished_at

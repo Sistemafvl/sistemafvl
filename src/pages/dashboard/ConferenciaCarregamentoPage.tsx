@@ -1321,14 +1321,15 @@ const ConferenciaCarregamentoPage = () => {
                           </Badge>
                         </div>
 
-                        <Avatar className="h-16 w-16 mt-2">
-                          {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
-                          <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
-                            {(ride.driver_name ?? "M")[0].toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-
-                        <h3 className="text-lg font-bold text-center">{ride.driver_name}</h3>
+                        <div className="flex items-center gap-3 mt-2">
+                          <Avatar className="h-16 w-16 shrink-0">
+                            {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
+                            <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
+                              {(ride.driver_name ?? "M")[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <h3 className="text-lg font-bold">{ride.driver_name}</h3>
+                        </div>
                         {isSearchActive && ride.unit_id !== unitId && (
                           <Badge className="bg-orange-500 text-white hover:bg-orange-600 text-[10px]">
                             {searchUnitNames[ride.unit_id] || "Outra Unidade"}
