@@ -1296,7 +1296,7 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                          {!isCancelled && managerSession && (
+                          {managerSession && (
                             <button
                               onClick={() => handleOpenDeleteModal(ride.id)}
                               className="h-6 w-6 flex items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
