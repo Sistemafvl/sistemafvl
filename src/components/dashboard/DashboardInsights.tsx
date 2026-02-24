@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange } from "@/lib/utils";
@@ -215,11 +216,12 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
-    title, icon: Icon, data, color, page, setPage, dates, setDates,
+    title, icon: Icon, data, color, page, setPage, dates, setDates, infoText,
   }: {
     title: string; icon: any; data: DriverRank[] | ConferenteRank[]; color: string;
     page: number; setPage: (p: number) => void;
     dates: CardDateRange; setDates: (d: CardDateRange) => void;
+    infoText?: string;
   }) => {
     const totalPages = Math.ceil(data.length / PAGE_SIZE);
     const pageData = data.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
@@ -230,6 +232,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
           <CardTitle className="text-sm font-bold italic flex items-center gap-2">
             <Icon className={`h-4 w-4 ${color}`} />
             {title}
+            {infoText && <InfoButton text={infoText} />}
           </CardTitle>
           <DateRangeFilter value={dates} onChange={setDates} />
         </CardHeader>
@@ -273,9 +276,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} dates={driverDates} setDates={setDriverDates} />
-        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} />
-        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} dates={confDates} setDates={setConfDates} />
+        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} dates={driverDates} setDates={setDriverDates} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos) no período." />
+        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO) no período." />
+        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} dates={confDates} setDates={setConfDates} infoText="Conferentes que mais escanearam TBRs no período." />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -283,28 +286,28 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <BarChart3 className="h-5 w-5 text-blue-500" />
             <span className="text-2xl font-bold italic">{avgTbrs}</span>
-            <span className="text-xs text-muted-foreground leading-tight">Média TBRs / Carregamento</span>
+            <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Média TBRs / Carregamento <InfoButton text="Média de TBRs por carregamento no período." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Percent className="h-5 w-5 text-orange-500" />
             <span className="text-2xl font-bold italic">{returnRate}%</span>
-            <span className="text-xs text-muted-foreground leading-tight">Taxa de Retorno</span>
+            <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Taxa de Retorno <InfoButton text="Percentual de TBRs que retornaram em relação ao total escaneado." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Clock className="h-5 w-5 text-green-500" />
             <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>
-            <span className="text-xs text-muted-foreground leading-tight">Tempo Médio Carregamento</span>
+            <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Tempo Médio Carregamento <InfoButton text="Tempo médio entre início e fim do carregamento." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <CalendarDays className="h-5 w-5 text-purple-500" />
             <span className="text-2xl font-bold italic">{bestDay || "—"}</span>
-            <span className="text-xs text-muted-foreground leading-tight">Dia Mais Movimentado</span>
+            <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Dia Mais Movimentado <InfoButton text="Dia da semana com maior volume de carregamentos no período." /></span>
           </CardContent>
         </Card>
       </div>

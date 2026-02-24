@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2, Trash2 } from "lucide-react";
+import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -333,7 +334,7 @@ const FinanceiroPage = () => {
               <FileText className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Relatórios</p>
+              <p className="text-xs text-muted-foreground flex items-center">Relatórios <InfoButton text="Quantidade total de relatórios de folha de pagamento gerados para esta unidade." /></p>
               <p className="text-lg font-bold">{filteredReports.length}</p>
             </div>
           </CardContent>
@@ -344,7 +345,7 @@ const FinanceiroPage = () => {
               <Users className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Motoristas</p>
+              <p className="text-xs text-muted-foreground flex items-center">Motoristas <InfoButton text="Número de motoristas distintos que aparecem nos relatórios financeiros." /></p>
               <p className="text-lg font-bold">{totalDrivers}</p>
             </div>
           </CardContent>
@@ -355,7 +356,7 @@ const FinanceiroPage = () => {
               <TrendingUp className="h-4 w-4 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xs text-muted-foreground flex items-center">Total <InfoButton text="Valor total pago em todos os relatórios filtrados. Soma de TBRs concluídos, bônus e descontos DNR." /></p>
               <p className="text-lg font-bold">{formatCurrency(totalReportsValue)}</p>
             </div>
           </CardContent>

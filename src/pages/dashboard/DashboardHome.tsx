@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 import SystemUpdates from "@/components/dashboard/SystemUpdates";
+import InfoButton from "@/components/dashboard/InfoButton";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -303,14 +304,14 @@ const DashboardHome = () => {
         </div>
       </div>
 
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+      <div className="relative tbr-search-glow shadow-lg">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-primary animate-pulse" />
         <Input
           value={tbrSearch}
           onChange={(e) => { if (e.target.value.length <= MAX_TBR_LENGTH) setTbrSearch(e.target.value); }}
           onKeyDown={handleTbrKeyDown}
           placeholder="Buscar TBR..."
-          className="pl-10 h-12 text-base"
+          className="pl-10 h-12 text-base border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
           maxLength={MAX_TBR_LENGTH}
         />
       </div>
@@ -379,7 +380,7 @@ const DashboardHome = () => {
           <CardContent className="p-3 flex items-center gap-2">
             <FileWarning className="h-5 w-5 text-destructive shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Abertos</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Abertos <InfoButton text="Total de DNRs (Did Not Receive) abertos na unidade. Representam pacotes que o cliente declarou não ter recebido e estão pendentes de análise." /></p>
               <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
               <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
             </div>
@@ -389,7 +390,7 @@ const DashboardHome = () => {
           <CardContent className="p-3 flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Analisando</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Analisando <InfoButton text="DNRs em processo de análise pela equipe. Esses pacotes estão sendo investigados para confirmar ou negar a entrega." /></p>
               <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
               <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
             </div>
@@ -399,7 +400,7 @@ const DashboardHome = () => {
           <CardContent className="p-3 flex items-center gap-2">
             <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
             <div className="min-w-0">
-              <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Finalizados</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Finalizados <InfoButton text="DNRs finalizados no período. Inclui casos confirmados e descartados." /></p>
               <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
             </div>
           </CardContent>

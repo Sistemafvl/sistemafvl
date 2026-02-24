@@ -480,19 +480,19 @@ const RelatoriosPage = () => {
               </CardHeader>
               <CardContent className="pt-0">
                 {r.secondAction ? (
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1 gap-2" onClick={r.secondAction} disabled={loading === "consult"}>
-                      {loading === "consult" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  <div className="flex gap-1.5">
+                    <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.secondAction} disabled={loading === "consult"}>
+                      {loading === "consult" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Search className="h-3.5 w-3.5" />}
                       Consultar
                     </Button>
                     {(r as any).espelhoAction && (
-                      <Button variant="outline" className="flex-1 gap-2" onClick={(r as any).espelhoAction} disabled={loading === "espelho"}>
-                        {loading === "espelho" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                      <Button variant="outline" size="sm" className="flex-1 gap-1 text-xs px-2" onClick={(r as any).espelhoAction} disabled={loading === "espelho"}>
+                        {loading === "espelho" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
                         Espelho
                       </Button>
                     )}
-                    <Button className="flex-1 gap-2" onClick={r.action} disabled={loading === r.key}>
-                      {loading === r.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                    <Button size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.action} disabled={loading === r.key}>
+                      {loading === r.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                       Gerar
                     </Button>
                   </div>
