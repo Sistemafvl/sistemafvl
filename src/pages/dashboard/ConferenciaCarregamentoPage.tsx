@@ -911,7 +911,6 @@ const ConferenciaCarregamentoPage = () => {
     setShowDeleteModal(false);
     fetchRides();
   };
-  };
 
   // Swap driver - requires password for non-managers
   const handleOpenSwapModal = (rideId: string) => {
