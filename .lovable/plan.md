@@ -1,69 +1,101 @@
 
-# Separar Visualizacao do Motorista por Unidade Logada
 
-## Problema
+# Correcao de 3 Problemas: Sequencia, Camera QR e Toasts
 
-Atualmente, quando o motorista faz login em uma unidade, ele ve dados de **todas as unidades** onde ja trabalhou. O Ricardo Brito, por exemplo, entrou em uma unidade diferente e esta vendo os numeros consolidados de todas, gerando confusao. O correto e mostrar apenas os dados da unidade em que ele esta logado.
+## Problema 1 — Sequencia de Carregamento comecando em #4
 
-## Paginas Afetadas
+**Causa raiz**: A edge function `create-ride-with-login` calcula o numero sequencial usando `new Date()` com `setHours(0, 0, 0, 0)`, que usa **meia-noite UTC** (21:00 do dia anterior no Brasil). Isso faz com que carregamentos do dia anterior (entre 21:00 e 23:59 horario de Brasilia) sejam contados como "hoje", inflando a sequencia.
 
-| Pagina | Situacao Atual | Correcao |
-|---|---|---|
-| Visao Geral (DriverHome) | Mostra corridas de todas as unidades | Filtrar por `unit_id` da sessao |
-| Corridas (DriverRides) | Lista corridas de todas as unidades | Filtrar por `unit_id` da sessao |
-| DNR (DriverDNR) | Mostra DNRs de todas as unidades | Filtrar por `unit_id` da sessao |
-| Recebiveis (DriverRecebiveis) | Mostra folhas de todas as unidades | Filtrar por `unit_id` da sessao |
-| Entrar na Fila (DriverQueue) | Ja usa `unitId` corretamente | Nenhuma mudanca |
-| Perfil / Documentos / Config | Dados do motorista (sem unidade) | Nenhuma mudanca |
-| Avaliar Unidades (DriverReviews) | Mostra todas (intencional) | Nenhuma mudanca |
+**Exemplo**: Se ontem houve 3 carregamentos apos as 21h (horario de Brasilia), o `count` retorna 3 e o primeiro carregamento de hoje comeca em #4.
 
-## Paginas que NAO serao alteradas
+**Solucao**: Usar meia-noite no fuso horario de Brasilia (03:00 UTC) na edge function para calcular o inicio do dia.
 
-- **Avaliar Unidades**: faz sentido ver todas as unidades que ja frequentou
-- **Perfil, Documentos, Configuracoes**: dados pessoais do motorista, sem relacao com unidade
-- **Entrar na Fila**: ja filtra pela unidade logada
+### Arquivo: `supabase/functions/create-ride-with-login/index.ts`
 
-## Detalhes Tecnicos
-
-### 1. DriverHome.tsx
-
-Adicionar `.eq("unit_id", unitSession.id)` na query principal de `driver_rides`. Isso automaticamente limita todos os calculos (TBRs, retornos, ganhos, graficos, insights) a unidade atual.
-
-Tambem filtrar DNRs por `unit_id`:
+Substituir o calculo do dia:
 ```typescript
-.eq("unit_id", unitSession.id)
+// ANTES (UTC midnight = 21:00 Brazil)
+const today = new Date();
+today.setHours(0, 0, 0, 0);
+
+// DEPOIS (Brazil midnight = 03:00 UTC)
+const now = new Date();
+const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+const brNow = new Date(brStr);
+const yyyy = brNow.getFullYear();
+const mm = String(brNow.getMonth() + 1).padStart(2, "0");
+const dd = String(brNow.getDate()).padStart(2, "0");
+const todayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
 ```
 
-### 2. DriverRides.tsx
+---
 
-Adicionar `.eq("unit_id", unitSession.id)` na query de `driver_rides`. Isso limita a lista de corridas a unidade logada.
+## Problema 2 — Camera nao le QR Code
 
-### 3. DriverDNR.tsx
+**Causa raiz**: O `BarcodeDetector` ja inclui `"qr_code"` nos formatos, porem faltam formatos comuns em etiquetas de transporte: `"data_matrix"` e `"pdf417"`. Alem disso, o cooldown de 3 segundos entre leituras do mesmo codigo pode parecer lento.
 
-Adicionar `.eq("unit_id", unitSession.id)` na query de `dnr_entries`. Isso mostra apenas DNRs da unidade atual.
+**Solucao**: 
+- Adicionar `"data_matrix"` e `"pdf417"` aos formatos do detector
+- Reduzir o cooldown de 3000ms para 1500ms para leitura mais responsiva
 
-### 4. DriverRecebiveis.tsx
+### Arquivo: `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-Filtrar folhas de pagamento (`payroll_reports`) pela `unit_id` da sessao. Isso garante que o motorista veja apenas os recebiveis da unidade em que esta logado.
+Na inicializacao do BarcodeDetector (linha 266):
+```typescript
+// Adicionar data_matrix e pdf417
+const detector = new BarcodeDetector({ 
+  formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", 
+            "data_matrix", "pdf417", "codabar", "itf", "upc_a", "upc_e"] 
+});
+```
 
-### 5. DriverSidebar.tsx
+No cooldown (linha 277): Reduzir de 3000 para 1500.
 
-Mostrar o nome da unidade logada no sidebar, abaixo do nome do motorista, para que fique claro em qual unidade ele esta operando.
+---
 
-Tambem filtrar o indicador de NF pendente pela unidade atual.
+## Problema 3 — Toasts nao aparecem
 
-### Resultado Esperado
+**Causa raiz**: Todo o `ConferenciaCarregamentoPage` usa `await import("@/hooks/use-toast")` — que e o sistema de toast **Radix** (shadcn). Porem, o `App.tsx` (linha 40) so inclui o `<Toaster />` do **Sonner**, nao o componente `<Toaster />` do Radix (`src/components/ui/toaster.tsx`). Sem esse componente montado, os toasts do Radix sao disparados mas nunca renderizados.
 
-- Ricardo Brito logado na Unidade A vera apenas corridas, TBRs, DNRs e recebiveis da Unidade A
-- Se ele fizer login na Unidade B, vera dados exclusivos da Unidade B
-- O sidebar mostrara claramente em qual unidade ele esta operando
+**Solucao**: Adicionar o `<Toaster />` do Radix no `App.tsx` ao lado do Sonner.
 
-### Arquivos Modificados
+### Arquivo: `src/App.tsx`
+
+```typescript
+import { Toaster } from "./components/ui/sonner";
+import { Toaster as RadixToaster } from "./components/ui/toaster"; // Adicionar
+
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <OfflineIndicator />
+    <Toaster />
+    <RadixToaster />  {/* Adicionar */}
+    <BrowserRouter>
+      ...
+    </BrowserRouter>
+  </QueryClientProvider>
+);
+```
+
+---
+
+## Problema 2b — Delay no celular ao gravar TBR
+
+**Causa raiz**: A funcao `saveTbr` faz multiplas queries sequenciais antes de confirmar a leitura (verifica carregamento ativo, verifica piso, fecha piso, fecha RTO, insere TBR). No celular com conexao mais lenta, isso gera delay perceptivel.
+
+**Solucao**: Aplicar atualizacao otimista — adicionar o TBR na lista imediatamente e fazer as queries em background, igual ja e feito no delete.
+
+### Arquivo: `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+Na funcao `saveTbr`, mover o `setTbrs` (linha 682-685) para **antes** das queries de verificacao, e fazer as queries de piso/RTO em paralelo com `Promise.all`.
+
+---
+
+## Resumo de Arquivos
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/driver/DriverHome.tsx` | Filtrar `driver_rides` e `dnr_entries` por `unit_id` |
-| `src/pages/driver/DriverRides.tsx` | Filtrar `driver_rides` por `unit_id` |
-| `src/pages/driver/DriverDNR.tsx` | Filtrar `dnr_entries` por `unit_id` |
-| `src/pages/driver/DriverRecebiveis.tsx` | Filtrar `payroll_reports` por `unit_id` |
-| `src/components/dashboard/DriverSidebar.tsx` | Exibir nome da unidade logada |
+| `supabase/functions/create-ride-with-login/index.ts` | Usar fuso de Brasilia para calculo de sequencia |
+| `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` | Adicionar formatos data_matrix/pdf417, reduzir cooldown, otimizar saveTbr |
+| `src/App.tsx` | Adicionar RadixToaster para exibir notificacoes |
+
