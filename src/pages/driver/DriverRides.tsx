@@ -39,10 +39,12 @@ const DriverRides = () => {
     if (!driverId) return;
     const fetchRides = async () => {
       setLoading(true);
+      const unitId = unitSession?.id;
       const { data } = await supabase
         .from("driver_rides")
         .select("*")
         .eq("driver_id", driverId)
+        .eq("unit_id", unitId!)
         .gte("completed_at", startDate.toISOString())
         .lte("completed_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString())
         .order("completed_at", { ascending: false });

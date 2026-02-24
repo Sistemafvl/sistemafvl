@@ -37,9 +37,11 @@ const DriverRecebiveis = () => {
     if (!driverId) return;
 
     // Fetch all payroll_reports, filter those containing this driver
+    const unitId = unitSession?.id;
     const { data: reports } = await supabase
       .from("payroll_reports" as any)
       .select("*")
+      .eq("unit_id", unitId!)
       .order("created_at", { ascending: false });
 
     if (!reports) { setLoading(false); return; }

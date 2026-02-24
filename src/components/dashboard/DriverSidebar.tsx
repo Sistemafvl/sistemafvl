@@ -58,7 +58,8 @@ const DriverSidebar = () => {
     const checkPending = async () => {
       const { data: reports } = await supabase
         .from("payroll_reports")
-        .select("id, report_data");
+        .select("id, report_data")
+        .eq("unit_id", unitSession?.id!);
       if (!reports) { setHasPendingInvoice(false); return; }
 
       // Filter reports that include this driver
@@ -99,8 +100,11 @@ const DriverSidebar = () => {
             </AvatarFallback>
           </Avatar>
           <div className="text-center min-w-0">
-            <p className="text-sm font-bold italic truncate">Bem-vindo,</p>
+           <p className="text-sm font-bold italic truncate">Bem-vindo,</p>
             <p className="text-sm font-bold italic text-primary truncate">{driverName}</p>
+            {unitSession?.name && (
+              <p className="text-[10px] text-muted-foreground truncate mt-0.5">{unitSession.name}</p>
+            )}
           </div>
         </div>
 
