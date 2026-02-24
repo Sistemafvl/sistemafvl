@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2 } from "lucide-react";
+import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,11 @@ const FinanceiroPage = () => {
   const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
   const [downloading, setDownloading] = useState<string | null>(null);
 
+  // Delete modal state
+  const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleting, setDeleting] = useState(false);
+
   const unitId = unitSession?.id;
 
   useEffect(() => {
@@ -54,7 +59,6 @@ const FinanceiroPage = () => {
     const reportsData = (data as any) ?? [];
     setReports(reportsData);
 
-    // Load invoice counts for all reports
     const { data: allInvoices } = await supabase
       .from("driver_invoices" as any)
       .select("payroll_report_id, file_url")
@@ -67,7 +71,6 @@ const FinanceiroPage = () => {
       }
     });
     setAllInvoiceCounts(counts);
-
     setLoading(false);
   };
 
@@ -92,11 +95,8 @@ const FinanceiroPage = () => {
     const inv = invoices[driverId];
     if (!inv) return;
     setDownloading(driverId);
-
     try {
       let storagePath = inv.file_url;
-      
-      // If it's a full URL, extract the path portion
       if (storagePath.startsWith("http")) {
         const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
         if (match) {
@@ -107,12 +107,9 @@ const FinanceiroPage = () => {
           return;
         }
       }
-
-      // Use edge function directly (bucket is private, anon role can't create signed URLs)
       const { data, error } = await supabase.functions.invoke("get-signed-url", {
         body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
       });
-
       if (error || !data?.signedUrl) {
         toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
       } else {
@@ -124,9 +121,56 @@ const FinanceiroPage = () => {
     setDownloading(null);
   };
 
+  const handleDeleteReport = async () => {
+    if (!deleteReportId || !unitId) return;
+    setDeleting(true);
+    try {
+      // Validate manager password
+      const { data: managers } = await supabase
+        .from("managers")
+        .select("manager_password")
+        .eq("unit_id", unitId)
+        .eq("active", true);
+
+      const valid = (managers ?? []).some((m: any) => m.manager_password === deletePassword);
+      if (!valid) {
+        toast({ title: "Erro", description: "Senha do gerente inválida.", variant: "destructive" });
+        setDeleting(false);
+        return;
+      }
+
+      // 1. Delete driver_invoices
+      await (supabase
+        .from("driver_invoices") as any)
+        .delete()
+        .eq("payroll_report_id", deleteReportId);
+
+      // 2. Clear reported_in_payroll_id on dnr_entries
+      await (supabase
+        .from("dnr_entries") as any)
+        .update({ reported_in_payroll_id: null })
+        .eq("reported_in_payroll_id", deleteReportId);
+
+      // 3. Delete the payroll_report
+      await supabase
+        .from("payroll_reports" as any)
+        .delete()
+        .eq("id", deleteReportId);
+
+      toast({ title: "Relatório excluído", description: "Relatório e registros associados foram removidos." });
+      setDeleteReportId(null);
+      setDeletePassword("");
+      setSelectedReport(null);
+      setInvoices({});
+      await loadReports();
+    } catch {
+      toast({ title: "Erro", description: "Erro ao excluir relatório.", variant: "destructive" });
+    }
+    setDeleting(false);
+  };
+
   const filteredReports = useMemo(() => {
     return reports.filter((r) => {
-      // Date filter
       if (filterStart) {
         const rStart = new Date(r.period_start + "T00:00:00");
         if (rStart < filterStart) return false;
@@ -135,7 +179,6 @@ const FinanceiroPage = () => {
         const rEnd = new Date(r.period_end + "T23:59:59");
         if (rEnd > filterEnd) return false;
       }
-      // Text filter
       if (searchFilter.trim()) {
         const q = searchFilter.toLowerCase();
         const drivers = r.report_data as any[];
@@ -151,7 +194,6 @@ const FinanceiroPage = () => {
     });
   }, [reports, searchFilter, filterStart, filterEnd]);
 
-  // Summary stats
   const totalReportsValue = useMemo(() => {
     return filteredReports.reduce((sum, r) => {
       const drivers = r.report_data as any[];
@@ -175,9 +217,17 @@ const FinanceiroPage = () => {
           <Button variant="ghost" size="sm" onClick={() => { setSelectedReport(null); setInvoices({}); }}>
             <ChevronLeft className="h-4 w-4 mr-1" /> Voltar
           </Button>
-          <h1 className="text-xl font-bold italic">
+          <h1 className="text-xl font-bold italic flex-1">
             Relatório {format(new Date(selectedReport.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(selectedReport.period_end + "T12:00:00"), "dd/MM/yyyy")}
           </h1>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => setDeleteReportId(selectedReport.id)}
+          >
+            <Trash2 className="h-4 w-4 mr-1" /> Excluir
+          </Button>
         </div>
         <p className="text-sm text-muted-foreground">
           Gerado por {selectedReport.generated_by} em {format(new Date(selectedReport.created_at), "dd/MM/yyyy HH:mm")}
@@ -236,6 +286,35 @@ const FinanceiroPage = () => {
             );
           })}
         </div>
+
+        {/* Delete confirmation modal */}
+        {deleteReportId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center">
+            <div className="fixed inset-0 bg-black/80" onClick={() => { setDeleteReportId(null); setDeletePassword(""); }} />
+            <div className="relative z-50 w-full max-w-sm border bg-background p-6 shadow-lg rounded-lg animate-in fade-in-0 zoom-in-95">
+              <h3 className="text-lg font-bold mb-2">Excluir Relatório</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Esta ação removerá o relatório, as NFs associadas e liberará os DNRs marcados. Digite a senha do gerente para confirmar.
+              </p>
+              <Input
+                type="password"
+                placeholder="Senha do gerente"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                className="mb-4"
+              />
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setDeleteReportId(null); setDeletePassword(""); }}>
+                  Cancelar
+                </Button>
+                <Button variant="destructive" className="flex-1" onClick={handleDeleteReport} disabled={!deletePassword || deleting}>
+                  {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                  Excluir
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -376,9 +455,45 @@ const FinanceiroPage = () => {
                     {nfReceived}/{totalDriversInReport}
                   </Badge>
                 </div>
+                <button
+                  className="shrink-0 p-1.5 rounded-md hover:bg-destructive/10 transition-colors"
+                  title="Excluir relatório"
+                  onClick={(e) => { e.stopPropagation(); setDeleteReportId(r.id); }}
+                >
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </button>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteReportId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="fixed inset-0 bg-black/80" onClick={() => { setDeleteReportId(null); setDeletePassword(""); }} />
+          <div className="relative z-50 w-full max-w-sm border bg-background p-6 shadow-lg rounded-lg animate-in fade-in-0 zoom-in-95">
+            <h3 className="text-lg font-bold mb-2">Excluir Relatório</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              Esta ação removerá o relatório, as NFs associadas e liberará os DNRs marcados. Digite a senha do gerente para confirmar.
+            </p>
+            <Input
+              type="password"
+              placeholder="Senha do gerente"
+              value={deletePassword}
+              onChange={(e) => setDeletePassword(e.target.value)}
+              className="mb-4"
+            />
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { setDeleteReportId(null); setDeletePassword(""); }}>
+                Cancelar
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={handleDeleteReport} disabled={!deletePassword || deleting}>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Trash2 className="h-4 w-4 mr-1" />}
+                Excluir
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

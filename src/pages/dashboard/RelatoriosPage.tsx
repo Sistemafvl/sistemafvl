@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X } from "lucide-react";
+import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -407,8 +407,27 @@ const RelatoriosPage = () => {
     return result;
   };
 
+  // Espelho: generate PDF without saving to database
+  const fetchPayrollEspelho = async () => {
+    if (!unitId) return;
+    setLoading("espelho");
+    try {
+      const common = await ensureCommon();
+      if (!common) { setLoading(null); return; }
+      const result = await fetchPayrollData(common);
+      if (!result) { setLoading(null); return; }
+      setTimeout(async () => {
+        if (payrollRef.current) {
+          await generatePDFFromContainer(payrollRef.current, `espelho_folha_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+          toast({ title: "Espelho gerado!", description: "PDF de consulta baixado com sucesso." });
+        }
+      }, 500);
+    } catch { toast({ title: "Erro", description: "Erro ao gerar espelho.", variant: "destructive" }); }
+    setLoading(null);
+  };
+
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll, secondAction: consultPayroll },
+    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll, secondAction: consultPayroll, espelhoAction: fetchPayrollEspelho },
     { key: "daily", title: "Resumo Diário", description: "Consolidado operacional por dia do período", icon: BarChart3, action: fetchDailySummary },
     { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: fetchReturns },
     { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: fetchRanking },
@@ -466,9 +485,15 @@ const RelatoriosPage = () => {
                       {loading === "consult" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                       Consultar
                     </Button>
+                    {(r as any).espelhoAction && (
+                      <Button variant="outline" className="flex-1 gap-2" onClick={(r as any).espelhoAction} disabled={loading === "espelho"}>
+                        {loading === "espelho" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
+                        Espelho
+                      </Button>
+                    )}
                     <Button className="flex-1 gap-2" onClick={r.action} disabled={loading === r.key}>
                       {loading === r.key ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
-                      Gerar PDF
+                      Gerar
                     </Button>
                   </div>
                 ) : (
