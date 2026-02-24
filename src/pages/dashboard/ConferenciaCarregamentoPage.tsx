@@ -661,24 +661,21 @@ const ConferenciaCarregamentoPage = () => {
 
           tripNumber = previousTbrs.length + 1;
 
-          // Close piso entries for this TBR (remove from retorno piso list)
-          await supabase
-            .from("piso_entries")
-            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-            .eq("tbr_code", code)
-            .eq("status", "open");
-
-          // Also delete the piso entry if it was created from this unit
-          // This ensures the TBR is removed from the Retorno Piso list immediately
-
-          await supabase
-            .from("rto_entries")
-            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-            .eq("tbr_code", code)
-            .eq("status", "open");
-
           playReincidenceBeep();
         }
+
+        // ALWAYS close piso_entries and rto_entries when scanning into a load
+        await supabase
+          .from("piso_entries")
+          .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+          .eq("tbr_code", code)
+          .eq("status", "open");
+
+        await supabase
+          .from("rto_entries")
+          .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+          .eq("tbr_code", code)
+          .eq("status", "open");
 
         newTbr.trip_number = tripNumber;
 
