@@ -52,17 +52,19 @@ const DriverRides = () => {
       const unitIds = [...new Set(data.map((r) => r.unit_id))];
       const rideIds = data.map((r) => r.id);
 
-      const [unitsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes] = await Promise.all([
+      const [unitsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
         supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
+        supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
       ]);
 
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
       const settingsMap = new Map((settingsRes.data ?? []).map((s) => [s.unit_id, Number(s.tbr_value)]));
+      const customMap = new Map((customRes.data ?? []).map((cv) => [cv.unit_id, Number(cv.custom_tbr_value)]));
 
       const tbrCountMap = new Map<string, number>();
       (tbrsRes.data ?? []).forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
@@ -83,7 +85,7 @@ const DriverRides = () => {
         unit_name: unitMap.get(r.unit_id) ?? "—",
         tbrCount: tbrCountMap.get(r.id) ?? 0,
         returnCount: returnCountMap.get(r.id) ?? 0,
-        tbrValue: settingsMap.get(r.unit_id) ?? 0,
+        tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
       })));
       setLoading(false);
     };
