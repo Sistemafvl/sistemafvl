@@ -1,58 +1,69 @@
 
-# Correcao: Corridas do Motorista usando valor TBR errado
+# Separar Visualizacao do Motorista por Unidade Logada
 
 ## Problema
 
-A pagina de Corridas (DriverRides) nao consulta a tabela `driver_custom_values` e usa apenas o valor padrao da unidade (`unit_settings.tbr_value`). Motoristas com valor diferenciado (como Vitoria com R$2,20) veem calculos baseados no valor padrao (R$3,35).
+Atualmente, quando o motorista faz login em uma unidade, ele ve dados de **todas as unidades** onde ja trabalhou. O Ricardo Brito, por exemplo, entrou em uma unidade diferente e esta vendo os numeros consolidados de todas, gerando confusao. O correto e mostrar apenas os dados da unidade em que ele esta logado.
 
-**Exemplo - Vitoria, corrida #19 (23/02):**
-- Exibido: Total R$26,80 (8 x R$3,35)
-- Correto: Total R$17,60 (8 x R$2,20)
+## Paginas Afetadas
 
-## Causa Raiz
+| Pagina | Situacao Atual | Correcao |
+|---|---|---|
+| Visao Geral (DriverHome) | Mostra corridas de todas as unidades | Filtrar por `unit_id` da sessao |
+| Corridas (DriverRides) | Lista corridas de todas as unidades | Filtrar por `unit_id` da sessao |
+| DNR (DriverDNR) | Mostra DNRs de todas as unidades | Filtrar por `unit_id` da sessao |
+| Recebiveis (DriverRecebiveis) | Mostra folhas de todas as unidades | Filtrar por `unit_id` da sessao |
+| Entrar na Fila (DriverQueue) | Ja usa `unitId` corretamente | Nenhuma mudanca |
+| Perfil / Documentos / Config | Dados do motorista (sem unidade) | Nenhuma mudanca |
+| Avaliar Unidades (DriverReviews) | Mostra todas (intencional) | Nenhuma mudanca |
 
-No arquivo `src/pages/driver/DriverRides.tsx`:
-- Linha 61: Busca apenas `unit_settings` para valor do TBR
-- Linha 86: Atribui `tbrValue` direto do `settingsMap` sem verificar valor customizado
-- Nao existe fetch de `driver_custom_values`
+## Paginas que NAO serao alteradas
 
-## Solucao
-
-Adicionar a consulta de `driver_custom_values` e priorizar o valor customizado sobre o valor padrao da unidade, mantendo consistencia com a folha de pagamento e o dashboard.
+- **Avaliar Unidades**: faz sentido ver todas as unidades que ja frequentou
+- **Perfil, Documentos, Configuracoes**: dados pessoais do motorista, sem relacao com unidade
+- **Entrar na Fila**: ja filtra pela unidade logada
 
 ## Detalhes Tecnicos
 
-### Arquivo: `src/pages/driver/DriverRides.tsx`
+### 1. DriverHome.tsx
 
-**Mudanca 1 -- Adicionar fetch de `driver_custom_values` (linha 55-62)**
+Adicionar `.eq("unit_id", unitSession.id)` na query principal de `driver_rides`. Isso automaticamente limita todos os calculos (TBRs, retornos, ganhos, graficos, insights) a unidade atual.
 
-Incluir no `Promise.all`:
+Tambem filtrar DNRs por `unit_id`:
 ```typescript
-supabase.from("driver_custom_values")
-  .select("unit_id, custom_tbr_value")
-  .eq("driver_id", driverId),
+.eq("unit_id", unitSession.id)
 ```
 
-**Mudanca 2 -- Criar mapa de valores customizados e priorizar (linhas 64-86)**
+### 2. DriverRides.tsx
 
-```typescript
-const customMap = new Map(
-  (customRes.data ?? []).map((cv) => [cv.unit_id, Number(cv.custom_tbr_value)])
-);
+Adicionar `.eq("unit_id", unitSession.id)` na query de `driver_rides`. Isso limita a lista de corridas a unidade logada.
 
-// Na atribuicao de tbrValue:
-tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
-```
+### 3. DriverDNR.tsx
 
-### Resultado esperado
+Adicionar `.eq("unit_id", unitSession.id)` na query de `dnr_entries`. Isso mostra apenas DNRs da unidade atual.
 
-| Corrida | Antes (errado) | Depois (correto) |
-|---|---|---|
-| #20 (1 TBR) | R$3,35 | R$2,20 |
-| #19 (8 concluidos) | R$26,80 | R$17,60 |
+### 4. DriverRecebiveis.tsx
 
-### Arquivo modificado
+Filtrar folhas de pagamento (`payroll_reports`) pela `unit_id` da sessao. Isso garante que o motorista veja apenas os recebiveis da unidade em que esta logado.
+
+### 5. DriverSidebar.tsx
+
+Mostrar o nome da unidade logada no sidebar, abaixo do nome do motorista, para que fique claro em qual unidade ele esta operando.
+
+Tambem filtrar o indicador de NF pendente pela unidade atual.
+
+### Resultado Esperado
+
+- Ricardo Brito logado na Unidade A vera apenas corridas, TBRs, DNRs e recebiveis da Unidade A
+- Se ele fizer login na Unidade B, vera dados exclusivos da Unidade B
+- O sidebar mostrara claramente em qual unidade ele esta operando
+
+### Arquivos Modificados
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/driver/DriverRides.tsx` | Buscar `driver_custom_values` e priorizar valor customizado sobre valor padrao da unidade |
+| `src/pages/driver/DriverHome.tsx` | Filtrar `driver_rides` e `dnr_entries` por `unit_id` |
+| `src/pages/driver/DriverRides.tsx` | Filtrar `driver_rides` por `unit_id` |
+| `src/pages/driver/DriverDNR.tsx` | Filtrar `dnr_entries` por `unit_id` |
+| `src/pages/driver/DriverRecebiveis.tsx` | Filtrar `payroll_reports` por `unit_id` |
+| `src/components/dashboard/DriverSidebar.tsx` | Exibir nome da unidade logada |
