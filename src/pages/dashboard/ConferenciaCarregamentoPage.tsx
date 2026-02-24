@@ -263,7 +263,7 @@ const ConferenciaCarregamentoPage = () => {
         return;
       }
 
-      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "codabar", "itf", "upc_a", "upc_e"] });
+      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "data_matrix", "pdf417", "codabar", "itf", "upc_a", "upc_e"] });
       const recentCodes = new Set<string>();
 
       scanIntervalRef.current = setInterval(async () => {
@@ -274,7 +274,7 @@ const ConferenciaCarregamentoPage = () => {
             const code = barcodes[0].rawValue;
             if (recentCodes.has(code)) return;
             recentCodes.add(code);
-            setTimeout(() => recentCodes.delete(code), 3000);
+            setTimeout(() => recentCodes.delete(code), 1500);
             setLastScannedCode(code);
             if (code.toUpperCase().startsWith("TBR")) {
               playSuccessBeep();

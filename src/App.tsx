@@ -38,12 +38,14 @@ import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
 import { Toaster } from "./components/ui/sonner";
+import { Toaster as RadixToaster } from "./components/ui/toaster";
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
       <OfflineIndicator />
       <Toaster />
+      <RadixToaster />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
