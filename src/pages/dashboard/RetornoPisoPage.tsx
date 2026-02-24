@@ -416,10 +416,20 @@ const RetornoPisoPage = () => {
                             deleteConfirmId === e.id ? (
                               <div className="flex gap-1">
                                 <Button variant="destructive" size="sm" onClick={async () => {
+                                  const tbrCode = e.tbr_code;
+                                  // 1. Deletar de piso_entries
                                   await supabase.from("piso_entries").delete().eq("id", e.id);
+                                  // 2. Deletar de ride_tbrs (pelo code)
+                                  await supabase.from("ride_tbrs").delete().eq("code", tbrCode);
+                                  // 3. Deletar de ps_entries
+                                  await supabase.from("ps_entries").delete().eq("tbr_code", tbrCode).eq("unit_id", unitSession!.id);
+                                  // 4. Deletar de rto_entries
+                                  await supabase.from("rto_entries").delete().eq("tbr_code", tbrCode).eq("unit_id", unitSession!.id);
+                                  // 5. Deletar de dnr_entries
+                                  await supabase.from("dnr_entries").delete().eq("tbr_code", tbrCode).eq("unit_id", unitSession!.id);
                                   setEntries((prev) => prev.filter((p) => p.id !== e.id));
                                   setDeleteConfirmId(null);
-                                  toast({ title: "Registro excluído" });
+                                  toast({ title: "TBR excluído definitivamente do sistema" });
                                 }}>
                                   Confirmar
                                 </Button>
