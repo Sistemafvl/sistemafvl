@@ -76,6 +76,13 @@ const PSPage = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
+  // Camera scanner for TBR reading
+  const scannerVideoRef = useRef<HTMLVideoElement | null>(null);
+  const scannerStreamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [lastScannedCode, setLastScannedCode] = useState("");
+
   const [isLoading, setIsLoading] = useState(true);
   const [tbrInput, setTbrInput] = useState("");
   const [searching, setSearching] = useState(false);
@@ -379,8 +386,78 @@ const PSPage = () => {
     setCapturedPhoto(null);
     setPhotoPreview(null);
     stopCamera();
+    stopCameraScanner();
     inputRef.current?.focus();
   };
+
+  // Camera scanner for TBR barcode reading
+  const playSuccessBeep = () => {
+    try {
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = 1000;
+      gain.gain.value = 0.3;
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch {}
+  };
+
+  const stopCameraScanner = useCallback(() => {
+    if (scanIntervalRef.current) { clearInterval(scanIntervalRef.current); scanIntervalRef.current = null; }
+    if (scannerStreamRef.current) { scannerStreamRef.current.getTracks().forEach(t => t.stop()); scannerStreamRef.current = null; }
+    setScannerOpen(false);
+    setLastScannedCode("");
+  }, []);
+
+  const startCameraScanner = useCallback(async () => {
+    setScannerOpen(true);
+    setLastScannedCode("");
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } });
+      scannerStreamRef.current = stream;
+      if (scannerVideoRef.current) {
+        scannerVideoRef.current.srcObject = stream;
+        scannerVideoRef.current.play();
+      }
+
+      if (!("BarcodeDetector" in window)) {
+        toast({ title: "Scanner não suportado", description: "Seu navegador não suporta leitura de código de barras pela câmera.", variant: "destructive" });
+        return;
+      }
+
+      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "codabar", "itf", "upc_a", "upc_e"] });
+      const recentCodes = new Set<string>();
+
+      scanIntervalRef.current = setInterval(async () => {
+        if (!scannerVideoRef.current || scannerVideoRef.current.readyState < 2) return;
+        try {
+          const barcodes = await detector.detect(scannerVideoRef.current);
+          if (barcodes.length > 0) {
+            const code = barcodes[0].rawValue;
+            if (recentCodes.has(code)) return;
+            recentCodes.add(code);
+            setTimeout(() => recentCodes.delete(code), 3000);
+            setLastScannedCode(code);
+            if (code.toUpperCase().startsWith("TBR")) {
+              playSuccessBeep();
+              stopCameraScanner();
+              searchTbr(code);
+            }
+          }
+        } catch {}
+      }, 100);
+    } catch {
+      toast({ title: "Erro ao acessar câmera", description: "Permita o acesso à câmera nas configurações do navegador.", variant: "destructive" });
+      stopCameraScanner();
+    }
+  }, [stopCameraScanner]);
+
+  // Cleanup scanner on unmount
+  useEffect(() => { return () => { stopCameraScanner(); }; }, [stopCameraScanner]);
 
   // PDF generation
   const loadImageAsBase64 = (url: string): Promise<string | null> => {
@@ -582,18 +659,48 @@ const PSPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Scanner input */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={inputRef}
-              value={tbrInput}
-              onChange={(e) => handleTbrInput(e.target.value)}
-              placeholder="Leia ou digite o código TBR..."
-              className="pl-9 h-11"
-              disabled={searching}
-              autoFocus
-            />
+          <div className="flex gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={inputRef}
+                value={tbrInput}
+                onChange={(e) => handleTbrInput(e.target.value)}
+                placeholder="Leia ou digite o código TBR..."
+                className="pl-9 h-11"
+                disabled={searching}
+                autoFocus
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-11 w-11 shrink-0"
+              onClick={() => scannerOpen ? stopCameraScanner() : startCameraScanner()}
+              title="Scanner de câmera"
+            >
+              <Camera className="h-5 w-5" />
+            </Button>
           </div>
+
+          {/* Camera scanner overlay */}
+          {scannerOpen && (
+            <div className="relative rounded-lg overflow-hidden border bg-black">
+              <video ref={scannerVideoRef} className="w-full h-48 object-cover" playsInline muted />
+              {/* Square overlay */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="w-40 h-40 border-2 border-primary rounded-lg opacity-70" />
+              </div>
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+                {lastScannedCode && (
+                  <span className="text-xs bg-background/80 text-foreground px-2 py-1 rounded">{lastScannedCode}</span>
+                )}
+                <Button size="sm" variant="destructive" onClick={stopCameraScanner} className="ml-auto">
+                  <X className="h-3 w-3 mr-1" /> Fechar
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Filters */}
           <div className="flex flex-wrap gap-2 items-end">
