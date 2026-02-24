@@ -62,7 +62,7 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const [t, pi, ps, rto, us, un, cv, bn] = await Promise.all([
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
+        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds),
         supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
@@ -107,9 +107,8 @@ const DriverHome = () => {
 
   const metrics = useMemo(() => {
     const totalRides = rides.length;
-    const totalTbrs = tbrs.length;
 
-    // Group rides by day (same logic as payroll: deduplicate returns per day, not per ride)
+    // Group rides by day
     const ridesByDay = new Map<string, string[]>();
     rides.forEach((r: any) => {
       const day = format(parseISO(r.completed_at), "yyyy-MM-dd");
@@ -117,66 +116,72 @@ const DriverHome = () => {
       ridesByDay.get(day)!.push(r.id);
     });
 
-    // Count returns: unique tbr_codes per day (matching payroll logic)
+    // Calculate per-day with deduplication and net returns (same as payroll)
+    let totalTbrs = 0;
     let totalReturns = 0;
-    const returnsByRide = new Map<string, number>();
-    const tbrsByRide = new Map<string, number>();
-    tbrs.forEach((t: any) => tbrsByRide.set(t.ride_id, (tbrsByRide.get(t.ride_id) ?? 0) + 1));
-
-    ridesByDay.forEach((rideIds, day) => {
-      const dayReturnSet = new Set<string>();
-      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((r: any) => {
-        if (r.ride_id && rideIds.includes(r.ride_id) && r.tbr_code) {
-          dayReturnSet.add(r.tbr_code);
-        }
-      });
-      totalReturns += dayReturnSet.size;
-
-      // Distribute day returns proportionally to rides for per-ride calculation
-      // Simple approach: assign all day returns to first ride for value calc
-      const dayTbrCount = rideIds.reduce((s, id) => s + (tbrsByRide.get(id) ?? 0), 0);
-      rideIds.forEach(id => {
-        const rTbrs = tbrsByRide.get(id) ?? 0;
-        // Proportional returns per ride
-        const rReturns = dayTbrCount > 0 ? Math.round((rTbrs / dayTbrCount) * dayReturnSet.size) : 0;
-        returnsByRide.set(id, rReturns);
-      });
-    });
-
-    const concluidos = Math.max(0, totalTbrs - totalReturns);
+    let totalGanho = 0;
 
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
-    let totalGanho = 0;
 
-    // Calculate value per day (matching payroll: (dayTbrs - dayReturns) * tbrVal)
     ridesByDay.forEach((rideIds, day) => {
-      const dayReturnSet = new Set<string>();
-      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((r: any) => {
-        if (r.ride_id && rideIds.includes(r.ride_id) && r.tbr_code) {
-          dayReturnSet.add(r.tbr_code);
+      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
+
+      // 1. TBRs unicos por codigo
+      const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
+
+      // 2. Codigos que retornaram
+      const returnCodes = new Set<string>();
+      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) {
+          returnCodes.add(p.tbr_code);
         }
       });
-      // Get the tbr count for this day's rides
-      const dayTbrs = rideIds.reduce((s, id) => s + (tbrsByRide.get(id) ?? 0), 0);
-      const dayReturns = dayReturnSet.size;
-      // Use the first ride's unit_id for value (all rides on same day are same unit)
+
+      // 3. Retornos liquidos (verificar ultima corrida do dia)
+      const sortedDayRides = rides
+        .filter((r: any) => rideIds.includes(r.id))
+        .sort((a: any, b: any) =>
+          new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime()
+        );
+
+      const netReturns = new Set<string>();
+      returnCodes.forEach(code => {
+        let lastRideId: string | null = null;
+        for (const ride of sortedDayRides) {
+          if (dayTbrs.some((t: any) => t.ride_id === ride.id && t.code === code)) {
+            lastRideId = ride.id;
+          }
+        }
+        if (lastRideId) {
+          const hasReturnInLast = [...pisoEntries, ...psEntries, ...rtoEntries].some(
+            (p: any) => p.ride_id === lastRideId && p.tbr_code === code
+          );
+          if (hasReturnInLast) netReturns.add(code);
+        }
+      });
+
+      const dayTbrCount = uniqueCodes.size;
+      const dayReturnCount = netReturns.size;
+      totalTbrs += dayTbrCount;
+      totalReturns += dayReturnCount;
+
+      // Valor do dia
       const firstRide = rides.find((r: any) => r.id === rideIds[0]);
       const unitId = firstRide?.unit_id;
       const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-      totalGanho += Math.max(0, dayTbrs - dayReturns) * tbrVal;
+      totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
     });
 
     // Add bonuses
     const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
     totalGanho += totalBonus;
 
+    const concluidos = Math.max(0, totalTbrs - totalReturns);
     const taxaConclusao = totalTbrs > 0 ? (concluidos / totalTbrs) * 100 : 0;
-    const startD = parseISO(startDate);
-    const endD = parseISO(endDate);
-    const days = eachDayOfInterval({ start: startD, end: endD });
-    const workedDays = new Set(rides.map((r: any) => format(parseISO(r.completed_at), "yyyy-MM-dd"))).size;
+    const workedDays = ridesByDay.size;
     const mediaTbrsDia = workedDays > 0 ? totalTbrs / workedDays : 0;
+    const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
     return { totalRides, totalTbrs, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
   }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
