@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -205,6 +205,12 @@ const ConferenciaCarregamentoPage = () => {
   const [showSwapPasswordModal, setShowSwapPasswordModal] = useState(false);
   const [swapPasswordInput, setSwapPasswordInput] = useState("");
   const [swapPasswordRideId, setSwapPasswordRideId] = useState<string | null>(null);
+
+  // Delete loading modal
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteRideId, setDeleteRideId] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   // Call driver
   const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
@@ -846,6 +852,67 @@ const ConferenciaCarregamentoPage = () => {
     fetchRides();
   };
 
+  // Delete/Reset loading
+  const handleOpenDeleteModal = (rideId: string) => {
+    setDeleteRideId(rideId);
+    setDeletePassword("");
+    setShowDeleteModal(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteRideId || !unitId) return;
+    setDeleteLoading(true);
+
+    // Validate manager password
+    const { data: managers } = await supabase
+      .from("managers")
+      .select("manager_password")
+      .eq("unit_id", unitId)
+      .eq("active", true);
+
+    const passwordValid = (managers ?? []).some(m => m.manager_password === deletePassword);
+    if (!passwordValid) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Senha incorreta", description: "A senha do gerente está incorreta.", variant: "destructive" });
+      setDeleteLoading(false);
+      return;
+    }
+
+    const ride = rides.find(r => r.id === deleteRideId);
+    if (!ride) { setDeleteLoading(false); return; }
+
+    // Move TBRs to piso_entries
+    const rideTbrs = tbrs[deleteRideId] ?? [];
+    if (rideTbrs.length > 0) {
+      const pisoInserts = rideTbrs.map(t => ({
+        tbr_code: t.code,
+        unit_id: unitId,
+        ride_id: deleteRideId,
+        reason: "Carregamento resetado",
+        status: "open",
+        driver_name: ride.driver_name || null,
+        route: ride.route || null,
+      }));
+      await supabase.from("piso_entries").insert(pisoInserts as any);
+    }
+
+    // Delete ride_tbrs
+    await supabase.from("ride_tbrs").delete().eq("ride_id", deleteRideId);
+
+    // Delete driver_rides
+    await supabase.from("driver_rides").delete().eq("id", deleteRideId);
+
+    // Release queue_entry if exists
+    if (ride.queue_entry_id) {
+      await supabase.from("queue_entries").update({ status: "waiting", called_at: null, completed_at: null } as any).eq("id", ride.queue_entry_id);
+    }
+
+    setDeleteLoading(false);
+    setShowDeleteModal(false);
+    fetchRides();
+  };
+  };
+
   // Swap driver - requires password for non-managers
   const handleOpenSwapModal = (rideId: string) => {
     if (!managerSession) {
@@ -1230,6 +1297,15 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
+                          {!isCancelled && managerSession && (
+                            <button
+                              onClick={() => handleOpenDeleteModal(ride.id)}
+                              className="h-6 w-6 flex items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
+                              title="Excluir carregamento"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           {isCancelled && (
                             <Badge variant="destructive" className="text-[10px] px-2 py-0.5">Cancelado</Badge>
                           )}
@@ -1724,6 +1800,43 @@ const ConferenciaCarregamentoPage = () => {
             )}
             <Button variant="destructive" className="w-full font-bold italic" onClick={stopCamera}>
               Fechar Câmera
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete/Reset Loading Modal */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Excluir Carregamento
+            </DialogTitle>
+            <DialogDescription>
+              Digite a senha do gerente para confirmar. Todos os TBRs serão movidos para o Retorno Piso como "resetados". O card será removido completamente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="delete-pw" className="font-semibold">Senha do Gerente</Label>
+              <Input
+                id="delete-pw"
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmDelete(); }}
+                placeholder="Digite a senha..."
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={handleConfirmDelete}
+              variant="destructive"
+              className="w-full font-bold italic"
+              disabled={deleteLoading || !deletePassword}
+            >
+              {deleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Exclusão
             </Button>
           </div>
         </DialogContent>
