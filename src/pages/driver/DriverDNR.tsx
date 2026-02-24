@@ -26,10 +26,12 @@ const DriverDNR = () => {
   const fetchEntries = useCallback(async () => {
     if (!driverId) return;
     // Fetch analyzing + closed with discount
+    const unitId = unitSession?.id;
     const { data } = await supabase
       .from("dnr_entries")
       .select("id, conferente_name, loaded_at, dnr_value, status, created_at, route, discounted")
       .eq("driver_id", driverId)
+      .eq("unit_id", unitId!)
       .or("status.eq.analyzing,and(status.eq.closed,discounted.eq.true)")
       .order("created_at", { ascending: false });
     setEntries((data ?? []) as DnrEntry[]);

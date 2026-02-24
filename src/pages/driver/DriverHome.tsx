@@ -41,10 +41,12 @@ const DriverHome = () => {
       const { start } = getBrazilDayRange(startDate);
       const { end } = getBrazilDayRange(endDate);
 
+      const unitId = unitSession?.id;
       const { data: ridesData } = await supabase
         .from("driver_rides")
         .select("*")
         .eq("driver_id", driverId)
+        .eq("unit_id", unitId!)
         .gte("completed_at", start)
         .lte("completed_at", end)
         .order("completed_at", { ascending: true });
@@ -92,10 +94,12 @@ const DriverHome = () => {
   useEffect(() => {
     if (!driverId) return;
     const fetchDnr = async () => {
+      const unitId = unitSession?.id;
       const { data } = await supabase
         .from("dnr_entries")
         .select("status, dnr_value")
-        .eq("driver_id", driverId);
+        .eq("driver_id", driverId)
+        .eq("unit_id", unitId!);
       const all = (data ?? []) as any[];
       const open = all.filter(e => e.status === "analyzing");
       const closed = all.filter(e => e.status === "closed");
