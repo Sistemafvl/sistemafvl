@@ -43,19 +43,26 @@ Deno.serve(async (req) => {
         );
       }
 
-      // If there's an auth header, validate it (admin/manager accessing driver docs)
+      // Validate caller identity
+      let isAuthenticated = false;
       if (authHeader?.startsWith("Bearer ")) {
         const token = authHeader.replace("Bearer ", "");
-        const { data: userData, error: userError } = await supabase.auth.getUser(token);
-        if (userError || !userData?.user) {
-          return new Response(
-            JSON.stringify({ error: "Invalid token" }),
-            { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        const anonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+        if (token !== anonKey) {
+          // Real user token - validate it
+          const { data: userData, error: userError } = await supabase.auth.getUser(token);
+          if (userError || !userData?.user) {
+            return new Response(
+              JSON.stringify({ error: "Invalid token" }),
+              { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+          isAuthenticated = true;
         }
-        // Authenticated user (admin/manager) - allow access
-      } else {
-        // No auth header - verify the driver exists to provide minimal validation
+      }
+
+      // For anon/unauthenticated access, verify the driver exists
+      if (!isAuthenticated) {
         const { data: driverData, error: driverError } = await supabase
           .from("drivers")
           .select("id")
