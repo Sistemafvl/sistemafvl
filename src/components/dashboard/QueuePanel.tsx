@@ -450,12 +450,20 @@ const QueuePanel = () => {
                     <button
                       key={d.id}
                       onClick={() => { setFoundDriver(d); setNameResults([]); }}
-                      className="w-full text-left p-2 rounded hover:bg-muted text-xs space-y-0.5"
+                      className="w-full text-left p-2 rounded hover:bg-muted text-xs flex items-center gap-2"
                     >
-                      <p className="font-bold">{d.name}</p>
-                      <p className="text-muted-foreground">
-                        CPF: {maskCPF(d.cpf)} · {d.car_model} {d.car_color || ""} · {d.car_plate}
-                      </p>
+                      <Avatar className="h-8 w-8 shrink-0">
+                        {d.avatar_url && <AvatarImage src={d.avatar_url} />}
+                        <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">
+                          {d.name[0].toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-bold">{d.name}</p>
+                        <p className="text-muted-foreground">
+                          CPF: {maskCPF(d.cpf)} · {d.car_model} {d.car_color || ""} · {d.car_plate}
+                        </p>
+                      </div>
                     </button>
                   ))}
                 </div>

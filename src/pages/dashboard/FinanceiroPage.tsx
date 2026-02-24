@@ -108,22 +108,13 @@ const FinanceiroPage = () => {
         }
       }
 
-      // Use createSignedUrl directly from the client
-      const { data, error } = await supabase.storage
-        .from("driver-documents")
-        .createSignedUrl(storagePath, 3600);
+      // Use edge function directly (bucket is private, anon role can't create signed URLs)
+      const { data, error } = await supabase.functions.invoke("get-signed-url", {
+        body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
+      });
 
       if (error || !data?.signedUrl) {
-        // Fallback to edge function
-        const { data: efData, error: efError } = await supabase.functions.invoke("get-signed-url", {
-          body: { bucket: "driver-documents", path: storagePath, driver_id: driverId },
-        });
-        if (efError || !efData?.signedUrl) {
-          toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
-          setDownloading(null);
-          return;
-        }
-        window.open(efData.signedUrl, "_blank");
+        toast({ title: "Erro", description: "Erro ao gerar link de download.", variant: "destructive" });
       } else {
         window.open(data.signedUrl, "_blank");
       }

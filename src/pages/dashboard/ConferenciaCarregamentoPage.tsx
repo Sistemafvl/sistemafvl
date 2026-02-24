@@ -249,7 +249,7 @@ const ConferenciaCarregamentoPage = () => {
     setCameraOpen(rideId);
     setLastScannedCode("");
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } } });
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
@@ -263,7 +263,7 @@ const ConferenciaCarregamentoPage = () => {
         return;
       }
 
-      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "codabar", "itf"] });
+      const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "codabar", "itf", "upc_a", "upc_e"] });
       const recentCodes = new Set<string>();
 
       scanIntervalRef.current = setInterval(async () => {
@@ -284,7 +284,7 @@ const ConferenciaCarregamentoPage = () => {
             }
           }
         } catch {}
-      }, 300);
+      }, 100);
     } catch (err) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Erro ao acessar câmera", description: "Permita o acesso à câmera nas configurações do navegador.", variant: "destructive" });
