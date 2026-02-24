@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, CalendarIcon } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
+import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
@@ -250,15 +250,16 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             <CardTitle className="text-sm font-bold italic">Status dos carregamentos</CardTitle>
             <DateRangeFilter value={pieDates} onChange={setPieDates} />
           </CardHeader>
-          <CardContent className="h-[220px]">
+          <CardContent className="h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value" nameKey="name" label={({ name, value }) => `${name}: ${value}`}>
+                <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={70} paddingAngle={3} dataKey="value" nameKey="name">
                   {pieData.map((_, i) => (
                     <Cell key={i} fill={COLORS[i % COLORS.length]} />
                   ))}
                 </Pie>
                 <Tooltip />
+                <Legend formatter={(value, entry: any) => `${value}: ${entry.payload.value}`} wrapperStyle={{ fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </CardContent>

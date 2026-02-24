@@ -181,7 +181,8 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
 
     const driverTbrSets: Record<string, Set<string>> = {};
     [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => {
-      const name = e.driver_name ?? "Desconhecido";
+      if (!e.driver_name) return;
+      const name = e.driver_name;
       if (!driverTbrSets[name]) driverTbrSets[name] = new Set();
       if (e.tbr_code) driverTbrSets[name].add(e.tbr_code);
     });
