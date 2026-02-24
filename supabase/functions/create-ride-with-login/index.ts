@@ -48,14 +48,20 @@ Deno.serve(async (req) => {
       passwordValue = loginData.password;
     }
 
-    // Get sequence number for today
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Get sequence number for today (Brazil timezone: midnight = 03:00 UTC)
+    const now = new Date();
+    const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+    const brNow = new Date(brStr);
+    const yyyy = brNow.getFullYear();
+    const mm = String(brNow.getMonth() + 1).padStart(2, "0");
+    const dd = String(brNow.getDate()).padStart(2, "0");
+    const todayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
+
     const { count } = await supabase
       .from("driver_rides")
       .select("*", { count: "exact", head: true })
       .eq("unit_id", unit_id)
-      .gte("completed_at", today.toISOString())
+      .gte("completed_at", todayStart)
       .neq("loading_status", "cancelled");
 
     const sequenceNumber = (count ?? 0) + 1;
