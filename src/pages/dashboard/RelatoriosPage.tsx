@@ -370,12 +370,41 @@ const RelatoriosPage = () => {
 
       const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
         const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-        const returnTbrSet = new Set<string>();
+        // 1. Contar TBRs únicos por código (evita duplicação quando pacote sai em 2 corridas no mesmo dia)
+        const uniqueTbrCodes = new Set(rTbrs.map((t: any) => t.code));
+
+        // 2. Coletar códigos que retornaram neste dia
+        const returnCodesForDay = new Set<string>();
         [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
-          if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) returnTbrSet.add(p.tbr_code);
+          if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) {
+            returnCodesForDay.add(p.tbr_code);
+          }
         });
-        const rReturns = returnTbrSet.size;
-        return { date, login: info.login, tbrCount: rTbrs.length, returns: rReturns, value: (rTbrs.length - rReturns) * tbrVal };
+
+        // 3. Calcular retornos líquidos (excluir re-tentativas bem-sucedidas)
+        const sortedDayRides = driverRides
+          .filter(r => info.rideIds.includes(r.id))
+          .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
+
+        const netReturns = new Set<string>();
+        returnCodesForDay.forEach(code => {
+          let lastRideId: string | null = null;
+          for (const ride of sortedDayRides) {
+            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code === code)) {
+              lastRideId = ride.id;
+            }
+          }
+          if (lastRideId) {
+            const hasReturnInLast = [...allPiso, ...allPs, ...allRto].some(
+              (p: any) => p.ride_id === lastRideId && p.tbr_code === code
+            );
+            if (hasReturnInLast) netReturns.add(code);
+          }
+        });
+
+        const tbrCount = uniqueTbrCodes.size;
+        const returns = netReturns.size;
+        return { date, login: info.login, tbrCount, returns, value: (tbrCount - returns) * tbrVal };
       });
 
       const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
