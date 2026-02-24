@@ -4,6 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { MessageSquare, Star, Users, TrendingUp, Car } from "lucide-react";
+import InfoButton from "@/components/dashboard/InfoButton";
 
 interface DriverInfo {
   name: string;
@@ -131,7 +132,7 @@ const FeedbacksPage = () => {
                 <CardContent className="p-3 flex items-center gap-2">
                   <Star className="h-5 w-5 text-amber-500 shrink-0" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Média</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">Média <InfoButton text="Média geral das avaliações recebidas dos motoristas para esta unidade." /></p>
                     <p className="text-lg font-bold text-amber-500">{summary.avg.toFixed(1)}</p>
                   </div>
                 </CardContent>
@@ -140,14 +141,14 @@ const FeedbacksPage = () => {
                 <CardContent className="p-3 flex items-center gap-2">
                   <Users className="h-5 w-5 text-primary shrink-0" />
                   <div>
-                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Total</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">Total <InfoButton text="Número total de avaliações recebidas dos motoristas." /></p>
                     <p className="text-lg font-bold text-primary">{summary.total}</p>
                   </div>
                 </CardContent>
               </Card>
               <Card>
                 <CardContent className="p-3">
-                  <p className="text-[10px] text-muted-foreground uppercase font-semibold mb-1">Distribuição</p>
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">Distribuição <InfoButton text="Distribuição das avaliações por nota (1 a 5 estrelas)." /></p>
                   <div className="space-y-0.5">
                     {[5, 4, 3, 2, 1].map((s) => (
                       <div key={s} className="flex items-center gap-1 text-xs">

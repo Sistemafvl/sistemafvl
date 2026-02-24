@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, CalendarIcon } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import InfoButton from "@/components/dashboard/InfoButton";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
@@ -185,13 +186,22 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     ? `A partir de ${format(startDate, "dd/MM")}`
     : "hoje";
 
+  const INFO_TEXTS: Record<string, string> = {
+    "Carregamentos": "Total de carregamentos realizados no período. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
+    "TBRs escaneados": "Total de pacotes (TBRs) escaneados no período. Cada TBR é um pacote individual conferido antes do carregamento.",
+    "PS abertos": "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolução manual.",
+    "RTO abertos": "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuição.",
+    "Retornos Piso abertos": "Pacotes que retornaram ao piso da unidade sem serem entregues.",
+    "Carregando agora": "Motoristas com carregamento em andamento neste momento.",
+  };
+
   const cards = [
-    { label: `Carregamentos (${periodLabel})`, value: metrics.todayRides, icon: Truck, color: "text-primary" },
-    { label: `TBRs escaneados (${periodLabel})`, value: metrics.todayTbrs, icon: ScanBarcode, color: "text-blue-500" },
-    { label: "PS abertos", value: metrics.openPs, icon: AlertTriangle, color: "text-destructive" },
-    { label: "RTO abertos", value: metrics.openRto, icon: RotateCcw, color: "text-orange-500" },
-    { label: "Retornos Piso abertos", value: metrics.openPiso, icon: PackageX, color: "text-yellow-600" },
-    { label: "Carregando agora", value: metrics.activeLoading, icon: Loader2, color: "text-green-500" },
+    { label: `Carregamentos (${periodLabel})`, value: metrics.todayRides, icon: Truck, color: "text-primary", infoKey: "Carregamentos" },
+    { label: `TBRs escaneados (${periodLabel})`, value: metrics.todayTbrs, icon: ScanBarcode, color: "text-blue-500", infoKey: "TBRs escaneados" },
+    { label: "PS abertos", value: metrics.openPs, icon: AlertTriangle, color: "text-destructive", infoKey: "PS abertos" },
+    { label: "RTO abertos", value: metrics.openRto, icon: RotateCcw, color: "text-orange-500", infoKey: "RTO abertos" },
+    { label: "Retornos Piso abertos", value: metrics.openPiso, icon: PackageX, color: "text-yellow-600", infoKey: "Retornos Piso abertos" },
+    { label: "Carregando agora", value: metrics.activeLoading, icon: Loader2, color: "text-green-500", infoKey: "Carregando agora" },
   ];
 
   return (
@@ -202,7 +212,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             <CardContent className="p-4 flex flex-col items-center text-center gap-1">
               <c.icon className={`h-5 w-5 ${c.color}`} />
               <span className="text-2xl font-bold italic">{c.value}</span>
-              <span className="text-xs text-muted-foreground leading-tight">{c.label}</span>
+              <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">{c.label} <InfoButton text={INFO_TEXTS[c.infoKey]} /></span>
             </CardContent>
           </Card>
         ))}
@@ -211,7 +221,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold italic">Carregamentos</CardTitle>
+            <CardTitle className="text-sm font-bold italic flex items-center gap-1">Carregamentos <InfoButton text="Evolução diária do número de carregamentos realizados na unidade." /></CardTitle>
             <DateRangeFilter value={barDates} onChange={setBarDates} />
           </CardHeader>
           <CardContent className="h-[220px]">
@@ -229,7 +239,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold italic">TBRs escaneados</CardTitle>
+            <CardTitle className="text-sm font-bold italic flex items-center gap-1">TBRs escaneados <InfoButton text="Evolução diária do número de TBRs escaneados na unidade." /></CardTitle>
             <DateRangeFilter value={lineDates} onChange={setLineDates} />
           </CardHeader>
           <CardContent className="h-[220px]">
@@ -247,7 +257,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
         <Card>
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-bold italic">Status dos carregamentos</CardTitle>
+            <CardTitle className="text-sm font-bold italic flex items-center gap-1">Status dos carregamentos <InfoButton text="Distribuição dos carregamentos por status: Pendente, Em carregamento e Finalizado." /></CardTitle>
             <DateRangeFilter value={pieDates} onChange={setPieDates} />
           </CardHeader>
           <CardContent className="h-[260px]">

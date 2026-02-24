@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock as ClockIcon, Car, MapPin, KeyRound, User, X } from "lucide-react";
+import InfoButton from "@/components/dashboard/InfoButton";
 import { format, differenceInMinutes } from "date-fns";
 import { getBrazilDayRange, getBrazilNow } from "@/lib/utils";
 import { ptBR } from "date-fns/locale";
@@ -209,22 +210,22 @@ const OperacaoPage = () => {
             <div className="rounded-lg border bg-card p-3 text-center">
               <Truck className="h-5 w-5 mx-auto text-primary mb-1" />
               <p className="text-2xl font-bold">{totalCarregamentos}</p>
-              <p className="text-xs text-muted-foreground">Carregamentos</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Carregamentos <InfoButton text="Total de carregamentos realizados no dia selecionado." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
               <p className="text-2xl font-bold">{totalTbrs}</p>
-              <p className="text-xs text-muted-foreground">TBRs lidos</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs lidos <InfoButton text="Total de pacotes (TBRs) escaneados no dia." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
               <p className="text-2xl font-bold">{totalRetornos}</p>
-              <p className="text-xs text-muted-foreground">Retornos piso</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Retornos piso <InfoButton text="Total de pacotes retornados ao piso (Piso, PS, RTO) no dia." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
               <p className="text-2xl font-bold">{taxaConclusao}%</p>
-              <p className="text-xs text-muted-foreground">Conclusão</p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Conclusão <InfoButton text="Percentual de TBRs entregues com sucesso em relação ao total escaneado." /></p>
             </div>
           </div>
 
