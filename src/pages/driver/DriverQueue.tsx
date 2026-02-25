@@ -355,53 +355,53 @@ const DriverQueue = () => {
 
   if (activeRide) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-4 px-1">
         <div className="flex items-center gap-3">
-          <Truck className="h-7 w-7 text-primary" />
-          <h1 className="text-2xl font-bold tracking-tight text-foreground">Em Carregamento</h1>
+          <Truck className="h-6 w-6 text-primary flex-shrink-0" />
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Em Carregamento</h1>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Domínio</CardTitle>
+            <CardHeader className="pb-2 px-4 pt-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Domínio</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold">{domainName}</p>
+            <CardContent className="px-4 pb-4">
+              <p className="text-base font-semibold">{domainName}</p>
             </CardContent>
           </Card>
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Unidade</CardTitle>
+            <CardHeader className="pb-2 px-4 pt-4">
+              <CardTitle className="text-xs font-medium text-muted-foreground">Unidade</CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-lg font-semibold">{unitName}</p>
+            <CardContent className="px-4 pb-4">
+              <p className="text-base font-semibold">{unitName}</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border-primary relative">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-primary flex items-center gap-2">
-                <Truck className="h-5 w-5" />
+        <Card className="border-primary relative overflow-hidden">
+          <CardHeader className="pb-3 px-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-primary flex items-center gap-2 text-base">
+                <Truck className="h-5 w-5 flex-shrink-0" />
                 Carregamento Ativo
               </CardTitle>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="gap-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="secondary" className="gap-1 text-xs">
                   <ScanBarcode className="h-3 w-3" />
                   TBRs: {tbrCount}
                 </Badge>
-                <Badge variant={activeRide.loading_status === "loading" ? "default" : "secondary"}>
+                <Badge variant={activeRide.loading_status === "loading" ? "default" : "secondary"} className="text-xs whitespace-nowrap">
                   {statusLabel}
                 </Badge>
               </div>
             </div>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 px-4">
             {activeRide.sequence_number && (
               <div className="flex items-center gap-3">
-                <Hash className="h-5 w-5 text-muted-foreground" />
+                <Hash className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Sequência</p>
                   <p className="text-2xl font-bold">{activeRide.sequence_number}º</p>
@@ -410,36 +410,36 @@ const DriverQueue = () => {
             )}
             {activeRide.route && (
               <div className="flex items-center gap-3">
-                <MapPin className="h-5 w-5 text-muted-foreground" />
-                <div>
+                <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Rota</p>
-                  <p className="text-lg font-semibold">{activeRide.route}</p>
+                  <p className="text-base sm:text-lg font-semibold break-words">{activeRide.route}</p>
                 </div>
               </div>
             )}
             {activeRide.login && (
               <div className="flex items-center gap-3">
-                <LogIn className="h-5 w-5 text-muted-foreground" />
-                <div>
+                <LogIn className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Login</p>
-                  <p className="text-lg font-semibold">{activeRide.login}</p>
+                  <p className="text-base sm:text-lg font-semibold break-words">{activeRide.login}</p>
                 </div>
               </div>
             )}
             {activeRide.password && (
               <div className="flex items-center gap-3">
-                <KeyRound className="h-5 w-5 text-muted-foreground" />
+                <KeyRound className="h-5 w-5 text-muted-foreground flex-shrink-0" />
                 <div>
                   <p className="text-sm text-muted-foreground">Senha</p>
-                  <p className="text-lg font-semibold">{activeRide.password}</p>
+                  <p className="text-base sm:text-lg font-semibold">{activeRide.password}</p>
                 </div>
               </div>
             )}
 
             {queuePosition !== null && (
               <Card className="border-primary/50 bg-primary/5">
-                <CardContent className="flex items-center gap-3 pt-6">
-                  <Hash className="h-6 w-6 text-primary" />
+                <CardContent className="flex items-center gap-3 py-4 px-4">
+                  <Hash className="h-6 w-6 text-primary flex-shrink-0" />
                   <div>
                     <p className="text-sm text-muted-foreground">Posição na Fila</p>
                     <p className="text-3xl font-bold text-primary">{queuePosition}º</p>
