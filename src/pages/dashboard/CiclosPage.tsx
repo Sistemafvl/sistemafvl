@@ -445,9 +445,17 @@ const CiclosPage = () => {
                     <p className="text-[9px] text-muted-foreground">Tempo Médio/TBR</p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
-                    <TrendingDown className="h-3 w-3 mx-auto text-muted-foreground" />
+                    {prevMetrics && metrics.totalRides >= prevMetrics.totalRides ? (
+                      <TrendingUp className="h-3 w-3 mx-auto text-green-600" />
+                    ) : (
+                      <TrendingDown className="h-3 w-3 mx-auto text-destructive" />
+                    )}
                     <p className="text-base font-bold">
-                      {prevMetrics ? prevMetrics.totalRides : "—"}
+                      {prevMetrics ? (
+                        prevMetrics.totalRides === 0
+                          ? (metrics.totalRides > 0 ? "+100%" : "0%")
+                          : `${delta(metrics.totalRides, prevMetrics.totalRides) >= 0 ? "+" : ""}${delta(metrics.totalRides, prevMetrics.totalRides).toFixed(1)}%`
+                      ) : "—"}
                     </p>
                     <p className="text-[9px] text-muted-foreground">Carreg. Dia Anterior</p>
                   </div>
