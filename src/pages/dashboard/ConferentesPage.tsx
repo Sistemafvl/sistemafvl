@@ -142,13 +142,14 @@ const ConferentesPage = () => {
   const handleDelete = async () => {
     if (!deleteConferente) return;
     setDeleteLoading(true);
-    const { error } = await supabase
+    const { error, data } = await supabase
       .from("user_profiles")
       .delete()
-      .eq("id", deleteConferente.id);
+      .eq("id", deleteConferente.id)
+      .select();
     setDeleteLoading(false);
 
-    if (error) return;
+    if (error || !data || data.length === 0) return;
     setConferentes((prev) => prev.filter((x) => x.id !== deleteConferente.id));
     setDeleteConferente(null);
   };
