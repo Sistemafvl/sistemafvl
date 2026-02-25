@@ -40,6 +40,8 @@ const ConfiguracoesPage = () => {
   const [newLogin, setNewLogin] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [loginsLoading, setLoginsLoading] = useState(false);
+  const [loginsPage, setLoginsPage] = useState(1);
+  const loginsPerPage = 10;
 
   // TBR Value
   const [tbrValue, setTbrValue] = useState("");
@@ -224,7 +226,7 @@ const ConfiguracoesPage = () => {
             <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado.</p>
           ) : (
             <div className="space-y-2">
-              {logins.map((l) => (
+              {logins.slice((loginsPage - 1) * loginsPerPage, loginsPage * loginsPerPage).map((l) => (
                 <div key={l.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
                   <span className="font-semibold flex-1">{l.login}</span>
                   <span className="text-muted-foreground flex-1">{l.password}</span>
@@ -233,6 +235,17 @@ const ConfiguracoesPage = () => {
                   </Button>
                 </div>
               ))}
+              {logins.length > loginsPerPage && (
+                <div className="flex items-center justify-between pt-2">
+                  <span className="text-xs text-muted-foreground">
+                    Página {loginsPage} de {Math.ceil(logins.length / loginsPerPage)} ({logins.length} logins)
+                  </span>
+                  <div className="flex gap-1">
+                    <Button variant="outline" size="sm" disabled={loginsPage <= 1} onClick={() => setLoginsPage(p => p - 1)}>Anterior</Button>
+                    <Button variant="outline" size="sm" disabled={loginsPage >= Math.ceil(logins.length / loginsPerPage)} onClick={() => setLoginsPage(p => p + 1)}>Próxima</Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
