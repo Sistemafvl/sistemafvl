@@ -96,11 +96,26 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     ]);
 
     let todayTbrCount = 0;
+    const tbrCodesSet = new Set<string>();
     if (tbrsRes.data) {
       const { data: unitRideIds } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
       const rideIdSet = new Set((unitRideIds ?? []).map(r => r.id));
-      todayTbrCount = tbrsRes.data.filter(t => rideIdSet.has(t.ride_id)).length;
+      const filtered = tbrsRes.data.filter(t => rideIdSet.has(t.ride_id));
+      todayTbrCount = filtered.length;
+      // Collect codes from ride_tbrs to avoid double-counting
+      const { data: tbrCodes } = await supabase.from("ride_tbrs").select("code").gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd);
+      (tbrCodes ?? []).forEach(t => tbrCodesSet.add(t.code));
     }
+
+    // Count unique TBRs from PS and RTO that are NOT already in ride_tbrs
+    const [psExtra, rtoExtra] = await Promise.all([
+      supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
+      supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
+    ]);
+    const extraCodes = new Set<string>();
+    (psExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
+    (rtoExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
+    todayTbrCount += extraCodes.size;
 
     setMetrics({
       todayRides: ridesRes.count ?? 0,
@@ -144,10 +159,11 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       });
       setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
     } else if (type === "line") {
-      const { data: tbrs7 } = await supabase.from("ride_tbrs").select("scanned_at, ride_id").gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd);
+      const { data: tbrs7 } = await supabase.from("ride_tbrs").select("scanned_at, ride_id, code").gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd);
       const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
       const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
       const filtered = (tbrs7 ?? []).filter(t => unitRideSet.has(t.ride_id));
+      const allTbrCodes = new Set<string>(filtered.map(t => t.code));
       const tbrsByDay: Record<string, number> = {};
       days.forEach(d => tbrsByDay[d] = 0);
       filtered.forEach(t => {
@@ -155,6 +171,21 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
         const d = toBrazilDateStr(t.scanned_at);
         if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
       });
+
+      // Add unique TBRs from PS/RTO not in ride_tbrs
+      const [psChart, rtoChart] = await Promise.all([
+        supabase.from("ps_entries").select("tbr_code, created_at").eq("unit_id", unitId).gte("created_at", rangeStart).lte("created_at", rangeEnd),
+        supabase.from("rto_entries").select("tbr_code, created_at").eq("unit_id", unitId).gte("created_at", rangeStart).lte("created_at", rangeEnd),
+      ]);
+      const countedExtra = new Set<string>();
+      [...(psChart.data ?? []), ...(rtoChart.data ?? [])].forEach(e => {
+        if (!allTbrCodes.has(e.tbr_code) && !countedExtra.has(e.tbr_code)) {
+          countedExtra.add(e.tbr_code);
+          const d = toBrazilDateStr(e.created_at);
+          if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
+        }
+      });
+
       setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
     } else {
       const { data: statusRes } = await supabase.from("driver_rides").select("loading_status").eq("unit_id", unitId).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);

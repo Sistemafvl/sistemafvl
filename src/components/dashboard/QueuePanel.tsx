@@ -196,23 +196,29 @@ const QueuePanel = () => {
     setOpen(true);
   };
 
+  const [definingRide, setDefiningRide] = useState(false);
+
   const handleDefinir = async () => {
     if (!selectedEntry || !unitId) return;
+    setDefiningRide(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-ride-with-login", {
+        body: {
+          driver_id: selectedEntry.driver_id,
+          unit_id: selectedEntry.unit_id,
+          queue_entry_id: selectedEntry.id,
+          route,
+          unit_login_id: selectedLoginId || null,
+        },
+      });
 
-    const { data, error } = await supabase.functions.invoke("create-ride-with-login", {
-      body: {
-        driver_id: selectedEntry.driver_id,
-        unit_id: selectedEntry.unit_id,
-        queue_entry_id: selectedEntry.id,
-        route,
-        unit_login_id: selectedLoginId || null,
-      },
-    });
+      if (error) { console.error("Error creating ride:", error); return; }
 
-    if (error) { console.error("Error creating ride:", error); return; }
-
-    setShowProgramModal(false);
-    fetchQueue();
+      setShowProgramModal(false);
+      fetchQueue();
+    } finally {
+      setDefiningRide(false);
+    }
   };
 
   const handleMoveEntry = async (idx: number, direction: "up" | "down") => {
@@ -417,7 +423,9 @@ const QueuePanel = () => {
                 <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado. Cadastre em Configurações.</p>
               )}
             </div>
-            <Button onClick={handleDefinir} className="w-full font-bold italic">Definir</Button>
+            <Button onClick={handleDefinir} className="w-full font-bold italic" disabled={definingRide}>
+              {definingRide ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Definindo...</> : "Definir"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
