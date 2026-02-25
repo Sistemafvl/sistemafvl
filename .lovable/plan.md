@@ -1,73 +1,60 @@
 
 
-# Correção Definitiva: Sequência de Carregamento
+# Plano: 3 Correções — TBRs do PS/RTO, Loading no Definir, Atualizações do Sistema
 
-## Causa Raiz
+## Problema 1 — TBRs adicionados direto no PS/RTO não contam como "escaneados"
 
-A edge function usa `COUNT` (quantidade) de corridas não-canceladas no dia para calcular a sequência. O problema:
+**Causa raiz**: O card "TBRs escaneados (hoje)" no `DashboardMetrics.tsx` (linha 91-102) conta apenas registros da tabela `ride_tbrs`. Quando um TBR é registrado diretamente na tela PS ou RTO (sem passar pela Conferência de Carregamento), ele não existe em `ride_tbrs` — só em `ps_entries` ou `rto_entries`. Logo, não é contabilizado.
 
-1. Os carregamentos #4 e #5 já existiam com números inflados (bug antigo do timezone, já corrigido)
-2. O `COUNT` retorna 2 (quantidade de corridas não-canceladas hoje)
-3. Novo carregamento recebe `2 + 1 = #3`, que é MENOR que os existentes
+**Solução**: Na função `fetchAll`, além de contar TBRs da tabela `ride_tbrs`, também contar TBRs **únicos** das tabelas `ps_entries` e `rto_entries` criados no mesmo período, que NÃO existam já em `ride_tbrs`. Somar ao total.
 
-Isso acontece porque `COUNT` não considera os números de sequência já atribuídos — apenas conta quantos registros existem.
+O mesmo ajuste se aplica ao gráfico de linha "TBRs escaneados" na `fetchChartData` tipo `line`.
 
-## Solução
+### Arquivo: `src/components/dashboard/DashboardMetrics.tsx`
 
-Trocar `COUNT` por `MAX(sequence_number)` na edge function. Assim:
+Na `fetchAll` (após linha 102):
+- Buscar `ps_entries` e `rto_entries` do período com `unit_id`
+- Coletar códigos TBR únicos que **não** estejam no set de `ride_tbrs` já contados
+- Somar ao `todayTbrCount`
 
-- Se existem #4 e #5 → MAX = 5 → próximo = #6
-- Se não existe nenhum → MAX = null → próximo = #1
-- Cancelados são excluídos do MAX, então a sequência "pula" corretamente
+Na `fetchChartData` tipo `line`:
+- Mesma lógica: adicionar TBRs de PS/RTO por dia
 
-Adicionalmente, corrigir os registros de hoje no banco (one-time fix):
-- #4 → #1, #5 → #2, novo #3 → #3 (fica correto)
+---
 
-## Detalhes Técnicos
+## Problema 2 — Botão "Definir" sem indicador de carregamento
 
-### Arquivo: `supabase/functions/create-ride-with-login/index.ts`
+**Causa raiz**: A função `handleDefinir` no `QueuePanel.tsx` (linha 199-216) não possui estado de loading. O botão fica clicável e sem feedback visual durante a chamada à edge function.
 
-Substituir a query de COUNT por uma query que busca o MAX do sequence_number:
+**Solução**: Adicionar estado `definingRide` e usá-lo no botão.
 
-```typescript
-// ANTES: COUNT (ignora números existentes)
-const { count } = await supabase
-  .from("driver_rides")
-  .select("*", { count: "exact", head: true })
-  .eq("unit_id", unit_id)
-  .gte("completed_at", todayStart)
-  .neq("loading_status", "cancelled");
-const sequenceNumber = (count ?? 0) + 1;
+### Arquivo: `src/components/dashboard/QueuePanel.tsx`
 
-// DEPOIS: MAX (respeita sequência existente)
-const { data: maxData } = await supabase
-  .from("driver_rides")
-  .select("sequence_number")
-  .eq("unit_id", unit_id)
-  .gte("completed_at", todayStart)
-  .neq("loading_status", "cancelled")
-  .order("sequence_number", { ascending: false })
-  .limit(1)
-  .maybeSingle();
-const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
-```
+1. Adicionar estado: `const [definingRide, setDefiningRide] = useState(false);`
+2. No `handleDefinir`: envolver com `setDefiningRide(true)` no início e `setDefiningRide(false)` no finally
+3. No botão "Definir" (linha 420): adicionar `disabled={definingRide}` e mostrar `<Loader2 className="animate-spin" />` quando `definingRide` é true
 
-### Correção pontual dos dados de hoje (migração SQL)
+---
 
-Renumerar os carregamentos de hoje na ordem correta de criação, excluindo cancelados.
+## Problema 3 — Lista de Atualizações do Sistema não preenchida
 
-## Resultado Esperado
+**Causa raiz**: O sistema de "Atualizações do Sistema" é **manual** — o admin precisa ir na página admin e criar cada entrada. Não existe automação que detecte mudanças no código e registre automaticamente.
 
-| Cenário | Antes (COUNT) | Depois (MAX) |
-|---|---|---|
-| Existem #4, #5 (antigos) | Próximo = #3 | Próximo = #6 |
-| Dia novo, sem corridas | Próximo = #1 | Próximo = #1 |
-| #1, #2, #3(cancelado) | Próximo = #3 | Próximo = #3 |
+O usuário espera que o feed reflita as mudanças feitas durante o desenvolvimento, mas o componente `SystemUpdates.tsx` apenas lê da tabela `system_updates`, que só tem dados se alguém inseriu manualmente via `AdminSystemUpdates`.
 
-## Arquivos Modificados
+**Solução**: Como a automação real de changelog requer integração com o pipeline de deploy (fora do escopo), a solução prática é **popular a tabela com as atualizações recentes** que foram feitas nesta sessão de desenvolvimento, garantindo que o feed funcione. Além disso, verificar se o componente está renderizando corretamente no dashboard.
+
+Vou inserir via migração SQL as atualizações recentes mais relevantes para que o feed já apareça preenchido. E verificar se o `SystemUpdates` está de fato sendo renderizado no `DashboardHome`.
+
+O componente `SystemUpdates` já está importado e usado no `DashboardHome.tsx` (linha 18). Preciso verificar se está renderizado na parte visível da página.
+
+---
+
+## Resumo de Arquivos
 
 | Arquivo | Alteração |
 |---|---|
-| `supabase/functions/create-ride-with-login/index.ts` | Trocar COUNT por MAX(sequence_number) |
-| Migração SQL (one-time) | Renumerar corridas de hoje na ordem correta |
+| `src/components/dashboard/DashboardMetrics.tsx` | Incluir TBRs de `ps_entries` e `rto_entries` na contagem e gráfico |
+| `src/components/dashboard/QueuePanel.tsx` | Adicionar loading state no botão "Definir" |
+| Migração SQL | Popular `system_updates` com changelog recente |
 
