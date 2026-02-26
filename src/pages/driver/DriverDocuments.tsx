@@ -78,7 +78,7 @@ const DriverDocuments = () => {
   const getSignedUrl = async (path: string): Promise<string | null> => {
     try {
       const { data, error } = await supabase.functions.invoke("get-signed-url", {
-        body: { path, bucket: "driver-documents" },
+        body: { path, bucket: "driver-documents", driver_id: driverId },
       });
       if (error || !data?.signedUrl) return null;
       return data.signedUrl;

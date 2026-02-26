@@ -161,7 +161,7 @@ const MotoristasParceirosPage = () => {
       for (const doc of driverDocs) {
         try {
           const { data: signedData } = await supabase.functions.invoke("get-signed-url", {
-            body: { path: doc.file_url, bucket: "driver-documents" },
+            body: { path: doc.file_url, bucket: "driver-documents", driver_id: viewDriver?.id },
           });
           if (!signedData?.signedUrl) continue;
           const res = await fetch(signedData.signedUrl);
