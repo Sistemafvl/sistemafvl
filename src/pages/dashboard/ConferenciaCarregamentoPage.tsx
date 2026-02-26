@@ -769,7 +769,7 @@ const ConferenciaCarregamentoPage = () => {
     while (queueRef.current[rideId]?.length > 0) {
       const code = queueRef.current[rideId].shift()!;
       try {
-        await saveTbr(rideId, code);
+        await saveTbrRef.current?.(rideId, code);
       } catch (err) {
         console.error("Queue processing error:", err);
       }
