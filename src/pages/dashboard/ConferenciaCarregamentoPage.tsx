@@ -761,6 +761,11 @@ const ConferenciaCarregamentoPage = () => {
   const queueRef = useRef<Record<string, string[]>>({});
   const processingQueueRef = useRef<Record<string, boolean>>({});
 
+  const fetchRidesRef = useRef(fetchRides);
+  fetchRidesRef.current = fetchRides;
+  const fetchOpenRtosRef = useRef(fetchOpenRtos);
+  fetchOpenRtosRef.current = fetchOpenRtos;
+
   const processQueue = useCallback(async (rideId: string) => {
     if (processingQueueRef.current[rideId]) return;
     processingQueueRef.current[rideId] = true;
@@ -776,9 +781,9 @@ const ConferenciaCarregamentoPage = () => {
 
     processingQueueRef.current[rideId] = false;
     // Sync with DB only once after all queued items are processed
-    fetchRides();
-    fetchOpenRtos();
-  }, [fetchRides, fetchOpenRtos]);
+    fetchRidesRef.current();
+    fetchOpenRtosRef.current();
+  }, []);
 
   // Auto-save TBR with debounce (scanner mode) or Enter (manual mode)
   const handleTbrInputChange = (rideId: string, value: string) => {
