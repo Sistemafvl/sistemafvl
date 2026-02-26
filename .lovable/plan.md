@@ -1,47 +1,37 @@
 
 
-# Plano: Auto-atualização do sistema (PWA)
+# Plano: 3 Ajustes — Seller checkbox, TBR duplicado no PS, Horário nos TBRs bipados
 
-## Diagnóstico
+## 1. Checkbox "Seller" no modal de PS
 
-O sistema usa PWA com `registerType: "autoUpdate"`, mas **não existe nenhum código que registre o Service Worker** nem que force a atualização. O Vite PWA gera o SW, mas ninguém o importa/ativa. Resultado: o browser serve arquivos antigos do cache e o usuário vê a versão desatualizada até que o cache expire naturalmente.
+**Migração SQL:** Adicionar coluna `is_seller` (boolean, default false) na tabela `ps_entries`.
 
-## Solução
+**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+- Adicionar estado `isSeller` (boolean, default false)
+- Renderizar um checkbox com label "Este TBR é Seller" logo abaixo do botão "+ Novo motivo" (dentro do bloco de motivo)
+- Incluir `is_seller: isSeller` no objeto de insert
+- Na tabela de listagem, exibir um badge "Seller" ao lado do motivo quando `is_seller === true`
+- No PDF, incluir indicação "Seller" nos registros marcados
+- Resetar `isSeller` ao fechar o modal
 
-Duas alterações:
+## 2. Bloquear TBR duplicado no PS
 
-### 1. Workbox: forçar ativação imediata do novo SW
+**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+- No `handleSave`, antes de inserir, consultar `ps_entries` filtrando por `tbr_code = tbrCode` e `unit_id` e `status = 'open'`
+- Se já existir um registro aberto com o mesmo TBR, exibir toast "Este TBR já possui um PS aberto" e não inserir
+- Também verificar no `searchTbr`: ao abrir o modal, já alertar se existe PS aberto para aquele TBR
 
-**Arquivo:** `vite.config.ts`
+## 3. Horário de leitura nos TBRs bipados (Conferência Carregamento)
 
-Adicionar `skipWaiting: true` e `clientsClaim: true` ao bloco `workbox`. Isso faz o novo Service Worker tomar controle imediatamente, sem esperar o usuário fechar todas as abas.
-
-### 2. Registrar o SW e recarregar ao detectar atualização
-
-**Novo arquivo:** `src/components/PWAAutoUpdate.tsx`
-
-Componente que usa `useRegisterSW` do `virtual:pwa-register/react` para:
-- Registrar o SW automaticamente
-- Verificar atualizações a cada 60 segundos
-- Quando detectar uma nova versão, chamar `updateServiceWorker(true)` que força `skipWaiting` + recarrega a página automaticamente
-- Mostrar um toast informando "Sistema atualizado" após o reload
-
-**Arquivo:** `src/App.tsx`
-
-Incluir `<PWAAutoUpdate />` dentro do App.
-
-### 3. Tipagem para o módulo virtual
-
-**Novo arquivo:** `src/vite-pwa.d.ts`
-
-Declaração de tipo para `virtual:pwa-register/react` evitar erros de TypeScript.
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+- Na renderização da lista de TBRs (linha ~1503), entre o código do TBR e o botão X, adicionar o horário formatado como `HH:mm:ss.SSS` extraído de `t.scanned_at`
+- Exibir em texto pequeno e cor muted para não poluir visualmente
 
 ## Resumo
 
 | Arquivo | Alteração |
 |---|---|
-| `vite.config.ts` | Adicionar `skipWaiting` + `clientsClaim` ao workbox |
-| `src/components/PWAAutoUpdate.tsx` | Novo — registra SW, detecta updates, recarrega automaticamente |
-| `src/vite-pwa.d.ts` | Novo — tipos do módulo virtual |
-| `src/App.tsx` | Incluir `<PWAAutoUpdate />` |
+| Migração SQL | Adicionar `is_seller boolean default false` em `ps_entries` |
+| `src/pages/dashboard/PSPage.tsx` | Checkbox seller, bloqueio de TBR duplicado, badge na tabela, indicação no PDF |
+| `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` | Exibir horário (HH:mm:ss.SSS) ao lado de cada TBR bipado |
 
