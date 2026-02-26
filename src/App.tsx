@@ -37,6 +37,7 @@ import AdminUpdatesPage from "./pages/admin/AdminUpdatesPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
+import PWAAutoUpdate from "./components/PWAAutoUpdate";
 import { Toaster } from "./components/ui/sonner";
 import { Toaster as RadixToaster } from "./components/ui/toaster";
 const queryClient = new QueryClient();
@@ -44,6 +45,7 @@ const queryClient = new QueryClient();
 const App = () => (
   <QueryClientProvider client={queryClient}>
       <OfflineIndicator />
+      <PWAAutoUpdate />
       <Toaster />
       <RadixToaster />
       <BrowserRouter>
