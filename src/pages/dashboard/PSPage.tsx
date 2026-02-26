@@ -235,6 +235,8 @@ const PSPage = () => {
       .from("ride_tbrs")
       .select("ride_id")
       .eq("code", code)
+      .order("scanned_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (!tbrData) {
@@ -533,19 +535,29 @@ const PSPage = () => {
         if (!scannerVideoRef.current || scannerVideoRef.current.readyState < 2) return;
         try {
           const barcodes = await detector.detect(scannerVideoRef.current);
-          if (barcodes.length > 0) {
-            const code = barcodes[0].rawValue;
-            if (recentCodes.has(code)) return;
-            recentCodes.add(code);
-            setTimeout(() => recentCodes.delete(code), 3000);
-            setLastScannedCode(code);
-            if (code.toUpperCase().startsWith("TBR")) {
-              if (!isValidTbrCode(code)) return;
-              playSuccessBeep();
-              stopCameraScanner();
-              searchTbr(code);
-            }
+          if (barcodes.length === 0) return;
+
+          // Filter only TBR codes
+          const tbrBarcodes = barcodes.filter((b: any) => b.rawValue.toUpperCase().startsWith("TBR"));
+
+          // Multiple TBR codes visible — ask user to focus
+          if (tbrBarcodes.length > 1) {
+            setLastScannedCode("⚠ Múltiplos códigos. Foque em apenas 1.");
+            return;
           }
+
+          if (tbrBarcodes.length === 0) return;
+
+          const code = tbrBarcodes[0].rawValue;
+          if (recentCodes.has(code)) return;
+          recentCodes.add(code);
+          setTimeout(() => recentCodes.delete(code), 5000);
+
+          if (!isValidTbrCode(code)) return;
+          setLastScannedCode(code);
+          playSuccessBeep();
+          stopCameraScanner();
+          searchTbr(code);
         } catch {}
       }, 100);
     } catch {
