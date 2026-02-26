@@ -1,0 +1,1 @@
+ALTER TABLE public.ps_entries ADD COLUMN is_seller boolean NOT NULL DEFAULT false;

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { toast } from "@/hooks/use-toast";
@@ -24,6 +25,7 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import jsPDF from "jspdf";
@@ -50,6 +52,7 @@ interface PsEntry {
   created_at: string;
   conferente_id: string | null;
   conferente_name?: string;
+  is_seller?: boolean;
 }
 
 interface Conferente {
@@ -96,6 +99,7 @@ const PSPage = () => {
   const [entries, setEntries] = useState<PsEntry[]>([]);
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
+  const [isSeller, setIsSeller] = useState(false);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -178,6 +182,7 @@ const PSPage = () => {
         reason: e.reason ?? null,
         photo_url: e.photo_url ?? null,
         conferente_name: e.conferente_id ? confMap[e.conferente_id] : undefined,
+        is_seller: (e as any).is_seller ?? false,
       })));
     }
     setIsLoading(false);
@@ -202,6 +207,24 @@ const PSPage = () => {
   const searchTbr = async (code: string) => {
     setSearching(true);
     setTbrCode(code);
+
+    // Check for duplicate open PS
+    if (unitSession) {
+      const { data: existingPs } = await supabase
+        .from("ps_entries")
+        .select("id")
+        .eq("tbr_code", code.toUpperCase())
+        .eq("unit_id", unitSession.id)
+        .eq("status", "open")
+        .limit(1);
+      if (existingPs && existingPs.length > 0) {
+        toast({ title: "TBR duplicado", description: "Este TBR já possui um PS aberto.", variant: "destructive" });
+        setSearching(false);
+        setTbrInput("");
+        inputRef.current?.focus();
+        return;
+      }
+    }
 
     const { data: tbrData } = await supabase
       .from("ride_tbrs")
@@ -262,6 +285,7 @@ const PSPage = () => {
     setSelectedConferente("");
     setCapturedPhoto(null);
     setPhotoPreview(null);
+    setIsSeller(false);
   };
 
   // Camera functions
@@ -348,6 +372,20 @@ const PSPage = () => {
     if (!unitSession || !selectedReason) return;
     setSaving(true);
 
+    // Double-check for duplicate open PS before saving
+    const { data: existingPs } = await supabase
+      .from("ps_entries")
+      .select("id")
+      .eq("tbr_code", tbrCode.toUpperCase())
+      .eq("unit_id", unitSession.id)
+      .eq("status", "open")
+      .limit(1);
+    if (existingPs && existingPs.length > 0) {
+      toast({ title: "TBR duplicado", description: "Este TBR já possui um PS aberto.", variant: "destructive" });
+      setSaving(false);
+      return;
+    }
+
     let photoUrl: string | null = null;
     if (capturedPhoto) {
       photoUrl = await uploadPhoto();
@@ -363,6 +401,7 @@ const PSPage = () => {
       photo_url: photoUrl,
       driver_name: history?.driver_name ?? null,
       route: history?.route ?? null,
+      is_seller: isSeller,
     };
 
     const { error } = await supabase.from("ps_entries").insert(entry as any);
@@ -390,6 +429,7 @@ const PSPage = () => {
     setHistory(null);
     setCapturedPhoto(null);
     setPhotoPreview(null);
+    setIsSeller(false);
     stopCamera();
     stopCameraScanner();
     inputRef.current?.focus();
@@ -585,6 +625,17 @@ const PSPage = () => {
       doc.setFontSize(10);
       doc.text(e.tbr_code, margin + 11, y + 1);
 
+      // Seller badge in PDF
+      if (e.is_seller) {
+        const sellerX = margin + 11 + doc.getTextWidth(e.tbr_code) + 3;
+        doc.setFillColor(234, 88, 12); // orange
+        const sellerW = doc.getTextWidth("SELLER") + 6;
+        doc.roundedRect(sellerX, y - 3, sellerW, 6, 1, 1, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(7);
+        doc.text("SELLER", sellerX + 3, y + 1);
+      }
+
       // Status badge
       const statusText = e.status === "open" ? "ABERTO" : "FINALIZADO";
       const statusColor = e.status === "open" ? [234, 179, 8] : [34, 197, 94];
@@ -602,7 +653,7 @@ const PSPage = () => {
       doc.text(`Motorista: ${e.driver_name ?? "—"}`, margin + 4, y);
       doc.text(`Rota: ${e.route ?? "—"}`, margin + 90, y);
       y += 4;
-      doc.text(`Motivo: ${(e.reason ?? e.description ?? "—").slice(0, 60)}`, margin + 4, y);
+      doc.text(`Motivo: ${(e.reason ?? e.description ?? "—").slice(0, 60)}${e.is_seller ? " [Seller]" : ""}`, margin + 4, y);
       y += 4;
       doc.setTextColor(130, 130, 130);
       doc.setFontSize(7);
@@ -800,7 +851,12 @@ const PSPage = () => {
                         <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                         <TableCell>{e.driver_name ?? "-"}</TableCell>
                         <TableCell>{e.route ?? "-"}</TableCell>
-                        <TableCell className="max-w-[200px] truncate">{e.reason ?? e.description}</TableCell>
+                        <TableCell className="max-w-[200px] truncate">
+                          <span>{e.reason ?? e.description}</span>
+                          {e.is_seller && (
+                            <Badge variant="outline" className="ml-1.5 text-[10px] px-1.5 py-0 border-orange-400 text-orange-600 font-bold">Seller</Badge>
+                          )}
+                        </TableCell>
                         <TableCell>{e.conferente_name ?? "-"}</TableCell>
                         <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
                         <TableCell className="text-center">
@@ -898,6 +954,18 @@ const PSPage = () => {
                     <Button size="sm" onClick={handleAddReason} disabled={!newReasonInput.trim()}>Adicionar</Button>
                   </div>
                 )}
+
+                {/* Seller checkbox */}
+                <div className="flex items-center gap-2 pt-1">
+                  <Checkbox
+                    id="is-seller"
+                    checked={isSeller}
+                    onCheckedChange={(checked) => setIsSeller(checked === true)}
+                  />
+                  <label htmlFor="is-seller" className="text-xs font-medium cursor-pointer">
+                    Este TBR é Seller
+                  </label>
+                </div>
               </div>
 
               {/* Conferente */}
