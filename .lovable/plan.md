@@ -1,37 +1,39 @@
 
 
-# Plano: 3 Ajustes — Seller checkbox, TBR duplicado no PS, Horário nos TBRs bipados
+# Plano: Observação no PS + Lápis para editar
 
-## 1. Checkbox "Seller" no modal de PS
+## 1. Migração SQL
 
-**Migração SQL:** Adicionar coluna `is_seller` (boolean, default false) na tabela `ps_entries`.
+Adicionar coluna `observations` (text, nullable) na tabela `ps_entries`.
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
-- Adicionar estado `isSeller` (boolean, default false)
-- Renderizar um checkbox com label "Este TBR é Seller" logo abaixo do botão "+ Novo motivo" (dentro do bloco de motivo)
-- Incluir `is_seller: isSeller` no objeto de insert
-- Na tabela de listagem, exibir um badge "Seller" ao lado do motivo quando `is_seller === true`
-- No PDF, incluir indicação "Seller" nos registros marcados
-- Resetar `isSeller` ao fechar o modal
+## 2. Alterações em `src/pages/dashboard/PSPage.tsx`
 
-## 2. Bloquear TBR duplicado no PS
+**Interface e estado:**
+- Adicionar `observations` ao `PsEntry`
+- Novo estado `observations` (string)
+- Novo estado `editingEntry` (PsEntry | null) para modo edição
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
-- No `handleSave`, antes de inserir, consultar `ps_entries` filtrando por `tbr_code = tbrCode` e `unit_id` e `status = 'open'`
-- Se já existir um registro aberto com o mesmo TBR, exibir toast "Este TBR já possui um PS aberto" e não inserir
-- Também verificar no `searchTbr`: ao abrir o modal, já alertar se existe PS aberto para aquele TBR
+**Modal — campo Observação:**
+- Adicionar `<Textarea>` com label "Observação" abaixo do bloco de foto, antes do botão "Gravar PS"
+- No `handleSave`, incluir `observations` no insert
 
-## 3. Horário de leitura nos TBRs bipados (Conferência Carregamento)
+**Tabela — coluna Observação:**
+- Nova coluna "Observação" entre "Data" e "Status"
+- Exibir texto truncado (max ~30 chars)
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
-- Na renderização da lista de TBRs (linha ~1503), entre o código do TBR e o botão X, adicionar o horário formatado como `HH:mm:ss.SSS` extraído de `t.scanned_at`
-- Exibir em texto pequeno e cor muted para não poluir visualmente
+**Lápis para editar:**
+- Na coluna Ações, adicionar botão com ícone `Pencil` (apenas para status "open")
+- Ao clicar, preenche o modal com os dados do registro existente (motivo, conferente, seller, observação, foto)
+- O botão do modal muda para "Atualizar PS" e faz `update` em vez de `insert`
+- Resetar `editingEntry` ao fechar o modal
+
+**PDF:**
+- Incluir observação na linha do registro, abaixo do motivo
 
 ## Resumo
 
 | Arquivo | Alteração |
 |---|---|
-| Migração SQL | Adicionar `is_seller boolean default false` em `ps_entries` |
-| `src/pages/dashboard/PSPage.tsx` | Checkbox seller, bloqueio de TBR duplicado, badge na tabela, indicação no PDF |
-| `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` | Exibir horário (HH:mm:ss.SSS) ao lado de cada TBR bipado |
+| Migração SQL | `ADD COLUMN observations text` em `ps_entries` |
+| `PSPage.tsx` | Campo observação no modal, coluna na tabela, lápis para edição, update no save, PDF |
 
