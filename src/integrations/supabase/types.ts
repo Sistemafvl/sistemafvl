@@ -625,6 +625,7 @@ export type Database = {
           driver_name: string | null
           id: string
           is_seller: boolean
+          observations: string | null
           photo_url: string | null
           reason: string | null
           ride_id: string | null
@@ -641,6 +642,7 @@ export type Database = {
           driver_name?: string | null
           id?: string
           is_seller?: boolean
+          observations?: string | null
           photo_url?: string | null
           reason?: string | null
           ride_id?: string | null
@@ -657,6 +659,7 @@ export type Database = {
           driver_name?: string | null
           id?: string
           is_seller?: boolean
+          observations?: string | null
           photo_url?: string | null
           reason?: string | null
           ride_id?: string | null

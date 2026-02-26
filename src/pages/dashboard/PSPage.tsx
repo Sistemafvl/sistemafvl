@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
-import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { toast } from "@/hooks/use-toast";
 import {
@@ -53,6 +54,7 @@ interface PsEntry {
   conferente_id: string | null;
   conferente_name?: string;
   is_seller?: boolean;
+  observations?: string | null;
 }
 
 interface Conferente {
@@ -100,6 +102,8 @@ const PSPage = () => {
   const [saving, setSaving] = useState(false);
   const [page, setPage] = useState(1);
   const [isSeller, setIsSeller] = useState(false);
+  const [observations, setObservations] = useState("");
+  const [editingEntry, setEditingEntry] = useState<PsEntry | null>(null);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -183,6 +187,7 @@ const PSPage = () => {
         photo_url: e.photo_url ?? null,
         conferente_name: e.conferente_id ? confMap[e.conferente_id] : undefined,
         is_seller: (e as any).is_seller ?? false,
+        observations: (e as any).observations ?? null,
       })));
     }
     setIsLoading(false);
@@ -286,6 +291,22 @@ const PSPage = () => {
     setCapturedPhoto(null);
     setPhotoPreview(null);
     setIsSeller(false);
+    setObservations("");
+    setEditingEntry(null);
+  };
+
+  const handleEditEntry = (entry: PsEntry) => {
+    setEditingEntry(entry);
+    setTbrCode(entry.tbr_code);
+    setSelectedReason(entry.reason ?? entry.description ?? "");
+    setSelectedConferente(entry.conferente_id ?? "");
+    setIsSeller(entry.is_seller ?? false);
+    setObservations(entry.observations ?? "");
+    setPhotoPreview(entry.photo_url ?? null);
+    setCapturedPhoto(null);
+    setHistory(null);
+    setIncludeMode(true);
+    setHistoryModalOpen(true);
   };
 
   // Camera functions
@@ -372,6 +393,34 @@ const PSPage = () => {
     if (!unitSession || !selectedReason) return;
     setSaving(true);
 
+    // Edit mode — update existing entry
+    if (editingEntry) {
+      let photoUrl: string | null = editingEntry.photo_url ?? null;
+      if (capturedPhoto) {
+        photoUrl = await uploadPhoto();
+      }
+
+      const { error } = await supabase.from("ps_entries").update({
+        reason: selectedReason,
+        description: selectedReason,
+        conferente_id: selectedConferente || null,
+        is_seller: isSeller,
+        observations: observations || null,
+        photo_url: photoUrl,
+      } as any).eq("id", editingEntry.id);
+      setSaving(false);
+
+      if (error) {
+        toast({ title: "Erro ao atualizar PS", variant: "destructive" });
+        return;
+      }
+      toast({ title: "PS atualizado com sucesso" });
+      closeModal();
+      loadEntries();
+      inputRef.current?.focus();
+      return;
+    }
+
     // Double-check for duplicate open PS before saving
     const { data: existingPs } = await supabase
       .from("ps_entries")
@@ -402,6 +451,7 @@ const PSPage = () => {
       driver_name: history?.driver_name ?? null,
       route: history?.route ?? null,
       is_seller: isSeller,
+      observations: observations || null,
     };
 
     const { error } = await supabase.from("ps_entries").insert(entry as any);
@@ -430,6 +480,8 @@ const PSPage = () => {
     setCapturedPhoto(null);
     setPhotoPreview(null);
     setIsSeller(false);
+    setObservations("");
+    setEditingEntry(null);
     stopCamera();
     stopCameraScanner();
     inputRef.current?.focus();
@@ -655,6 +707,10 @@ const PSPage = () => {
       y += 4;
       doc.text(`Motivo: ${(e.reason ?? e.description ?? "—").slice(0, 60)}${e.is_seller ? " [Seller]" : ""}`, margin + 4, y);
       y += 4;
+      if (e.observations) {
+        doc.text(`Obs: ${e.observations.slice(0, 80)}`, margin + 4, y);
+        y += 4;
+      }
       doc.setTextColor(130, 130, 130);
       doc.setFontSize(7);
       doc.text(`Registrado em: ${format(new Date(e.created_at), "dd/MM/yyyy 'às' HH:mm")}`, margin + 4, y);
@@ -834,12 +890,13 @@ const PSPage = () => {
               <div className="rounded-md border overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                     <TableRow>
                       <TableHead className="font-bold">TBR</TableHead>
                       <TableHead className="font-bold">Motorista</TableHead>
                       <TableHead className="font-bold">Rota</TableHead>
                       <TableHead className="font-bold">Motivo</TableHead>
                       <TableHead className="font-bold">Conferente</TableHead>
+                      <TableHead className="font-bold">Observação</TableHead>
                       <TableHead className="font-bold">Data</TableHead>
                       <TableHead className="font-bold text-center">Status</TableHead>
                       <TableHead className="font-bold text-center">Ações</TableHead>
@@ -858,6 +915,9 @@ const PSPage = () => {
                           )}
                         </TableCell>
                         <TableCell>{e.conferente_name ?? "-"}</TableCell>
+                        <TableCell className="max-w-[150px] truncate text-xs" title={e.observations ?? ""}>
+                          {e.observations ? (e.observations.length > 30 ? e.observations.slice(0, 30) + "…" : e.observations) : "-"}
+                        </TableCell>
                         <TableCell className="text-xs">{new Date(e.created_at).toLocaleString("pt-BR")}</TableCell>
                         <TableCell className="text-center">
                           {e.status === "open" ? (
@@ -868,6 +928,11 @@ const PSPage = () => {
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex gap-1 justify-center">
+                            {e.status === "open" && (
+                              <Button variant="ghost" size="sm" onClick={() => handleEditEntry(e)} title="Editar PS">
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            )}
                             {e.photo_url && (
                               <Button variant="ghost" size="sm" onClick={() => window.open(e.photo_url!, "_blank")}>
                                 <Camera className="h-3 w-3" />
@@ -910,7 +975,7 @@ const PSPage = () => {
             <DialogTitle className="flex items-center gap-2 font-bold italic">
               <AlertTriangle className="h-5 w-5 text-primary" /> PS — {tbrCode}
             </DialogTitle>
-            <DialogDescription>Registrar Problem Solve para este TBR.</DialogDescription>
+            <DialogDescription>{editingEntry ? "Editar Problem Solve existente." : "Registrar Problem Solve para este TBR."}</DialogDescription>
           </DialogHeader>
           {history && (
             <div className="space-y-2 text-sm">
@@ -1009,8 +1074,19 @@ const PSPage = () => {
                 )}
               </div>
 
+              {/* Observations */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold">Observação</label>
+                <Textarea
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                  placeholder="Observação (opcional)..."
+                  className="min-h-[60px] text-sm"
+                />
+              </div>
+
               <Button className="w-full" onClick={handleSave} disabled={saving || !selectedReason || uploadingPhoto}>
-                {saving || uploadingPhoto ? "Gravando..." : "Gravar PS"}
+                {saving || uploadingPhoto ? "Gravando..." : editingEntry ? "Atualizar PS" : "Gravar PS"}
               </Button>
             </div>
           )}
