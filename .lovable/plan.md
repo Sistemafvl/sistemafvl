@@ -1,42 +1,42 @@
 
 
-# Plano: Leitura e gravação ultra-rápida de TBRs
+# Plano: Leitura ultra-rápida de TBRs - corrigir stale state e reduzir latência
 
-## Problema
+## Problema identificado
 
-Quando o scanner lê dois códigos em sequência rápida (< 2s), o segundo é descartado porque `processingRef` bloqueia o input enquanto o `saveTbr` executa múltiplas queries sequenciais no banco (verificar TBRs anteriores, fechar piso, fechar RTO, inserir). Todo esse processamento leva ~1-2s, bloqueando a próxima leitura.
+Analisando os network requests do teste:
+- TBR4567819 e TBR4567849 foram escaneados anteriormente com ~600ms de diferença (ok)
+- TBR4567834 e TBR4567896 foram processados no mesmo segundo (19:49:13) -- a fila funcionou e ambos foram gravados
 
-## Solução: Fila de processamento assíncrona
+Porém, o problema principal é que `saveTbr` lê `tbrs[rideId]` do **state React** (linha 615-616) para verificar duplicatas. Quando a fila processa 2 códigos seguidos, o segundo item lê o state **antes** do `setTbrs` do primeiro ter sido aplicado, causando:
+1. O segundo TBR não vê o primeiro na lista de duplicatas
+2. Possíveis gravações duplicadas ou erros de "mesmo TBR"
 
-Em vez de bloquear o input, implementar uma **fila (queue)** por ride que:
-1. Captura o código imediatamente e limpa o input
-2. Adiciona o código à fila
-3. Processa a fila em background, um por vez
-4. O input nunca fica bloqueado — aceita o próximo código enquanto o anterior está sendo processado
+Além disso, cada `saveTbr` faz até 4 queries sequenciais ao banco antes de inserir, adicionando ~500ms-1s de latência por item.
+
+## Solução
+
+### 1. Usar ref para tracking de códigos processados (evitar stale state)
+
+Criar `processedCodesRef = useRef<Record<string, Set<string>>>({})` que é atualizado **sincronamente** dentro da fila, antes mesmo do `setTbrs` assíncrono do React. Assim, o segundo TBR na fila consegue ver imediatamente que o primeiro já foi processado.
+
+### 2. Reduzir debounce de 50ms para 20ms
+
+Scanners enviam o código completo de uma vez. 20ms é suficiente para capturar o input completo.
+
+### 3. Paralelizar queries iniciais no saveTbr
+
+As queries de verificação (check previous TBRs) e fechamento (piso/rto) podem ser otimizadas usando `Promise.all` onde possível.
 
 ## Alterações em `ConferenciaCarregamentoPage.tsx`
 
-**Remover:** `processingRef` como mecanismo de bloqueio de input
-
-**Adicionar:**
-- `queueRef = useRef<Record<string, string[]>>({})` — fila de códigos por ride
-- `processingQueueRef = useRef<Record<string, boolean>>({})` — flag indicando se a fila está sendo processada
-- Função `processQueue(rideId)` que consome a fila sequencialmente, chamando `saveTbr` para cada código
-- Atualização otimista imediata: ao entrar na fila, o TBR já aparece na lista (com estado "pendente") antes mesmo de salvar no banco
-
-**Fluxo do scanner (debounce 50ms):**
-1. Código chega → limpa input imediatamente → adiciona à fila
-2. Se `processQueue` não está rodando para esse ride, inicia
-3. `processQueue` consome códigos um a um, chamando `saveTbr`
-4. Enquanto processa, novos códigos continuam entrando na fila
-
-**Otimização adicional no `saveTbr`:**
-- Executar queries independentes em paralelo (`Promise.all`) onde possível: fechar `piso_entries` e `rto_entries` simultaneamente
-- Reduzir o número de awaits sequenciais
-
-## Resumo
+1. Adicionar `processedCodesRef` que mantém um Set de códigos já enfileirados/processados por ride
+2. No `handleTbrInputChange`, verificar duplicata via ref **antes** de enfileirar
+3. Na `processQueue`, após processar cada código, atualizar o ref
+4. No `saveTbr`, usar o ref em vez de `tbrs[rideId]` para contagem de ocorrências
+5. Reduzir debounce para 20ms
 
 | Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` | Substituir `processingRef` por sistema de fila; paralelizar queries no `saveTbr` |
+| `ConferenciaCarregamentoPage.tsx` | Adicionar `processedCodesRef` para tracking síncrono; reduzir debounce; verificar duplicatas via ref |
 
