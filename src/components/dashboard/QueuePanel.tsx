@@ -82,6 +82,7 @@ const QueuePanel = () => {
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [isPulsing, setIsPulsing] = useState(false);
   const prevCountRef = useRef(0);
+  const [animating, setAnimating] = useState<{ idx: number; direction: "up" | "down" } | null>(null);
 
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
@@ -224,6 +225,12 @@ const QueuePanel = () => {
   const handleMoveEntry = async (idx: number, direction: "up" | "down") => {
     const targetIdx = direction === "up" ? idx - 1 : idx + 1;
     if (targetIdx < 0 || targetIdx >= entries.length) return;
+    if (animating) return;
+
+    setAnimating({ idx, direction });
+
+    // Wait for animation
+    await new Promise(r => setTimeout(r, 300));
 
     const current = entries[idx];
     const neighbor = entries[targetIdx];
@@ -232,6 +239,8 @@ const QueuePanel = () => {
       supabase.from("queue_entries").update({ joined_at: neighbor.joined_at }).eq("id", current.id),
       supabase.from("queue_entries").update({ joined_at: current.joined_at }).eq("id", neighbor.id),
     ]);
+
+    setAnimating(null);
     fetchQueue();
   };
 
@@ -353,7 +362,25 @@ const QueuePanel = () => {
               </div>
             ) : (
               entries.map((entry, idx) => (
-                <div key={entry.id} className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card">
+                <div
+                  key={entry.id}
+                  className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card"
+                  style={{
+                    transition: animating ? "transform 0.3s ease-in-out, z-index 0s" : "none",
+                    position: "relative",
+                    zIndex:
+                      animating?.idx === idx ? 10 :
+                      (animating && ((animating.direction === "up" && idx === animating.idx - 1) || (animating.direction === "down" && idx === animating.idx + 1))) ? 5 : 1,
+                    transform:
+                      animating?.idx === idx
+                        ? `translateY(${animating.direction === "up" ? "-100%" : "100%"})`
+                        : animating && animating.direction === "up" && idx === animating.idx - 1
+                          ? "translateY(100%)"
+                          : animating && animating.direction === "down" && idx === animating.idx + 1
+                            ? "translateY(-100%)"
+                            : "translateY(0)",
+                  }}
+                >
                   <Avatar className="h-8 w-8 shrink-0">
                     {entry.driver_avatar && <AvatarImage src={entry.driver_avatar} />}
                     <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">

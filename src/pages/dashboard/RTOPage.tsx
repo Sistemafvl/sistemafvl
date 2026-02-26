@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { isValidTbrCode } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,14 @@ const RTOPage = () => {
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" || !tbrInput.trim()) return;
     const code = tbrInput.trim();
+
+    if (!isValidTbrCode(code)) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "TBR inválido", description: "O código TBR deve conter apenas 'TBR' seguido de números.", variant: "destructive" });
+      setTbrInput("");
+      return;
+    }
+
     setSearching(true);
     setTbrCode(code);
 

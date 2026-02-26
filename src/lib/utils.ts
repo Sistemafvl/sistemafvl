@@ -30,6 +30,14 @@ export function getBrazilDayRange(dateStr?: string): { start: string; end: strin
   };
 }
 
+/** Validate TBR code: must start with "TBR" followed by digits only */
+export function isValidTbrCode(code: string): boolean {
+  const upper = code.toUpperCase();
+  if (!upper.startsWith("TBR")) return false;
+  const rest = upper.slice(3);
+  return rest.length > 0 && /^\d+$/.test(rest);
+}
+
 /** Format an ISO date to dd/MM/yyyy in Brazil timezone */
 export function formatDateBR(iso: string): string {
   const d = new Date(iso);

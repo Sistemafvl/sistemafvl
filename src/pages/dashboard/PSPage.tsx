@@ -25,7 +25,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { format } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, isValidTbrCode } from "@/lib/utils";
 import jsPDF from "jspdf";
 
 interface TbrHistory {
@@ -189,6 +189,11 @@ const PSPage = () => {
     debounceRef.current = setTimeout(() => {
       const code = value.trim();
       if (code.toUpperCase().startsWith("TBR") && code.length >= 5) {
+        if (!isValidTbrCode(code)) {
+          toast({ title: "TBR inválido", description: "O código TBR deve conter apenas 'TBR' seguido de números.", variant: "destructive" });
+          setTbrInput("");
+          return;
+        }
         searchTbr(code);
       }
     }, 300);
@@ -443,6 +448,7 @@ const PSPage = () => {
             setTimeout(() => recentCodes.delete(code), 3000);
             setLastScannedCode(code);
             if (code.toUpperCase().startsWith("TBR")) {
+              if (!isValidTbrCode(code)) return;
               playSuccessBeep();
               stopCameraScanner();
               searchTbr(code);

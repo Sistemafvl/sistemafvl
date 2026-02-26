@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
+import { cn, isValidTbrCode } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 import SystemUpdates from "@/components/dashboard/SystemUpdates";
@@ -41,6 +41,8 @@ interface TbrResult {
   dnr_status: { status: string; value: number } | null;
   piso_status: { status: string; reason: string } | null;
   composite_status: string;
+  entry_date: string | null;
+  entry_source: string | null;
 }
 
 const DashboardHome = () => {
@@ -116,6 +118,16 @@ const DashboardHome = () => {
         return;
       }
 
+      if (!isValidTbrCode(code)) {
+        setTbrError("TBR inválido. O código deve conter apenas 'TBR' seguido de números.");
+        setShowTbrModal(true);
+        setSearchedTbr(code);
+        setTbrLoading(false);
+        setTbrResult(null);
+        setTbrNotFound(false);
+        return;
+      }
+
       setTbrError("");
       setSearchedTbr(code);
       setShowTbrModal(true);
@@ -145,6 +157,14 @@ const DashboardHome = () => {
           setTbrLoading(false);
           return;
         }
+
+        // Determine entry source and date
+        let entrySource: string | null = null;
+        let entryDate: string | null = null;
+        if (dnrCheck.data) { entrySource = "DNR"; entryDate = dnrCheck.data.created_at; }
+        else if (psCheck.data) { entrySource = "PS"; entryDate = psCheck.data.created_at; }
+        else if (rtoCheck.data) { entrySource = "RTO"; entryDate = rtoCheck.data.created_at; }
+        else if (pisoCheck.data) { entrySource = "Retorno Piso"; entryDate = pisoCheck.data.created_at; }
 
         // Get unit name
         const unitId = (foundEntry as any).unit_id;
@@ -194,6 +214,8 @@ const DashboardHome = () => {
           dnr_status: dnrCheck.data ? { status: dnrCheck.data.status, value: Number(dnrCheck.data.dnr_value) } : null,
           piso_status: pisoCheck.data ? { status: pisoCheck.data.status, reason: pisoCheck.data.reason } : null,
           composite_status: computeFallbackStatus(),
+          entry_date: entryDate,
+          entry_source: entrySource,
         });
         setTbrLoading(false);
         return;
@@ -268,6 +290,8 @@ const DashboardHome = () => {
         dnr_status: dnrRes.data ? { status: dnrRes.data.status, value: Number(dnrRes.data.dnr_value) } : null,
         piso_status: pisoRes.data ? { status: pisoRes.data.status, reason: pisoRes.data.reason } : null,
         composite_status: computeCompositeStatus(),
+        entry_date: tbr.scanned_at ?? null,
+        entry_source: "Conferência Carregamento",
       });
       setTbrLoading(false);
     }
@@ -506,6 +530,12 @@ const DashboardHome = () => {
                     <div><strong>Status:</strong> <span className="font-semibold">{tbrResult.composite_status}</span></div>
                     <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
                     <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
+                    {tbrResult.entry_date && (
+                      <div><strong>Lançamento:</strong> {format(new Date(tbrResult.entry_date), "dd/MM/yyyy HH:mm")}</div>
+                    )}
+                    {tbrResult.entry_source && (
+                      <div><strong>Origem:</strong> {tbrResult.entry_source}</div>
+                    )}
                   </div>
                 </div>
               ) : null}
