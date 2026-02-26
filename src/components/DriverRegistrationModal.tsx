@@ -165,6 +165,21 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     }
     setUploadingDoc(null);
 
+    // Verify all required docs were uploaded successfully
+    const { count } = await supabase
+      .from("driver_documents")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", driverId)
+      .in("doc_type", ["cnh", "crlv", "comprovante_endereco"]);
+
+    if ((count ?? 0) < 3) {
+      await supabase.from("driver_documents").delete().eq("driver_id", driverId);
+      await supabase.from("drivers" as any).delete().eq("id", driverId);
+      toast({ title: "Erro no upload", description: "Falha ao enviar documentos obrigatórios. Tente novamente.", variant: "destructive" });
+      setLoading(false);
+      return;
+    }
+
     setLoading(false);
     setForm({
       name: "", cpf: "", cep: "", address: "", house_number: "", neighborhood: "",
