@@ -1,42 +1,37 @@
 
 
-# Plano: Leitura ultra-rápida de TBRs - corrigir stale state e reduzir latência
+# Plano: Preservar conferente ao retornar carregamento
 
-## Problema identificado
+## Problema
 
-Analisando os network requests do teste:
-- TBR4567819 e TBR4567849 foram escaneados anteriormente com ~600ms de diferença (ok)
-- TBR4567834 e TBR4567896 foram processados no mesmo segundo (19:49:13) -- a fila funcionou e ambos foram gravados
+A função `handleRetornar` (linha 523) faz update do `loading_status` para "loading" e `finished_at` para null, mas o `fetchRides()` subsequente recarrega todos os dados do banco. Se houver algum timing issue ou se o conferente não foi salvo corretamente, o dropdown pode voltar ao estado "não selecionado". Além disso, não há proteção explícita para garantir que o `conferente_id` não seja alterado durante o retorno.
 
-Porém, o problema principal é que `saveTbr` lê `tbrs[rideId]` do **state React** (linha 615-616) para verificar duplicatas. Quando a fila processa 2 códigos seguidos, o segundo item lê o state **antes** do `setTbrs` do primeiro ter sido aplicado, causando:
-1. O segundo TBR não vê o primeiro na lista de duplicatas
-2. Possíveis gravações duplicadas ou erros de "mesmo TBR"
+## Correção
 
-Além disso, cada `saveTbr` faz até 4 queries sequenciais ao banco antes de inserir, adicionando ~500ms-1s de latência por item.
+### 1. Garantir que `handleRetornar` nunca toque no `conferente_id`
 
-## Solução
+Na linha 524, o update já não inclui `conferente_id`, mas vamos adicionar uma proteção explícita para manter o valor atual e adicionar `e.stopPropagation()` no botão para evitar propagação de eventos.
 
-### 1. Usar ref para tracking de códigos processados (evitar stale state)
+### 2. Adicionar o `rideId` ao `lockedConferenteIds` antes de retornar
 
-Criar `processedCodesRef = useRef<Record<string, Set<string>>>({})` que é atualizado **sincronamente** dentro da fila, antes mesmo do `setTbrs` assíncrono do React. Assim, o segundo TBR na fila consegue ver imediatamente que o primeiro já foi processado.
+Antes de executar o update, inserir o `rideId` no set de locks para que o dropdown permaneça travado durante todo o processo:
 
-### 2. Reduzir debounce de 50ms para 20ms
+```typescript
+const handleRetornar = async (rideId: string) => {
+  // Preserve conferente lock during return
+  setLockedConferenteIds((prev) => new Set(prev).add(rideId));
+  await supabase.from("driver_rides")
+    .update({ loading_status: "loading", finished_at: null } as any)
+    .eq("id", rideId);
+  await fetchRides();
+};
+```
 
-Scanners enviam o código completo de uma vez. 20ms é suficiente para capturar o input completo.
+### 3. Adicionar `stopPropagation` no botão Retornar
 
-### 3. Paralelizar queries iniciais no saveTbr
-
-As queries de verificação (check previous TBRs) e fechamento (piso/rto) podem ser otimizadas usando `Promise.all` onde possível.
-
-## Alterações em `ConferenciaCarregamentoPage.tsx`
-
-1. Adicionar `processedCodesRef` que mantém um Set de códigos já enfileirados/processados por ride
-2. No `handleTbrInputChange`, verificar duplicata via ref **antes** de enfileirar
-3. Na `processQueue`, após processar cada código, atualizar o ref
-4. No `saveTbr`, usar o ref em vez de `tbrs[rideId]` para contagem de ocorrências
-5. Reduzir debounce para 20ms
+No JSX do botão (linha 1469), adicionar `e.stopPropagation()` para evitar que o clique propague e afete o conferente select.
 
 | Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` | Adicionar `processedCodesRef` para tracking síncrono; reduzir debounce; verificar duplicatas via ref |
+| `ConferenciaCarregamentoPage.tsx` | Lock conferente antes do retorno + stopPropagation no botão |
 
