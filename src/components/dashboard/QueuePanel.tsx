@@ -232,15 +232,25 @@ const QueuePanel = () => {
     // Wait for animation
     await new Promise(r => setTimeout(r, 300));
 
+    // Capture references before local swap
     const current = entries[idx];
     const neighbor = entries[targetIdx];
 
+    // Optimistic local swap BEFORE resetting animation
+    setEntries(prev => {
+      const newArr = [...prev];
+      [newArr[idx], newArr[targetIdx]] = [newArr[targetIdx], newArr[idx]];
+      return newArr;
+    });
+
+    // Now reset animation — local state already has correct order
+    setAnimating(null);
+
+    // DB update + background sync
     await Promise.all([
       supabase.from("queue_entries").update({ joined_at: neighbor.joined_at }).eq("id", current.id),
       supabase.from("queue_entries").update({ joined_at: current.joined_at }).eq("id", neighbor.id),
     ]);
-
-    setAnimating(null);
     fetchQueue();
   };
 
