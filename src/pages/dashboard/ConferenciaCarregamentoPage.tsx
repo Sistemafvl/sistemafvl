@@ -520,7 +520,10 @@ const ConferenciaCarregamentoPage = () => {
     await fetchRides();
   };
 
-  const handleRetornar = async (rideId: string) => {
+  const handleRetornar = async (rideId: string, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    // Lock conferente dropdown so it's never reset during return
+    setLockedConferenteIds((prev) => new Set(prev).add(rideId));
     await supabase.from("driver_rides").update({ loading_status: "loading", finished_at: null } as any).eq("id", rideId);
     await fetchRides();
   };
@@ -1466,7 +1469,7 @@ const ConferenciaCarregamentoPage = () => {
                               </Button>
                             )}
                             {isFinished && (
-                              <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => handleRetornar(ride.id)}>
+                              <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={(e) => handleRetornar(ride.id, e)}>
                                 <RotateCcw className="h-3.5 w-3.5" /> Retornar
                               </Button>
                             )}
