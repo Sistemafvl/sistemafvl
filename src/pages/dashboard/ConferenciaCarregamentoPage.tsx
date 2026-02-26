@@ -265,25 +265,60 @@ const ConferenciaCarregamentoPage = () => {
 
       const detector = new (window as any).BarcodeDetector({ formats: ["code_128", "code_39", "ean_13", "ean_8", "qr_code", "data_matrix", "pdf417", "codabar", "itf", "upc_a", "upc_e"] });
       const recentCodes = new Set<string>();
+      let scanningPaused = false;
 
       scanIntervalRef.current = setInterval(async () => {
+        if (scanningPaused) return;
         if (!videoRef.current || videoRef.current.readyState < 2) return;
         try {
           const barcodes = await detector.detect(videoRef.current);
-          if (barcodes.length > 0) {
+          if (barcodes.length === 0) return;
+
+          // Filter only TBR codes
+          const tbrBarcodes = barcodes.filter((b: any) => b.rawValue.toUpperCase().startsWith("TBR"));
+
+          // If multiple TBR codes visible, ask user to focus
+          if (tbrBarcodes.length > 1) {
+            setLastScannedCode("⚠ Múltiplos códigos detectados. Foque em apenas 1.");
+            return;
+          }
+
+          // If no TBR codes but other codes visible, show error
+          if (tbrBarcodes.length === 0) {
             const code = barcodes[0].rawValue;
             if (recentCodes.has(code)) return;
             recentCodes.add(code);
-            setTimeout(() => recentCodes.delete(code), 1500);
+            setTimeout(() => recentCodes.delete(code), 5000);
             setLastScannedCode(code);
-            if (code.toUpperCase().startsWith("TBR")) {
-              if (!isValidTbrCode(code)) { playErrorBeep(); return; }
-              playSuccessBeep();
-              await saveTbrRef.current?.(rideId, code);
-            } else {
-              playErrorBeep();
-            }
+            playErrorBeep();
+            return;
           }
+
+          const code = tbrBarcodes[0].rawValue;
+          if (recentCodes.has(code)) return;
+          recentCodes.add(code);
+          setTimeout(() => recentCodes.delete(code), 5000);
+
+          if (!isValidTbrCode(code)) { setLastScannedCode(code); playErrorBeep(); return; }
+
+          // Pause scanning after successful read
+          scanningPaused = true;
+          setLastScannedCode(code);
+          playSuccessBeep();
+
+          // Synchronous lock BEFORE async saveTbr to prevent duplicates
+          if (!processedCodesRef.current[rideId]) processedCodesRef.current[rideId] = new Set();
+          const upper = code.toUpperCase();
+          if (processedCodesRef.current[rideId].has(upper)) {
+            // Already processed — resume scanning after short delay
+            setTimeout(() => { scanningPaused = false; }, 1500);
+            return;
+          }
+
+          await saveTbrRef.current?.(rideId, code);
+
+          // Resume scanning after a delay so user sees the result
+          setTimeout(() => { scanningPaused = false; }, 1500);
         } catch {}
       }, 100);
     } catch (err) {
