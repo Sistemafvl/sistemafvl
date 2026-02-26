@@ -609,8 +609,15 @@ const ConferenciaCarregamentoPage = () => {
   const scrollTbrList = (rideId: string) => {
     setTimeout(() => {
       const el = tbrListRefs.current[rideId];
-      if (el) el.scrollTop = el.scrollHeight;
-    }, 100);
+      if (el) {
+        const lastChild = el.lastElementChild;
+        if (lastChild) {
+          lastChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          el.scrollTop = el.scrollHeight;
+        }
+      }
+    }, 250);
   };
 
   // Save TBR logic (shared between scanner debounce and manual Enter)
