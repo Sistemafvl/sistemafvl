@@ -51,13 +51,9 @@ Deno.serve(async (req) => {
         if (token !== anonKey) {
           // Real user token - validate it
           const { data: userData, error: userError } = await supabase.auth.getUser(token);
-          if (userError || !userData?.user) {
-            return new Response(
-              JSON.stringify({ error: "Invalid token" }),
-              { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-            );
+          if (!userError && userData?.user) {
+            isAuthenticated = true;
           }
-          isAuthenticated = true;
         }
       }
 
