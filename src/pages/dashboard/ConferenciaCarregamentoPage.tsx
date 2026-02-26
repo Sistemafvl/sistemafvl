@@ -20,7 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { format, differenceInMinutes } from "date-fns";
-import { cn } from "@/lib/utils";
+import { cn, isValidTbrCode } from "@/lib/utils";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface RideWithDriver {
@@ -277,6 +277,7 @@ const ConferenciaCarregamentoPage = () => {
             setTimeout(() => recentCodes.delete(code), 1500);
             setLastScannedCode(code);
             if (code.toUpperCase().startsWith("TBR")) {
+              if (!isValidTbrCode(code)) { playErrorBeep(); return; }
               playSuccessBeep();
               await saveTbrRef.current?.(rideId, code);
             } else {
@@ -602,6 +603,14 @@ const ConferenciaCarregamentoPage = () => {
   // Save TBR logic (shared between scanner debounce and manual Enter)
   const saveTbr = async (rideId: string, code: string) => {
     if (!code.trim()) return;
+    if (!isValidTbrCode(code)) {
+      playErrorBeep();
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "TBR inválido", description: "O código TBR deve conter apenas 'TBR' seguido de números.", variant: "destructive" });
+      setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+      setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+      return;
+    }
     if (code.toUpperCase().startsWith("TBR")) {
       const currentTbrs = tbrs[rideId] ?? [];
       const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === code.toUpperCase());

@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/command";
 import { format } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
-import { cn } from "@/lib/utils";
+import { cn, isValidTbrCode } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
 const MAX_TBR_LENGTH = 15;
@@ -138,6 +138,12 @@ const RetornoPisoPage = () => {
     if (e.key !== "Enter" || !tbrInput.trim()) return;
     const code = tbrInput.trim();
     if (code.length > MAX_TBR_LENGTH) return;
+
+    if (!isValidTbrCode(code)) {
+      toast({ title: "TBR inválido", description: "O código TBR deve conter apenas 'TBR' seguido de números.", variant: "destructive" });
+      setTbrInput("");
+      return;
+    }
 
     setSearching(true);
     setTbrCode(code);
