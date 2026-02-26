@@ -1502,7 +1502,20 @@ const ConferenciaCarregamentoPage = () => {
                                 {rideTbrs.map((t, i) => (
                                   <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
                                     <span className="font-bold text-primary">{i + 1}.</span>
-                                    <span className="font-mono flex-1">{t.code}</span>
+                                    <span className="font-mono">{t.code}</span>
+                                    {t.scanned_at && (
+                                      <span className="text-[10px] text-muted-foreground font-mono">
+                                        {(() => {
+                                          const d = new Date(t.scanned_at);
+                                          const hh = String(d.getHours()).padStart(2, "0");
+                                          const mm = String(d.getMinutes()).padStart(2, "0");
+                                          const ss = String(d.getSeconds()).padStart(2, "0");
+                                          const ms = String(d.getMilliseconds()).padStart(3, "0");
+                                          return `${hh}:${mm}:${ss}.${ms}`;
+                                        })()}
+                                      </span>
+                                    )}
+                                    <span className="flex-1" />
                                     <button
                                       onClick={() => handleDeleteTbr(t.id, ride.id)}
                                       className="text-destructive hover:text-destructive/80 shrink-0"
