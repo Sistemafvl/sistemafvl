@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { format, differenceInMinutes } from "date-fns";
 import { cn, isValidTbrCode } from "@/lib/utils";
+import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface RideWithDriver {
@@ -271,7 +272,11 @@ const ConferenciaCarregamentoPage = () => {
         if (scanningPaused) return;
         if (!videoRef.current || videoRef.current.readyState < 2) return;
         try {
-          const barcodes = await detector.detect(videoRef.current);
+          const allBarcodes = await detector.detect(videoRef.current);
+          if (allBarcodes.length === 0) return;
+
+          // Only consider barcodes fully inside the viewfinder area (20% inset)
+          const barcodes = allBarcodes.filter((b: any) => isBarcodeInsideViewfinder(b, videoRef.current!, 0.2));
           if (barcodes.length === 0) return;
 
           // Filter only TBR codes

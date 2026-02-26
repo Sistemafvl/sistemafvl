@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
+import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import { toast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -534,7 +535,11 @@ const PSPage = () => {
       scanIntervalRef.current = setInterval(async () => {
         if (!scannerVideoRef.current || scannerVideoRef.current.readyState < 2) return;
         try {
-          const barcodes = await detector.detect(scannerVideoRef.current);
+          const allBarcodes = await detector.detect(scannerVideoRef.current);
+          if (allBarcodes.length === 0) return;
+
+          // Only consider barcodes fully inside the viewfinder area (~25% inset for centered 40x40 in 48h)
+          const barcodes = allBarcodes.filter((b: any) => isBarcodeInsideViewfinder(b, scannerVideoRef.current!, 0.2));
           if (barcodes.length === 0) return;
 
           // Filter only TBR codes
