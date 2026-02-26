@@ -714,7 +714,7 @@ const ConferenciaCarregamentoPage = () => {
         }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
-        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber } as any);
+        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
       } else if (count === 1) {
         newTbr._duplicate = true;
         setTbrs((prev) => {
