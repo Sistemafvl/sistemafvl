@@ -673,18 +673,19 @@ const ConferenciaCarregamentoPage = () => {
           playReincidenceBeep();
         }
 
-        // ALWAYS close piso_entries and rto_entries when scanning into a load
-        await supabase
-          .from("piso_entries")
-          .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-          .eq("tbr_code", code)
-          .eq("status", "open");
-
-        await supabase
-          .from("rto_entries")
-          .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-          .eq("tbr_code", code)
-          .eq("status", "open");
+        // Close piso and rto entries in parallel for speed
+        await Promise.all([
+          supabase
+            .from("piso_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .eq("tbr_code", code)
+            .eq("status", "open"),
+          supabase
+            .from("rto_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .eq("tbr_code", code)
+            .eq("status", "open"),
+        ]);
 
         newTbr.trip_number = tripNumber;
 
@@ -757,15 +758,29 @@ const ConferenciaCarregamentoPage = () => {
   // Keep ref updated for camera scanner callback
   saveTbrRef.current = saveTbr;
 
-  // Processing lock per ride to prevent double-reads
-  const processingRef = useRef<Record<string, boolean>>({});
+  // Queue system for ultra-fast scanning - never blocks input
+  const queueRef = useRef<Record<string, string[]>>({});
+  const processingQueueRef = useRef<Record<string, boolean>>({});
+
+  const processQueue = useCallback(async (rideId: string) => {
+    if (processingQueueRef.current[rideId]) return;
+    processingQueueRef.current[rideId] = true;
+
+    while (queueRef.current[rideId]?.length > 0) {
+      const code = queueRef.current[rideId].shift()!;
+      try {
+        await saveTbr(rideId, code);
+      } catch (err) {
+        console.error("Queue processing error:", err);
+      }
+    }
+
+    processingQueueRef.current[rideId] = false;
+  }, []);
 
   // Auto-save TBR with debounce (scanner mode) or Enter (manual mode)
   const handleTbrInputChange = (rideId: string, value: string) => {
     if (value.length > 15) return;
-
-    // Block input while processing previous TBR
-    if (processingRef.current[rideId]) return;
 
     setTbrInputs((prev) => ({ ...prev, [rideId]: value }));
 
@@ -778,16 +793,18 @@ const ConferenciaCarregamentoPage = () => {
     // In manual mode, don't auto-save
     if (manualMode[rideId]) return;
 
-    // Scanner mode: fast 50ms debounce
-    debounceTimers.current[rideId] = setTimeout(async () => {
+    // Scanner mode: fast 50ms debounce - enqueue and never block
+    debounceTimers.current[rideId] = setTimeout(() => {
       const code = value.trim();
-      // Lock processing and clear input immediately
-      processingRef.current[rideId] = true;
+      // Clear input immediately so scanner can read next code
       setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-      // Force DOM update before async work
-      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
-      await saveTbr(rideId, code);
-      processingRef.current[rideId] = false;
+      requestAnimationFrame(() => {
+        inputRefs.current[rideId]?.focus();
+      });
+      // Enqueue the code for background processing
+      if (!queueRef.current[rideId]) queueRef.current[rideId] = [];
+      queueRef.current[rideId].push(code);
+      processQueue(rideId);
     }, 50);
   };
 
