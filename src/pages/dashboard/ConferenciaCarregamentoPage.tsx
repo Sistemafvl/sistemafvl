@@ -373,8 +373,15 @@ const ConferenciaCarregamentoPage = () => {
         }));
       }
       setTbrs(result);
+      // Sync processedCodesRef with loaded data
+      const newProcessed: Record<string, Set<string>> = {};
+      for (const [rideId, tbrList] of Object.entries(result)) {
+        newProcessed[rideId] = new Set(tbrList.map(t => t.code.toUpperCase()));
+      }
+      processedCodesRef.current = newProcessed;
     } else {
       setTbrs({});
+      processedCodesRef.current = {};
     }
     setIsLoading(false);
   }, [unitId, startDate, endDate]);
@@ -525,7 +532,10 @@ const ConferenciaCarregamentoPage = () => {
 
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
 
-    // Optimistic UI removal
+    // Optimistic UI removal + sync processedCodesRef
+    if (tbrToDelete) {
+      processedCodesRef.current[rideId]?.delete(tbrToDelete.code.toUpperCase());
+    }
     setTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
@@ -612,9 +622,12 @@ const ConferenciaCarregamentoPage = () => {
       return;
     }
     if (code.toUpperCase().startsWith("TBR")) {
+      // Use processedCodesRef for synchronous duplicate detection (avoids stale React state)
+      if (!processedCodesRef.current[rideId]) processedCodesRef.current[rideId] = new Set();
+      const alreadyProcessed = processedCodesRef.current[rideId].has(code.toUpperCase());
       const currentTbrs = tbrs[rideId] ?? [];
       const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === code.toUpperCase());
-      const count = occurrences.length;
+      const count = alreadyProcessed ? Math.max(occurrences.length, 1) : occurrences.length;
 
       const tempId = crypto.randomUUID();
       const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
@@ -689,6 +702,9 @@ const ConferenciaCarregamentoPage = () => {
 
         newTbr.trip_number = tripNumber;
 
+        // Track synchronously BEFORE async React setState
+        processedCodesRef.current[rideId]?.add(code.toUpperCase());
+
         setTbrs((prev) => ({
           ...prev,
           [rideId]: [...(prev[rideId] ?? []), newTbr],
@@ -760,6 +776,8 @@ const ConferenciaCarregamentoPage = () => {
   // Queue system for ultra-fast scanning - never blocks input
   const queueRef = useRef<Record<string, string[]>>({});
   const processingQueueRef = useRef<Record<string, boolean>>({});
+  // Synchronous tracking of codes already enqueued/processed per ride (avoids stale React state)
+  const processedCodesRef = useRef<Record<string, Set<string>>>({});
 
   const fetchRidesRef = useRef(fetchRides);
   fetchRidesRef.current = fetchRides;
@@ -800,7 +818,7 @@ const ConferenciaCarregamentoPage = () => {
     // In manual mode, don't auto-save
     if (manualMode[rideId]) return;
 
-    // Scanner mode: fast 50ms debounce - enqueue and never block
+    // Scanner mode: ultra-fast 20ms debounce - enqueue and never block
     debounceTimers.current[rideId] = setTimeout(() => {
       const code = value.trim();
       // Clear input immediately so scanner can read next code
@@ -812,7 +830,7 @@ const ConferenciaCarregamentoPage = () => {
       if (!queueRef.current[rideId]) queueRef.current[rideId] = [];
       queueRef.current[rideId].push(code);
       processQueue(rideId);
-    }, 50);
+    }, 20);
   };
 
   const handleTbrKeyDown = (rideId: string, e: React.KeyboardEvent<HTMLInputElement>) => {
