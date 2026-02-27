@@ -21,6 +21,9 @@ const DashboardLayout = () => {
   if (unitSession.sessionType === "driver") {
     return <Navigate to="/motorista" replace />;
   }
+  if (unitSession.sessionType === "matriz") {
+    return <Navigate to="/matriz" replace />;
+  }
 
   return (
     <SidebarProvider>

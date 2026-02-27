@@ -27,6 +27,8 @@ import DNRPage from "./pages/dashboard/DNRPage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import AdminLayout from "./components/admin/AdminLayout";
+import MatrizLayout from "./components/matriz/MatrizLayout";
+import MatrizOverview from "./pages/matriz/MatrizOverview";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
 import AdminDriversPage from "./pages/admin/AdminDriversPage";
@@ -85,6 +87,9 @@ const App = () => (
             <Route path="recebiveis" element={<DriverRecebiveis />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />
+          </Route>
+          <Route path="/matriz" element={<MatrizLayout />}>
+            <Route index element={<MatrizOverview />} />
           </Route>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminOverviewPage />} />

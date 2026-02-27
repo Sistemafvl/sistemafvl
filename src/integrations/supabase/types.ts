@@ -50,6 +50,51 @@ export type Database = {
         }
         Relationships: []
       }
+      directors: {
+        Row: {
+          active: boolean
+          cpf: string
+          created_at: string
+          id: string
+          name: string
+          password: string
+          unit_id: string
+        }
+        Insert: {
+          active?: boolean
+          cpf: string
+          created_at?: string
+          id?: string
+          name: string
+          password: string
+          unit_id: string
+        }
+        Update: {
+          active?: boolean
+          cpf?: string
+          created_at?: string
+          id?: string
+          name?: string
+          password?: string
+          unit_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directors_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "directors_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dnr_entries: {
         Row: {
           approved_at: string | null
@@ -1047,6 +1092,7 @@ export type Database = {
           geofence_lng: number | null
           geofence_radius_meters: number | null
           id: string
+          is_matriz: boolean
           name: string
           password: string
         }
@@ -1059,6 +1105,7 @@ export type Database = {
           geofence_lng?: number | null
           geofence_radius_meters?: number | null
           id?: string
+          is_matriz?: boolean
           name: string
           password: string
         }
@@ -1071,6 +1118,7 @@ export type Database = {
           geofence_lng?: number | null
           geofence_radius_meters?: number | null
           id?: string
+          is_matriz?: boolean
           name?: string
           password?: string
         }
@@ -1149,6 +1197,48 @@ export type Database = {
       }
     }
     Views: {
+      directors_public: {
+        Row: {
+          active: boolean | null
+          cpf: string | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+          unit_id: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          cpf?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          unit_id?: string | null
+        }
+        Update: {
+          active?: boolean | null
+          cpf?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+          unit_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "directors_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "directors_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       drivers_public: {
         Row: {
           active: boolean | null

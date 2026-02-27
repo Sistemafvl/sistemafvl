@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-type SessionType = "user" | "manager" | "driver";
+type SessionType = "user" | "manager" | "driver" | "matriz";
 
 interface UnitSession {
   id: string;

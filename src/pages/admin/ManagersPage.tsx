@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog, Loader2 } from "lucide-react";
+import { Plus, Trash2, Users, Building2, Building, Eye, Pencil, UserCog, Loader2, Crown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Dialog,
@@ -19,6 +19,7 @@ import {
 interface Domain { id: string; name: string; }
 interface Unit { id: string; name: string; }
 interface ManagerPublic { id: string; name: string; cnpj: string; active: boolean; unit_id: string; created_at: string; }
+interface DirectorPublic { id: string; name: string; cpf: string; active: boolean; unit_id: string; created_at: string; }
 
 const formatCnpj = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 14);
@@ -29,6 +30,14 @@ const formatCnpj = (v: string) => {
     .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
 };
 
+const formatCpf = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  return d
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+};
+
 const ManagersPage = () => {
   const [domains, setDomains] = useState<Domain[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
@@ -36,6 +45,12 @@ const ManagersPage = () => {
   const [selectedDomain, setSelectedDomain] = useState("");
   const [selectedUnit, setSelectedUnit] = useState("");
   const [newManager, setNewManager] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
+
+  // Director states
+  const [directors, setDirectors] = useState<DirectorPublic[]>([]);
+  const [matrizUnitId, setMatrizUnitId] = useState<string | null>(null);
+  const [newDirector, setNewDirector] = useState({ name: "", cpf: "", password: "" });
+
   // Modal states
   const [viewManager, setViewManager] = useState<ManagerPublic | null>(null);
   const [viewPasswords, setViewPasswords] = useState<{ password: string; manager_password: string | null } | null>(null);
@@ -45,6 +60,10 @@ const ManagersPage = () => {
   const [credManager, setCredManager] = useState<ManagerPublic | null>(null);
   const [credForm, setCredForm] = useState({ cnpj: "", manager_password: "" });
 
+  // Director edit modal
+  const [editDirector, setEditDirector] = useState<DirectorPublic | null>(null);
+  const [editDirectorForm, setEditDirectorForm] = useState({ name: "", cpf: "", password: "" });
+
   useEffect(() => {
     supabase.from("domains").select("id, name").eq("active", true).order("name").then(({ data }) => {
       if (data) setDomains(data);
@@ -52,9 +71,23 @@ const ManagersPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedDomain) { setUnits([]); setSelectedUnit(""); return; }
+    if (!selectedDomain) { setUnits([]); setSelectedUnit(""); setMatrizUnitId(null); setDirectors([]); return; }
+    // Fetch units (excluding MATRIZ ADMIN from the unit select)
     supabase.from("units_public").select("id, name").eq("domain_id", selectedDomain).eq("active", true).order("name").then(({ data }) => {
-      if (data) setUnits(data as any);
+      if (data) {
+        const nonMatriz = (data as any[]).filter((u: any) => u.name !== "MATRIZ ADMIN");
+        setUnits(nonMatriz);
+      }
+    });
+    // Find Matriz unit for this domain to manage directors
+    supabase.from("units").select("id").eq("domain_id", selectedDomain).eq("is_matriz", true).single().then(({ data }) => {
+      if (data) {
+        setMatrizUnitId(data.id);
+        refreshDirectors(data.id);
+      } else {
+        setMatrizUnitId(null);
+        setDirectors([]);
+      }
     });
   }, [selectedDomain]);
 
@@ -68,6 +101,55 @@ const ManagersPage = () => {
     supabase.from("managers_public").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => {
       if (data) setManagers(data as any);
     });
+  };
+
+  const refreshDirectors = (unitId?: string) => {
+    const id = unitId || matrizUnitId;
+    if (!id) return;
+    supabase.from("directors_public").select("*").eq("unit_id", id).order("name").then(({ data }) => {
+      if (data) setDirectors(data as any);
+    });
+  };
+
+  const addDirector = async () => {
+    const cleanCpf = newDirector.cpf.replace(/\D/g, "");
+    if (!newDirector.name.trim() || cleanCpf.length !== 11 || !newDirector.password || !matrizUnitId) return;
+    const { error } = await supabase.from("directors").insert({
+      name: newDirector.name.trim().toUpperCase(),
+      cpf: cleanCpf,
+      password: newDirector.password,
+      unit_id: matrizUnitId,
+    } as any);
+    if (!error) {
+      setNewDirector({ name: "", cpf: "", password: "" });
+      refreshDirectors();
+    }
+  };
+
+  const toggleDirector = async (id: string, active: boolean) => {
+    await supabase.from("directors").update({ active: !active } as any).eq("id", id);
+    refreshDirectors();
+  };
+
+  const deleteDirector = async (id: string) => {
+    await supabase.from("directors").delete().eq("id", id);
+    refreshDirectors();
+  };
+
+  const openEditDirector = (d: DirectorPublic) => {
+    setEditDirector(d);
+    setEditDirectorForm({ name: d.name, cpf: formatCpf(d.cpf), password: "" });
+  };
+
+  const saveEditDirector = async () => {
+    if (!editDirector) return;
+    const cleanCpf = editDirectorForm.cpf.replace(/\D/g, "");
+    if (!editDirectorForm.name.trim() || cleanCpf.length !== 11) return;
+    const updates: any = { name: editDirectorForm.name.trim().toUpperCase(), cpf: cleanCpf };
+    if (editDirectorForm.password.trim()) updates.password = editDirectorForm.password.trim();
+    await supabase.from("directors").update(updates).eq("id", editDirector.id);
+    setEditDirector(null);
+    refreshDirectors();
   };
 
   const addManager = async () => {
@@ -116,18 +198,10 @@ const ManagersPage = () => {
     if (!editManager) return;
     const cleanCnpj = editForm.cnpj.replace(/\D/g, "");
     if (!editForm.name.trim() || cleanCnpj.length !== 14) return;
-    const updates: any = {
-      name: editForm.name.trim().toUpperCase(),
-      cnpj: cleanCnpj,
-    };
-    if (editForm.password.trim()) {
-      updates.password = editForm.password.trim();
-    }
+    const updates: any = { name: editForm.name.trim().toUpperCase(), cnpj: cleanCnpj };
+    if (editForm.password.trim()) updates.password = editForm.password.trim();
     const { error } = await supabase.from("managers").update(updates).eq("id", editManager.id);
-    if (!error) {
-      setEditManager(null);
-      refreshManagers();
-    }
+    if (!error) { setEditManager(null); refreshManagers(); }
   };
 
   const openCred = (m: ManagerPublic) => {
@@ -143,10 +217,7 @@ const ManagersPage = () => {
       cnpj: cleanCnpj,
       manager_password: credForm.manager_password,
     } as any).eq("id", credManager.id);
-    if (!error) {
-      setCredManager(null);
-      refreshManagers();
-    }
+    if (!error) { setCredManager(null); refreshManagers(); }
   };
 
   return (
@@ -184,6 +255,64 @@ const ManagersPage = () => {
               </Select>
             </div>
           </div>
+
+          {/* Director section - when domain selected but no unit */}
+          {selectedDomain && !selectedUnit && matrizUnitId && (
+            <div className="space-y-3 pt-2 border-t border-border">
+              <div className="flex items-center gap-2">
+                <Crown className="h-4 w-4 text-amber-500" />
+                <span className="text-sm font-bold italic">Diretor do Domínio</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Input
+                  value={newDirector.name}
+                  onChange={(e) => setNewDirector(p => ({ ...p, name: e.target.value }))}
+                  placeholder="Nome"
+                  className="font-medium italic h-11"
+                />
+                <Input
+                  value={newDirector.cpf}
+                  onChange={(e) => setNewDirector(p => ({ ...p, cpf: formatCpf(e.target.value) }))}
+                  placeholder="000.000.000-00"
+                  className="h-11"
+                />
+                <div className="flex gap-2">
+                  <Input
+                    value={newDirector.password}
+                    onChange={(e) => setNewDirector(p => ({ ...p, password: e.target.value }))}
+                    placeholder="Senha"
+                    type="password"
+                    className="h-11"
+                  />
+                  <Button size="sm" onClick={addDirector} className="h-11 px-4 shrink-0">
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {directors.map((d) => (
+                  <div key={d.id} className="flex items-center justify-between p-3 rounded-md border border-border">
+                    <div>
+                      <p className="font-bold italic text-sm">{d.name}</p>
+                      <p className="text-xs text-muted-foreground">{formatCpf(d.cpf)}</p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditDirector(d)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Switch checked={d.active} onCheckedChange={() => toggleDirector(d.id, d.active)} />
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteDirector(d.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+                {directors.length === 0 && (
+                  <p className="text-sm text-muted-foreground italic text-center py-2">Nenhum diretor cadastrado</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {selectedUnit ? (
             <>
@@ -252,11 +381,11 @@ const ManagersPage = () => {
                 )}
               </div>
             </>
-          ) : (
+          ) : !selectedDomain ? (
             <p className="text-sm text-muted-foreground italic text-center py-4">
               Selecione um domínio e unidade para gerenciar
             </p>
-          )}
+          ) : null}
         </CardContent>
       </Card>
 
@@ -289,7 +418,7 @@ const ManagersPage = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Editar */}
+      {/* Modal Editar Manager */}
       <Dialog open={!!editManager} onOpenChange={(open) => !open && setEditManager(null)}>
         <DialogContent>
           <DialogHeader>
@@ -339,6 +468,35 @@ const ManagersPage = () => {
           </div>
           <DialogFooter>
             <Button onClick={saveCred}>Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Editar Diretor */}
+      <Dialog open={!!editDirector} onOpenChange={(open) => !open && setEditDirector(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <Pencil className="h-5 w-5 text-amber-500" /> Editar Diretor
+            </DialogTitle>
+            <DialogDescription>Altere os dados do diretor.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nome</Label>
+              <Input value={editDirectorForm.name} onChange={(e) => setEditDirectorForm(p => ({ ...p, name: e.target.value }))} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">CPF</Label>
+              <Input value={editDirectorForm.cpf} onChange={(e) => setEditDirectorForm(p => ({ ...p, cpf: formatCpf(e.target.value) }))} className="h-11" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs font-semibold">Nova Senha (deixe vazio para manter)</Label>
+              <Input value={editDirectorForm.password} onChange={(e) => setEditDirectorForm(p => ({ ...p, password: e.target.value }))} type="password" className="h-11" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={saveEditDirector}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

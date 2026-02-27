@@ -3,8 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Plus, Trash2, Building2, Building } from "lucide-react";
+import { Plus, Trash2, Building2, Building, Crown } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 interface Domain {
   id: string;
@@ -17,6 +18,7 @@ interface Unit {
   domain_id: string;
   name: string;
   active: boolean;
+  is_matriz?: boolean;
 }
 
 const DomainsUnitsPage = () => {
@@ -25,7 +27,6 @@ const DomainsUnitsPage = () => {
   const [newDomain, setNewDomain] = useState("");
   const [newUnit, setNewUnit] = useState({ name: "", password: "" });
   const [selectedDomain, setSelectedDomain] = useState<string | null>(null);
-  
 
   const fetchDomains = async () => {
     const { data } = await supabase.from("domains").select("id, name, active").order("name");
@@ -33,7 +34,7 @@ const DomainsUnitsPage = () => {
   };
 
   const fetchUnits = async (domainId: string) => {
-    const { data } = await supabase.from("units_public").select("id, domain_id, name, active").eq("domain_id", domainId).order("name");
+    const { data } = await supabase.from("units").select("id, domain_id, name, active, is_matriz").eq("domain_id", domainId).order("name");
     if (data) setUnits(data as any);
   };
 
@@ -50,6 +51,8 @@ const DomainsUnitsPage = () => {
     if (!error) {
       setNewDomain("");
       fetchDomains();
+      // Refresh units if a domain is selected (trigger creates MATRIZ ADMIN)
+      if (selectedDomain) setTimeout(() => fetchUnits(selectedDomain), 500);
     }
   };
 
@@ -172,12 +175,21 @@ const DomainsUnitsPage = () => {
               <div className="space-y-2">
                 {units.map((u) => (
                   <div key={u.id} className="flex items-center justify-between p-3 rounded-md border border-border">
-                    <span className="font-bold italic text-sm">{u.name}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold italic text-sm">{u.name}</span>
+                      {u.is_matriz && (
+                        <Badge variant="outline" className="text-amber-600 border-amber-300 bg-amber-50 dark:bg-amber-950/30 gap-1 text-[10px]">
+                          <Crown className="h-3 w-3" /> Matriz
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <Switch checked={u.active} onCheckedChange={() => toggleUnit(u.id, u.active)} />
-                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteUnit(u.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      {!u.is_matriz && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => deleteUnit(u.id)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}

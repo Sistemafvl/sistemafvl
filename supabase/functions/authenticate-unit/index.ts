@@ -30,7 +30,7 @@ Deno.serve(async (req) => {
     // Fetch unit
     const { data: unit, error } = await supabase
       .from("units")
-      .select("id, name, password, active, domain_id, domains(name)")
+      .select("id, name, password, active, domain_id, is_matriz, domains(name)")
       .eq("id", unit_id)
       .single();
 
@@ -88,7 +88,43 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      // CPF -> check user_profiles first (requires unit password), then drivers (uses own password)
+      // CPF -> check directors first (if unit is_matriz), then user_profiles, then drivers
+      
+      // Check if this is a Matriz unit and if there's a director with this CPF
+      if (unit.is_matriz) {
+        const { data: director } = await supabase
+          .from("directors")
+          .select("id, name, cpf, password")
+          .eq("unit_id", unit_id)
+          .eq("cpf", rawDocument)
+          .eq("active", true)
+          .single();
+
+        if (director) {
+          // Director uses their own password
+          if (director.password !== password) {
+            return new Response(JSON.stringify({ error: "Senha inválida" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+          }
+          return new Response(
+            JSON.stringify({
+              success: true,
+              unit: {
+                id: unit.id,
+                name: unit.name,
+                domain_id: unit.domain_id,
+                domain_name: (unit as any).domains?.name || "",
+                user_profile_id: director.id,
+                user_name: director.name,
+                user_cpf: director.cpf,
+                sessionType: "matriz",
+              },
+            }),
+            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+
+      // Check user_profiles (requires unit password)
       const { data: userProfile } = await supabase
         .from("user_profiles")
         .select("id, name, cpf")
