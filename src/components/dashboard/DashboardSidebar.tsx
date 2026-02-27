@@ -53,7 +53,7 @@ const managerMenuItems = [
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Financeiro", url: "/dashboard/financeiro", icon: DollarSign },
   { title: "Feedbacks", url: "/dashboard/feedbacks", icon: MessageSquare },
-  { title: "Configurações", url: "/dashboard/configuracoes", icon: Settings },
+  { title: "Ajuste", url: "/dashboard/configuracoes", icon: Settings },
   { title: "Motoristas Parceiros", url: "/dashboard/motoristas-parceiros", icon: Users },
   { title: "Conferentes", url: "/dashboard/conferentes", icon: ClipboardCheck },
 ];
