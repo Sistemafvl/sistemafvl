@@ -1,0 +1,372 @@
+import { useState, useEffect, useMemo } from "react";
+import { useAuthStore } from "@/stores/auth-store";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, AreaChart, Area,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+} from "recharts";
+import {
+  Package, Truck, Users, ShieldCheck, AlertTriangle, FileWarning, RotateCcw,
+  DollarSign, Star, Building, TrendingUp, ClipboardList,
+} from "lucide-react";
+import { format, subDays, startOfDay, endOfDay } from "date-fns";
+
+const COLORS = [
+  "hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--accent))",
+  "#10b981", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4",
+];
+
+const MatrizOverview = () => {
+  const { unitSession } = useAuthStore();
+  const domainId = unitSession?.domain_id || "";
+
+  const [dateStart, setDateStart] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
+  const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
+  const [filterUnit, setFilterUnit] = useState("all");
+
+  const [domainUnits, setDomainUnits] = useState<{ id: string; name: string }[]>([]);
+  const [rides, setRides] = useState<any[]>([]);
+  const [tbrs, setTbrs] = useState<any[]>([]);
+  const [psEntries, setPsEntries] = useState<any[]>([]);
+  const [rtoEntries, setRtoEntries] = useState<any[]>([]);
+  const [dnrEntries, setDnrEntries] = useState<any[]>([]);
+  const [pisoEntries, setPisoEntries] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch domain units
+  useEffect(() => {
+    if (!domainId) return;
+    supabase.from("units_public").select("id, name").eq("domain_id", domainId).eq("active", true).order("name")
+      .then(({ data }) => { if (data) setDomainUnits(data as any); });
+  }, [domainId]);
+
+  // Fetch all data
+  useEffect(() => {
+    if (!domainUnits.length) return;
+    const unitIds = filterUnit === "all" ? domainUnits.map(u => u.id) : [filterUnit];
+    const start = startOfDay(new Date(dateStart)).toISOString();
+    const end = endOfDay(new Date(dateEnd)).toISOString();
+
+    setLoading(true);
+    Promise.all([
+      supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, finished_at, loading_status").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end),
+      supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
+      supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
+      supabase.from("dnr_entries").select("id, unit_id, status, dnr_value, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
+      supabase.from("piso_entries").select("id, unit_id, status, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
+      supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
+    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR]) => {
+      setRides(ridesR.data || []);
+      setPsEntries(psR.data || []);
+      setRtoEntries(rtoR.data || []);
+      setDnrEntries(dnrR.data || []);
+      setPisoEntries(pisoR.data || []);
+      setReviews(reviewsR.data || []);
+      setLoading(false);
+
+      // Fetch TBRs for those rides
+      const rideIds = (ridesR.data || []).map((r: any) => r.id);
+      if (rideIds.length > 0) {
+        supabase.from("ride_tbrs").select("id, ride_id, scanned_at").in("ride_id", rideIds)
+          .then(({ data }) => setTbrs(data || []));
+      } else {
+        setTbrs([]);
+      }
+    });
+  }, [domainUnits, filterUnit, dateStart, dateEnd]);
+
+  // KPI calculations
+  const kpis = useMemo(() => {
+    const uniqueDrivers = new Set(rides.map(r => r.driver_id));
+    const psOpen = psEntries.filter(p => p.status === "open").length;
+    const psClosed = psEntries.filter(p => p.status !== "open").length;
+    const rtoOpen = rtoEntries.filter(r => r.status === "open").length;
+    const rtoClosed = rtoEntries.filter(r => r.status !== "open").length;
+    const pisoOpen = pisoEntries.filter(p => p.status === "open").length;
+    const pisoClosed = pisoEntries.filter(p => p.status !== "open").length;
+    const dnrOpen = dnrEntries.filter(d => d.status === "open");
+    const dnrAnalysis = dnrEntries.filter(d => d.status === "analysis");
+    const dnrClosed = dnrEntries.filter(d => d.status === "closed" || d.status === "approved");
+    const avgRating = reviews.length > 0 ? (reviews.reduce((a, r) => a + r.rating, 0) / reviews.length).toFixed(1) : "—";
+    const activeUnits = filterUnit === "all" ? domainUnits.length : 1;
+
+    return [
+      { label: "Total Carregamentos", value: rides.length, icon: Package, color: "text-primary" },
+      { label: "Total TBRs", value: tbrs.length, icon: ClipboardList, color: "text-primary" },
+      { label: "Motoristas Ativos", value: uniqueDrivers.size, icon: Truck, color: "text-emerald-500" },
+      { label: "PS Abertos / Fechados", value: `${psOpen} / ${psClosed}`, icon: ShieldCheck, color: "text-amber-500" },
+      { label: "RTO Abertos / Fechados", value: `${rtoOpen} / ${rtoClosed}`, icon: AlertTriangle, color: "text-orange-500" },
+      { label: "Retorno Piso Ab. / Fech.", value: `${pisoOpen} / ${pisoClosed}`, icon: RotateCcw, color: "text-violet-500" },
+      { label: "DNR Abertos", value: `${dnrOpen.length} (R$ ${dnrOpen.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-red-500" },
+      { label: "DNR Em Análise", value: `${dnrAnalysis.length} (R$ ${dnrAnalysis.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-yellow-500" },
+      { label: "DNR Finalizados", value: dnrClosed.length, icon: DollarSign, color: "text-green-500" },
+      { label: "Média Avaliação", value: avgRating, icon: Star, color: "text-amber-400" },
+      { label: "Unidades Ativas", value: activeUnits, icon: Building, color: "text-primary" },
+      { label: "TBRs / Carregamento", value: rides.length ? (tbrs.length / rides.length).toFixed(1) : "0", icon: TrendingUp, color: "text-emerald-500" },
+    ];
+  }, [rides, tbrs, psEntries, rtoEntries, dnrEntries, pisoEntries, reviews, domainUnits, filterUnit]);
+
+  // Chart 1: Carregamentos por unidade (barras)
+  const chartRidesByUnit = useMemo(() => {
+    const map: Record<string, number> = {};
+    rides.forEach(r => { map[r.unit_id] = (map[r.unit_id] || 0) + 1; });
+    return domainUnits.map(u => ({ name: u.name, carregamentos: map[u.id] || 0 }));
+  }, [rides, domainUnits]);
+
+  // Chart 2: Evolução diária (linha)
+  const chartDailyRides = useMemo(() => {
+    const map: Record<string, number> = {};
+    rides.forEach(r => {
+      const day = format(new Date(r.completed_at), "dd/MM");
+      map[day] = (map[day] || 0) + 1;
+    });
+    return Object.entries(map).sort().map(([d, v]) => ({ dia: d, carregamentos: v }));
+  }, [rides]);
+
+  // Chart 3: Status carregamentos (pizza)
+  const chartStatusPie = useMemo(() => {
+    const statusMap: Record<string, number> = {};
+    rides.forEach(r => {
+      const s = r.loading_status || "pending";
+      statusMap[s] = (statusMap[s] || 0) + 1;
+    });
+    return Object.entries(statusMap).map(([name, value]) => ({ name, value }));
+  }, [rides]);
+
+  // Chart 4: Top 10 motoristas (barras horizontais)
+  const chartTopDrivers = useMemo(() => {
+    const map: Record<string, { count: number; name: string }> = {};
+    rides.forEach(r => {
+      if (!map[r.driver_id]) map[r.driver_id] = { count: 0, name: r.driver_id.slice(0, 8) };
+      map[r.driver_id].count++;
+    });
+    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10).map(d => ({ name: d.name, viagens: d.count }));
+  }, [rides]);
+
+  // Chart 5: Ocorrências por unidade (barras empilhadas)
+  const chartOccurrencesByUnit = useMemo(() => {
+    return domainUnits.map(u => ({
+      name: u.name,
+      PS: psEntries.filter(p => p.unit_id === u.id).length,
+      RTO: rtoEntries.filter(r => r.unit_id === u.id).length,
+      Piso: pisoEntries.filter(p => p.unit_id === u.id).length,
+    }));
+  }, [domainUnits, psEntries, rtoEntries, pisoEntries]);
+
+  // Chart 6: TBRs diários (linha)
+  const chartDailyTbrs = useMemo(() => {
+    const map: Record<string, number> = {};
+    tbrs.forEach(t => {
+      if (t.scanned_at) {
+        const day = format(new Date(t.scanned_at), "dd/MM");
+        map[day] = (map[day] || 0) + 1;
+      }
+    });
+    return Object.entries(map).sort().map(([d, v]) => ({ dia: d, tbrs: v }));
+  }, [tbrs]);
+
+  // Chart 7: Média TBRs por carregamento por unidade (barras)
+  const chartAvgTbrsByUnit = useMemo(() => {
+    const ridesByUnit: Record<string, string[]> = {};
+    rides.forEach(r => {
+      if (!ridesByUnit[r.unit_id]) ridesByUnit[r.unit_id] = [];
+      ridesByUnit[r.unit_id].push(r.id);
+    });
+    return domainUnits.map(u => {
+      const unitRideIds = ridesByUnit[u.id] || [];
+      const unitTbrs = tbrs.filter(t => unitRideIds.includes(t.ride_id)).length;
+      return { name: u.name, media: unitRideIds.length ? +(unitTbrs / unitRideIds.length).toFixed(1) : 0 };
+    });
+  }, [rides, tbrs, domainUnits]);
+
+  // Chart 8: DNR tendência (área)
+  const chartDnrTrend = useMemo(() => {
+    const mapOpen: Record<string, number> = {};
+    const mapClosed: Record<string, number> = {};
+    dnrEntries.forEach(d => {
+      const day = format(new Date(d.created_at), "dd/MM");
+      if (d.status === "open" || d.status === "analysis") mapOpen[day] = (mapOpen[day] || 0) + 1;
+      else mapClosed[day] = (mapClosed[day] || 0) + 1;
+    });
+    const allDays = [...new Set([...Object.keys(mapOpen), ...Object.keys(mapClosed)])].sort();
+    return allDays.map(d => ({ dia: d, abertos: mapOpen[d] || 0, finalizados: mapClosed[d] || 0 }));
+  }, [dnrEntries]);
+
+  // Insights
+  const insights = useMemo(() => {
+    const unitRideCounts = domainUnits.map(u => ({
+      name: u.name,
+      count: rides.filter(r => r.unit_id === u.id).length,
+      occurrences: psEntries.filter(p => p.unit_id === u.id).length + rtoEntries.filter(r => r.unit_id === u.id).length,
+      avgRating: (() => {
+        const unitReviews = reviews.filter(r => r.unit_id === u.id);
+        return unitReviews.length ? (unitReviews.reduce((a, r) => a + r.rating, 0) / unitReviews.length).toFixed(1) : null;
+      })(),
+    }));
+
+    const mostProductive = unitRideCounts.sort((a, b) => b.count - a.count)[0];
+    const mostOccurrences = [...unitRideCounts].sort((a, b) => b.occurrences - a.occurrences)[0];
+    const bestRated = unitRideCounts.filter(u => u.avgRating).sort((a, b) => Number(b.avgRating) - Number(a.avgRating))[0];
+
+    const psTbrsRate = tbrs.length ? ((psEntries.length / tbrs.length) * 100).toFixed(2) : "0";
+    const rtoTbrsRate = tbrs.length ? ((rtoEntries.length / tbrs.length) * 100).toFixed(2) : "0";
+
+    return [
+      mostProductive?.count ? `🏆 Unidade mais produtiva: ${mostProductive.name} (${mostProductive.count} carreg.)` : null,
+      mostOccurrences?.occurrences ? `⚠️ Mais ocorrências: ${mostOccurrences.name} (${mostOccurrences.occurrences} PS+RTO)` : null,
+      `📊 Taxa PS/TBRs: ${psTbrsRate}%`,
+      `📊 Taxa RTO/TBRs: ${rtoTbrsRate}%`,
+      bestRated?.avgRating ? `⭐ Melhor avaliação: ${bestRated.name} (${bestRated.avgRating})` : null,
+    ].filter(Boolean);
+  }, [rides, psEntries, rtoEntries, tbrs, reviews, domainUnits]);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row gap-3 items-end">
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold italic">Data Início</Label>
+          <Input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="h-9 w-40" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold italic">Data Fim</Label>
+          <Input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="h-9 w-40" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold italic">Unidade</Label>
+          <Select value={filterUnit} onValueChange={setFilterUnit}>
+            <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {domainUnits.filter(u => !u.name?.includes("MATRIZ")).map(u => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* KPIs */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {kpis.map((kpi, i) => (
+          <Card key={i} className="animate-slide-up">
+            <CardContent className="p-4 flex items-center gap-3">
+              <kpi.icon className={`h-8 w-8 ${kpi.color} shrink-0`} />
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground font-semibold italic truncate">{kpi.label}</p>
+                <p className="text-lg font-bold">{loading ? "..." : kpi.value}</p>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Insights */}
+      {insights.length > 0 && (
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">📌 Insights</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+            {insights.map((ins, i) => (
+              <div key={i} className="text-sm p-2 rounded bg-muted/50">{ins}</div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Chart 1 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Carregamentos por Unidade</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartRidesByUnit}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Bar dataKey="carregamentos" fill="hsl(var(--primary))" radius={[4,4,0,0]} /></BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 2 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Evolução Diária de Carregamentos</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={chartDailyRides}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="dia" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Line type="monotone" dataKey="carregamentos" stroke="hsl(var(--primary))" strokeWidth={2} /></LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 3 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Status dos Carregamentos</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart><Pie data={chartStatusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                {chartStatusPie.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+              </Pie><Tooltip /><Legend /></PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 4 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Top 10 Motoristas (Viagens)</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartTopDrivers} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="viagens" fill="#10b981" radius={[0,4,4,0]} /></BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 5 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Ocorrências por Unidade</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartOccurrencesByUnit}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Legend />
+                <Bar dataKey="PS" stackId="a" fill="#f59e0b" /><Bar dataKey="RTO" stackId="a" fill="#ef4444" /><Bar dataKey="Piso" stackId="a" fill="#8b5cf6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 6 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">TBRs Escaneados por Dia</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={chartDailyTbrs}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="dia" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Line type="monotone" dataKey="tbrs" stroke="#8b5cf6" strokeWidth={2} /></LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 7 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">Média TBRs por Carregamento</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={chartAvgTbrsByUnit}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Bar dataKey="media" fill="#06b6d4" radius={[4,4,0,0]} /></BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Chart 8 */}
+        <Card>
+          <CardHeader><CardTitle className="text-sm font-bold italic">DNR: Abertos vs Finalizados</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={chartDnrTrend}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="dia" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Legend />
+                <Area type="monotone" dataKey="abertos" stroke="#ef4444" fill="#ef4444" fillOpacity={0.2} /><Area type="monotone" dataKey="finalizados" stroke="#10b981" fill="#10b981" fillOpacity={0.2} />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default MatrizOverview;

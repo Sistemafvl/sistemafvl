@@ -25,6 +25,7 @@ const Index = () => {
 
   if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
   if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
+  if (unitSession?.sessionType === "matriz") return <Navigate to="/matriz" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
 
   const showBanner = (canInstall || !isInstalled) && !dismissedBanner;
