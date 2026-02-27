@@ -389,6 +389,12 @@ const ConferenciaCarregamentoPage = () => {
 
     setRides(mapped);
 
+    setLockedConferenteIds(prev => {
+      const next = new Set(prev);
+      mapped.forEach(r => { if (r.conferente_id) next.add(r.id); });
+      return next;
+    });
+
     const rideIds = mapped.map((r) => r.id);
     if (rideIds.length > 0) {
       const { data: tbrData } = await supabase
