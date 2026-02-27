@@ -1627,8 +1627,8 @@ const ConferenciaCarregamentoPage = () => {
                               </div>
                             )}
                             {isLoadingStatus && (
-                              <div className="flex gap-1">
-                                <div className="relative flex-1">
+                              <div className="flex gap-1 items-center">
+                                <div className="relative flex-1 max-w-[55%] sm:max-w-none">
                                   {!manualMode[ride.id] && (
                                     <Lock className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
                                   )}
