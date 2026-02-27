@@ -41,6 +41,7 @@ const MatrizOverview = () => {
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [minPackages, setMinPackages] = useState<any[]>([]);
 
   // Fetch domain units
   useEffect(() => {
@@ -67,7 +68,8 @@ const MatrizOverview = () => {
       supabase.from("drivers_public").select("id, name"),
       supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
       supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
-    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR, driversR, settingsR, customR]) => {
+      supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds),
+    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR, driversR, settingsR, customR, minPkgR]) => {
       setRides(ridesR.data || []);
       setPsEntries(psR.data || []);
       setRtoEntries(rtoR.data || []);
@@ -77,6 +79,7 @@ const MatrizOverview = () => {
       setDrivers(driversR.data || []);
       setUnitSettings(settingsR.data || []);
       setCustomValues(customR.data || []);
+      setMinPackages((minPkgR.data as any[]) || []);
       setLoading(false);
 
       // Fetch TBRs for those rides
@@ -92,13 +95,24 @@ const MatrizOverview = () => {
 
   // Helper: calculate total paid for TBRs
   const calcTotalPaid = (ridesArr: any[], tbrsArr: any[]) => {
-    let total = 0;
+    // Group rides by driver+unit+day for minimum packages logic
+    const dayGroups = new Map<string, { driverId: string; unitId: string; tbrCount: number; tbrVal: number }>();
     ridesArr.forEach(ride => {
+      const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
+      const key = `${ride.driver_id}_${ride.unit_id}_${day}`;
       const rideTbrCount = tbrsArr.filter(t => t.ride_id === ride.id).length;
       const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
       const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
       const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
-      total += rideTbrCount * tbrVal;
+      const existing = dayGroups.get(key);
+      if (existing) { existing.tbrCount += rideTbrCount; }
+      else dayGroups.set(key, { driverId: ride.driver_id, unitId: ride.unit_id, tbrCount: rideTbrCount, tbrVal });
+    });
+    let total = 0;
+    dayGroups.forEach((g, key) => {
+      const minPkg = minPackages.find(mp => mp.driver_id === g.driverId && mp.unit_id === g.unitId);
+      const effectiveTbrs = minPkg && g.tbrCount < Number(minPkg.min_packages) ? Number(minPkg.min_packages) : g.tbrCount;
+      total += effectiveTbrs * g.tbrVal;
     });
     return total;
   };
@@ -132,7 +146,7 @@ const MatrizOverview = () => {
       { label: "Unidades Ativas", value: activeUnits, icon: Building, color: "text-primary" },
       { label: "TBRs / Carregamento", value: rides.length ? (tbrs.length / rides.length).toFixed(1) : "0", icon: TrendingUp, color: "text-emerald-500" },
     ];
-  }, [rides, tbrs, psEntries, rtoEntries, dnrEntries, pisoEntries, reviews, domainUnits, filterUnit, unitSettings, customValues]);
+  }, [rides, tbrs, psEntries, rtoEntries, dnrEntries, pisoEntries, reviews, domainUnits, filterUnit, unitSettings, customValues, minPackages]);
 
   // Chart 1: Carregamentos por unidade (barras)
   const chartRidesByUnit = useMemo(() => {

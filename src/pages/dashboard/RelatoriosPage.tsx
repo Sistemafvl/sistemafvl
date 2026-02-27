@@ -313,7 +313,7 @@ const RelatoriosPage = () => {
     const driverIds = [...new Set(rides.map(r => r.driver_id))];
     const rideIds = rides.map(r => r.id);
 
-    const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes] = await Promise.all([
+    const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
       supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
@@ -322,6 +322,7 @@ const RelatoriosPage = () => {
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
+      supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
     ]);
 
     const drivers = driversRes.data ?? [];
@@ -334,6 +335,8 @@ const RelatoriosPage = () => {
     (customValuesRes.data ?? []).forEach((cv: any) => { customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value)); });
     const bonusByDriver = new Map<string, number>();
     (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
+    const minPkgMap = new Map<string, number>();
+    ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => { minPkgMap.set(mp.driver_id, Number(mp.min_packages)); });
 
     const { data: dnrData } = await supabase.from("dnr_entries").select("id, driver_id, dnr_value")
       .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
@@ -402,8 +405,11 @@ const RelatoriosPage = () => {
           }
         });
 
-        const tbrCount = uniqueTbrCodes.size;
+        let tbrCount = uniqueTbrCodes.size;
         const returns = netReturns.size;
+        // Apply minimum packages: if tbrCount < min, bump to min
+        const minPkg = minPkgMap.get(driverId) ?? 0;
+        if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
         return { date, login: info.login, tbrCount, returns, value: (tbrCount - returns) * tbrVal };
       });
 

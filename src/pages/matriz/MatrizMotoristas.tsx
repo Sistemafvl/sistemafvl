@@ -27,6 +27,7 @@ const MatrizMotoristas = () => {
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [minPackages, setMinPackages] = useState<any[]>([]);
 
   useEffect(() => {
     if (!domainId) return;
@@ -47,13 +48,15 @@ const MatrizMotoristas = () => {
       supabase.from("ps_entries").select("id, unit_id, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
       supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
       supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
-    ]).then(([ridesR, driversR, dnrR, psR, settingsR, customR]) => {
+      supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds),
+    ]).then(([ridesR, driversR, dnrR, psR, settingsR, customR, minPkgR]) => {
       setRides(ridesR.data || []);
       setDrivers(driversR.data || []);
       setDnrEntries(dnrR.data || []);
       setPsEntries(psR.data || []);
       setUnitSettings(settingsR.data || []);
       setCustomValues(customR.data || []);
+      setMinPackages((minPkgR.data as any[]) || []);
       setLoading(false);
       const rideIds = (ridesR.data || []).map((r: any) => r.id);
       if (rideIds.length > 0) {
@@ -64,7 +67,7 @@ const MatrizMotoristas = () => {
   }, [units, dateStart, dateEnd, filterUnit]);
 
   const ranking = useMemo(() => {
-    const driverMap: Record<string, { rides: number; unitIds: Set<string>; rideIds: string[]; rideDetails: { id: string; unit_id: string; driver_id: string }[] }> = {};
+    const driverMap: Record<string, { rides: number; unitIds: Set<string>; rideIds: string[]; rideDetails: { id: string; unit_id: string; driver_id: string; completed_at: string }[] }> = {};
     rides.forEach(r => {
       if (!driverMap[r.driver_id]) driverMap[r.driver_id] = { rides: 0, unitIds: new Set(), rideIds: [], rideDetails: [] };
       driverMap[r.driver_id].rides++;
@@ -80,14 +83,25 @@ const MatrizMotoristas = () => {
       const dnrValue = driverDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
       const unitNames = [...stats.unitIds].map(uid => units.find(u => u.id === uid)?.name || "").filter(Boolean);
 
-      // Calculate total earned from TBRs
+      // Calculate total earned from TBRs with minimum packages logic
       let totalEarned = 0;
+      // Group by unit+day for min packages
+      const dayGroups = new Map<string, { unitId: string; tbrCount: number; tbrVal: number }>();
       stats.rideDetails.forEach(ride => {
+        const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
+        const key = `${ride.unit_id}_${day}`;
         const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
         const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
         const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
         const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
-        totalEarned += rideTbrCount * tbrVal;
+        const existing = dayGroups.get(key);
+        if (existing) { existing.tbrCount += rideTbrCount; }
+        else dayGroups.set(key, { unitId: ride.unit_id, tbrCount: rideTbrCount, tbrVal });
+      });
+      dayGroups.forEach(g => {
+        const minPkg = minPackages.find(mp => mp.driver_id === driverId && mp.unit_id === g.unitId);
+        const effectiveTbrs = minPkg && g.tbrCount < Number(minPkg.min_packages) ? Number(minPkg.min_packages) : g.tbrCount;
+        totalEarned += effectiveTbrs * g.tbrVal;
       });
 
       return {
@@ -105,7 +119,7 @@ const MatrizMotoristas = () => {
         units: unitNames.join(", "),
       };
     }).sort((a, b) => b.rides - a.rides);
-  }, [rides, drivers, tbrs, dnrEntries, units, unitSettings, customValues]);
+  }, [rides, drivers, tbrs, dnrEntries, units, unitSettings, customValues, minPackages]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return ranking;
