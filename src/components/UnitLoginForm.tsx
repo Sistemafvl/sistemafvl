@@ -41,7 +41,7 @@ const UnitLoginForm = () => {
 
   useEffect(() => {
     if (!selectedDomain) { setUnits([]); setSelectedUnit(""); return; }
-    supabase.from("units").select("id, name, domain_id").eq("domain_id", selectedDomain).eq("active", true).then(({ data }) => { if (data) setUnits(data); });
+    supabase.from("units").select("id, name, domain_id, is_matriz").eq("domain_id", selectedDomain).eq("active", true).then(({ data }) => { if (data) { const sorted = [...data].sort((a, b) => (b as any).is_matriz === true ? 1 : (a as any).is_matriz === true ? -1 : a.name.localeCompare(b.name)); setUnits(sorted); } });
   }, [selectedDomain]);
 
   const handleDocChange = (e: React.ChangeEvent<HTMLInputElement>) => {
