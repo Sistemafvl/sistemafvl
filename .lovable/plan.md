@@ -1,75 +1,129 @@
 
 
-# Análise de Escalabilidade e Performance do Sistema FVL
+# Plano: Matriz Admin — Etapa 1 (Infraestrutura + Cadastro do Diretor)
 
-## Diagnóstico Atual
+## Resumo
 
-O sistema já funciona para múltiplas unidades e domínios por design (isolamento via `unit_id`). Porém, há pontos de atenção para operação com muitos acessos simultâneos:
-
----
-
-## Pontos Positivos (já funciona bem)
-- Isolamento correto por `unit_id` em todas as queries — cada unidade vê apenas seus dados
-- Realtime com filtro por `unit_id` — cada canal é isolado
-- PWA com service worker para cache de assets estáticos
-- Offline store com IndexedDB para operações pendentes
-- Edge functions sem JWT (acesso rápido, sem overhead de auth)
+Ao criar um domínio, a unidade "MATRIZ ADMIN" será criada automaticamente. Na página de Gerenciadores, ao selecionar um domínio sem escolher unidade, aparece o campo de cadastro do diretor (CPF + senha). Ao selecionar uma unidade, aparece o fluxo atual de gerenciadores. O diretor acessa pelo login normal (seleciona domínio → unidade "MATRIZ ADMIN" → CPF + senha da unidade) e é redirecionado para o painel `/matriz`.
 
 ---
 
-## Problemas Identificados e Correções Propostas
+## 1. Migração SQL
 
-### 1. Realtime do `ride_tbrs` sem filtro de `unit_id` (CRÍTICO)
+```sql
+-- Coluna is_matriz na tabela units
+ALTER TABLE units ADD COLUMN is_matriz boolean NOT NULL DEFAULT false;
 
-Na `ConferenciaCarregamentoPage.tsx` (linhas 543-545), os listeners de `ride_tbrs` **não possuem filtro**. Isso significa que **qualquer TBR inserido/atualizado/deletado em QUALQUER unidade** dispara `fetchRides()` para TODAS as unidades conectadas. Com 10+ unidades operando simultaneamente, isso gera dezenas de fetches desnecessários por segundo.
+-- Tabela de diretores (CPF + senha, vinculado ao domínio via unidade Matriz)
+CREATE TABLE directors (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  name text NOT NULL,
+  cpf text NOT NULL,
+  password text NOT NULL,
+  active boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
 
-**Correção**: Não é possível filtrar `ride_tbrs` por `unit_id` diretamente (a tabela não tem esse campo). A solução é fazer o listener reagir ao payload e verificar se o `ride_id` pertence aos rides carregados antes de chamar `fetchRides()`, ou debounce o fetch.
+ALTER TABLE directors ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Anyone can read active directors" ON directors FOR SELECT USING (active = true);
+CREATE POLICY "Authenticated can read all directors" ON directors FOR SELECT USING (true);
+CREATE POLICY "Authenticated can insert directors" ON directors FOR INSERT WITH CHECK (true);
+CREATE POLICY "Authenticated can update directors" ON directors FOR UPDATE USING (true);
+CREATE POLICY "Authenticated can delete directors" ON directors FOR DELETE USING (true);
+
+-- View pública para diretores (sem senha)
+CREATE VIEW directors_public AS
+SELECT id, unit_id, name, cpf, active, created_at FROM directors;
+```
+
+## 2. Trigger: Auto-criar "MATRIZ ADMIN" ao inserir domínio
+
+Na mesma migração SQL, criar uma function + trigger:
+
+```sql
+CREATE OR REPLACE FUNCTION auto_create_matriz_unit()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO units (domain_id, name, password, is_matriz)
+  VALUES (NEW.id, 'MATRIZ ADMIN', 'matriz_default', true);
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_auto_matriz
+AFTER INSERT ON domains
+FOR EACH ROW EXECUTE FUNCTION auto_create_matriz_unit();
+```
+
+## 3. Edge Function `authenticate-unit` — Suporte a Diretor
+
+Após o bloco de CPF (linha ~90), antes de checar `user_profiles`, adicionar checagem da tabela `directors`:
+
+```
+Se rawDocument.length <= 11 (CPF):
+  1. Checar directors WHERE unit_id = unit_id AND cpf = rawDocument AND active = true
+  2. Se encontrou → validar password do diretor (não da unidade) → retornar sessionType: "matriz"
+  3. Se não → continuar fluxo normal (user_profiles → drivers)
+```
+
+## 4. Auth Store
+
+| Alteração |
+|---|
+| Adicionar `"matriz"` ao tipo `SessionType` |
+
+## 5. Redirects
 
 | Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` (linhas 538-548) | Adicionar **debounce de 2s** no realtime de `ride_tbrs` para evitar rajadas de refetch. Manter um `Set` de `rideIds` atuais e só refetch se o payload pertencer a um ride da unidade |
+| `Index.tsx` | Antes do `if (unitSession)`: `if (unitSession?.sessionType === "matriz") return <Navigate to="/matriz" replace />;` |
+| `DashboardLayout.tsx` | Após check de driver: `if (unitSession.sessionType === "matriz") return <Navigate to="/matriz" replace />;` |
 
-### 2. `fetchRides()` faz 3 queries sequenciais a cada trigger realtime
+## 6. DomainsUnitsPage — Auto "MATRIZ ADMIN"
 
-Cada chamada a `fetchRides()` executa: rides → drivers → tbrs (3 requests). Com realtime sem debounce, isso multiplica.
+O trigger SQL cria automaticamente. Na UI, a unidade "MATRIZ ADMIN" já aparecerá listada. Opcionalmente, marcar visualmente com badge "Matriz" e impedir exclusão.
 
-| Arquivo | Alteração |
+## 7. ManagersPage — Campo de Diretor
+
+Quando `selectedDomain` está preenchido mas `selectedUnit` está vazio:
+- Mostrar seção "Diretor do Domínio" com campos: Nome, CPF (formatado), Senha, botão +
+- Listar diretores existentes da unidade Matriz daquele domínio (buscar `units` com `is_matriz = true` e `domain_id`, depois `directors_public` com `unit_id`)
+- Ações: visualizar, editar, toggle ativo, excluir
+
+Quando `selectedUnit` é preenchido → fluxo atual de gerenciadores (sem mudanças).
+
+## 8. Layout e Rotas Matriz (placeholder)
+
+| Arquivo | Descrição |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` | Adicionar debounce de ~1.5s no `fetchRides` dentro do listener realtime para agrupar múltiplos eventos em um único refetch |
+| `src/components/matriz/MatrizLayout.tsx` | Layout com sidebar + header "Diretoria — {domínio}" + Outlet |
+| `src/components/matriz/MatrizSidebar.tsx` | Menu lateral: Visão Geral, Unidades, Motoristas, Financeiro, Ocorrências, Sair |
+| `src/pages/matriz/MatrizOverview.tsx` | Página principal com 12 KPIs + 8 gráficos (conforme plano anterior) |
+| `src/App.tsx` | Rota `/matriz` com `MatrizLayout` e subrota index `MatrizOverview` |
 
-### 3. QueryClient sem configuração de cache
+## 9. Arquivos a criar
 
-O `QueryClient` na linha 43 do `App.tsx` é instanciado sem nenhuma configuração. Isso significa `staleTime: 0` — toda vez que um componente monta, refaz a query.
+- `src/components/matriz/MatrizLayout.tsx`
+- `src/components/matriz/MatrizSidebar.tsx`
+- `src/pages/matriz/MatrizOverview.tsx`
 
-| Arquivo | Alteração |
-|---|---|
-| `App.tsx` (linha 43) | Configurar `defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } }` para reduzir refetches desnecessários |
+## 10. Arquivos a modificar
 
-### 4. Página de Conferência com ~2000 linhas (peso do bundle)
+- `src/stores/auth-store.ts` — SessionType
+- `src/pages/Index.tsx` — redirect matriz
+- `src/components/dashboard/DashboardLayout.tsx` — redirect matriz
+- `src/App.tsx` — rotas /matriz
+- `supabase/functions/authenticate-unit/index.ts` — login de diretor
+- `src/pages/admin/DomainsUnitsPage.tsx` — badge visual na Matriz Admin
+- `src/pages/admin/ManagersPage.tsx` — seção de cadastro de diretor
 
-`ConferenciaCarregamentoPage.tsx` tem 1966 linhas. Isso impacta tempo de parse e memória.
+## 11. Ordem de execução
 
-| Arquivo | Alteração |
-|---|---|
-| (futuro, não prioritário) | Extrair componentes (cards, modais, scanner) em arquivos separados. Não é bloqueante, mas melhora manutenabilidade |
-
-### 5. Canal `system-updates-realtime` sem filtro global
-
-`SystemUpdates.tsx` escuta TODOS os eventos de `system_updates` sem filtro — impacto baixo pois é tabela pequena, mas vale notar.
-
----
-
-## Resumo de Prioridades
-
-| Prioridade | Ação | Impacto |
-|---|---|---|
-| **Alta** | Debounce no realtime de `ride_tbrs` e `driver_rides` | Evita dezenas de fetches simultâneos |
-| **Alta** | Configurar `staleTime` no QueryClient | Reduz queries redundantes em navegação |
-| **Média** | Verificar `ride_id` no payload realtime antes de refetch | Isola completamente o realtime por unidade |
-| **Baixa** | Code-split da página de Conferência | Melhora tempo de carregamento inicial |
-
-### Sobre a infraestrutura
-O backend (Lovable Cloud) escala automaticamente. Conexões realtime e queries são gerenciadas pelo serviço. O gargalo potencial está no **lado do cliente** fazendo requests excessivos, não no servidor. As correções acima resolvem isso.
-
-Deseja que eu implemente as correções de alta prioridade (debounce no realtime + configuração do QueryClient)?
+1. Migração SQL (is_matriz + directors + trigger)
+2. Edge function authenticate-unit
+3. Auth store + redirects
+4. ManagersPage (cadastro diretor)
+5. DomainsUnitsPage (badge Matriz)
+6. MatrizLayout + MatrizSidebar + MatrizOverview + rotas
 
