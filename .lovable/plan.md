@@ -1,49 +1,53 @@
 
 
-## Plan: Ajustes nas telas da Matriz (Overview, Motoristas, Financeiro)
+## Plano: Pacotes Mínimos por Motorista
 
-### Resumo das mudanças solicitadas
+### O que será feito
 
-**Anexo 1 — MatrizOverview.tsx (KPI "Média Avaliação")**
-- Substituir o card "Média Avaliação" por "Total Pago (TBRs)" que calcula o valor total pago aos motoristas pelos TBRs concluídos (carregamentos finalizados), considerando `driver_custom_values` para taxas diferenciadas e `unit_settings.tbr_value` como fallback padrão.
-- Buscar `driver_custom_values` e `unit_settings` no fetch de dados da Overview.
+Novo campo em Configurações que permite definir um mínimo de pacotes por motorista. Quando o motorista sair com menos TBRs que o mínimo em um dia, o sistema complementa automaticamente até o valor configurado no cálculo da folha de pagamento.
 
-**Anexo 2 — MatrizOverview.tsx (Gráficos)**
-- **Status dos Carregamentos (pizza):** Traduzir os status para PT-BR usando mapeamento (`finished` → "Finalizado", `cancelled` → "Cancelado", `pending` → "Pendente", `loading` → "Carregando").
-- **Top 10 Motoristas:** Os IDs truncados (`driver_id.slice(0,8)`) estão aparecendo no lugar dos nomes. Buscar `drivers_public` para mapear `driver_id` → `name` e exibir o nome real.
+**Exemplo:** Vitoria Santana configurada com mínimo 60. Se sair com 59 TBRs no dia, o sistema calcula como 60 (adiciona +1 TBR virtual), usando o valor diferenciado dela se existir.
 
-**Anexo 3 — MatrizMotoristas.tsx**
-- Substituir coluna "Média" (média TBRs/carregamento) por "Total Ganho" — valor total recebido pelos TBRs finalizados, usando `driver_custom_values` + `unit_settings.tbr_value`.
-- Adicionar filtro de Unidade (Select com "Todas" + lista de unidades do domínio).
+### 1. Criar tabela `driver_minimum_packages`
 
-**Anexo 4 — MatrizFinanceiro.tsx**
-- Excluir o gráfico de barras "Receita vs DNR por Unidade".
-- Substituir card "Receita Estimada" por "Total Pago (TBRs)" — soma real paga aos motoristas considerando valores diferenciados.
-- Na tabela "Detalhamento por Unidade": substituir coluna "Receita Est." por "Total Pago TBRs" e excluir coluna "Líquido Est.".
-
-### Detalhes técnicos
-
-**Dados adicionais a buscar:**
-- `drivers_public` (id, name) — já buscado em Motoristas, adicionar em Overview
-- `unit_settings` (unit_id, tbr_value) — adicionar em Overview e Motoristas
-- `driver_custom_values` (unit_id, driver_id, custom_tbr_value) — adicionar em Overview, Motoristas e Financeiro
-
-**Lógica de cálculo "Total Pago":**
-Para cada TBR finalizado (em ride com `loading_status = finished` ou qualquer ride concluída):
-1. Verificar se existe `driver_custom_values` para o `driver_id` + `unit_id` → usar `custom_tbr_value`
-2. Senão, usar `unit_settings.tbr_value` da unidade
-3. Somar todos os valores
-
-**Mapeamento de status PT-BR (pizza chart):**
-```
-pending → Pendente
-loading → Carregando  
-finished → Finalizado
-cancelled → Cancelado
+```sql
+CREATE TABLE driver_minimum_packages (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  unit_id uuid NOT NULL,
+  driver_id uuid NOT NULL,
+  min_packages integer NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE(unit_id, driver_id)
+);
+-- RLS: leitura, inserção, update e delete para todos (mesmo padrão das demais tabelas)
 ```
 
-### Arquivos a modificar
-1. `src/pages/matriz/MatrizOverview.tsx` — KPI, pizza chart tradução, top 10 com nomes reais
-2. `src/pages/matriz/MatrizMotoristas.tsx` — coluna Média → Total Ganho, filtro unidade
-3. `src/pages/matriz/MatrizFinanceiro.tsx` — remover gráfico, ajustar card e tabela
+### 2. Adicionar seção na `ConfiguracoesPage.tsx`
+
+- Nova seção após "Adicionais por Motorista" com ícone `Package` e título **"Pacotes Mínimos por Motorista"**
+- Mesma mecânica de busca de motorista (reutiliza `searchDrivers`)
+- Campo numérico para definir quantidade mínima
+- Lista de motoristas configurados com botão de exclusão
+- Texto explicativo: "Defina o mínimo de pacotes. Se o motorista sair com menos, o sistema complementa automaticamente no cálculo."
+
+### 3. Integrar lógica no `RelatoriosPage.tsx`
+
+Na geração da folha de pagamento (`buildPayroll`):
+- Buscar `driver_minimum_packages` para a unidade
+- Na construção dos `days` de cada motorista, após calcular `tbrCount` e `returns`:
+  - Se `tbrCount < minPackages`, ajustar `tbrCount` para `minPackages`
+  - Recalcular `value` com o tbrCount ajustado
+- O valor diferenciado (`driver_custom_values`) já é respeitado pois `tbrVal` já é resolvido antes
+
+### 4. Integrar nas telas da Matriz
+
+Nas páginas `MatrizOverview`, `MatrizMotoristas` e `MatrizFinanceiro`, buscar também `driver_minimum_packages` e aplicar a mesma lógica de complemento ao calcular "Total Pago (TBRs)".
+
+### Arquivos modificados
+1. **Nova migração SQL** — tabela `driver_minimum_packages`
+2. **`src/pages/dashboard/ConfiguracoesPage.tsx`** — nova seção de UI
+3. **`src/pages/dashboard/RelatoriosPage.tsx`** — lógica de complemento no cálculo da folha
+4. **`src/pages/matriz/MatrizOverview.tsx`** — aplicar mínimo no cálculo total pago
+5. **`src/pages/matriz/MatrizMotoristas.tsx`** — aplicar mínimo no total ganho
+6. **`src/pages/matriz/MatrizFinanceiro.tsx`** — aplicar mínimo no total pago por unidade
 
