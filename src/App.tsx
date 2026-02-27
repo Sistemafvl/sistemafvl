@@ -29,6 +29,10 @@ import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import AdminLayout from "./components/admin/AdminLayout";
 import MatrizLayout from "./components/matriz/MatrizLayout";
 import MatrizOverview from "./pages/matriz/MatrizOverview";
+import MatrizUnidades from "./pages/matriz/MatrizUnidades";
+import MatrizMotoristas from "./pages/matriz/MatrizMotoristas";
+import MatrizFinanceiro from "./pages/matriz/MatrizFinanceiro";
+import MatrizOcorrencias from "./pages/matriz/MatrizOcorrencias";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
 import AdminDriversPage from "./pages/admin/AdminDriversPage";
@@ -90,6 +94,10 @@ const App = () => (
           </Route>
           <Route path="/matriz" element={<MatrizLayout />}>
             <Route index element={<MatrizOverview />} />
+            <Route path="unidades" element={<MatrizUnidades />} />
+            <Route path="motoristas" element={<MatrizMotoristas />} />
+            <Route path="financeiro" element={<MatrizFinanceiro />} />
+            <Route path="ocorrencias" element={<MatrizOcorrencias />} />
           </Route>
           <Route path="/admin" element={<AdminLayout />}>
             <Route index element={<AdminOverviewPage />} />
