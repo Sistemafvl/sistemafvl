@@ -1,40 +1,39 @@
 
-# Plano: Correções do Scanner de Câmera e PS
 
-## Problemas identificados
+# Plano: Forçar carregamento da última versão ao abrir o sistema
 
-### 1. Câmera lê o mesmo TBR múltiplas vezes (Conferência)
-O cooldown de 1500ms no `recentCodes` é insuficiente — a câmera vê múltiplos QR codes simultaneamente e o mesmo código pode ser relido. Além disso, o `saveTbr` é chamado via `await` dentro do `setInterval`, o que pode causar corrida entre detecções.
+## Problema
 
-### 2. TBR gravou 2x no carregamento
-O `processedCodesRef` deveria impedir isso, mas como a câmera chama `saveTbr` diretamente (sem usar a fila `queueRef`), duas detecções podem entrar em paralelo antes do `processedCodesRef` ser atualizado (o `await` da verificação no banco demora).
+O PWA e o cache do navegador servem versões antigas dos arquivos JS/CSS. Mesmo com `skipWaiting` e `clientsClaim`, o Service Worker antigo pode continuar servindo assets cacheados até que o ciclo de atualização complete. Resultado: o usuário abre o sistema e vê a versão anterior (sem horários nos TBRs, etc.), precisando recarregar manualmente.
 
-### 3. PS não mostra histórico do TBR (câmera mobile)
-O `searchTbr` usa `.maybeSingle()` na query `ride_tbrs`, que retorna **null** quando existem múltiplas entradas para o mesmo código (reincidências). Como TBR4567804 tem 3 registros, o `maybeSingle()` falha silenciosamente e mostra "sem histórico".
+## Causa raiz
 
-### 4. Câmera capta múltiplos códigos simultaneamente
-O `detector.detect()` retorna um array de todos os barcodes visíveis. Atualmente usa `barcodes[0]`, mas deveria filtrar para pegar apenas o código mais central/focado, ou exigir que apenas 1 código esteja visível.
+1. O `PWAAutoUpdate` verifica atualizações a cada 60s, mas na **primeira abertura** o SW antigo já está ativo e serve o cache antigo imediatamente
+2. O `index.html` não tem headers `no-cache`, então o navegador pode servir uma cópia cacheada do HTML sem nem consultar o servidor
+3. O `hasReloaded.current` impede reload duplicado, mas se o SW não detecta atualização imediatamente, a página fica na versão antiga
 
 ## Correções
 
-### ConferenciaCarregamentoPage.tsx — Camera scanner
+### 1. Meta tags no-cache no `index.html`
+Adicionar headers de cache-control via meta tags para garantir que o `index.html` nunca seja servido do cache do navegador:
+```html
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<meta http-equiv="Pragma" content="no-cache" />
+<meta http-equiv="Expires" content="0" />
+```
 
-1. **Leitura única por sessão**: Após ler um TBR válido, pausar a detecção (não fechar câmera). Mostrar o código lido com confirmação visual. Só retomar detecção quando o usuário quiser bipar outro.
-2. **Filtro de código único**: Se `detector.detect()` retorna múltiplos barcodes, ignorar a leitura e mostrar mensagem pedindo para focar em apenas um código.
-3. **Lock síncrono antes do await**: Adicionar o código ao `processedCodesRef` ANTES de chamar `saveTbr` para evitar chamadas paralelas duplicatas.
-4. **Aumentar cooldown**: De 1500ms para 5000ms no `recentCodes`.
+### 2. Versão embarcada com verificação na inicialização
+- Gerar um `BUILD_VERSION` baseado no timestamp do build (via `define` no Vite)
+- No `PWAAutoUpdate`, ao montar, comparar o `BUILD_VERSION` com o valor salvo no `localStorage`
+- Se diferente: salvar a nova versão e forçar `location.reload()` uma única vez
+- Isso garante que mesmo sem SW, ao carregar um novo bundle, o sistema recarrega limpo
 
-### PSPage.tsx — Histórico do TBR
+### 3. Forçar verificação do SW na inicialização (não só a cada 60s)
+- No `onRegisteredSW`, chamar `registration.update()` imediatamente ao registrar, além do intervalo
 
-5. **Corrigir query**: Trocar `.maybeSingle()` por `.order("created_at", { ascending: false }).limit(1)` + `.maybeSingle()` para pegar o registro mais recente quando existem múltiplos.
-
-### Ambas páginas — Foco único
-
-6. **Validação de código único**: Nas duas páginas, quando `barcodes.length > 1`, filtrar apenas os que começam com "TBR" e se ainda houver mais de 1, não processar e pedir foco.
-
-## Detalhes técnicos
-
-| Arquivo | Alterações |
+| Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` | Lock síncrono na câmera, filtro de código único, cooldown maior, pausar após leitura |
-| `PSPage.tsx` | Fix `.maybeSingle()` → `.order().limit(1)`, filtro de código único na câmera |
+| `index.html` | Adicionar meta tags no-cache |
+| `vite.config.ts` | Adicionar `define: { __BUILD_VERSION__: JSON.stringify(Date.now().toString()) }` |
+| `src/components/PWAAutoUpdate.tsx` | Verificar BUILD_VERSION vs localStorage, reload se diferente; chamar `registration.update()` imediato |
+
