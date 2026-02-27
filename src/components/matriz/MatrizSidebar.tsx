@@ -10,7 +10,7 @@ import {
   SidebarMenuItem,
   SidebarFooter,
 } from "@/components/ui/sidebar";
-import { LayoutDashboard, Building, Truck, DollarSign, AlertTriangle, LogOut } from "lucide-react";
+import { LayoutDashboard, Building, Truck, DollarSign, AlertTriangle, LogOut, Crown } from "lucide-react";
 import LogoHeader from "@/components/LogoHeader";
 
 const menuItems = [
@@ -24,7 +24,7 @@ const menuItems = [
 const MatrizSidebar = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout } = useAuthStore();
+  const { logout, unitSession } = useAuthStore();
 
   const handleLogout = () => {
     logout();
@@ -37,6 +37,23 @@ const MatrizSidebar = () => {
         <div className="p-4 flex justify-center">
           <LogoHeader size="sm" />
         </div>
+
+        {/* Director profile card */}
+        {unitSession && (
+          <div className="px-3 pb-2">
+            <div className="flex items-center gap-2 p-2.5 rounded-md bg-primary/10 border border-primary/20">
+              <Crown className="h-4 w-4 text-amber-500 shrink-0" />
+              <div className="min-w-0">
+                <p className="text-xs font-bold italic truncate">{unitSession.user_name}</p>
+                <p className="text-[10px] text-muted-foreground">Diretor</p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {unitSession.domain_name}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
