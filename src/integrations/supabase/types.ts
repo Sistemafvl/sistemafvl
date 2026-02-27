@@ -342,6 +342,30 @@ export type Database = {
           },
         ]
       }
+      driver_minimum_packages: {
+        Row: {
+          created_at: string
+          driver_id: string
+          id: string
+          min_packages: number
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          id?: string
+          min_packages?: number
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          id?: string
+          min_packages?: number
+          unit_id?: string
+        }
+        Relationships: []
+      }
       driver_rides: {
         Row: {
           completed_at: string

@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X } from "lucide-react";
+import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomValue {
@@ -22,6 +22,13 @@ interface Bonus {
   description: string | null;
   period_start: string;
   period_end: string;
+}
+
+interface MinPackage {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  min_packages: number;
 }
 
 interface DriverOption {
@@ -66,6 +73,14 @@ const ConfiguracoesPage = () => {
   const [bonusDate, setBonusDate] = useState("");
   const [bonusSaving, setBonusSaving] = useState(false);
 
+  // Min packages
+  const [minPackages, setMinPackages] = useState<MinPackage[]>([]);
+  const [mpDriverSearch, setMpDriverSearch] = useState("");
+  const [mpDriverResults, setMpDriverResults] = useState<DriverOption[]>([]);
+  const [mpSelectedDriver, setMpSelectedDriver] = useState<DriverOption | null>(null);
+  const [mpValue, setMpValue] = useState("");
+  const [mpSaving, setMpSaving] = useState(false);
+
   const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -95,7 +110,18 @@ const ConfiguracoesPage = () => {
     setBonuses((data ?? []) as Bonus[]);
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses]);
+  const fetchMinPackages = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase.from("driver_minimum_packages" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
+    if (!data) { setMinPackages([]); return; }
+    const driverIds = (data as any[]).map((d: any) => d.driver_id);
+    if (!driverIds.length) { setMinPackages([]); return; }
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setMinPackages((data as any[]).map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
@@ -110,6 +136,7 @@ const ConfiguracoesPage = () => {
 
   useEffect(() => { const t = setTimeout(() => searchDrivers(cvDriverSearch, setCvDriverResults), 300); return () => clearTimeout(t); }, [cvDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(bonusDriverSearch, setBonusDriverResults), 300); return () => clearTimeout(t); }, [bonusDriverSearch]);
+  useEffect(() => { const t = setTimeout(() => searchDrivers(mpDriverSearch, setMpDriverResults), 300); return () => clearTimeout(t); }, [mpDriverSearch]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -192,6 +219,23 @@ const ConfiguracoesPage = () => {
     let raw = e.target.value.replace(/[^\d]/g, "");
     if (!raw) { setCvValue(""); return; }
     setCvValue(formatCurrency(parseInt(raw, 10) / 100));
+  };
+
+  const handleAddMinPackage = async () => {
+    if (!unitId || !mpSelectedDriver || !mpValue) return;
+    setMpSaving(true);
+    const num = parseInt(mpValue, 10);
+    if (isNaN(num) || num <= 0) { setMpSaving(false); return; }
+    await supabase.from("driver_minimum_packages" as any).upsert({ unit_id: unitId, driver_id: mpSelectedDriver.id, min_packages: num } as any, { onConflict: "unit_id,driver_id" });
+    setMpSelectedDriver(null); setMpDriverSearch(""); setMpValue(""); setMpDriverResults([]);
+    await fetchMinPackages();
+    setMpSaving(false);
+    toast({ title: "Pacote mínimo salvo!" });
+  };
+
+  const handleDeleteMinPackage = async (id: string) => {
+    await supabase.from("driver_minimum_packages" as any).delete().eq("id", id);
+    await fetchMinPackages();
   };
 
   const handleBonusAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -402,6 +446,75 @@ const ConfiguracoesPage = () => {
                   </div>
                   <span className="text-green-600 font-mono font-bold">+R$ {formatCurrency(Number(b.amount))}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteBonus(b.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Pacotes Mínimos */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <Package className="h-5 w-5 text-primary" />
+            Pacotes Mínimos por Motorista
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Defina o mínimo de pacotes. Se o motorista sair com menos, o sistema complementa automaticamente no cálculo da folha de pagamento.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={mpSelectedDriver ? mpSelectedDriver.name : mpDriverSearch}
+                onChange={(e) => { setMpDriverSearch(e.target.value); setMpSelectedDriver(null); }}
+                placeholder="Buscar motorista por nome ou CPF..."
+                className="pl-9"
+              />
+              {mpSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setMpSelectedDriver(null); setMpDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {mpDriverResults.length > 0 && !mpSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {mpDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setMpSelectedDriver(d); setMpDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {mpSelectedDriver && (
+              <div className="flex gap-2 items-center">
+                <Input
+                  type="number"
+                  value={mpValue}
+                  onChange={(e) => setMpValue(e.target.value)}
+                  placeholder="Mínimo de pacotes"
+                  className="max-w-[180px]"
+                  min={1}
+                />
+                <Button onClick={handleAddMinPackage} disabled={mpSaving || !mpValue} size="sm">
+                  {mpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                  Salvar
+                </Button>
+              </div>
+            )}
+          </div>
+          {minPackages.length > 0 && (
+            <div className="space-y-2">
+              {minPackages.map(mp => (
+                <div key={mp.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <span className="font-semibold flex-1">{mp.driver_name}</span>
+                  <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
