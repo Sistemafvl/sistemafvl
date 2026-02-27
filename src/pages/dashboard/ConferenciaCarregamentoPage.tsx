@@ -537,14 +537,20 @@ const ConferenciaCarregamentoPage = () => {
 
   useEffect(() => {
     if (!unitId) return;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedFetch = () => {
+      if (Date.now() < realtimeLockUntil.current) return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => { fetchRides(); }, 1500);
+    };
     const channel = supabase
       .channel("conferencia-" + unitId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, () => { if (Date.now() < realtimeLockUntil.current) return; fetchRides(); })
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, debouncedFetch)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, debouncedFetch)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, debouncedFetch)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, debouncedFetch)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {

@@ -40,7 +40,14 @@ import OfflineIndicator from "./components/OfflineIndicator";
 import PWAAutoUpdate from "./components/PWAAutoUpdate";
 import { Toaster } from "./components/ui/sonner";
 import { Toaster as RadixToaster } from "./components/ui/toaster";
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 30_000,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
