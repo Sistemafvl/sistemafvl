@@ -762,6 +762,7 @@ const ConferenciaCarregamentoPage = () => {
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
+        playSuccessBeep();
       } else if (count === 1) {
         newTbr._duplicate = true;
         setTbrs((prev) => {
@@ -1506,7 +1507,7 @@ const ConferenciaCarregamentoPage = () => {
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
                             {!isLoadingStatus && !isFinished && (
-                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)}>
+                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
                             )}
