@@ -1,16 +1,16 @@
 
 
-# Plano: Tornar o lock do conferente permanente baseado nos dados do banco
+# Plano: Ajustar input TBR e botões no mobile
 
 ## Problema
-O `lockedConferenteIds` é um `Set` em memória que só é preenchido quando o usuário seleciona um conferente na sessão atual. Quando `fetchRides` roda (realtime, refresh, etc.), ele substitui os rides com dados novos do banco, mas o `lockedConferenteIds` pode não conter aquele ride — então por um instante (ou permanentemente, se o componente remontou) o dropdown fica ativo novamente.
+No mobile, o campo "Escanear TBR" ocupa muito espaço horizontal, fazendo os botões de câmera e teclado ficarem atrás do balão "Fila", dificultando o clique.
 
 ## Correção
-Após `setRides(mapped)` dentro do `fetchRides`, iterar sobre os rides carregados e adicionar automaticamente ao `lockedConferenteIds` todos os rides que já possuem `conferente_id` definido no banco. Isso garante que o lock é sempre derivado da verdade do servidor, não apenas de ações da sessão atual.
+Na `div` da linha 1630 (`flex gap-1`), reduzir a largura do input no mobile e garantir que os botões fiquem visíveis:
 
 | Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` (~linha 390, dentro de `fetchRides`) | Após `setRides(mapped)`, adicionar `setLockedConferenteIds(prev => { const next = new Set(prev); mapped.forEach(r => { if (r.conferente_id) next.add(r.id); }); return next; })` |
+| `ConferenciaCarregamentoPage.tsx` (linha 1630-1631) | Mudar `<div className="flex gap-1">` para `<div className="flex gap-1 items-center">` e no `div.relative.flex-1` (linha 1631) adicionar classe `max-w-[55%] sm:max-w-none` para limitar a largura do input apenas no mobile, empurrando os botões para fora da zona do balão |
 
-Isso é uma alteração de ~3 linhas que resolve o problema na raiz: qualquer ride que tenha conferente definido no banco será sempre travado, independente de sessão, refresh, ou atualização realtime.
+Isso reduz o campo de input apenas na visão mobile (< 640px), mantendo os botões de câmera e teclado acessíveis ao lado.
 
