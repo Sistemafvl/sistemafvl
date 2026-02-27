@@ -253,11 +253,11 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
           {/* Veículo */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className="space-y-1">
-              <Label htmlFor="dr-plate">Placa do carro *</Label>
+              <Label htmlFor="dr-plate">Placa do Carro/Moto *</Label>
               <Input id="dr-plate" value={form.car_plate} onChange={(e) => set("car_plate", maskPlate(e.target.value))} placeholder="AAA-0AAA" required />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="dr-model">Modelo do carro *</Label>
+              <Label htmlFor="dr-model">Modelo do Carro/Moto *</Label>
               <Input id="dr-model" value={form.car_model} onChange={(e) => set("car_model", capitalize(e.target.value))} required />
             </div>
             <div className="space-y-1">
