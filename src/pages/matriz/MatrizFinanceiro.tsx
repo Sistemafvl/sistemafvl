@@ -5,8 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { DollarSign, TrendingUp, FileWarning, Package } from "lucide-react";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { DollarSign, TrendingUp, FileWarning, Package, Wallet } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 const MatrizFinanceiro = () => {
@@ -20,6 +19,7 @@ const MatrizFinanceiro = () => {
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
+  const [customValues, setCustomValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -38,10 +38,12 @@ const MatrizFinanceiro = () => {
       supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end),
       supabase.from("dnr_entries").select("id, unit_id, dnr_value, status, discounted").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
       supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
-    ]).then(([ridesR, dnrR, settingsR]) => {
+      supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
+    ]).then(([ridesR, dnrR, settingsR, customR]) => {
       setRides(ridesR.data || []);
       setDnrEntries(dnrR.data || []);
       setSettings(settingsR.data || []);
+      setCustomValues(customR.data || []);
       setLoading(false);
       const rideIds = (ridesR.data || []).map((r: any) => r.id);
       if (rideIds.length > 0) {
@@ -56,39 +58,37 @@ const MatrizFinanceiro = () => {
       const uRides = rides.filter(r => r.unit_id === u.id);
       const uRideIds = uRides.map(r => r.id);
       const uTbrs = tbrs.filter(t => uRideIds.includes(t.ride_id)).length;
-      const tbrValue = settings.find(s => s.unit_id === u.id)?.tbr_value || 0;
-      const estimatedRevenue = uTbrs * Number(tbrValue);
       const uDnr = dnrEntries.filter(d => d.unit_id === u.id);
       const dnrTotal = uDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
-      const dnrDiscounted = uDnr.filter(d => d.discounted).reduce((a, d) => a + Number(d.dnr_value || 0), 0);
+
+      // Calculate total paid considering custom values
+      let totalPaid = 0;
+      uRides.forEach(ride => {
+        const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
+        const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
+        const unitVal = settings.find(s => s.unit_id === u.id)?.tbr_value || 0;
+        const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
+        totalPaid += rideTbrCount * tbrVal;
+      });
 
       return {
         id: u.id,
         name: u.name,
         rides: uRides.length,
         tbrs: uTbrs,
-        tbrValue: Number(tbrValue),
-        estimatedRevenue,
+        tbrValue: Number(settings.find(s => s.unit_id === u.id)?.tbr_value || 0),
+        totalPaid,
         dnrTotal,
-        dnrDiscounted,
-        netEstimate: estimatedRevenue - dnrTotal,
       };
-    }).sort((a, b) => b.estimatedRevenue - a.estimatedRevenue);
-  }, [units, rides, tbrs, dnrEntries, settings]);
+    }).sort((a, b) => b.totalPaid - a.totalPaid);
+  }, [units, rides, tbrs, dnrEntries, settings, customValues]);
 
   const totals = useMemo(() => ({
     rides: unitFinancials.reduce((a, u) => a + u.rides, 0),
     tbrs: unitFinancials.reduce((a, u) => a + u.tbrs, 0),
-    revenue: unitFinancials.reduce((a, u) => a + u.estimatedRevenue, 0),
+    totalPaid: unitFinancials.reduce((a, u) => a + u.totalPaid, 0),
     dnr: unitFinancials.reduce((a, u) => a + u.dnrTotal, 0),
-    net: unitFinancials.reduce((a, u) => a + u.netEstimate, 0),
   }), [unitFinancials]);
-
-  const chartData = useMemo(() => unitFinancials.map(u => ({
-    name: u.name,
-    Receita: +u.estimatedRevenue.toFixed(2),
-    DNR: +u.dnrTotal.toFixed(2),
-  })), [unitFinancials]);
 
   return (
     <div className="space-y-6">
@@ -107,23 +107,9 @@ const MatrizFinanceiro = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard icon={Package} label="Total Carregamentos" value={totals.rides} loading={loading} />
         <KpiCard icon={TrendingUp} label="Total TBRs" value={totals.tbrs} loading={loading} />
-        <KpiCard icon={DollarSign} label="Receita Estimada" value={`R$ ${totals.revenue.toFixed(2)}`} loading={loading} />
+        <KpiCard icon={Wallet} label="Total Pago (TBRs)" value={`R$ ${totals.totalPaid.toFixed(2)}`} loading={loading} color="text-emerald-600" />
         <KpiCard icon={FileWarning} label="DNR Total" value={`R$ ${totals.dnr.toFixed(2)}`} loading={loading} color="text-destructive" />
       </div>
-
-      {/* Chart */}
-      <Card>
-        <CardHeader><CardTitle className="text-sm font-bold italic">Receita vs DNR por Unidade</CardTitle></CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={chartData}><CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" tick={{ fontSize: 10 }} /><YAxis /><Tooltip /><Legend />
-              <Bar dataKey="Receita" fill="hsl(var(--primary))" radius={[4,4,0,0]} />
-              <Bar dataKey="DNR" fill="hsl(var(--destructive))" radius={[4,4,0,0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </CardContent>
-      </Card>
 
       {/* Table */}
       <Card>
@@ -139,9 +125,8 @@ const MatrizFinanceiro = () => {
                   <TableHead className="text-center">Carreg.</TableHead>
                   <TableHead className="text-center">TBRs</TableHead>
                   <TableHead className="text-center">Valor TBR</TableHead>
-                  <TableHead className="text-right">Receita Est.</TableHead>
+                  <TableHead className="text-right">Total Pago TBRs</TableHead>
                   <TableHead className="text-right">DNR</TableHead>
-                  <TableHead className="text-right">Líquido Est.</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -151,9 +136,8 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{u.rides}</TableCell>
                     <TableCell className="text-center">{u.tbrs}</TableCell>
                     <TableCell className="text-center">R$ {u.tbrValue.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-semibold text-emerald-600">R$ {u.estimatedRevenue.toFixed(2)}</TableCell>
+                    <TableCell className="text-right font-semibold text-emerald-600">R$ {u.totalPaid.toFixed(2)}</TableCell>
                     <TableCell className="text-right text-destructive">R$ {u.dnrTotal.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-bold">R$ {u.netEstimate.toFixed(2)}</TableCell>
                   </TableRow>
                 ))}
                 {unitFinancials.length > 1 && (
@@ -162,9 +146,8 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{totals.rides}</TableCell>
                     <TableCell className="text-center">{totals.tbrs}</TableCell>
                     <TableCell />
-                    <TableCell className="text-right text-emerald-600">R$ {totals.revenue.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-emerald-600">R$ {totals.totalPaid.toFixed(2)}</TableCell>
                     <TableCell className="text-right text-destructive">R$ {totals.dnr.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">R$ {totals.net.toFixed(2)}</TableCell>
                   </TableRow>
                 )}
               </TableBody>

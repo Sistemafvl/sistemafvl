@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Truck, Search } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
@@ -16,12 +17,15 @@ const MatrizMotoristas = () => {
   const [dateStart, setDateStart] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [search, setSearch] = useState("");
+  const [filterUnit, setFilterUnit] = useState("all");
   const [units, setUnits] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [psEntries, setPsEntries] = useState<any[]>([]);
+  const [unitSettings, setUnitSettings] = useState<any[]>([]);
+  const [customValues, setCustomValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +36,7 @@ const MatrizMotoristas = () => {
 
   useEffect(() => {
     if (!units.length) return;
-    const unitIds = units.map(u => u.id);
+    const unitIds = filterUnit === "all" ? units.map(u => u.id) : [filterUnit];
     const start = startOfDay(new Date(dateStart)).toISOString();
     const end = endOfDay(new Date(dateEnd)).toISOString();
     setLoading(true);
@@ -41,11 +45,15 @@ const MatrizMotoristas = () => {
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, active"),
       supabase.from("dnr_entries").select("id, unit_id, driver_id, dnr_value, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
       supabase.from("ps_entries").select("id, unit_id, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-    ]).then(([ridesR, driversR, dnrR, psR]) => {
+      supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
+      supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
+    ]).then(([ridesR, driversR, dnrR, psR, settingsR, customR]) => {
       setRides(ridesR.data || []);
       setDrivers(driversR.data || []);
       setDnrEntries(dnrR.data || []);
       setPsEntries(psR.data || []);
+      setUnitSettings(settingsR.data || []);
+      setCustomValues(customR.data || []);
       setLoading(false);
       const rideIds = (ridesR.data || []).map((r: any) => r.id);
       if (rideIds.length > 0) {
@@ -53,15 +61,16 @@ const MatrizMotoristas = () => {
           .then(({ data }) => setTbrs(data || []));
       } else setTbrs([]);
     });
-  }, [units, dateStart, dateEnd]);
+  }, [units, dateStart, dateEnd, filterUnit]);
 
   const ranking = useMemo(() => {
-    const driverMap: Record<string, { rides: number; unitIds: Set<string>; rideIds: string[] }> = {};
+    const driverMap: Record<string, { rides: number; unitIds: Set<string>; rideIds: string[]; rideDetails: { id: string; unit_id: string; driver_id: string }[] }> = {};
     rides.forEach(r => {
-      if (!driverMap[r.driver_id]) driverMap[r.driver_id] = { rides: 0, unitIds: new Set(), rideIds: [] };
+      if (!driverMap[r.driver_id]) driverMap[r.driver_id] = { rides: 0, unitIds: new Set(), rideIds: [], rideDetails: [] };
       driverMap[r.driver_id].rides++;
       driverMap[r.driver_id].unitIds.add(r.unit_id);
       driverMap[r.driver_id].rideIds.push(r.id);
+      driverMap[r.driver_id].rideDetails.push(r);
     });
 
     return Object.entries(driverMap).map(([driverId, stats]) => {
@@ -70,6 +79,16 @@ const MatrizMotoristas = () => {
       const driverDnr = dnrEntries.filter(d => d.driver_id === driverId);
       const dnrValue = driverDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
       const unitNames = [...stats.unitIds].map(uid => units.find(u => u.id === uid)?.name || "").filter(Boolean);
+
+      // Calculate total earned from TBRs
+      let totalEarned = 0;
+      stats.rideDetails.forEach(ride => {
+        const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
+        const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
+        const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
+        const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
+        totalEarned += rideTbrCount * tbrVal;
+      });
 
       return {
         id: driverId,
@@ -80,13 +99,13 @@ const MatrizMotoristas = () => {
         active: driver?.active ?? true,
         rides: stats.rides,
         tbrs: driverTbrs,
-        avgTbrs: stats.rides ? (driverTbrs / stats.rides).toFixed(1) : "0",
+        totalEarned,
         dnr: driverDnr.length,
         dnrValue,
         units: unitNames.join(", "),
       };
     }).sort((a, b) => b.rides - a.rides);
-  }, [rides, drivers, tbrs, dnrEntries, units]);
+  }, [rides, drivers, tbrs, dnrEntries, units, unitSettings, customValues]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return ranking;
@@ -106,6 +125,18 @@ const MatrizMotoristas = () => {
         <div className="space-y-1">
           <Label className="text-xs font-semibold italic">Data Fim</Label>
           <Input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="h-9 w-40" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold italic">Unidade</Label>
+          <Select value={filterUnit} onValueChange={setFilterUnit}>
+            <SelectTrigger className="h-9 w-48"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas</SelectItem>
+              {units.map(u => (
+                <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
         <div className="space-y-1 flex-1 min-w-[200px]">
           <Label className="text-xs font-semibold italic">Buscar</Label>
@@ -135,7 +166,7 @@ const MatrizMotoristas = () => {
                   <TableHead>Placa</TableHead>
                   <TableHead className="text-center">Carreg.</TableHead>
                   <TableHead className="text-center">TBRs</TableHead>
-                  <TableHead className="text-center">Média</TableHead>
+                  <TableHead className="text-right">Total Ganho</TableHead>
                   <TableHead className="text-center">DNR</TableHead>
                   <TableHead>Unidades</TableHead>
                   <TableHead className="text-center">Status</TableHead>
@@ -149,7 +180,7 @@ const MatrizMotoristas = () => {
                     <TableCell className="text-xs">{d.plate}</TableCell>
                     <TableCell className="text-center font-bold">{d.rides}</TableCell>
                     <TableCell className="text-center">{d.tbrs}</TableCell>
-                    <TableCell className="text-center">{d.avgTbrs}</TableCell>
+                    <TableCell className="text-right font-semibold text-emerald-600">R$ {d.totalEarned.toFixed(2)}</TableCell>
                     <TableCell className="text-center">
                       {d.dnr > 0 ? (
                         <span className="text-destructive font-semibold">{d.dnr} (R$ {d.dnrValue.toFixed(2)})</span>
