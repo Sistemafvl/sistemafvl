@@ -1,129 +1,49 @@
 
 
-# Plano: Matriz Admin — Etapa 1 (Infraestrutura + Cadastro do Diretor)
+## Plan: Ajustes nas telas da Matriz (Overview, Motoristas, Financeiro)
 
-## Resumo
+### Resumo das mudanças solicitadas
 
-Ao criar um domínio, a unidade "MATRIZ ADMIN" será criada automaticamente. Na página de Gerenciadores, ao selecionar um domínio sem escolher unidade, aparece o campo de cadastro do diretor (CPF + senha). Ao selecionar uma unidade, aparece o fluxo atual de gerenciadores. O diretor acessa pelo login normal (seleciona domínio → unidade "MATRIZ ADMIN" → CPF + senha da unidade) e é redirecionado para o painel `/matriz`.
+**Anexo 1 — MatrizOverview.tsx (KPI "Média Avaliação")**
+- Substituir o card "Média Avaliação" por "Total Pago (TBRs)" que calcula o valor total pago aos motoristas pelos TBRs concluídos (carregamentos finalizados), considerando `driver_custom_values` para taxas diferenciadas e `unit_settings.tbr_value` como fallback padrão.
+- Buscar `driver_custom_values` e `unit_settings` no fetch de dados da Overview.
 
----
+**Anexo 2 — MatrizOverview.tsx (Gráficos)**
+- **Status dos Carregamentos (pizza):** Traduzir os status para PT-BR usando mapeamento (`finished` → "Finalizado", `cancelled` → "Cancelado", `pending` → "Pendente", `loading` → "Carregando").
+- **Top 10 Motoristas:** Os IDs truncados (`driver_id.slice(0,8)`) estão aparecendo no lugar dos nomes. Buscar `drivers_public` para mapear `driver_id` → `name` e exibir o nome real.
 
-## 1. Migração SQL
+**Anexo 3 — MatrizMotoristas.tsx**
+- Substituir coluna "Média" (média TBRs/carregamento) por "Total Ganho" — valor total recebido pelos TBRs finalizados, usando `driver_custom_values` + `unit_settings.tbr_value`.
+- Adicionar filtro de Unidade (Select com "Todas" + lista de unidades do domínio).
 
-```sql
--- Coluna is_matriz na tabela units
-ALTER TABLE units ADD COLUMN is_matriz boolean NOT NULL DEFAULT false;
+**Anexo 4 — MatrizFinanceiro.tsx**
+- Excluir o gráfico de barras "Receita vs DNR por Unidade".
+- Substituir card "Receita Estimada" por "Total Pago (TBRs)" — soma real paga aos motoristas considerando valores diferenciados.
+- Na tabela "Detalhamento por Unidade": substituir coluna "Receita Est." por "Total Pago TBRs" e excluir coluna "Líquido Est.".
 
--- Tabela de diretores (CPF + senha, vinculado ao domínio via unidade Matriz)
-CREATE TABLE directors (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  unit_id uuid NOT NULL,
-  name text NOT NULL,
-  cpf text NOT NULL,
-  password text NOT NULL,
-  active boolean NOT NULL DEFAULT true,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
+### Detalhes técnicos
 
-ALTER TABLE directors ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Anyone can read active directors" ON directors FOR SELECT USING (active = true);
-CREATE POLICY "Authenticated can read all directors" ON directors FOR SELECT USING (true);
-CREATE POLICY "Authenticated can insert directors" ON directors FOR INSERT WITH CHECK (true);
-CREATE POLICY "Authenticated can update directors" ON directors FOR UPDATE USING (true);
-CREATE POLICY "Authenticated can delete directors" ON directors FOR DELETE USING (true);
+**Dados adicionais a buscar:**
+- `drivers_public` (id, name) — já buscado em Motoristas, adicionar em Overview
+- `unit_settings` (unit_id, tbr_value) — adicionar em Overview e Motoristas
+- `driver_custom_values` (unit_id, driver_id, custom_tbr_value) — adicionar em Overview, Motoristas e Financeiro
 
--- View pública para diretores (sem senha)
-CREATE VIEW directors_public AS
-SELECT id, unit_id, name, cpf, active, created_at FROM directors;
+**Lógica de cálculo "Total Pago":**
+Para cada TBR finalizado (em ride com `loading_status = finished` ou qualquer ride concluída):
+1. Verificar se existe `driver_custom_values` para o `driver_id` + `unit_id` → usar `custom_tbr_value`
+2. Senão, usar `unit_settings.tbr_value` da unidade
+3. Somar todos os valores
+
+**Mapeamento de status PT-BR (pizza chart):**
+```
+pending → Pendente
+loading → Carregando  
+finished → Finalizado
+cancelled → Cancelado
 ```
 
-## 2. Trigger: Auto-criar "MATRIZ ADMIN" ao inserir domínio
-
-Na mesma migração SQL, criar uma function + trigger:
-
-```sql
-CREATE OR REPLACE FUNCTION auto_create_matriz_unit()
-RETURNS trigger AS $$
-BEGIN
-  INSERT INTO units (domain_id, name, password, is_matriz)
-  VALUES (NEW.id, 'MATRIZ ADMIN', 'matriz_default', true);
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER trg_auto_matriz
-AFTER INSERT ON domains
-FOR EACH ROW EXECUTE FUNCTION auto_create_matriz_unit();
-```
-
-## 3. Edge Function `authenticate-unit` — Suporte a Diretor
-
-Após o bloco de CPF (linha ~90), antes de checar `user_profiles`, adicionar checagem da tabela `directors`:
-
-```
-Se rawDocument.length <= 11 (CPF):
-  1. Checar directors WHERE unit_id = unit_id AND cpf = rawDocument AND active = true
-  2. Se encontrou → validar password do diretor (não da unidade) → retornar sessionType: "matriz"
-  3. Se não → continuar fluxo normal (user_profiles → drivers)
-```
-
-## 4. Auth Store
-
-| Alteração |
-|---|
-| Adicionar `"matriz"` ao tipo `SessionType` |
-
-## 5. Redirects
-
-| Arquivo | Alteração |
-|---|---|
-| `Index.tsx` | Antes do `if (unitSession)`: `if (unitSession?.sessionType === "matriz") return <Navigate to="/matriz" replace />;` |
-| `DashboardLayout.tsx` | Após check de driver: `if (unitSession.sessionType === "matriz") return <Navigate to="/matriz" replace />;` |
-
-## 6. DomainsUnitsPage — Auto "MATRIZ ADMIN"
-
-O trigger SQL cria automaticamente. Na UI, a unidade "MATRIZ ADMIN" já aparecerá listada. Opcionalmente, marcar visualmente com badge "Matriz" e impedir exclusão.
-
-## 7. ManagersPage — Campo de Diretor
-
-Quando `selectedDomain` está preenchido mas `selectedUnit` está vazio:
-- Mostrar seção "Diretor do Domínio" com campos: Nome, CPF (formatado), Senha, botão +
-- Listar diretores existentes da unidade Matriz daquele domínio (buscar `units` com `is_matriz = true` e `domain_id`, depois `directors_public` com `unit_id`)
-- Ações: visualizar, editar, toggle ativo, excluir
-
-Quando `selectedUnit` é preenchido → fluxo atual de gerenciadores (sem mudanças).
-
-## 8. Layout e Rotas Matriz (placeholder)
-
-| Arquivo | Descrição |
-|---|---|
-| `src/components/matriz/MatrizLayout.tsx` | Layout com sidebar + header "Diretoria — {domínio}" + Outlet |
-| `src/components/matriz/MatrizSidebar.tsx` | Menu lateral: Visão Geral, Unidades, Motoristas, Financeiro, Ocorrências, Sair |
-| `src/pages/matriz/MatrizOverview.tsx` | Página principal com 12 KPIs + 8 gráficos (conforme plano anterior) |
-| `src/App.tsx` | Rota `/matriz` com `MatrizLayout` e subrota index `MatrizOverview` |
-
-## 9. Arquivos a criar
-
-- `src/components/matriz/MatrizLayout.tsx`
-- `src/components/matriz/MatrizSidebar.tsx`
-- `src/pages/matriz/MatrizOverview.tsx`
-
-## 10. Arquivos a modificar
-
-- `src/stores/auth-store.ts` — SessionType
-- `src/pages/Index.tsx` — redirect matriz
-- `src/components/dashboard/DashboardLayout.tsx` — redirect matriz
-- `src/App.tsx` — rotas /matriz
-- `supabase/functions/authenticate-unit/index.ts` — login de diretor
-- `src/pages/admin/DomainsUnitsPage.tsx` — badge visual na Matriz Admin
-- `src/pages/admin/ManagersPage.tsx` — seção de cadastro de diretor
-
-## 11. Ordem de execução
-
-1. Migração SQL (is_matriz + directors + trigger)
-2. Edge function authenticate-unit
-3. Auth store + redirects
-4. ManagersPage (cadastro diretor)
-5. DomainsUnitsPage (badge Matriz)
-6. MatrizLayout + MatrizSidebar + MatrizOverview + rotas
+### Arquivos a modificar
+1. `src/pages/matriz/MatrizOverview.tsx` — KPI, pizza chart tradução, top 10 com nomes reais
+2. `src/pages/matriz/MatrizMotoristas.tsx` — coluna Média → Total Ganho, filtro unidade
+3. `src/pages/matriz/MatrizFinanceiro.tsx` — remover gráfico, ajustar card e tabela
 
