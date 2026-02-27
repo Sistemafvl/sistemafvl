@@ -1,28 +1,16 @@
 
 
-# Plano: 3 Ajustes (Iniciar, Beep de Sucesso, Labels do Formulário)
+# Plano: Tornar o lock do conferente permanente baseado nos dados do banco
 
-## 1. Botão "Iniciar" só libera com conferente selecionado
+## Problema
+O `lockedConferenteIds` é um `Set` em memória que só é preenchido quando o usuário seleciona um conferente na sessão atual. Quando `fetchRides` roda (realtime, refresh, etc.), ele substitui os rides com dados novos do banco, mas o `lockedConferenteIds` pode não conter aquele ride — então por um instante (ou permanentemente, se o componente remontou) o dropdown fica ativo novamente.
 
-No botão Iniciar (linha ~1509), adicionar `disabled={!ride.conferente_id}` para desabilitar quando nenhum conferente está selecionado.
-
-| Arquivo | Alteração |
-|---|---|
-| `ConferenciaCarregamentoPage.tsx` (linha 1509) | Adicionar `disabled={!ride.conferente_id}` e estilo visual de desabilitado |
-
-## 2. Beep de sucesso ao gravar TBR com sucesso
-
-O `playSuccessBeep` já existe (linha 227) mas só é chamado pela câmera. Adicionar a chamada dentro do `saveTbr` no caminho de sucesso (count === 0, após a inserção, linha ~764), para que tanto a câmera quanto o scanner manual emitam o som.
+## Correção
+Após `setRides(mapped)` dentro do `fetchRides`, iterar sobre os rides carregados e adicionar automaticamente ao `lockedConferenteIds` todos os rides que já possuem `conferente_id` definido no banco. Isso garante que o lock é sempre derivado da verdade do servidor, não apenas de ações da sessão atual.
 
 | Arquivo | Alteração |
 |---|---|
-| `ConferenciaCarregamentoPage.tsx` (linha ~764) | Adicionar `playSuccessBeep()` após inserção bem-sucedida |
+| `ConferenciaCarregamentoPage.tsx` (~linha 390, dentro de `fetchRides`) | Após `setRides(mapped)`, adicionar `setLockedConferenteIds(prev => { const next = new Set(prev); mapped.forEach(r => { if (r.conferente_id) next.add(r.id); }); return next; })` |
 
-## 3. Labels do formulário de cadastro de motorista
-
-Trocar "Placa do carro" → "Placa do Carro/Moto" e "Modelo do carro" → "Modelo do Carro/Moto".
-
-| Arquivo | Alteração |
-|---|---|
-| `DriverRegistrationModal.tsx` (linhas 256, 260) | Alterar textos dos labels |
+Isso é uma alteração de ~3 linhas que resolve o problema na raiz: qualquer ride que tenha conferente definido no banco será sempre travado, independente de sessão, refresh, ou atualização realtime.
 
