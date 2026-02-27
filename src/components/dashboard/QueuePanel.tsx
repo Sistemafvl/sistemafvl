@@ -169,11 +169,13 @@ const QueuePanel = () => {
   };
 
   const [usedLoginsToday, setUsedLoginsToday] = useState<Set<string>>(new Set());
+  const [routeHistory, setRouteHistory] = useState<string[]>([]);
 
   const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
     setSelectedLoginId("");
+    setRouteHistory([]);
     setShowProgramModal(true);
     if (unitId) {
       const { data } = await supabase.from("unit_logins").select("id, login").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -189,6 +191,16 @@ const QueuePanel = () => {
         .not("login", "is", null);
       const used = new Set<string>((ridesData ?? []).map((r: any) => r.login).filter(Boolean));
       setUsedLoginsToday(used);
+
+      // Fetch route history for this driver at this unit
+      const { data: routesData } = await supabase
+        .from("driver_rides")
+        .select("route")
+        .eq("driver_id", entry.driver_id)
+        .eq("unit_id", unitId)
+        .not("route", "is", null);
+      const uniqueRoutes = [...new Set((routesData ?? []).map((r: any) => r.route).filter(Boolean))].sort();
+      setRouteHistory(uniqueRoutes as string[]);
     }
   };
 
@@ -443,6 +455,19 @@ const QueuePanel = () => {
             <DialogDescription>{selectedEntry?.driver_name} — Preencha as informações abaixo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">Rotas anteriores</Label>
+              <div className="max-h-24 overflow-y-auto flex flex-wrap gap-1 p-2 border rounded-md bg-muted/30">
+                {routeHistory.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">Nenhuma rota anterior.</p>
+                ) : (
+                  routeHistory.map(r => (
+                    <Button key={r} type="button" variant="outline" size="sm" className="h-7 text-xs"
+                      onClick={() => setRoute(r)}>{r}</Button>
+                  ))
+                )}
+              </div>
+            </div>
             <div className="space-y-2">
               <Label htmlFor="route" className="font-semibold">Rota</Label>
               <Input id="route" placeholder="Informe a rota..." value={route} onChange={(e) => setRoute(e.target.value)} />
