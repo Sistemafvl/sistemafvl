@@ -11,9 +11,10 @@ import {
 } from "recharts";
 import {
   Package, Truck, Users, ShieldCheck, AlertTriangle, FileWarning, RotateCcw,
-  DollarSign, Star, Building, TrendingUp, ClipboardList,
+  DollarSign, Star, Building, TrendingUp, ClipboardList, Wallet,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { translateStatus } from "@/lib/status-labels";
 
 const COLORS = [
   "hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--accent))",
@@ -36,6 +37,9 @@ const MatrizOverview = () => {
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
   const [reviews, setReviews] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<any[]>([]);
+  const [unitSettings, setUnitSettings] = useState<any[]>([]);
+  const [customValues, setCustomValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Fetch domain units
@@ -60,13 +64,19 @@ const MatrizOverview = () => {
       supabase.from("dnr_entries").select("id, unit_id, status, dnr_value, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
       supabase.from("piso_entries").select("id, unit_id, status, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
       supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR]) => {
+      supabase.from("drivers_public").select("id, name"),
+      supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
+      supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
+    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR, driversR, settingsR, customR]) => {
       setRides(ridesR.data || []);
       setPsEntries(psR.data || []);
       setRtoEntries(rtoR.data || []);
       setDnrEntries(dnrR.data || []);
       setPisoEntries(pisoR.data || []);
       setReviews(reviewsR.data || []);
+      setDrivers(driversR.data || []);
+      setUnitSettings(settingsR.data || []);
+      setCustomValues(customR.data || []);
       setLoading(false);
 
       // Fetch TBRs for those rides
@@ -80,6 +90,19 @@ const MatrizOverview = () => {
     });
   }, [domainUnits, filterUnit, dateStart, dateEnd]);
 
+  // Helper: calculate total paid for TBRs
+  const calcTotalPaid = (ridesArr: any[], tbrsArr: any[]) => {
+    let total = 0;
+    ridesArr.forEach(ride => {
+      const rideTbrCount = tbrsArr.filter(t => t.ride_id === ride.id).length;
+      const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
+      const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
+      const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
+      total += rideTbrCount * tbrVal;
+    });
+    return total;
+  };
+
   // KPI calculations
   const kpis = useMemo(() => {
     const uniqueDrivers = new Set(rides.map(r => r.driver_id));
@@ -92,7 +115,7 @@ const MatrizOverview = () => {
     const dnrOpen = dnrEntries.filter(d => d.status === "open");
     const dnrAnalysis = dnrEntries.filter(d => d.status === "analysis");
     const dnrClosed = dnrEntries.filter(d => d.status === "closed" || d.status === "approved");
-    const avgRating = reviews.length > 0 ? (reviews.reduce((a, r) => a + r.rating, 0) / reviews.length).toFixed(1) : "—";
+    const totalPaid = calcTotalPaid(rides, tbrs);
     const activeUnits = filterUnit === "all" ? domainUnits.length : 1;
 
     return [
@@ -105,11 +128,11 @@ const MatrizOverview = () => {
       { label: "DNR Abertos", value: `${dnrOpen.length} (R$ ${dnrOpen.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-red-500" },
       { label: "DNR Em Análise", value: `${dnrAnalysis.length} (R$ ${dnrAnalysis.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-yellow-500" },
       { label: "DNR Finalizados", value: dnrClosed.length, icon: DollarSign, color: "text-green-500" },
-      { label: "Média Avaliação", value: avgRating, icon: Star, color: "text-amber-400" },
+      { label: "Total Pago (TBRs)", value: `R$ ${totalPaid.toFixed(2)}`, icon: Wallet, color: "text-emerald-600" },
       { label: "Unidades Ativas", value: activeUnits, icon: Building, color: "text-primary" },
       { label: "TBRs / Carregamento", value: rides.length ? (tbrs.length / rides.length).toFixed(1) : "0", icon: TrendingUp, color: "text-emerald-500" },
     ];
-  }, [rides, tbrs, psEntries, rtoEntries, dnrEntries, pisoEntries, reviews, domainUnits, filterUnit]);
+  }, [rides, tbrs, psEntries, rtoEntries, dnrEntries, pisoEntries, reviews, domainUnits, filterUnit, unitSettings, customValues]);
 
   // Chart 1: Carregamentos por unidade (barras)
   const chartRidesByUnit = useMemo(() => {
@@ -128,25 +151,31 @@ const MatrizOverview = () => {
     return Object.entries(map).sort().map(([d, v]) => ({ dia: d, carregamentos: v }));
   }, [rides]);
 
-  // Chart 3: Status carregamentos (pizza)
+  // Chart 3: Status carregamentos (pizza) — translated to PT-BR
   const chartStatusPie = useMemo(() => {
     const statusMap: Record<string, number> = {};
     rides.forEach(r => {
       const s = r.loading_status || "pending";
-      statusMap[s] = (statusMap[s] || 0) + 1;
+      const translated = translateStatus(s);
+      statusMap[translated] = (statusMap[translated] || 0) + 1;
     });
     return Object.entries(statusMap).map(([name, value]) => ({ name, value }));
   }, [rides]);
 
-  // Chart 4: Top 10 motoristas (barras horizontais)
+  // Chart 4: Top 10 motoristas — using real driver names
   const chartTopDrivers = useMemo(() => {
-    const map: Record<string, { count: number; name: string }> = {};
+    const map: Record<string, number> = {};
     rides.forEach(r => {
-      if (!map[r.driver_id]) map[r.driver_id] = { count: 0, name: r.driver_id.slice(0, 8) };
-      map[r.driver_id].count++;
+      map[r.driver_id] = (map[r.driver_id] || 0) + 1;
     });
-    return Object.values(map).sort((a, b) => b.count - a.count).slice(0, 10).map(d => ({ name: d.name, viagens: d.count }));
-  }, [rides]);
+    return Object.entries(map)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10)
+      .map(([driverId, count]) => {
+        const driver = drivers.find(d => d.id === driverId);
+        return { name: driver?.name || driverId.slice(0, 8), viagens: count };
+      });
+  }, [rides, drivers]);
 
   // Chart 5: Ocorrências por unidade (barras empilhadas)
   const chartOccurrencesByUnit = useMemo(() => {
@@ -299,7 +328,7 @@ const MatrizOverview = () => {
           </CardContent>
         </Card>
 
-        {/* Chart 3 */}
+        {/* Chart 3 - Status traduzidos */}
         <Card>
           <CardHeader><CardTitle className="text-sm font-bold italic">Status dos Carregamentos</CardTitle></CardHeader>
           <CardContent>
@@ -311,12 +340,12 @@ const MatrizOverview = () => {
           </CardContent>
         </Card>
 
-        {/* Chart 4 */}
+        {/* Chart 4 - Nomes reais dos motoristas */}
         <Card>
           <CardHeader><CardTitle className="text-sm font-bold italic">Top 10 Motoristas (Viagens)</CardTitle></CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={chartTopDrivers} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis dataKey="name" type="category" width={70} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="viagens" fill="#10b981" radius={[0,4,4,0]} /></BarChart>
+              <BarChart data={chartTopDrivers} layout="vertical"><CartesianGrid strokeDasharray="3 3" /><XAxis type="number" /><YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} /><Tooltip /><Bar dataKey="viagens" fill="#10b981" radius={[0,4,4,0]} /></BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
