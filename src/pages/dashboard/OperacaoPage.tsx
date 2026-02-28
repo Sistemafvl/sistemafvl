@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Search, CalendarIcon, Truck, Package, TrendingUp, Loader2, DollarSign, BarChart3, Clock as ClockIcon, Car, MapPin, KeyRound, User, X } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format, differenceInMinutes } from "date-fns";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { getBrazilDayRange, getBrazilNow } from "@/lib/utils";
 import { ptBR } from "date-fns/locale";
 import { Calendar } from "@/components/ui/calendar";
@@ -98,9 +99,9 @@ const OperacaoPage = () => {
     const tbrsData = await fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
       supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
     );
-    const [pisoData, psData, rtoData] = await Promise.all([
-      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+    const [pisoRaw, psData, rtoData] = await Promise.all([
+      fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+        supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
       ),
       fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -136,6 +137,7 @@ const OperacaoPage = () => {
     });
 
     // Count unique tbr_codes per ride for returns (only if TBR still in ride)
+    const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const returnTbrSets: Record<string, Set<string>> = {};
     [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
       if (p.ride_id && p.tbr_code && tbrCodesByRide[p.ride_id]?.has(p.tbr_code)) {
@@ -314,12 +316,13 @@ const OperacaoPage = () => {
                               .order("scanned_at", { ascending: false });
                             // Fetch returns for this ride
                             const [pisoR, psR, rtoR] = await Promise.all([
-                              supabase.from("piso_entries").select("tbr_code").eq("ride_id", c.ride_id),
+                              supabase.from("piso_entries").select("tbr_code, reason").eq("ride_id", c.ride_id),
                               supabase.from("ps_entries").select("tbr_code").eq("ride_id", c.ride_id),
                               supabase.from("rto_entries").select("tbr_code").eq("ride_id", c.ride_id),
                             ]);
                             const returnSet = new Set<string>();
-                            [...(pisoR.data ?? []), ...(psR.data ?? []), ...(rtoR.data ?? [])].forEach((e: any) => {
+                            const filteredPiso = (pisoR.data ?? []).filter((e: any) => !OPERATIONAL_PISO_REASONS.includes(e.reason ?? ""));
+                            [...filteredPiso, ...(psR.data ?? []), ...(rtoR.data ?? [])].forEach((e: any) => {
                               if (e.tbr_code) returnSet.add(e.tbr_code);
                             });
                             setTbrModalList((rideTbrs ?? []).map(t => ({

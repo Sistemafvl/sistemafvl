@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -83,12 +84,12 @@ const CiclosPage = () => {
 
     if (rideIds.length > 0) {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [tbrsData, pisoData, psData, rtoData] = await Promise.all([
+      const [tbrsData, pisoRaw, psData, rtoData] = await Promise.all([
         fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
           supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
         ),
-        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+          supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
         ),
         fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
           supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -99,6 +100,7 @@ const CiclosPage = () => {
       ]);
 
       totalTbrs = tbrsData.length;
+      const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
 
       // Build set of TBR codes per ride
       const tbrCodesByRide: Record<string, Set<string>> = {};

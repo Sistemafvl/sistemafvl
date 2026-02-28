@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAllRows } from "@/lib/supabase-helpers";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -135,8 +136,8 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
 
     // Return rate
     const [pisoAll, rtoAll, psAll] = await Promise.all([
-      fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("piso_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      fetchAllRows<{ tbr_code: string; reason: string | null }>((from, to) =>
+        supabase.from("piso_entries").select("tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
         supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
@@ -145,8 +146,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
         supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
       ),
     ]);
+    const filteredPisoAll = pisoAll.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const allReturnTbrs = new Set<string>();
-    [...pisoAll, ...rtoAll, ...psAll].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
+    [...filteredPisoAll, ...rtoAll, ...psAll].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
     const { count: totalTbrs30 } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true });
     if (totalTbrs30 && totalTbrs30 > 0) {
       setReturnRate(Math.round((allReturnTbrs.size / totalTbrs30) * 1000) / 10);
@@ -174,8 +176,8 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const until = getUntil(returnDates);
 
     const [pisoData, rtoData, psData] = await Promise.all([
-      fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
-        supabase.from("piso_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      fetchAllRows<{ driver_name: string | null; tbr_code: string; reason: string | null }>((from, to) =>
+        supabase.from("piso_entries").select("driver_name, tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).range(from, to)
       ),
       fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
         supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
@@ -185,8 +187,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
       ),
     ]);
 
+    const filteredPisoData = pisoData.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const driverTbrSets: Record<string, Set<string>> = {};
-    [...pisoData, ...rtoData, ...psData].forEach(e => {
+    [...filteredPisoData, ...rtoData, ...psData].forEach(e => {
       if (!e.driver_name) return;
       const name = e.driver_name;
       if (!driverTbrSets[name]) driverTbrSets[name] = new Set();

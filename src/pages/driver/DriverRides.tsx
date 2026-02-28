@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -55,10 +56,10 @@ const DriverRides = () => {
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [unitsRes, pisoData, psData, rtoData, settingsRes, customRes] = await Promise.all([
+      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+          supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
         ),
         fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
           supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -76,6 +77,7 @@ const DriverRides = () => {
       );
 
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
+      const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       const settingsMap = new Map((settingsRes.data ?? []).map((s) => [s.unit_id, Number(s.tbr_value)]));
       const customMap = new Map((customRes.data ?? []).map((cv) => [cv.unit_id, Number(cv.custom_tbr_value)]));
 
