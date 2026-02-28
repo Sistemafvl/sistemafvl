@@ -98,9 +98,17 @@ const OperacaoPage = () => {
     const tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
       supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
     );
-    const pisoData = (await supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
-    const psData = (await supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
-    const rtoData = (await supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
+    const [pisoData, psData, rtoData] = await Promise.all([
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
+    ]);
 
     const baseTbrValue = Number(settingsRes.data?.tbr_value ?? 0);
     setTbrValue(baseTbrValue);

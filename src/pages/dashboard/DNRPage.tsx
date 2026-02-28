@@ -65,12 +65,11 @@ const DNRPage = () => {
 
   const fetchEntries = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase
-      .from("dnr_entries")
-      .select("*")
-      .eq("unit_id", unitId)
-      .order("created_at", { ascending: false });
-    setEntries((data ?? []) as DnrEntry[]);
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<DnrEntry>((from, to) =>
+      supabase.from("dnr_entries").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
+    );
+    setEntries(data);
     setLoadingEntries(false);
   }, [unitId]);
 
