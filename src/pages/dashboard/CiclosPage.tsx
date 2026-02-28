@@ -84,8 +84,8 @@ const CiclosPage = () => {
     if (rideIds.length > 0) {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       const [tbrsData, pisoData, psData, rtoData] = await Promise.all([
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
+        fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
+          supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
         ),
         fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
           supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -100,9 +100,19 @@ const CiclosPage = () => {
 
       totalTbrs = tbrsData.length;
 
+      // Build set of TBR codes per ride
+      const tbrCodesByRide: Record<string, Set<string>> = {};
+      tbrsData.forEach((t) => {
+        if (!tbrCodesByRide[t.ride_id]) tbrCodesByRide[t.ride_id] = new Set();
+        tbrCodesByRide[t.ride_id].add(t.code);
+      });
+
+      // Only count as return if TBR is still in ride_tbrs
       const returnSet = new Set<string>();
       [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
-        if (e.tbr_code) returnSet.add(e.tbr_code);
+        if (e.ride_id && e.tbr_code && tbrCodesByRide[e.ride_id]?.has(e.tbr_code)) {
+          returnSet.add(`${e.ride_id}:${e.tbr_code}`);
+        }
       });
       totalReturns = returnSet.size;
     }

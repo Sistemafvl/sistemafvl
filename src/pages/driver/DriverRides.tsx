@@ -71,8 +71,8 @@ const DriverRides = () => {
       ]);
 
       // Fetch TBRs with pagination (bypass 1000 limit)
-      const tbrsData = await fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).range(from, to)
+      const tbrsData = await fetchAllRows<{ id: string; ride_id: string; code: string }>((from, to) =>
+        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds).range(from, to)
       );
 
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
@@ -82,10 +82,17 @@ const DriverRides = () => {
       const tbrCountMap = new Map<string, number>();
       tbrsData.forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
 
-      // Count unique tbr_codes per ride for returns
+      // Build set of TBR codes per ride
+      const tbrCodesByRide = new Map<string, Set<string>>();
+      tbrsData.forEach((t) => {
+        if (!tbrCodesByRide.has(t.ride_id)) tbrCodesByRide.set(t.ride_id, new Set());
+        tbrCodesByRide.get(t.ride_id)!.add(t.code);
+      });
+
+      // Count unique tbr_codes per ride for returns (only if TBR still in ride)
       const returnTbrSets = new Map<string, Set<string>>();
       [...pisoData, ...psData, ...rtoData].forEach((r: any) => {
-        if (r.ride_id && r.tbr_code) {
+        if (r.ride_id && r.tbr_code && tbrCodesByRide.get(r.ride_id)?.has(r.tbr_code)) {
           if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
           returnTbrSets.get(r.ride_id)!.add(r.tbr_code);
         }
