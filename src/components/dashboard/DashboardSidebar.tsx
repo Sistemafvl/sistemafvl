@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -27,6 +27,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 
 const formatCnpj = (v: string) => {
@@ -62,8 +69,13 @@ const managerModalItems = [
   { title: "Cadastro de Motorista", key: "driver" as const, icon: Truck },
 ];
 
+interface ConferenteOption {
+  id: string;
+  name: string;
+}
+
 const DashboardSidebar = () => {
-  const { logout, unitSession, managerSession, setManagerSession } = useAuthStore();
+  const { logout, unitSession, managerSession, setManagerSession, conferenteSession, setConferenteSession } = useAuthStore();
   const { setOpenMobile } = useSidebar();
   const [loginOpen, setLoginOpen] = useState(false);
   const [cnpj, setCnpj] = useState("");
@@ -71,7 +83,19 @@ const DashboardSidebar = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [driverModalOpen, setDriverModalOpen] = useState(false);
-  
+  const [conferentes, setConferentes] = useState<ConferenteOption[]>([]);
+  const [conferenteSelectOpen, setConferenteSelectOpen] = useState(false);
+
+  // Fetch conferentes for the unit
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    supabase
+      .from("user_profiles")
+      .select("id, name")
+      .eq("unit_id", unitSession.id)
+      .eq("active", true)
+      .then(({ data }) => { if (data) setConferentes(data); });
+  }, [unitSession?.id]);
 
   const handleManagerLogin = async () => {
     const cleanCnpj = cnpj.replace(/\D/g, "");
@@ -127,6 +151,41 @@ const DashboardSidebar = () => {
                 <UserCog className="h-4 w-4" />
                 Gerente
               </Button>
+            )}
+          </div>
+
+          {/* Conferente Selector */}
+          <div className="px-3 pb-2">
+            {conferenteSession ? (
+              <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 border border-green-500/20">
+                <UserCheck className="h-4 w-4 text-green-600 shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-bold italic truncate">{conferenteSession.name}</p>
+                  <p className="text-[10px] text-muted-foreground">Conferente</p>
+                </div>
+                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setConferenteSession(null)}>
+                  Trocar
+                </Button>
+              </div>
+            ) : (
+              <Select
+                open={conferenteSelectOpen}
+                onOpenChange={setConferenteSelectOpen}
+                onValueChange={(val) => {
+                  const c = conferentes.find(c => c.id === val);
+                  if (c) setConferenteSession({ id: c.id, name: c.name });
+                }}
+              >
+                <SelectTrigger className="w-full font-semibold italic gap-2 bg-green-500/10 border-green-500/20 text-green-700 hover:bg-green-500/20">
+                  <UserCheck className="h-4 w-4" />
+                  <SelectValue placeholder="Selecionar Conferente" />
+                </SelectTrigger>
+                <SelectContent>
+                  {conferentes.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             )}
           </div>
 

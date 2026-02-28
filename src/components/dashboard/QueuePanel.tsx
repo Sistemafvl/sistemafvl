@@ -428,9 +428,14 @@ const QueuePanel = () => {
                       </Button>
                     </div>
                   ) : (
-                    <Button size="sm" variant="default" className="shrink-0 font-bold italic text-xs h-7 px-2" onClick={() => openProgramModal(entry)}>
-                      <CalendarCheck className="h-3 w-3 mr-1" /> Programar
-                    </Button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button size="sm" variant="default" className="shrink-0 font-bold italic text-xs h-7 px-2" onClick={() => openProgramModal(entry)}>
+                        <CalendarCheck className="h-3 w-3 mr-1" /> Programar
+                      </Button>
+                      <Button size="icon" variant="ghost" className="shrink-0 h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => handleReject(entry)} title="Remover da fila">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   )}
                   <div className="flex flex-col gap-0.5 shrink-0">
                     <Button size="icon" variant="ghost" className="h-6 w-6" disabled={idx === 0} onClick={() => handleMoveEntry(idx, "up")}>
