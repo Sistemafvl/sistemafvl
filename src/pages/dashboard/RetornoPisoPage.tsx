@@ -389,7 +389,9 @@ const RetornoPisoPage = () => {
           </div>
 
           {loading ? (
-            <p className="text-center text-muted-foreground py-4">Carregando...</p>
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
           ) : entries.length === 0 ? (
             <p className="text-center text-muted-foreground italic py-8">Nenhum TBR no piso</p>
           ) : (

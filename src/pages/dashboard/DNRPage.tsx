@@ -60,6 +60,7 @@ const DNRPage = () => {
   const [saving, setSaving] = useState(false);
 
   const [entries, setEntries] = useState<DnrEntry[]>([]);
+  const [loadingEntries, setLoadingEntries] = useState(true);
   const [activeTab, setActiveTab] = useState("open");
 
   const fetchEntries = useCallback(async () => {
@@ -70,6 +71,7 @@ const DNRPage = () => {
       .eq("unit_id", unitId)
       .order("created_at", { ascending: false });
     setEntries((data ?? []) as DnrEntry[]);
+    setLoadingEntries(false);
   }, [unitId]);
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
@@ -280,7 +282,11 @@ const DNRPage = () => {
           </TabsTrigger>
         </TabsList>
         <TabsContent value={activeTab} className="mt-4 space-y-2">
-          {filtered.length === 0 ? (
+          {loadingEntries ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground italic text-center py-8">Nenhum DNR nesta categoria.</p>
           ) : (
             filtered.map((entry) => (
