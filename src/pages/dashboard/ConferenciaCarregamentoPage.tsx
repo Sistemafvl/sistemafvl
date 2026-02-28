@@ -162,6 +162,7 @@ const ConferenciaCarregamentoPage = () => {
   const [tbrInputs, setTbrInputs] = useState<Record<string, string>>({});
   const [tbrSearch, setTbrSearch] = useState("");
   const [tbrSearchCommitted, setTbrSearchCommitted] = useState("");
+  const [isSearchLoading, setIsSearchLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
   const [endDate, setEndDate] = useState<Date>(() => { const d = new Date(); d.setHours(23,59,59,999); return d; });
@@ -615,7 +616,7 @@ const ConferenciaCarregamentoPage = () => {
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
     if (deletingRef.current.has(tbrId)) return;
     deletingRef.current.add(tbrId);
-    realtimeLockUntil.current = Date.now() + 5000;
+    realtimeLockUntil.current = Date.now() + 8000;
 
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
 
@@ -684,7 +685,8 @@ const ConferenciaCarregamentoPage = () => {
 
     await fetchOpenRtos();
 
-    // Wait for all DB ops to settle, then re-fetch
+    // Wait for DB ops to propagate, then re-fetch
+    await new Promise(r => setTimeout(r, 500));
     await fetchRides();
     deletingRef.current.delete(tbrId);
     // Lock expires automatically after 5s - no need to reset
@@ -1186,12 +1188,14 @@ const ConferenciaCarregamentoPage = () => {
     };
   }, []);
 
-  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") {
       const val = tbrSearch.trim();
       setTbrSearchCommitted(val);
       if (val) {
-        fetchSearchResults(val);
+        setIsSearchLoading(true);
+        await fetchSearchResults(val);
+        setIsSearchLoading(false);
       }
     }
   };
@@ -1429,6 +1433,10 @@ const ConferenciaCarregamentoPage = () => {
           <SkeletonCard />
           <SkeletonCard />
           <SkeletonCard />
+        </div>
+      ) : isSearchLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : displayRides.length === 0 ? (
         <p className="text-muted-foreground italic text-center py-12">
@@ -1698,9 +1706,13 @@ const ConferenciaCarregamentoPage = () => {
                               <ScanBarcode className="h-3.5 w-3.5 text-primary" />
                               TBRs Lidos ({rideTbrs.length})
                             </p>
-                            {rideTbrs.length > 0 && (
+                            {rideTbrs.length > 0 && (() => {
+                              const visibleTbrs = isSearchActive
+                                ? rideTbrs.filter(t => t.code.toLowerCase().includes(tbrSearchCommitted.toLowerCase()))
+                                : rideTbrs;
+                              return (
                               <div ref={(el) => { tbrListRefs.current[ride.id] = el; }} className="max-h-32 overflow-y-auto space-y-1">
-                                {rideTbrs.map((t, i) => (
+                                {visibleTbrs.map((t, i) => (
                                   <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
                                     <span className="font-bold text-primary">{i + 1}.</span>
                                     <span className="font-mono">{t.code}</span>
@@ -1727,7 +1739,8 @@ const ConferenciaCarregamentoPage = () => {
                                   </div>
                                 ))}
                               </div>
-                            )}
+                              );
+                            })()}
                             {isLoadingStatus && (
                               <div className="flex gap-1 items-center">
                                 <div className="relative flex-1 max-w-[45%] sm:max-w-none">
