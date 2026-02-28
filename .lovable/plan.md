@@ -1,63 +1,79 @@
 
 
-## Plano: Modo Foco ao Iniciar Bipagem
+## Plano: Eliminar limite de 1000 registros em todo o sistema
 
-### Análise do problema atual
-Hoje, quando o Conferente A clica "Iniciar" num card, o `loading_status` muda no banco via Realtime e o `fetchRides` re-renderiza toda a lista. Se o Conferente B (em outra aba/sessão) clica "Iniciar" em outro card, o Realtime dispara `fetchRides` no Conferente A também, podendo deslocar o carrossel ou mudar o foco do input de bipagem.
+### Diagnóstico completo
 
-O seletor de conferente já resolve o **conflito de dados** (cada card tem seu conferente travado). Porém, o **conflito visual** (tela se movendo, input perdendo foco) ainda pode ocorrer porque o Realtime re-renderiza tudo.
+Após analisar todos os arquivos, identifiquei **16 queries vulneráveis** ao limite de 1000 registros. Todas as queries de `ride_tbrs` já estão corrigidas com `fetchAllRows`. Porém, outras tabelas que acumulam dados ao longo do tempo (`piso_entries`, `ps_entries`, `rto_entries`, `dnr_entries`, `driver_rides`) ainda estão limitadas.
 
-### Solução: Modo Foco (Overlay)
-Ao clicar "Iniciar", o card entra em **modo foco**: aparece centralizado na tela sobre um fundo escuro (overlay), isolando visualmente a bipagem. O conferente bipa apenas naquele card, sem interferência visual de outros.
+### Queries vulneráveis por arquivo
 
-### Isso resolve?
-**Sim, completamente.** O overlay captura o foco do teclado e isola o input de bipagem. Mesmo que o Realtime atualize outros cards no fundo, o conferente não vê e não é afetado. Cada conferente (em sua máquina/aba) terá seu próprio overlay com seu próprio card.
+| Arquivo | Tabela(s) limitada(s) | Risco |
+|---------|----------------------|-------|
+| `OperacaoPage.tsx` L101-103 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
+| `CiclosPage.tsx` L90-92 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
+| `DriverHome.tsx` L68-70 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Médio |
+| `DriverRides.tsx` L60-62 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Médio |
+| `RelatoriosPage.tsx` L252-254 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
+| `DashboardInsights.tsx` L136-139, 170-172 | piso/rto/ps_entries `.eq("unit_id")` + data | Médio |
+| `DashboardInsights.tsx` L194 | driver_rides `.eq("unit_id")` | Médio |
+| `MotoristasParceirosPage.tsx` L127-131 | driver_rides `.in("driver_id")` | Alto |
+| `MatrizOcorrencias.tsx` L49-52 | ps/rto/piso/dnr_entries `.in("unit_id")` | Alto |
+| `MatrizMotoristas.tsx` L45 | driver_rides `.in("unit_id")` | Alto |
+| `MatrizFinanceiro.tsx` L39 | driver_rides `.in("unit_id")` | Alto |
+| `DNRPage.tsx` L68-72 | dnr_entries `.eq("unit_id")` | Médio |
+| `PSPage.tsx` L160-166 | ps_entries `.eq("unit_id")` + data | Médio |
+| `RTOPage.tsx` L90-94 | rto_entries `.eq("unit_id")` | Médio |
 
----
+### Estratégia
 
-### Mudanças
+Usar `fetchAllRows` para todas as queries que buscam listas completas sem `.limit()`, `.maybeSingle()` ou `{ count: "exact", head: true }`. Queries que já usam `.limit(1)` ou `.maybeSingle()` estão seguras.
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+### Mudanças por arquivo
 
-1. **Novo estado `focusedRideId: string | null`** — armazena o ID do ride em modo foco.
+1. **`OperacaoPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
 
-2. **`handleIniciar` atualizado** — após iniciar, seta `setFocusedRideId(rideId)` para ativar o overlay automaticamente.
+2. **`CiclosPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
 
-3. **Overlay de foco** — Renderizar um `Dialog` (ou div fixa com z-50) quando `focusedRideId` estiver definido:
-   - Fundo escuro semi-transparente (`bg-black/60`)
-   - Card do motorista renderizado no centro, com largura máxima (~480px)
-   - Contém todos os elementos: info do motorista, lista de TBRs, input de bipagem, botão Finalizar
-   - Input de bipagem recebe `autoFocus` automaticamente
-   - Botão "Minimizar" ou "X" para sair do modo foco e voltar ao carrossel
+3. **`DriverHome.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
 
-4. **Botão para entrar em modo foco manualmente** — Nos cards que já estão "em andamento", adicionar um ícone de "expandir" para reentrar no modo foco caso o conferente tenha saído.
+4. **`DriverRides.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
 
-5. **Ao Finalizar, sair do foco** — `handleFinalizar` seta `setFocusedRideId(null)` após finalizar.
+5. **`RelatoriosPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows` (em todas as funções de relatório)
 
-6. **Realtime não afeta o overlay** — O card no overlay usa os mesmos estados `rides` e `tbrs`, então os dados ficam atualizados, mas o layout do overlay é fixo e não se move.
+6. **`DashboardInsights.tsx`** — Envolver queries de retornos (`piso/ps/rto`) e `driver_rides` (fetchTopConferentes) com `fetchAllRows`
 
-### Layout do Modo Foco
-```text
-┌──────────────────────────────────────────────┐
-│             FUNDO ESCURO (overlay)            │
-│                                               │
-│    ┌───────────────────────────────────┐      │
-│    │  [Avatar] Motorista Nome          │      │
-│    │  Placa · Modelo · Cor             │      │
-│    │  Rota: 0825  Login: xxx           │      │
-│    │  Conferente: Ricardo (🔒)         │      │
-│    │                                   │      │
-│    │  TBRs Lidos (45)                  │      │
-│    │  ┌─────────────────────────────┐  │      │
-│    │  │ 1. ABC123  10:30:45.123    │  │      │
-│    │  │ 2. DEF456  10:30:47.456    │  │      │
-│    │  │ ...                        │  │      │
-│    │  └─────────────────────────────┘  │      │
-│    │  [ Escanear TBR... ] [📷] [⌨️]   │      │
-│    │                                   │      │
-│    │  [🔴 Finalizar]    [↙ Minimizar] │      │
-│    └───────────────────────────────────┘      │
-│                                               │
-└──────────────────────────────────────────────┘
+7. **`MotoristasParceirosPage.tsx`** — Envolver `driver_rides` com `fetchAllRows`
+
+8. **`MatrizOcorrencias.tsx`** — Envolver todas as 4 queries (`ps/rto/piso/dnr_entries`) com `fetchAllRows`
+
+9. **`MatrizMotoristas.tsx`** — Envolver `driver_rides` com `fetchAllRows`
+
+10. **`MatrizFinanceiro.tsx`** — Envolver `driver_rides` com `fetchAllRows`
+
+11. **`DNRPage.tsx`** — Envolver `dnr_entries` com `fetchAllRows`
+
+12. **`PSPage.tsx`** — Envolver `ps_entries` com `fetchAllRows`
+
+13. **`RTOPage.tsx`** — Envolver `rto_entries` com `fetchAllRows`
+
+### Padrão de conversão
+
+Antes:
+```typescript
+const { data } = await supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds);
+const pisoData = data ?? [];
 ```
+
+Depois:
+```typescript
+const pisoData = await fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+  supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+);
+```
+
+### Nota técnica
+- Queries com `.maybeSingle()`, `.single()`, `.limit(1)` ou `{ count: "exact", head: true }` NÃO precisam de paginação
+- Queries de lookup (conferentes, drivers_public, unit_settings) têm baixo volume e não precisam de paginação
+- O `fetchAllRows` já existe em `src/lib/supabase-helpers.ts` e será reutilizado
 
