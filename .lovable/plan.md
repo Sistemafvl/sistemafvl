@@ -1,15 +1,17 @@
 
 
-## Plano: Loading na busca TBR, filtro de TBRs e correção de exclusão
+## Plano: Modo Foco ao Iniciar Bipagem
 
-### Problema 1 — "Nenhum resultado" aparece antes do carregamento
-Ao buscar um TBR, o estado `isSearchActive` fica `true` imediatamente (via `setTbrSearchCommitted`), mas `searchRides` ainda está vazio enquanto `fetchSearchResults` roda. O usuário vê "Nenhum resultado encontrado" por 1-2 segundos até os dados chegarem.
+### Análise do problema atual
+Hoje, quando o Conferente A clica "Iniciar" num card, o `loading_status` muda no banco via Realtime e o `fetchRides` re-renderiza toda a lista. Se o Conferente B (em outra aba/sessão) clica "Iniciar" em outro card, o Realtime dispara `fetchRides` no Conferente A também, podendo deslocar o carrossel ou mudar o foco do input de bipagem.
 
-### Problema 2 — Busca mostra todos os TBRs do motorista
-Ao buscar um TBR específico, o card do motorista aparece com TODOS os TBRs listados. O usuário quer ver apenas o TBR buscado.
+O seletor de conferente já resolve o **conflito de dados** (cada card tem seu conferente travado). Porém, o **conflito visual** (tela se movendo, input perdendo foco) ainda pode ocorrer porque o Realtime re-renderiza tudo.
 
-### Problema 3 — Exclusão de TBR falha silenciosamente
-A exclusão otimista funciona na UI, mas o realtime (com debounce de 1.5s) pode re-inserir o TBR deletado antes que o `realtimeLockUntil` expire, ou o `fetchRides` após delete pode trazer dados antigos.
+### Solução: Modo Foco (Overlay)
+Ao clicar "Iniciar", o card entra em **modo foco**: aparece centralizado na tela sobre um fundo escuro (overlay), isolando visualmente a bipagem. O conferente bipa apenas naquele card, sem interferência visual de outros.
+
+### Isso resolve?
+**Sim, completamente.** O overlay captura o foco do teclado e isola o input de bipagem. Mesmo que o Realtime atualize outros cards no fundo, o conferente não vê e não é afetado. Cada conferente (em sua máquina/aba) terá seu próprio overlay com seu próprio card.
 
 ---
 
@@ -17,33 +19,45 @@ A exclusão otimista funciona na UI, mas o realtime (com debounce de 1.5s) pode 
 
 **Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-1. **Adicionar estado `isSearchLoading`** — novo `useState(false)` que fica `true` durante `fetchSearchResults` e `false` ao final.
+1. **Novo estado `focusedRideId: string | null`** — armazena o ID do ride em modo foco.
 
-2. **Spinner na busca** — No bloco condicional de renderização (linha ~1427), adicionar checagem de `isSearchLoading` antes de "Nenhum resultado". Quando `isSearchLoading` for `true`, mostrar `<Loader2 className="h-8 w-8 animate-spin" />` centralizado.
+2. **`handleIniciar` atualizado** — após iniciar, seta `setFocusedRideId(rideId)` para ativar o overlay automaticamente.
 
-3. **Filtrar TBRs na lista quando busca ativa (Anexo 3)** — Na renderização dos `rideTbrs` dentro de cada card (linha ~1703), quando `isSearchActive`, filtrar para mostrar apenas TBRs cujo `code` contém o termo buscado:
-   ```typescript
-   const visibleTbrs = isSearchActive 
-     ? rideTbrs.filter(t => t.code.toLowerCase().includes(tbrSearchCommitted.toLowerCase()))
-     : rideTbrs;
-   ```
-   O contador de TBRs no badge também refletirá o total real (`rideTbrs.length`), mas a lista exibida será `visibleTbrs`.
+3. **Overlay de foco** — Renderizar um `Dialog` (ou div fixa com z-50) quando `focusedRideId` estiver definido:
+   - Fundo escuro semi-transparente (`bg-black/60`)
+   - Card do motorista renderizado no centro, com largura máxima (~480px)
+   - Contém todos os elementos: info do motorista, lista de TBRs, input de bipagem, botão Finalizar
+   - Input de bipagem recebe `autoFocus` automaticamente
+   - Botão "Minimizar" ou "X" para sair do modo foco e voltar ao carrossel
 
-4. **Corrigir exclusão de TBR** — O problema é que o `realtimeLockUntil` de 5 segundos pode não ser suficiente, e o `fetchRides` final pode buscar dados antes do DELETE propagar. Ajustes:
-   - Aumentar `realtimeLockUntil` para 8 segundos
-   - Adicionar `await` de 500ms antes do `fetchRides` final no `handleDeleteTbr` para dar tempo ao DB
-   - Garantir que `deletingRef` é verificado ao processar dados do realtime também (já existe no `fetchRides`, mas confirmar)
+4. **Botão para entrar em modo foco manualmente** — Nos cards que já estão "em andamento", adicionar um ícone de "expandir" para reentrar no modo foco caso o conferente tenha saído.
 
-5. **Aplicar loading spinner em outras telas** — Verificar e adicionar loading state nas páginas:
-   - `OperacaoPage.tsx` — já tem `isLoading`/Skeleton, OK
-   - `RetornoPisoPage.tsx`, `DNRPage.tsx` — verificar se já possuem loading adequado
+5. **Ao Finalizar, sair do foco** — `handleFinalizar` seta `setFocusedRideId(null)` após finalizar.
 
-### Fluxo corrigido da busca
+6. **Realtime não afeta o overlay** — O card no overlay usa os mesmos estados `rides` e `tbrs`, então os dados ficam atualizados, mas o layout do overlay é fixo e não se move.
+
+### Layout do Modo Foco
 ```text
-Enter → setTbrSearchCommitted(val) + setIsSearchLoading(true)
-       → fetchSearchResults(val)
-       → [Spinner girando na tela]
-       → setSearchRides(mapped) + setIsSearchLoading(false)
-       → [Cards aparecem com apenas o TBR buscado visível na lista]
+┌──────────────────────────────────────────────┐
+│             FUNDO ESCURO (overlay)            │
+│                                               │
+│    ┌───────────────────────────────────┐      │
+│    │  [Avatar] Motorista Nome          │      │
+│    │  Placa · Modelo · Cor             │      │
+│    │  Rota: 0825  Login: xxx           │      │
+│    │  Conferente: Ricardo (🔒)         │      │
+│    │                                   │      │
+│    │  TBRs Lidos (45)                  │      │
+│    │  ┌─────────────────────────────┐  │      │
+│    │  │ 1. ABC123  10:30:45.123    │  │      │
+│    │  │ 2. DEF456  10:30:47.456    │  │      │
+│    │  │ ...                        │  │      │
+│    │  └─────────────────────────────┘  │      │
+│    │  [ Escanear TBR... ] [📷] [⌨️]   │      │
+│    │                                   │      │
+│    │  [🔴 Finalizar]    [↙ Minimizar] │      │
+│    └───────────────────────────────────┘      │
+│                                               │
+└──────────────────────────────────────────────┘
 ```
 
