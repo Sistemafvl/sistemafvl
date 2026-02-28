@@ -1183,20 +1183,8 @@ const ConferenciaCarregamentoPage = () => {
 
   const isSearchActive = tbrSearchCommitted.trim().length > 0;
   
-  // Filter rides by conferente session (conferente sees only their cards + unassigned pending)
-  const filteredRides = (() => {
-    if (isSearchActive) return searchRides;
-    if (managerSession) return rides; // Manager sees all
-    if (conferenteSession) {
-      return rides.filter(r => 
-        r.conferente_id === conferenteSession.id || 
-        (!r.conferente_id && r.loading_status === "pending")
-      );
-    }
-    return rides;
-  })();
-  
-  const displayRides = filteredRides;
+  // All conferentes see all rides - session is only for auto-filling conferente on "Iniciar"
+  const displayRides = isSearchActive ? searchRides : rides;
   const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
