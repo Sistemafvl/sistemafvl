@@ -1,38 +1,28 @@
 
 
-## Plano: Adicionar Filtros de Nome e Login na Conferência Carregamento
+## Plano: Contador de 5s para refresh da fila
 
-### O que falta do pedido original (Anexo 1)
+### Problema
+O Realtime nem sempre entrega o evento instantaneamente, causando casos onde um motorista entra na fila e não aparece até atualizar a página.
 
-Os filtros de **nome do motorista** e **login (dropdown com buscador)** não foram implementados. Apenas o campo "Buscar TBR" e os filtros de data existem atualmente.
+### Solução
+Adicionar um `setInterval` de 5 segundos no `QueuePanel.tsx` que chama `fetchQueue()` automaticamente, como fallback ao Realtime.
 
-### Mudanças
+### Mudança
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
 
-1. **Reduzir campo "Buscar TBR"** — de `flex-1` para largura fixa menor (~33%)
-2. **Adicionar campo "Nome do motorista"** — Input de texto que filtra `displayRides` localmente por `driver_name` (case-insensitive)
-3. **Adicionar dropdown "Login"** — Combobox com buscador (usando `cmdk`/Command) que:
-   - Carrega logins da tabela `unit_logins` da unidade ao montar
-   - Permite digitar para filtrar na lista
-   - Ao selecionar um login, filtra `displayRides` para mostrar apenas rides com aquele login
-   - Botão de limpar para remover o filtro
+Adicionar um `useEffect` com intervalo de 5s:
 
-4. **Lógica de filtro** — Encadear os 3 filtros:
-   ```
-   displayRides = (isSearchActive ? searchRides : rides)
-     .filter(r => !driverNameFilter || r.driver_name?.toLowerCase().includes(driverNameFilter))
-     .filter(r => !loginFilter || r.login === loginFilter)
-   ```
-
-### Layout dos filtros (linha única responsiva)
-```text
-[ 🔍 Buscar TBR (33%) ] [ 👤 Nome motorista (33%) ] [ 🔑 Login ▼ (33%) ]
-[  📅 Data início  ] [  📅 Data fim  ]
+```typescript
+// Polling fallback — refresh queue every 5 seconds
+useEffect(() => {
+  const interval = setInterval(() => {
+    fetchQueue();
+  }, 5000);
+  return () => clearInterval(interval);
+}, [fetchQueue]);
 ```
 
-### Estados novos
-- `driverNameFilter: string` — texto digitado no campo nome
-- `loginFilter: string` — login selecionado no dropdown
-- `unitLogins: string[]` — lista de logins carregados do banco
+Inserido logo após o `useEffect` do Realtime (linha ~154). Sem mudanças visuais — apenas um refresh silencioso dos dados da fila a cada 5 segundos.
 
