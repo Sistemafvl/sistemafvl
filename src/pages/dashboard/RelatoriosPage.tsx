@@ -123,29 +123,34 @@ const RelatoriosPage = () => {
       const common = await ensureCommon();
       if (!common) return;
 
-      const [ridesRes, pisoRes, psRes, rtoRes] = await Promise.all([
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [ridesRes, pisoData, psData, rtoData] = await Promise.all([
         supabase.from("driver_rides").select("id, completed_at, driver_id").eq("unit_id", unitId)
           .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString()),
-        supabase.from("piso_entries").select("id, created_at").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("ps_entries").select("id, created_at").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("rto_entries").select("id, created_at").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+        fetchAllRows<{ id: string; created_at: string }>((from, to) =>
+          supabase.from("piso_entries").select("id, created_at").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
+        fetchAllRows<{ id: string; created_at: string }>((from, to) =>
+          supabase.from("ps_entries").select("id, created_at").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
+        fetchAllRows<{ id: string; created_at: string }>((from, to) =>
+          supabase.from("rto_entries").select("id, created_at").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
       ]);
 
       const rides = ridesRes.data ?? [];
       const rideIds = rides.map(r => r.id);
 
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-
       const allTbrs = rideIds.length > 0
         ? await fetchAllRows<{ ride_id: string }>((from, to) =>
             supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to))
         : [];
-      const piso = pisoRes.data ?? [];
-      const ps = psRes.data ?? [];
-      const rto = rtoRes.data ?? [];
+      const piso = pisoData;
+      const ps = psData;
+      const rto = rtoData;
 
       // Group by day
       const dayMap = new Map<string, DailySummaryRow>();
@@ -202,18 +207,25 @@ const RelatoriosPage = () => {
       const common = await ensureCommon();
       if (!common) return;
 
-      const [pisoRes, psRes, rtoRes] = await Promise.all([
-        supabase.from("piso_entries").select("tbr_code, reason, driver_name, route, created_at").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("ps_entries").select("tbr_code, description, driver_name, route, created_at").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
-        supabase.from("rto_entries").select("tbr_code, description, driver_name, route, created_at, cep").eq("unit_id", unitId)
-          .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()),
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [pisoRaw, psRaw, rtoRaw] = await Promise.all([
+        fetchAllRows<any>((from, to) =>
+          supabase.from("piso_entries").select("tbr_code, reason, driver_name, route, created_at").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
+        fetchAllRows<any>((from, to) =>
+          supabase.from("ps_entries").select("tbr_code, description, driver_name, route, created_at").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
+        fetchAllRows<any>((from, to) =>
+          supabase.from("rto_entries").select("tbr_code, description, driver_name, route, created_at, cep").eq("unit_id", unitId)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+        ),
       ]);
 
-      const pisoEntries: ReturnEntry[] = (pisoRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.reason, driver_name: e.driver_name, route: e.route, date: e.created_at }));
-      const psEntries: ReturnEntry[] = (psRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at }));
-      const rtoEntries: ReturnEntry[] = (rtoRes.data ?? []).map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at, cep: e.cep }));
+      const pisoEntries: ReturnEntry[] = pisoRaw.map(e => ({ tbr_code: e.tbr_code, description: e.reason, driver_name: e.driver_name, route: e.route, date: e.created_at }));
+      const psEntries: ReturnEntry[] = psRaw.map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at }));
+      const rtoEntries: ReturnEntry[] = rtoRaw.map(e => ({ tbr_code: e.tbr_code, description: e.description, driver_name: e.driver_name, route: e.route, date: e.created_at, cep: e.cep }));
 
       if (!pisoEntries.length && !psEntries.length && !rtoEntries.length) {
         toast({ title: "Sem dados", description: "Nenhum retorno no período.", variant: "destructive" }); setLoading(null); return;
@@ -247,11 +259,17 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [driversRes, pisoRes, psRes, rtoRes] = await Promise.all([
+      const [driversRes, pisoRankData, psRankData, rtoRankData] = await Promise.all([
         supabase.from("drivers_public").select("id, name").in("id", driverIds),
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
       ]);
       const tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
         supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
@@ -260,7 +278,7 @@ const RelatoriosPage = () => {
       const drivers = driversRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d.name]));
       const allTbrs = tbrsData;
-      const allReturns = [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])];
+      const allReturns = [...pisoRankData, ...psRankData, ...rtoRankData];
 
       const ranking: RankingRow[] = driverIds.map(did => {
         const driverRides = rides.filter(r => r.driver_id === did);
@@ -318,11 +336,17 @@ const RelatoriosPage = () => {
     const rideIds = rides.map(r => r.id);
 
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const [driversRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
+    const [driversRes, allPiso, allPs, allRto, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
-      supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-      supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-      supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
+      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      ),
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
@@ -334,9 +358,6 @@ const RelatoriosPage = () => {
 
     const drivers = driversRes.data ?? [];
     const allTbrs = tbrsData;
-    const allPiso = pisoRes.data ?? [];
-    const allPs = psRes.data ?? [];
-    const allRto = rtoRes.data ?? [];
     const driverMap = new Map(drivers.map(d => [d.id, d]));
     const customValueMap = new Map<string, number>();
     (customValuesRes.data ?? []).forEach((cv: any) => { customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value)); });

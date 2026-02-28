@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows } from "@/lib/supabase-helpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
@@ -133,13 +134,19 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     }
 
     // Return rate
-    const [{ data: pisoAll }, { data: rtoAll }, { data: psAll }] = await Promise.all([
-      supabase.from("piso_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
-      supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
-      supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since),
+    const [pisoAll, rtoAll, psAll] = await Promise.all([
+      fetchAllRows<{ tbr_code: string }>((from, to) =>
+        supabase.from("piso_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
+      fetchAllRows<{ tbr_code: string }>((from, to) =>
+        supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
+      fetchAllRows<{ tbr_code: string }>((from, to) =>
+        supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
     ]);
     const allReturnTbrs = new Set<string>();
-    [...(pisoAll ?? []), ...(rtoAll ?? []), ...(psAll ?? [])].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
+    [...pisoAll, ...rtoAll, ...psAll].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
     const { count: totalTbrs30 } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true });
     if (totalTbrs30 && totalTbrs30 > 0) {
       setReturnRate(Math.round((allReturnTbrs.size / totalTbrs30) * 1000) / 10);
@@ -166,18 +173,20 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const since = getSince(returnDates);
     const until = getUntil(returnDates);
 
-    const queries = [
-      supabase.from("piso_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
-      supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
-      supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since),
-    ];
-    if (until) {
-      // Can't chain .lte after await, so we accept the global range here
-    }
-    const [{ data: pisoData }, { data: rtoData }, { data: psData }] = await Promise.all(queries);
+    const [pisoData, rtoData, psData] = await Promise.all([
+      fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
+        supabase.from("piso_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
+      fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
+        supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
+      fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
+        supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+      ),
+    ]);
 
     const driverTbrSets: Record<string, Set<string>> = {};
-    [...(pisoData ?? []), ...(rtoData ?? []), ...(psData ?? [])].forEach(e => {
+    [...pisoData, ...rtoData, ...psData].forEach(e => {
       if (!e.driver_name) return;
       const name = e.driver_name;
       if (!driverTbrSets[name]) driverTbrSets[name] = new Set();
@@ -191,11 +200,13 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const since = getSince(confDates);
     const until = getUntil(confDates);
 
-    let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
-    if (until) q = q.lte("completed_at", until);
-    const { data: confRides } = await q;
+    const confRides = await fetchAllRows<{ conferente_id: string | null }>((from, to) => {
+      let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
+      if (until) q = q.lte("completed_at", until);
+      return q.range(from, to);
+    });
 
-    if (!confRides || confRides.length === 0) { setTopConferentes([]); return; }
+    if (confRides.length === 0) { setTopConferentes([]); return; }
     const confCount: Record<string, number> = {};
     confRides.forEach(r => { confCount[r.conferente_id!] = (confCount[r.conferente_id!] || 0) + 1; });
     const sorted = Object.entries(confCount).sort((a, b) => b[1] - a[1]);

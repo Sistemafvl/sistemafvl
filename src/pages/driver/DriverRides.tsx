@@ -55,11 +55,17 @@ const DriverRides = () => {
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [unitsRes, pisoRes, psRes, rtoRes, settingsRes, customRes] = await Promise.all([
+      const [unitsRes, pisoData, psData, rtoData, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
-        supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
       ]);
@@ -78,7 +84,7 @@ const DriverRides = () => {
 
       // Count unique tbr_codes per ride for returns
       const returnTbrSets = new Map<string, Set<string>>();
-      [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((r: any) => {
+      [...pisoData, ...psData, ...rtoData].forEach((r: any) => {
         if (r.ride_id && r.tbr_code) {
           if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
           returnTbrSets.get(r.ride_id)!.add(r.tbr_code);

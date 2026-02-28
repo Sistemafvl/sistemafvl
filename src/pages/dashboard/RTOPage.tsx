@@ -87,12 +87,11 @@ const RTOPage = () => {
 
   const loadEntries = async () => {
     if (!unitSession) return;
-    const { data } = await supabase
-      .from("rto_entries")
-      .select("*")
-      .eq("unit_id", unitSession.id)
-      .order("created_at", { ascending: false });
-    if (data) {
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) =>
+      supabase.from("rto_entries").select("*").eq("unit_id", unitSession.id).order("created_at", { ascending: false }).range(from, to)
+    );
+    {
       const confIds = [...new Set(data.filter(e => e.conferente_id).map(e => e.conferente_id!))];
       let confMap: Record<string, string> = {};
       if (confIds.length > 0) {

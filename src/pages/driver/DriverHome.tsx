@@ -64,10 +64,16 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [pi, ps, rto, us, un, cv, bn] = await Promise.all([
-        supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
+      const [piData, psData, rtoData, us, un, cv, bn] = await Promise.all([
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("units").select("id, name").in("id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
@@ -81,9 +87,9 @@ const DriverHome = () => {
       );
 
       setTbrs(tbrData);
-      setPisoEntries(pi.data ?? []);
-      setPsEntries(ps.data ?? []);
-      setRtoEntries(rto.data ?? []);
+      setPisoEntries(piData);
+      setPsEntries(psData);
+      setRtoEntries(rtoData);
       setUnitSettings(us.data ?? []);
       setUnits(un.data ?? []);
       setCustomValues(cv.data ?? []);

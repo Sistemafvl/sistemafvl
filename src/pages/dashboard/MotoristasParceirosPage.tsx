@@ -122,16 +122,15 @@ const MotoristasParceirosPage = () => {
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
 
-    // Fetch last operation for each driver
     const driverIds = driversData.map(d => d.id).filter(Boolean) as string[];
-    const { data: lastRides } = await supabase
-      .from("driver_rides")
-      .select("driver_id, completed_at")
-      .in("driver_id", driverIds)
-      .order("completed_at", { ascending: false });
+    // Fetch last operation for each driver
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const lastRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
+      supabase.from("driver_rides").select("driver_id, completed_at").in("driver_id", driverIds).order("completed_at", { ascending: false }).range(from, to)
+    );
 
     const lastOpMap = new Map<string, string>();
-    (lastRides ?? []).forEach(r => {
+    lastRides.forEach(r => {
       if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
     });
 

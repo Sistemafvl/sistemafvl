@@ -157,19 +157,20 @@ const PSPage = () => {
 
   const loadEntries = async () => {
     if (!unitSession) return;
-    let query = supabase
-      .from("ps_entries")
-      .select("*")
-      .eq("unit_id", unitSession.id)
-      .gte("created_at", startDate.toISOString())
-      .lte("created_at", endDate.toISOString())
-      .order("created_at", { ascending: false });
-
-    if (statusFilter !== "all") {
-      query = query.eq("status", statusFilter);
-    }
-
-    const { data } = await query;
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => {
+      let query = supabase
+        .from("ps_entries")
+        .select("*")
+        .eq("unit_id", unitSession.id)
+        .gte("created_at", startDate.toISOString())
+        .lte("created_at", endDate.toISOString())
+        .order("created_at", { ascending: false });
+      if (statusFilter !== "all") {
+        query = query.eq("status", statusFilter);
+      }
+      return query.range(from, to);
+    });
     if (data) {
       let filtered = data;
       if (reasonFilter !== "all") {

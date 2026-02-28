@@ -87,9 +87,15 @@ const CiclosPage = () => {
         fetchAllRows<{ ride_id: string }>((from, to) =>
           supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
         ),
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
-        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
-        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+          supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        ),
       ]);
 
       totalTbrs = tbrsData.length;

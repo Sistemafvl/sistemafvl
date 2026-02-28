@@ -45,17 +45,27 @@ const MatrizOcorrencias = () => {
     const start = startOfDay(new Date(dateStart)).toISOString();
     const end = endOfDay(new Date(dateEnd)).toISOString();
     setLoading(true);
-    Promise.all([
-      supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, description, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }),
-      supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, description, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }),
-      supabase.from("piso_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, reason, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }),
-      supabase.from("dnr_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, dnr_value, route, observations").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }),
-    ]).then(([psR, rtoR, pisoR, dnrR]) => {
-      setPsEntries(psR.data || []);
-      setRtoEntries(rtoR.data || []);
-      setPisoEntries(pisoR.data || []);
-      setDnrEntries(dnrR.data || []);
-      setLoading(false);
+    import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+      Promise.all([
+        fetchAllRows<any>((from, to) =>
+          supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, description, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }).range(from, to)
+        ),
+        fetchAllRows<any>((from, to) =>
+          supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, description, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }).range(from, to)
+        ),
+        fetchAllRows<any>((from, to) =>
+          supabase.from("piso_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, reason, route").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }).range(from, to)
+        ),
+        fetchAllRows<any>((from, to) =>
+          supabase.from("dnr_entries").select("id, unit_id, status, created_at, driver_name, tbr_code, dnr_value, route, observations").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("created_at", { ascending: false }).range(from, to)
+        ),
+      ]).then(([psData, rtoData, pisoData, dnrData]) => {
+        setPsEntries(psData);
+        setRtoEntries(rtoData);
+        setPisoEntries(pisoData);
+        setDnrEntries(dnrData);
+        setLoading(false);
+      });
     });
   }, [units, filterUnit, dateStart, dateEnd]);
 
