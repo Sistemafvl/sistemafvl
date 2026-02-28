@@ -1,45 +1,68 @@
 
 
-## Plano: Corrigir destaque vermelho indevido + Inverter ordem dos TBRs
+## Plano: Filtrar piso_entries com motivo "Removido do carregamento" dos retornos
 
-### Problema 1: TBR vermelho indevido
-Quando um TBR é excluído de um motorista (cria `piso_entry` com `status: "open"`), e depois escaneado em outro motorista, o sistema fecha a `piso_entry`. Porém, há uma condição de corrida: o destaque vermelho é baseado no Set `pisoTbrCodes` (atualizado via realtime), que pode não ter sido atualizado no momento da renderização. Resultado: TBR aparece vermelho mesmo estando no carregamento ativo.
+### Problema
+Entradas na `piso_entries` com `reason = "Removido do carregamento"` ou `"Carregamento resetado"` ou `"Carregamento cancelado"` são operacionais — o TBR foi removido durante a bipagem, não é um retorno real de entrega. Quando esse TBR permanece no `ride_tbrs` do motorista (foi re-escaneado), o sistema o conta como retorno, inflando os números (ex: 14/94 com 80 retornos).
 
-**Correção**: Na função `getTbrItemClass`, verificar se o TBR pertence ao carregamento atual antes de aplicar o destaque vermelho do piso. Se o TBR está em `ride_tbrs` do ride atual, ele NÃO deve ficar vermelho por causa de piso — pois foi escaneado e a piso_entry deveria estar fechada. A forma mais simples: a função já recebe o `tbr` que pertence ao ride, então basta verificar se esse TBR tem `trip_number >= 2` (reincidência) — caso tenha, o sistema já o categorizou como reincidência, não como retorno pendente.
+### Motivos operacionais a excluir
+- `"Removido do carregamento"` (266 closed + 44 open = 310 registros)
+- `"Carregamento resetado"` (17 registros)
+- `"Carregamento cancelado"` (5 registros)
 
-Na verdade, a correção mais robusta: **excluir do `pisoTbrCodes` os códigos que estão atualmente em `ride_tbrs` de qualquer ride ativo**. Porém, isso é complexo. A solução mais simples e eficaz: na `getTbrItemClass`, não aplicar vermelho do piso se o TBR está sendo exibido dentro de um carregamento (ele está no ride, logo não é "pendente no piso"). Precisamos passar o contexto do ride para a função.
+Esses motivos indicam que o TBR voltou ao piso por questão operacional da conferência, não por falha de entrega.
 
-**Implementação**: Adicionar um parâmetro `rideId` à `getTbrItemClass`. Dentro da função, verificar se o TBR pertence ao ride atual consultando o estado `tbrs`. Se pertence, pular o check de `pisoTbrCodes`.
+### Arquivos a alterar
 
-Alternativa mais simples: O TBR está na lista do ride — ele foi escaneado e está ativo. Se está ativo, a piso_entry deveria estar fechada. O problema é só timing do realtime. Solução: **simplesmente não marcar como vermelho se o TBR está na lista do ride ativo (status loading/pending)**. Para isso, coletar todos os códigos de TBRs ativos e excluí-los do check.
+**1. `OperacaoPage.tsx`** — 2 locais:
+- **Contagem agregada (L101-103)**: Adicionar `reason` ao select de `piso_entries` e filtrar para excluir motivos operacionais antes de contar retornos
+- **Modal de detalhes (L316-317)**: Adicionar `reason` ao select de `piso_entries` e excluir motivos operacionais do `returnSet`
 
-**Solução final escolhida**: Modificar `getTbrItemClass` para aceitar um parâmetro opcional `isInActiveRide: boolean`. Nos locais onde renderizamos TBRs dentro de um card de carregamento ativo, passar `true`. Quando `isInActiveRide` é `true`, pular o check de `pisoTbrCodes`.
+**2. `CiclosPage.tsx` (L90-91)**: Adicionar `reason` ao select e filtrar motivos operacionais
 
-### Problema 2: Inverter ordem dos TBRs
-Atualmente os TBRs são ordenados por `scanned_at ascending` (primeiro bipado em cima). O usuário quer o último bipado em primeiro.
+**3. `DriverRides.tsx` (L60-61)**: Adicionar `reason` ao select e filtrar motivos operacionais
 
-**Arquivos afetados**:
+**4. `DriverHome.tsx` (L68-69)**: Adicionar `reason` ao select e filtrar motivos operacionais
 
-1. **`ConferenciaCarregamentoPage.tsx`**:
-   - Alterar as 3 queries de `ride_tbrs` que usam `.order("scanned_at", { ascending: true })` para `ascending: false`
-   - Ajustar a numeração `{i + 1}.` para contar do total para baixo: `{rideTbrs.length - i}.`
-   - Modificar `getTbrItemClass` para não aplicar vermelho do piso quando o TBR está em um ride ativo
-   - Ajustar o auto-scroll para ir ao **topo** da lista (já que o último bipado estará em primeiro)
+**5. `RelatoriosPage.tsx` (L264)**: Adicionar `reason` ao select e filtrar motivos operacionais
 
-2. **`OperacaoPage.tsx`** (modal de detalhes):
-   - Alterar query de `ride_tbrs` no modal: `.order("scanned_at", { ascending: false })`
-   - Na lógica de `hasReturn`: não marcar como vermelho se o TBR está no `ride_tbrs` do ride atual (já está correto pois cruza com returnSet que foi corrigido anteriormente)
+**6. `DashboardInsights.tsx` (L137-139, L176-178)**: Adicionar `reason` ao select e filtrar motivos operacionais
 
-### Mudanças detalhadas
+### Constante compartilhada
 
-**ConferenciaCarregamentoPage.tsx**:
-- L412: `ascending: true` → `ascending: false`
-- L460: `ascending: true` → `ascending: false`  
-- L514: `ascending: true` → `ascending: false`
-- `getTbrItemClass`: adicionar parâmetro `isInActiveRide?: boolean`, pular check `pisoTbrCodes` quando `true`
-- L1739, L1895: Numeração `{rideTbrs.length - i}.` em vez de `{i + 1}.`
-- Auto-scroll: `el.scrollTop = 0` em vez de `el.scrollHeight`
+Criar em `src/lib/status-labels.ts`:
+```typescript
+export const OPERATIONAL_PISO_REASONS = [
+  "Removido do carregamento",
+  "Carregamento resetado",
+  "Carregamento cancelado",
+];
+```
 
-**OperacaoPage.tsx** (modal):
-- L314: `ascending: true` → `ascending: false`
+### Padrão da filtragem
+
+Para queries que buscam piso_entries para contagem de retornos, adicionar `reason` ao select e filtrar:
+
+```typescript
+// Antes
+fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
+  supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+);
+
+// Depois  
+const pisoRaw = await fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+  supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
+);
+const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
+```
+
+Para o modal (query direta):
+```typescript
+supabase.from("piso_entries").select("tbr_code, reason").eq("ride_id", c.ride_id)
+// Depois filtrar: excluir entradas com reason operacional
+```
+
+### Nota
+- PS e RTO entries NÃO possuem esses motivos operacionais, então não precisam de filtro
+- `MatrizOcorrencias.tsx` já busca `reason` e exibe para visualização — não precisa de filtro pois mostra todas as ocorrências
 
