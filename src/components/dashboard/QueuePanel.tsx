@@ -153,6 +153,14 @@ const QueuePanel = () => {
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchQueue]);
 
+  // Polling fallback — refresh queue every 5 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetchQueue();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [fetchQueue]);
+
   const formatTime = (iso: string) => {
     const d = new Date(iso);
     return d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
