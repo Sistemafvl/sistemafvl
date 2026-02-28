@@ -614,6 +614,7 @@ const ConferenciaCarregamentoPage = () => {
     setLockedConferenteIds((prev) => new Set(prev).add(rideId));
     await supabase.from("driver_rides").update({ loading_status: "loading", finished_at: null } as any).eq("id", rideId);
     await fetchRides();
+    setFocusedRideId(rideId);
   };
 
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
