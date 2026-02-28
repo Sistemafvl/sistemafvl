@@ -591,30 +591,33 @@ const ConferenciaCarregamentoPage = () => {
     // Auto-fill conferente from session if not already set
     const ride = rides.find(r => r.id === rideId);
     const conferenteId = ride?.conferente_id || conferenteSession?.id;
+    // Optimistic: update local state and open overlay immediately
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId || r.conferente_id } : r));
+    if (conferenteId) setLockedConferenteIds((prev) => new Set(prev).add(rideId));
+    setFocusedRideId(rideId);
+    // Then persist to DB in background
     if (conferenteId && !ride?.conferente_id) {
-      setLockedConferenteIds((prev) => new Set(prev).add(rideId));
-      setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, conferente_id: conferenteId } : r));
       await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId } as any).eq("id", rideId);
     } else {
       await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
     }
-    await fetchRides();
-    setFocusedRideId(rideId);
+    fetchRides();
   };
 
   const handleFinalizar = async (rideId: string) => {
-    await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
     setFocusedRideId(null);
-    await fetchRides();
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "finished", finished_at: new Date().toISOString() } : r));
+    await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
+    fetchRides();
   };
 
   const handleRetornar = async (rideId: string, e?: React.MouseEvent) => {
     e?.stopPropagation();
-    // Lock conferente dropdown so it's never reset during return
     setLockedConferenteIds((prev) => new Set(prev).add(rideId));
-    await supabase.from("driver_rides").update({ loading_status: "loading", finished_at: null } as any).eq("id", rideId);
-    await fetchRides();
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "loading", finished_at: null } : r));
     setFocusedRideId(rideId);
+    await supabase.from("driver_rides").update({ loading_status: "loading", finished_at: null } as any).eq("id", rideId);
+    fetchRides();
   };
 
   const handleDeleteTbr = async (tbrId: string, rideId: string) => {
