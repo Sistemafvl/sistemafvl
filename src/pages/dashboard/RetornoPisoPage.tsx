@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -89,6 +89,8 @@ const RetornoPisoPage = () => {
   const [loading, setLoading] = useState(true);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [reasonSearchOpen, setReasonSearchOpen] = useState(false);
+  const [editingReasonId, setEditingReasonId] = useState<string | null>(null);
+  const [editingReasonLabel, setEditingReasonLabel] = useState("");
 
   // PS Modal state
   const [psModalOpen, setPsModalOpen] = useState(false);
@@ -250,6 +252,21 @@ const RetornoPisoPage = () => {
       setShowNewReason(false);
       toast({ title: "Motivo adicionado" });
     }
+  };
+
+  const capitalizeFirst = (text: string) => text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+
+  const handleEditReason = async (id: string, newLabel: string) => {
+    const formatted = capitalizeFirst(newLabel.trim());
+    if (!formatted) return;
+    const { error } = await supabase.from("piso_reasons").update({ label: formatted } as any).eq("id", id);
+    if (!error) {
+      setCustomReasons(prev => prev.map(r => r.id === id ? { ...r, label: formatted } : r));
+      if (selectedReason === editingReasonLabel) setSelectedReason(formatted);
+      toast({ title: "Motivo atualizado" });
+    }
+    setEditingReasonId(null);
+    setEditingReasonLabel("");
   };
 
   const handleSave = async () => {
@@ -544,12 +561,40 @@ const RetornoPisoPage = () => {
                     <CommandList>
                       <CommandEmpty>Nenhum motivo encontrado.</CommandEmpty>
                       <CommandGroup>
-                        {allReasons.map((r) => (
-                          <CommandItem key={r} value={r} onSelect={() => { setSelectedReason(r); setReasonSearchOpen(false); }}>
-                            <Check className={cn("mr-2 h-4 w-4", selectedReason === r ? "opacity-100" : "opacity-0")} />
-                            {r}
-                          </CommandItem>
-                        ))}
+                        {allReasons.map((r) => {
+                          const customReason = customReasons.find(cr => cr.label === r);
+                          const isEditing = customReason && editingReasonId === customReason.id;
+                          return (
+                            <CommandItem key={r} value={r} onSelect={() => { if (!isEditing) { setSelectedReason(r); setReasonSearchOpen(false); } }}>
+                              <Check className={cn("mr-2 h-4 w-4 shrink-0", selectedReason === r ? "opacity-100" : "opacity-0")} />
+                              {isEditing ? (
+                                <div className="flex items-center gap-1 flex-1" onClick={(e) => e.stopPropagation()}>
+                                  <Input
+                                    value={editingReasonLabel}
+                                    onChange={(e) => setEditingReasonLabel(e.target.value)}
+                                    onKeyDown={(e) => { if (e.key === "Enter") handleEditReason(customReason.id, editingReasonLabel); }}
+                                    className="h-7 text-sm flex-1"
+                                    autoFocus
+                                  />
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); handleEditReason(customReason.id, editingReasonLabel); }}>
+                                    <Check className="h-3 w-3" />
+                                  </Button>
+                                  <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); setEditingReasonId(null); }}>
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </div>
+                              ) : (
+                                <span className="flex-1">{r}</span>
+                              )}
+                              {customReason && !isEditing && (
+                                <Pencil
+                                  className="h-3.5 w-3.5 ml-auto shrink-0 text-muted-foreground hover:text-foreground cursor-pointer"
+                                  onClick={(e) => { e.stopPropagation(); setEditingReasonId(customReason.id); setEditingReasonLabel(customReason.label); }}
+                                />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
                       </CommandGroup>
                     </CommandList>
                   </Command>
@@ -564,7 +609,7 @@ const RetornoPisoPage = () => {
                 <div className="flex gap-2">
                   <Input
                     value={newReasonInput}
-                    onChange={(e) => setNewReasonInput(e.target.value)}
+                    onChange={(e) => setNewReasonInput(capitalizeFirst(e.target.value))}
                     placeholder="Novo motivo..."
                     className="flex-1 h-9 text-sm"
                   />
