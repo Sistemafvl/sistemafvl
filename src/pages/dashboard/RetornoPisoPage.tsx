@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,7 @@ import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
 import { format } from "date-fns";
-import { translateStatus } from "@/lib/status-labels";
+import { translateStatus, OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
 
@@ -130,7 +130,35 @@ const RetornoPisoPage = () => {
       .eq("unit_id", unitSession.id)
       .eq("status", "open")
       .order("created_at", { ascending: false });
-    setEntries(data ?? []);
+    const allEntries = data ?? [];
+
+    // Auto-close operational entries whose TBR is already loaded in a ride
+    const operationalEntries = allEntries.filter(e => OPERATIONAL_PISO_REASONS.includes(e.reason));
+    if (operationalEntries.length > 0) {
+      const codes = operationalEntries.map(e => e.tbr_code.toLowerCase());
+      const { data: matchingTbrs } = await supabase
+        .from("ride_tbrs")
+        .select("code")
+        .in("code", codes);
+      if (matchingTbrs && matchingTbrs.length > 0) {
+        const loadedSet = new Set(matchingTbrs.map(t => t.code.toLowerCase()));
+        const toClose = operationalEntries.filter(e => loadedSet.has(e.tbr_code.toLowerCase()));
+        if (toClose.length > 0) {
+          const closeIds = toClose.map(e => e.id);
+          await supabase
+            .from("piso_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .in("id", closeIds);
+          // Remove auto-closed from displayed list
+          const closeIdSet = new Set(closeIds);
+          setEntries(allEntries.filter(e => !closeIdSet.has(e.id)));
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
+    setEntries(allEntries);
     setLoading(false);
   };
 
