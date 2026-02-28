@@ -226,8 +226,8 @@ const DriverRides = () => {
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
                       <TrendingUp className="h-3 w-3 text-blue-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Média</span>
-                      <span className="text-xs font-bold text-blue-600">R${mediaTbr.toFixed(1)}</span>
+                      <span className="text-[10px] text-muted-foreground leading-none">Valor TBR</span>
+                      <span className="text-xs font-bold text-blue-600">R${(ride.tbrValue ?? 0).toFixed(2).replace(".", ",")}</span>
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
                       <Target className="h-3 w-3 text-amber-600 mb-0.5" />
