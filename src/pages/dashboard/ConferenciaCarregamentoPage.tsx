@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -186,6 +186,7 @@ const ConferenciaCarregamentoPage = () => {
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
+  const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
 
   // Manual mode toggle per ride
   const [manualMode, setManualMode] = useState<Record<string, boolean>>({});
@@ -598,10 +599,12 @@ const ConferenciaCarregamentoPage = () => {
       await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
     }
     await fetchRides();
+    setFocusedRideId(rideId);
   };
 
   const handleFinalizar = async (rideId: string) => {
     await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
+    setFocusedRideId(null);
     await fetchRides();
   };
 
@@ -1628,9 +1631,14 @@ const ConferenciaCarregamentoPage = () => {
                               </Button>
                             )}
                             {isLoadingStatus && (
-                              <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
-                                <CheckCircle className="h-3.5 w-3.5" /> Finalizar
-                              </Button>
+                              <>
+                                <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
+                                  <CheckCircle className="h-3.5 w-3.5" /> Finalizar
+                                </Button>
+                                <Button size="sm" variant="outline" className="gap-1" onClick={() => setFocusedRideId(ride.id)} title="Modo foco">
+                                  <Maximize2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </>
                             )}
                             {isFinished && (
                               <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={(e) => handleRetornar(ride.id, e)}>
@@ -1790,6 +1798,145 @@ const ConferenciaCarregamentoPage = () => {
           </div>
         </div>
       )}
+
+      {/* Focus Mode Overlay */}
+      {focusedRideId && (() => {
+        const ride = rides.find(r => r.id === focusedRideId);
+        if (!ride) return null;
+        const focusedTbrs = tbrs[ride.id] ?? [];
+        const conferenteId = ride.conferente_id || (conferenteSession?.id ?? null);
+        const selectedConferente = conferentes.find(c => c.id === conferenteId);
+        const focusInputRef = (el: HTMLInputElement | null) => { inputRefs.current[`focus-${ride.id}`] = el; };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setFocusedRideId(null)}>
+            <div className="w-full max-w-md mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <Card className="bg-blue-50 border-blue-200 shadow-2xl">
+                <CardContent className="p-5 flex flex-col items-center gap-3">
+                  {/* Header */}
+                  <div className="w-full flex items-center justify-between">
+                    <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1">
+                      <ScanBarcode className="h-3 w-3" />
+                      {focusedTbrs.length}
+                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
+                        <Hash className="h-3.5 w-3.5 mr-0.5" />
+                        {ride.sequence_number}º
+                      </Badge>
+                      <button onClick={() => setFocusedRideId(null)} className="h-7 w-7 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors" title="Minimizar">
+                        <Minimize2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Driver Info */}
+                  <div className="flex items-center gap-3">
+                    <Avatar className="h-16 w-16 shrink-0">
+                      {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
+                      <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
+                        {(ride.driver_name ?? "M")[0].toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <h3 className="text-lg font-bold">{ride.driver_name}</h3>
+                  </div>
+
+                  {/* Vehicle & details */}
+                  <div className="w-full space-y-1.5 text-sm">
+                    {ride.car_plate && (
+                      <div className="flex items-center gap-2 text-muted-foreground">
+                        <Car className="h-4 w-4 shrink-0" />
+                        <span className="font-mono font-bold text-foreground">{ride.car_plate}</span>
+                        {ride.car_model && <span>· {ride.car_model}</span>}
+                        {ride.car_color && <span>· {ride.car_color}</span>}
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <MapPin className="h-4 w-4 shrink-0 text-primary" />
+                      <span><strong>Rota:</strong> {ride.route || "—"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 shrink-0 text-primary" />
+                      <span><strong>Login:</strong> {ride.login || "—"}</span>
+                    </div>
+                  </div>
+
+                  {/* Conferente */}
+                  <div className="w-full flex items-center gap-2 h-9 px-3 rounded-md border bg-muted text-sm">
+                    <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate">{selectedConferente?.name || "Aguardando..."}</span>
+                  </div>
+
+                  {/* TBR List */}
+                  <div className="w-full space-y-2 border-t pt-3">
+                    <p className="text-xs font-bold italic flex items-center gap-1">
+                      <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+                      TBRs Lidos ({focusedTbrs.length})
+                    </p>
+                    {focusedTbrs.length > 0 && (
+                      <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
+                        {focusedTbrs.map((t, i) => (
+                          <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
+                            <span className="font-bold text-primary">{i + 1}.</span>
+                            <span className="font-mono">{t.code}</span>
+                            {t.scanned_at && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                {(() => {
+                                  const d = new Date(t.scanned_at);
+                                  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}:${String(d.getSeconds()).padStart(2,"0")}.${String(d.getMilliseconds()).padStart(3,"0")}`;
+                                })()}
+                              </span>
+                            )}
+                            <span className="flex-1" />
+                            <button onClick={() => handleDeleteTbr(t.id, ride.id)} className="text-destructive hover:text-destructive/80 shrink-0" title="Excluir TBR">
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* TBR Input */}
+                    <div className="flex gap-1 items-center">
+                      <div className="relative flex-1">
+                        {!manualMode[ride.id] && (
+                          <Lock className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+                        )}
+                        <Input
+                          ref={(el) => { inputRefs.current[ride.id] = el; }}
+                          className={cn("h-8 text-sm font-mono", !manualMode[ride.id] && "pl-7 bg-muted/30")}
+                          placeholder={manualMode[ride.id] ? "Digite o TBR + Enter..." : "Escanear TBR..."}
+                          value={tbrInputs[ride.id] ?? ""}
+                          onChange={(e) => handleTbrInputChange(ride.id, e.target.value)}
+                          onKeyDown={(e) => handleTbrKeyDown(ride.id, e)}
+                          autoFocus
+                        />
+                      </div>
+                      <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => startCamera(ride.id)} title="Câmera">
+                        <Camera className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button type="button" size="icon" variant={manualMode[ride.id] ? "default" : "outline"} className="h-8 w-8 shrink-0" onClick={() => setManualMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }))} title={manualMode[ride.id] ? "Modo manual" : "Modo scanner"}>
+                        <Keyboard className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="w-full flex gap-2 pt-2">
+                    <Button size="sm" variant="destructive" className="flex-1 gap-1 font-bold" onClick={() => handleFinalizar(ride.id)}>
+                      <CheckCircle className="h-3.5 w-3.5" /> Finalizar
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setFocusedRideId(null)}>
+                      <Minimize2 className="h-3.5 w-3.5" /> Minimizar
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Driver Info Modal */}
       <Dialog open={driverModalOpen} onOpenChange={setDriverModalOpen}>
