@@ -1,79 +1,61 @@
 
 
-## Plano: Eliminar limite de 1000 registros em todo o sistema
+## Plano: Corrigir contagem de retornos — excluir TBRs removidos durante carregamento
 
-### Diagnóstico completo
+### Problema
+Quando um TBR é removido durante o carregamento (bipagem), o sistema cria uma `piso_entry` com o `ride_id` do carregamento. Na contagem de retornos, essas entradas são contadas como "retornos", inflando o número (ex: -98/13 com 111 retornos). O correto é: **só contar como retorno se o TBR ainda está no carregamento** (presente em `ride_tbrs`).
 
-Após analisar todos os arquivos, identifiquei **16 queries vulneráveis** ao limite de 1000 registros. Todas as queries de `ride_tbrs` já estão corrigidas com `fetchAllRows`. Porém, outras tabelas que acumulam dados ao longo do tempo (`piso_entries`, `ps_entries`, `rto_entries`, `dnr_entries`, `driver_rides`) ainda estão limitadas.
+### Páginas já corretas (não precisam de alteração)
+- **RelatoriosPage.tsx** e **DriverHome.tsx** — usam lógica de "retorno líquido" que cruza com `ride_tbrs`, portanto TBRs removidos não são contados.
 
-### Queries vulneráveis por arquivo
+### Páginas a corrigir
 
-| Arquivo | Tabela(s) limitada(s) | Risco |
-|---------|----------------------|-------|
-| `OperacaoPage.tsx` L101-103 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
-| `CiclosPage.tsx` L90-92 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
-| `DriverHome.tsx` L68-70 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Médio |
-| `DriverRides.tsx` L60-62 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Médio |
-| `RelatoriosPage.tsx` L252-254 | piso_entries, ps_entries, rto_entries `.in("ride_id")` | Alto |
-| `DashboardInsights.tsx` L136-139, 170-172 | piso/rto/ps_entries `.eq("unit_id")` + data | Médio |
-| `DashboardInsights.tsx` L194 | driver_rides `.eq("unit_id")` | Médio |
-| `MotoristasParceirosPage.tsx` L127-131 | driver_rides `.in("driver_id")` | Alto |
-| `MatrizOcorrencias.tsx` L49-52 | ps/rto/piso/dnr_entries `.in("unit_id")` | Alto |
-| `MatrizMotoristas.tsx` L45 | driver_rides `.in("unit_id")` | Alto |
-| `MatrizFinanceiro.tsx` L39 | driver_rides `.in("unit_id")` | Alto |
-| `DNRPage.tsx` L68-72 | dnr_entries `.eq("unit_id")` | Médio |
-| `PSPage.tsx` L160-166 | ps_entries `.eq("unit_id")` + data | Médio |
-| `RTOPage.tsx` L90-94 | rto_entries `.eq("unit_id")` | Médio |
+**1. `OperacaoPage.tsx` — contagem agregada (L97-140)**
+- Alterar fetch de `ride_tbrs` para incluir `code` além de `ride_id`
+- Construir um set de códigos por ride: `tbrCodesByRide[ride_id] = Set<code>`
+- Na contagem de retornos, só contar se `tbrCodesByRide[ride_id].has(tbr_code)`
 
-### Estratégia
+**2. `OperacaoPage.tsx` — modal de detalhes (L309-322)**
+- Já busca `ride_tbrs` com `code` e cruza com retornos — porém os retornos vêm por `ride_id` e podem incluir TBRs removidos. Como o modal só mostra TBRs que estão em `ride_tbrs`, o vermelho está correto (se o código está em ride_tbrs E tem retorno). Este trecho **não precisa de correção**.
 
-Usar `fetchAllRows` para todas as queries que buscam listas completas sem `.limit()`, `.maybeSingle()` ou `{ count: "exact", head: true }`. Queries que já usam `.limit(1)` ou `.maybeSingle()` estão seguras.
+**3. `CiclosPage.tsx` — contagem agregada (L86-107)**
+- Alterar fetch de `ride_tbrs` para incluir `code`
+- Só contar retorno se o `tbr_code` existe em `ride_tbrs` para aquele `ride_id`
 
-### Mudanças por arquivo
+**4. `DriverRides.tsx` — contagem por corrida (L74-94)**
+- Alterar fetch de `ride_tbrs` para incluir `code`
+- Construir set de códigos por ride
+- Só contar retorno se `tbr_code` está no set do ride correspondente
 
-1. **`OperacaoPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
-
-2. **`CiclosPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
-
-3. **`DriverHome.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
-
-4. **`DriverRides.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows`
-
-5. **`RelatoriosPage.tsx`** — Envolver `piso_entries`, `ps_entries`, `rto_entries` com `fetchAllRows` (em todas as funções de relatório)
-
-6. **`DashboardInsights.tsx`** — Envolver queries de retornos (`piso/ps/rto`) e `driver_rides` (fetchTopConferentes) com `fetchAllRows`
-
-7. **`MotoristasParceirosPage.tsx`** — Envolver `driver_rides` com `fetchAllRows`
-
-8. **`MatrizOcorrencias.tsx`** — Envolver todas as 4 queries (`ps/rto/piso/dnr_entries`) com `fetchAllRows`
-
-9. **`MatrizMotoristas.tsx`** — Envolver `driver_rides` com `fetchAllRows`
-
-10. **`MatrizFinanceiro.tsx`** — Envolver `driver_rides` com `fetchAllRows`
-
-11. **`DNRPage.tsx`** — Envolver `dnr_entries` com `fetchAllRows`
-
-12. **`PSPage.tsx`** — Envolver `ps_entries` com `fetchAllRows`
-
-13. **`RTOPage.tsx`** — Envolver `rto_entries` com `fetchAllRows`
-
-### Padrão de conversão
+### Padrão da correção
 
 Antes:
 ```typescript
-const { data } = await supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds);
-const pisoData = data ?? [];
+const returnTbrSets: Record<string, Set<string>> = {};
+[...pisoData, ...psData, ...rtoData].forEach((p) => {
+  if (p.ride_id && p.tbr_code) {
+    if (!returnTbrSets[p.ride_id]) returnTbrSets[p.ride_id] = new Set();
+    returnTbrSets[p.ride_id].add(p.tbr_code);
+  }
+});
 ```
 
 Depois:
 ```typescript
-const pisoData = await fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-  supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
-);
-```
+// Build set of TBR codes per ride
+const tbrCodesByRide: Record<string, Set<string>> = {};
+tbrsData.forEach((t) => {
+  if (!tbrCodesByRide[t.ride_id]) tbrCodesByRide[t.ride_id] = new Set();
+  tbrCodesByRide[t.ride_id].add(t.code);
+});
 
-### Nota técnica
-- Queries com `.maybeSingle()`, `.single()`, `.limit(1)` ou `{ count: "exact", head: true }` NÃO precisam de paginação
-- Queries de lookup (conferentes, drivers_public, unit_settings) têm baixo volume e não precisam de paginação
-- O `fetchAllRows` já existe em `src/lib/supabase-helpers.ts` e será reutilizado
+// Only count as return if TBR is still in ride_tbrs
+const returnTbrSets: Record<string, Set<string>> = {};
+[...pisoData, ...psData, ...rtoData].forEach((p) => {
+  if (p.ride_id && p.tbr_code && tbrCodesByRide[p.ride_id]?.has(p.tbr_code)) {
+    if (!returnTbrSets[p.ride_id]) returnTbrSets[p.ride_id] = new Set();
+    returnTbrSets[p.ride_id].add(p.tbr_code);
+  }
+});
+```
 
