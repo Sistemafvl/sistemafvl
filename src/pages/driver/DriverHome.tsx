@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -64,9 +65,9 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [piData, psData, rtoData, us, un, cv, bn] = await Promise.all([
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      const [piRaw, psData, rtoData, us, un, cv, bn] = await Promise.all([
+        fetchAllRows<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+          supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
         ),
         fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
           supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -87,6 +88,7 @@ const DriverHome = () => {
       );
 
       setTbrs(tbrData);
+      const piData = piRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       setPisoEntries(piData);
       setPsEntries(psData);
       setRtoEntries(rtoData);

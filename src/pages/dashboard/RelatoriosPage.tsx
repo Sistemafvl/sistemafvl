@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -259,10 +260,10 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const [driversRes, pisoRankData, psRankData, rtoRankData] = await Promise.all([
+      const [driversRes, pisoRaw, psRankData, rtoRankData] = await Promise.all([
         supabase.from("drivers_public").select("id, name").in("id", driverIds),
-        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+          supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
         ),
         fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
           supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -278,6 +279,7 @@ const RelatoriosPage = () => {
       const drivers = driversRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d.name]));
       const allTbrs = tbrsData;
+      const pisoRankData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       const allReturns = [...pisoRankData, ...psRankData, ...rtoRankData];
 
       const ranking: RankingRow[] = driverIds.map(did => {

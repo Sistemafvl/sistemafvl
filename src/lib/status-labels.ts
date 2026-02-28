@@ -1,3 +1,9 @@
+export const OPERATIONAL_PISO_REASONS = [
+  "Removido do carregamento",
+  "Carregamento resetado",
+  "Carregamento cancelado",
+];
+
 const statusMap: Record<string, string> = {
   pending: "Pendente",
   loading: "Carregando",
