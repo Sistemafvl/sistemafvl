@@ -146,23 +146,19 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     }
   }, [unitId, startDate, endDate, getSince, getUntil]);
 
-  // Fetch top drivers with per-card dates
+  // Fetch top drivers with per-card dates — uses RPC to count TBRs (not rides)
   const fetchTopDrivers = useCallback(async () => {
     const since = getSince(driverDates);
     const until = getUntil(driverDates);
 
-    let q = supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId).gte("completed_at", since);
-    if (until) q = q.lte("completed_at", until);
-    const { data: rides } = await q;
+    const { data: rpcData } = await supabase.rpc("get_top_drivers_by_tbrs", {
+      p_unit_id: unitId,
+      p_since: since,
+      p_until: until || undefined,
+    });
 
-    if (!rides || rides.length === 0) { setTopDrivers([]); return; }
-    const driverCount: Record<string, number> = {};
-    rides.forEach(r => { driverCount[r.driver_id] = (driverCount[r.driver_id] || 0) + 1; });
-    const sorted = Object.entries(driverCount).sort((a, b) => b[1] - a[1]);
-    const topIds = sorted.slice(0, 50).map(([id]) => id);
-    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", topIds);
-    const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
-    setTopDrivers(sorted.map(([id, count]) => ({ name: driverMap.get(id) ?? "Desconhecido", count })));
+    if (!rpcData || rpcData.length === 0) { setTopDrivers([]); return; }
+    setTopDrivers(rpcData.map((r: any) => ({ name: r.driver_name ?? "Desconhecido", count: Number(r.tbr_count) })));
     setDriverPage(0);
   }, [unitId, driverDates, getSince, getUntil]);
 

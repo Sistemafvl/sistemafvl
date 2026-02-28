@@ -63,8 +63,8 @@ const DriverHome = () => {
       const rideIds = r.map((x) => x.id);
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
-      const [t, pi, ps, rto, us, un, cv, bn] = await Promise.all([
-        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds),
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [pi, ps, rto, us, un, cv, bn] = await Promise.all([
         supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
@@ -76,8 +76,11 @@ const DriverHome = () => {
           .gte("period_start", startDate)
           .lte("period_start", endDate),
       ]);
+      const tbrData = await fetchAllRows<{ id: string; ride_id: string; code: string }>((from, to) =>
+        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds).range(from, to)
+      );
 
-      setTbrs(t.data ?? []);
+      setTbrs(tbrData);
       setPisoEntries(pi.data ?? []);
       setPsEntries(ps.data ?? []);
       setRtoEntries(rto.data ?? []);

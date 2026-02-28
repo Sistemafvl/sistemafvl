@@ -137,11 +137,12 @@ const RelatoriosPage = () => {
       const rides = ridesRes.data ?? [];
       const rideIds = rides.map(r => r.id);
 
-      const tbrsRes = rideIds.length > 0
-        ? await supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds)
-        : { data: [] };
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
 
-      const allTbrs = tbrsRes.data ?? [];
+      const allTbrs = rideIds.length > 0
+        ? await fetchAllRows<{ ride_id: string }>((from, to) =>
+            supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to))
+        : [];
       const piso = pisoRes.data ?? [];
       const ps = psRes.data ?? [];
       const rto = rtoRes.data ?? [];
@@ -245,17 +246,20 @@ const RelatoriosPage = () => {
       const driverIds = [...new Set(rides.map(r => r.driver_id))];
       const rideIds = rides.map(r => r.id);
 
-      const [driversRes, tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [driversRes, pisoRes, psRes, rtoRes] = await Promise.all([
         supabase.from("drivers_public").select("id, name").in("id", driverIds),
-        supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
         supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       ]);
+      const tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
+        supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
+      );
 
       const drivers = driversRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d.name]));
-      const allTbrs = tbrsRes.data ?? [];
+      const allTbrs = tbrsData;
       const allReturns = [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])];
 
       const ranking: RankingRow[] = driverIds.map(did => {
@@ -313,9 +317,9 @@ const RelatoriosPage = () => {
     const driverIds = [...new Set(rides.map(r => r.driver_id))];
     const rideIds = rides.map(r => r.id);
 
-    const [driversRes, tbrsRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const [driversRes, pisoRes, psRes, rtoRes, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
-      supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds),
       supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
@@ -324,9 +328,12 @@ const RelatoriosPage = () => {
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
       supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
     ]);
+    const tbrsData = await fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
+      supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
+    );
 
     const drivers = driversRes.data ?? [];
-    const allTbrs = tbrsRes.data ?? [];
+    const allTbrs = tbrsData;
     const allPiso = pisoRes.data ?? [];
     const allPs = psRes.data ?? [];
     const allRto = rtoRes.data ?? [];

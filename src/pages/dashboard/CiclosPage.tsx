@@ -82,17 +82,20 @@ const CiclosPage = () => {
     let totalReturns = 0;
 
     if (rideIds.length > 0) {
-      const [tbrsRes, pisoRes, psRes, rtoRes] = await Promise.all([
-        supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [tbrsData, pisoData, psData, rtoData] = await Promise.all([
+        fetchAllRows<{ ride_id: string }>((from, to) =>
+          supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
+        ),
+        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
+        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
+        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).then(r => r.data ?? []),
       ]);
 
-      totalTbrs = (tbrsRes.data ?? []).length;
+      totalTbrs = tbrsData.length;
 
       const returnSet = new Set<string>();
-      [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((e: any) => {
+      [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
         if (e.tbr_code) returnSet.add(e.tbr_code);
       });
       totalReturns = returnSet.size;

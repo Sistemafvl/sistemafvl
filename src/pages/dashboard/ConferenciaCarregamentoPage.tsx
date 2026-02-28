@@ -397,14 +397,17 @@ const ConferenciaCarregamentoPage = () => {
 
     const rideIds = mapped.map((r) => r.id);
     if (rideIds.length > 0) {
-      const { data: tbrData } = await supabase
-        .from("ride_tbrs")
-        .select("*")
-        .in("ride_id", rideIds)
-        .order("scanned_at", { ascending: true });
+      // Use pagination to fetch ALL TBRs (bypass 1000 row limit)
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const tbrData = await fetchAllRows<any>((from, to) =>
+        supabase.from("ride_tbrs").select("*")
+          .in("ride_id", rideIds)
+          .order("scanned_at", { ascending: true })
+          .range(from, to)
+      );
 
       const grouped: Record<string, Tbr[]> = {};
-      (tbrData ?? []).forEach((t: any) => {
+      (tbrData).forEach((t: any) => {
         // Filter out TBRs currently being deleted
         if (deletingRef.current.has(t.id)) return;
         if (!grouped[t.ride_id]) grouped[t.ride_id] = [];

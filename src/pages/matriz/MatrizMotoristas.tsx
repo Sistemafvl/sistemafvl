@@ -60,8 +60,11 @@ const MatrizMotoristas = () => {
       setLoading(false);
       const rideIds = (ridesR.data || []).map((r: any) => r.id);
       if (rideIds.length > 0) {
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds)
-          .then(({ data }) => setTbrs(data || []));
+        import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
+            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).range(from, to)
+          ).then(data => setTbrs(data));
+        });
       } else setTbrs([]);
     });
   }, [units, dateStart, dateEnd, filterUnit]);

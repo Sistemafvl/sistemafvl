@@ -54,9 +54,9 @@ const DriverRides = () => {
       const unitIds = [...new Set(data.map((r) => r.unit_id))];
       const rideIds = data.map((r) => r.id);
 
-      const [unitsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes, customRes] = await Promise.all([
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const [unitsRes, pisoRes, psRes, rtoRes, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds),
         supabase.from("piso_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
         supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds),
@@ -64,12 +64,17 @@ const DriverRides = () => {
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
       ]);
 
+      // Fetch TBRs with pagination (bypass 1000 limit)
+      const tbrsData = await fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
+        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).range(from, to)
+      );
+
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
       const settingsMap = new Map((settingsRes.data ?? []).map((s) => [s.unit_id, Number(s.tbr_value)]));
       const customMap = new Map((customRes.data ?? []).map((cv) => [cv.unit_id, Number(cv.custom_tbr_value)]));
 
       const tbrCountMap = new Map<string, number>();
-      (tbrsRes.data ?? []).forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
+      tbrsData.forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
 
       // Count unique tbr_codes per ride for returns
       const returnTbrSets = new Map<string, Set<string>>();
