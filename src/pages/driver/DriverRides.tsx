@@ -252,7 +252,7 @@ const DriverRides = () => {
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
                       <Package className="h-3 w-3 text-purple-600 mb-0.5" />
                       <span className="text-[10px] text-muted-foreground leading-none">TBRs</span>
-                      <span className="text-xs font-bold text-purple-600">{ride.tbrCount ?? 0}</span>
+                      <span className="text-xs font-bold text-purple-600">{concluidos}</span>
                     </div>
                   </div>
                 </div>
