@@ -312,8 +312,8 @@ const DriverHome = () => {
             Para receber seus pagamentos corretamente, siga os passos:
           </p>
           <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-            <li>Acesse <strong>Perfil</strong> no menu lateral</li>
-            <li>Role até a seção <strong>Dados Bancários / Pix</strong></li>
+            <li>Acesse <strong>Documentos</strong> no menu lateral</li>
+            <li>Role até o final da página, na seção <strong>Dados Bancários / Pix</strong></li>
             <li>Preencha o tipo de chave, chave Pix e nome do titular</li>
             <li>Clique em <strong>Salvar</strong></li>
           </ol>
