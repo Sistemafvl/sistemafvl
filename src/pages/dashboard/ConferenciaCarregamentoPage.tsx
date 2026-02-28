@@ -154,7 +154,7 @@ const maskCPF = (v: string) => {
 };
 
 const ConferenciaCarregamentoPage = () => {
-  const { unitSession, managerSession } = useAuthStore();
+  const { unitSession, managerSession, conferenteSession } = useAuthStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [tbrs, setTbrs] = useState<Record<string, Tbr[]>>({});
@@ -177,7 +177,7 @@ const ConferenciaCarregamentoPage = () => {
   const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
-  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: "trimSnaps", dragFree: true });
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
   const [canScrollPrev, setCanScrollPrev] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
 
@@ -563,7 +563,16 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleIniciar = async (rideId: string) => {
-    await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
+    // Auto-fill conferente from session if not already set
+    const ride = rides.find(r => r.id === rideId);
+    const conferenteId = ride?.conferente_id || conferenteSession?.id;
+    if (conferenteId && !ride?.conferente_id) {
+      setLockedConferenteIds((prev) => new Set(prev).add(rideId));
+      setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, conferente_id: conferenteId } : r));
+      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId } as any).eq("id", rideId);
+    } else {
+      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
+    }
     await fetchRides();
   };
 
@@ -1173,7 +1182,21 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const isSearchActive = tbrSearchCommitted.trim().length > 0;
-  const displayRides = isSearchActive ? searchRides : rides;
+  
+  // Filter rides by conferente session (conferente sees only their cards + unassigned pending)
+  const filteredRides = (() => {
+    if (isSearchActive) return searchRides;
+    if (managerSession) return rides; // Manager sees all
+    if (conferenteSession) {
+      return rides.filter(r => 
+        r.conferente_id === conferenteSession.id || 
+        (!r.conferente_id && r.loading_status === "pending")
+      );
+    }
+    return rides;
+  })();
+  
+  const displayRides = filteredRides;
   const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
@@ -1486,22 +1509,23 @@ const ConferenciaCarregamentoPage = () => {
                           {renderEditableField(ride, "password", <KeyRound className="h-4 w-4 shrink-0 text-primary" />, "Senha")}
                         </div>
 
-                        {/* Conferente Select */}
+                        {/* Conferente Select — always locked, shows auto-filled or session conferente */}
                         <div className="w-full">
                           {(() => {
-                            const isLocked = isCancelled || ((!!ride.conferente_id || lockedConferenteIds.has(ride.id)) && !managerSession);
-                            const selectedConferente = conferentes.find(c => c.id === ride.conferente_id);
-                            if (isLocked && selectedConferente) {
+                            const conferenteId = ride.conferente_id || (conferenteSession?.id ?? null);
+                            const selectedConferente = conferentes.find(c => c.id === conferenteId);
+                            const isLocked = !managerSession; // Only manager can change
+                            if (isLocked || selectedConferente) {
                               return (
                                 <div className="flex items-center gap-2 h-9 px-3 rounded-md border bg-muted text-sm">
                                   <UserCheck className="h-3.5 w-3.5 text-primary shrink-0" />
                                   <Lock className="h-3 w-3 text-muted-foreground shrink-0" />
-                                  <span className="truncate">{selectedConferente.name}</span>
+                                  <span className="truncate">{selectedConferente?.name || "Aguardando..."}</span>
                                 </div>
                               );
                             }
                             return (
-                              <Select value={ride.conferente_id ?? undefined} onValueChange={(val) => handleSelectConferente(ride.id, val)} disabled={isLocked}>
+                              <Select value={ride.conferente_id ?? undefined} onValueChange={(val) => handleSelectConferente(ride.id, val)}>
                                 <SelectTrigger className="w-full h-9">
                                   <SelectValue placeholder="Selecionar Conferente" />
                                 </SelectTrigger>
@@ -1519,7 +1543,7 @@ const ConferenciaCarregamentoPage = () => {
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
                             {!isLoadingStatus && !isFinished && (
-                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id}>
+                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
                             )}
