@@ -53,44 +53,34 @@ const FeedbacksPage = () => {
         );
 
         // Fetch performance: rides count and tbrs count per driver
-        const [ridesRes, tbrsRes] = await Promise.all([
-          supabase
-            .from("driver_rides")
-            .select("driver_id")
-            .in("driver_id", driverIds)
-            .eq("unit_id", unitId),
-          supabase
-            .from("ride_tbrs")
-            .select("ride_id")
-            .in(
-              "ride_id",
-              (
-                await supabase
-                  .from("driver_rides")
-                  .select("id")
-                  .in("driver_id", driverIds)
-                  .eq("unit_id", unitId)
-              ).data?.map((r: any) => r.id) ?? []
-            ),
-        ]);
+        const { fetchAllRows } = await import("@/lib/supabase-helpers");
+        const ridesRes = await supabase
+          .from("driver_rides")
+          .select("id, driver_id")
+          .in("driver_id", driverIds)
+          .eq("unit_id", unitId);
+        
+        const rideData = ridesRes.data ?? [];
+        const rideIdsForTbrs = rideData.map((r: any) => r.id);
+        
+        const tbrsData = rideIdsForTbrs.length > 0
+          ? await fetchAllRows<{ ride_id: string }>((from, to) =>
+              supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIdsForTbrs).range(from, to)
+            )
+          : [];
 
         // Count rides per driver
         const rideCountMap = new Map<string, number>();
-        (ridesRes.data ?? []).forEach((r: any) => {
+        rideData.forEach((r: any) => {
           rideCountMap.set(r.driver_id, (rideCountMap.get(r.driver_id) ?? 0) + 1);
         });
 
         // For TBRs we need ride->driver mapping
         const rideDriverMap = new Map<string, string>();
-        const { data: rideDriverData } = await supabase
-          .from("driver_rides")
-          .select("id, driver_id")
-          .in("driver_id", driverIds)
-          .eq("unit_id", unitId);
-        (rideDriverData ?? []).forEach((r: any) => rideDriverMap.set(r.id, r.driver_id));
+        rideData.forEach((r: any) => rideDriverMap.set(r.id, r.driver_id));
 
         const tbrCountMap = new Map<string, number>();
-        (tbrsRes.data ?? []).forEach((t: any) => {
+        tbrsData.forEach((t: any) => {
           const dId = rideDriverMap.get(t.ride_id);
           if (dId) tbrCountMap.set(dId, (tbrCountMap.get(dId) ?? 0) + 1);
         });

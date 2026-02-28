@@ -84,18 +84,23 @@ const OperacaoPage = () => {
     const confIds = [...new Set(rides.filter((r) => r.conferente_id).map((r) => r.conferente_id!))];
     const rideIds = rides.map((r) => r.id);
 
-    const [driversRes, confsRes, tbrsRes, pisoRes, psRes, rtoRes, settingsRes, customValuesRes] = await Promise.all([
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const [driversRes, confsRes, settingsRes, customValuesRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
         ? supabase.from("user_profiles").select("id, name").in("id", confIds)
         : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-      supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds),
-      supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-      supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
-      supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds),
       supabase.from("unit_settings").select("tbr_value").eq("unit_id", unitSession.id).maybeSingle(),
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitSession.id),
     ]);
+
+    // Fetch TBRs with pagination (bypass 1000 limit)
+    const tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
+      supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).range(from, to)
+    );
+    const pisoData = (await supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
+    const psData = (await supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
+    const rtoData = (await supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds)).data ?? [];
 
     const baseTbrValue = Number(settingsRes.data?.tbr_value ?? 0);
     setTbrValue(baseTbrValue);
@@ -109,15 +114,15 @@ const OperacaoPage = () => {
     const driverMap = Object.fromEntries((driversRes.data ?? []).map((d) => [d.id, d]));
     const confMap = Object.fromEntries((confsRes.data ?? []).map((c) => [c.id, c.name]));
 
-    // Count TBRs per ride
+    // Count TBRs per ride (already paginated above)
     const tbrCounts: Record<string, number> = {};
-    (tbrsRes.data ?? []).forEach((t) => {
+    tbrsData.forEach((t) => {
       tbrCounts[t.ride_id] = (tbrCounts[t.ride_id] || 0) + 1;
     });
 
     // Count unique tbr_codes per ride for returns
     const returnTbrSets: Record<string, Set<string>> = {};
-    [...(pisoRes.data ?? []), ...(psRes.data ?? []), ...(rtoRes.data ?? [])].forEach((p: any) => {
+    [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
       if (p.ride_id && p.tbr_code) {
         if (!returnTbrSets[p.ride_id]) returnTbrSets[p.ride_id] = new Set();
         returnTbrSets[p.ride_id].add(p.tbr_code);

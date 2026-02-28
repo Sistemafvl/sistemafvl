@@ -11,6 +11,7 @@ import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/uti
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { fetchAllRows } from "@/lib/supabase-helpers";
 
 interface Props {
   unitId: string;
@@ -77,7 +78,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [pieDates, setPieDates] = useState<CardDateRange>({});
 
   const fetchAll = useCallback(async () => {
-    // Determine the "today" range from global filter or default
     const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
     const globalEnd = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
@@ -86,32 +86,35 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       : getBrazilDayRange();
     const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
 
-    const [ridesRes, tbrsRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
+    const [ridesRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
       supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
-      supabase.from("ride_tbrs").select("id, ride_id", { count: "exact" }).gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd),
       supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
       supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
       supabase.from("piso_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
       supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("loading_status", "loading"),
     ]);
 
+    // Use RPC for accurate TBR count (no 1000 limit)
     let todayTbrCount = 0;
-    const tbrCodesSet = new Set<string>();
-    if (tbrsRes.data) {
-      const { data: unitRideIds } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
-      const rideIdSet = new Set((unitRideIds ?? []).map(r => r.id));
-      const filtered = tbrsRes.data.filter(t => rideIdSet.has(t.ride_id));
-      todayTbrCount = filtered.length;
-      // Collect codes from ride_tbrs to avoid double-counting
-      const { data: tbrCodes } = await supabase.from("ride_tbrs").select("code").gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd);
-      (tbrCodes ?? []).forEach(t => tbrCodesSet.add(t.code));
-    }
+    const { data: rpcCount } = await supabase.rpc("get_unit_tbr_count", {
+      p_unit_id: unitId,
+      p_start: todayStart,
+      p_end: effectiveTodayEnd,
+    });
+    todayTbrCount = Number(rpcCount ?? 0);
 
     // Count unique TBRs from PS and RTO that are NOT already in ride_tbrs
     const [psExtra, rtoExtra] = await Promise.all([
       supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
       supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
     ]);
+
+    // Get ride_tbr codes to check for duplicates
+    const { data: tbrCodes } = await supabase.from("ride_tbrs").select("code")
+      .gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd);
+    const tbrCodesSet = new Set<string>();
+    (tbrCodes ?? []).forEach(t => tbrCodesSet.add(t.code));
+
     const extraCodes = new Set<string>();
     (psExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
     (rtoExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
@@ -136,7 +139,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const effectiveEnd = cardDates.end || (endDate ? endDate : todayDate);
     const effectiveStart = cardDates.start || (startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 6)));
 
-    // Build days array
     const days: string[] = [];
     const cursor = new Date(effectiveStart);
     const endD = new Date(effectiveEnd);
@@ -159,10 +161,17 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       });
       setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
     } else if (type === "line") {
-      const { data: tbrs7 } = await supabase.from("ride_tbrs").select("scanned_at, ride_id, code").gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd);
+      // Use fetchAllRows to bypass 1000 limit for TBR chart data
       const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
       const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
-      const filtered = (tbrs7 ?? []).filter(t => unitRideSet.has(t.ride_id));
+
+      const allTbrs = await fetchAllRows<{ scanned_at: string | null; ride_id: string; code: string }>((from, to) =>
+        supabase.from("ride_tbrs").select("scanned_at, ride_id, code")
+          .gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd)
+          .range(from, to)
+      );
+
+      const filtered = allTbrs.filter(t => unitRideSet.has(t.ride_id));
       const allTbrCodes = new Set<string>(filtered.map(t => t.code));
       const tbrsByDay: Record<string, number> = {};
       days.forEach(d => tbrsByDay[d] = 0);

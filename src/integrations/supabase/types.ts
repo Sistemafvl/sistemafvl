@@ -1435,6 +1435,25 @@ export type Database = {
       }
     }
     Functions: {
+      get_ride_tbr_counts: {
+        Args: { p_ride_ids: string[] }
+        Returns: {
+          ride_id: string
+          tbr_count: number
+        }[]
+      }
+      get_top_drivers_by_tbrs: {
+        Args: { p_since: string; p_unit_id: string; p_until?: string }
+        Returns: {
+          driver_id: string
+          driver_name: string
+          tbr_count: number
+        }[]
+      }
+      get_unit_tbr_count: {
+        Args: { p_end: string; p_start: string; p_unit_id: string }
+        Returns: number
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
