@@ -625,13 +625,19 @@ const ConferenciaCarregamentoPage = () => {
     deletingRef.current.add(tbrId);
     realtimeLockUntil.current = Date.now() + 8000;
 
-    const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId);
+    // Look in both tbrs and searchTbrs to find the TBR to delete
+    const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId)
+      || (searchTbrs[rideId] ?? []).find(t => t.id === tbrId);
 
     // Optimistic UI removal + sync processedCodesRef
     if (tbrToDelete) {
       processedCodesRef.current[rideId]?.delete(tbrToDelete.code.toUpperCase());
     }
     setTbrs((prev) => ({
+      ...prev,
+      [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
+    }));
+    setSearchTbrs((prev) => ({
       ...prev,
       [rideId]: (prev[rideId] ?? []).filter((t) => t.id !== tbrId),
     }));
@@ -695,6 +701,10 @@ const ConferenciaCarregamentoPage = () => {
     // Wait for DB ops to propagate, then re-fetch
     await new Promise(r => setTimeout(r, 500));
     await fetchRides();
+    // Also refresh search results if search is active
+    if (tbrSearchCommitted.trim()) {
+      await fetchSearchResults(tbrSearchCommitted);
+    }
     deletingRef.current.delete(tbrId);
     // Lock expires automatically after 5s - no need to reset
   };
