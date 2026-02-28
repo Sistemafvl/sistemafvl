@@ -184,8 +184,6 @@ const ConferenciaCarregamentoPage = () => {
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
-  const [canScrollPrev, setCanScrollPrev] = useState(false);
-  const [canScrollNext, setCanScrollNext] = useState(false);
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
 
   // Manual mode toggle per ride
@@ -343,17 +341,6 @@ const ConferenciaCarregamentoPage = () => {
   // Cleanup camera on unmount
   useEffect(() => { return () => { stopCamera(); }; }, [stopCamera]);
 
-  useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => {
-      setCanScrollPrev(emblaApi.canScrollPrev());
-      setCanScrollNext(emblaApi.canScrollNext());
-    };
-    onSelect();
-    emblaApi.on("select", onSelect);
-    emblaApi.on("reInit", onSelect);
-    return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onSelect); };
-  }, [emblaApi]);
 
   const [searchRides, setSearchRides] = useState<RideWithDriver[]>([]);
   const [searchTbrs, setSearchTbrs] = useState<Record<string, Tbr[]>>({});
@@ -1465,10 +1452,10 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollPrev()} disabled={!canScrollPrev}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollPrev()}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollNext()} disabled={!canScrollNext}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollNext()}>
               <ChevronRight className="h-4 w-4" />
             </Button>
 
