@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2 } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -20,6 +20,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { format, differenceInMinutes } from "date-fns";
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import useEmblaCarousel from "embla-carousel-react";
@@ -175,6 +176,10 @@ const ConferenciaCarregamentoPage = () => {
   const deletingRef = useRef<Set<string>>(new Set());
   const realtimeLockUntil = useRef<number>(0);
   const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
+  const [driverNameFilter, setDriverNameFilter] = useState("");
+  const [loginFilter, setLoginFilter] = useState("");
+  const [unitLogins, setUnitLogins] = useState<string[]>([]);
+  const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
@@ -537,6 +542,21 @@ const ConferenciaCarregamentoPage = () => {
 
   useEffect(() => { fetchOpenRtos(); }, [fetchOpenRtos]);
   useEffect(() => { fetchRides(); }, [fetchRides]);
+
+  // Fetch unit logins for the dropdown filter
+  useEffect(() => {
+    if (!unitId) return;
+    const fetchLogins = async () => {
+      const { data } = await supabase
+        .from("unit_logins")
+        .select("login")
+        .eq("unit_id", unitId)
+        .eq("active", true)
+        .order("login", { ascending: true });
+      setUnitLogins((data ?? []).map((l: any) => l.login));
+    };
+    fetchLogins();
+  }, [unitId]);
 
   useEffect(() => {
     if (!unitId) return;
@@ -1187,7 +1207,9 @@ const ConferenciaCarregamentoPage = () => {
   const isSearchActive = tbrSearchCommitted.trim().length > 0;
   
   // All conferentes see all rides - session is only for auto-filling conferente on "Iniciar"
-  const displayRides = isSearchActive ? searchRides : rides;
+  const displayRides = (isSearchActive ? searchRides : rides)
+    .filter(r => !driverNameFilter || r.driver_name?.toLowerCase().includes(driverNameFilter.toLowerCase()))
+    .filter(r => !loginFilter || r.login === loginFilter);
   const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
@@ -1301,46 +1323,105 @@ const ConferenciaCarregamentoPage = () => {
       <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
 
       {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9 h-10"
-            placeholder="Buscar TBR... (Enter para buscar)"
-            value={tbrSearch}
-            onChange={(e) => setTbrSearch(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-          />
-          {tbrSearch && (
-            <button onClick={handleClearSearch} className="absolute right-3 top-1/2 -translate-y-1/2">
-              <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
-            </button>
-          )}
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative sm:w-1/3">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9 h-10"
+              placeholder="Buscar TBR... (Enter)"
+              value={tbrSearch}
+              onChange={(e) => setTbrSearch(e.target.value)}
+              onKeyDown={handleSearchKeyDown}
+            />
+            {tbrSearch && (
+              <button onClick={handleClearSearch} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+
+          <div className="relative sm:w-1/3">
+            <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9 h-10"
+              placeholder="Nome do motorista..."
+              value={driverNameFilter}
+              onChange={(e) => setDriverNameFilter(e.target.value)}
+            />
+            {driverNameFilter && (
+              <button onClick={() => setDriverNameFilter("")} className="absolute right-3 top-1/2 -translate-y-1/2">
+                <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+
+          <Popover open={loginPopoverOpen} onOpenChange={setLoginPopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="sm:w-1/3 h-10 justify-start gap-2 font-normal">
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                {loginFilter || "Filtrar por login..."}
+                {loginFilter && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setLoginFilter(""); }}
+                    className="ml-auto"
+                  >
+                    <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                  </button>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar login..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum login encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {unitLogins.map((login) => (
+                      <CommandItem
+                        key={login}
+                        value={login}
+                        onSelect={() => {
+                          setLoginFilter(login);
+                          setLoginPopoverOpen(false);
+                        }}
+                      >
+                        {login}
+                        {loginFilter === login && <Check className="ml-auto h-4 w-4" />}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2 justify-start">
-              <CalendarIcon className="h-4 w-4" />
-              {format(startDate, "dd/MM/yyyy")}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={startDate} onSelect={handleStartDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
-          </PopoverContent>
-        </Popover>
+        <div className="flex flex-row gap-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 justify-start">
+                <CalendarIcon className="h-4 w-4" />
+                {format(startDate, "dd/MM/yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={startDate} onSelect={handleStartDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
 
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button variant="outline" className="gap-2 justify-start">
-              <CalendarIcon className="h-4 w-4" />
-              {format(endDate, "dd/MM/yyyy")}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar mode="single" selected={endDate} onSelect={handleEndDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
-          </PopoverContent>
-        </Popover>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="gap-2 justify-start">
+                <CalendarIcon className="h-4 w-4" />
+                {format(endDate, "dd/MM/yyyy")}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar mode="single" selected={endDate} onSelect={handleEndDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
+            </PopoverContent>
+          </Popover>
+        </div>
       </div>
 
       {isLoading ? (
