@@ -195,10 +195,10 @@ const DriverHome = () => {
     const concluidos = Math.max(0, totalTbrs - totalReturns);
     const taxaConclusao = totalTbrs > 0 ? (concluidos / totalTbrs) * 100 : 0;
     const workedDays = ridesByDay.size;
-    const mediaTbrsDia = workedDays > 0 ? totalTbrs / workedDays : 0;
+    const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    return { totalRides, totalTbrs, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
+    return { totalRides, totalTbrs, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
   }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
 
   const chartData = useMemo(() => {
@@ -273,7 +273,7 @@ const DriverHome = () => {
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
-    { label: "Total TBRs", value: metrics.totalTbrs, icon: Package, color: "text-blue-600" },
+    { label: "TBRs Concluídos", value: metrics.concluidos, icon: Package, color: "text-blue-600" },
     { label: "Total Ganho", value: `R$${metrics.totalGanho.toFixed(2)}`, icon: DollarSign, color: "text-emerald-600" },
     { label: "Conclusão", value: `${metrics.taxaConclusao.toFixed(1)}%`, icon: Target, color: "text-amber-600" },
     { label: "Média TBRs/Dia", value: metrics.mediaTbrsDia.toFixed(1), icon: CalendarDays, color: "text-purple-600" },
