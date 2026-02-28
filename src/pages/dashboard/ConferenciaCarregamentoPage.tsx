@@ -409,7 +409,7 @@ const ConferenciaCarregamentoPage = () => {
       const tbrData = await fetchAllRows<any>((from, to) =>
         supabase.from("ride_tbrs").select("*")
           .in("ride_id", rideIds)
-          .order("scanned_at", { ascending: true })
+          .order("scanned_at", { ascending: false })
           .range(from, to)
       );
 
@@ -457,7 +457,7 @@ const ConferenciaCarregamentoPage = () => {
       .from("ride_tbrs")
       .select("*")
       .ilike("code", `%${searchTerm.trim()}%`)
-      .order("scanned_at", { ascending: true });
+      .order("scanned_at", { ascending: false });
 
     if (!matchingTbrs || matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
 
@@ -511,7 +511,7 @@ const ConferenciaCarregamentoPage = () => {
       .from("ride_tbrs")
       .select("*")
       .in("ride_id", matchingRideIds)
-      .order("scanned_at", { ascending: true });
+      .order("scanned_at", { ascending: false });
 
     const grouped: Record<string, Tbr[]> = {};
     (allTbrData ?? []).forEach((t: any) => {
@@ -713,11 +713,12 @@ const ConferenciaCarregamentoPage = () => {
     setTimeout(() => {
       const el = tbrListRefs.current[rideId];
       if (el) {
-        const lastChild = el.lastElementChild;
-        if (lastChild) {
-          lastChild.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        // Last scanned is now first in list, scroll to top
+        const firstChild = el.firstElementChild;
+        if (firstChild) {
+          firstChild.scrollIntoView({ behavior: 'smooth', block: 'start' });
         } else {
-          el.scrollTop = el.scrollHeight;
+          el.scrollTop = 0;
         }
       }
     }, 250);
@@ -1326,14 +1327,14 @@ const ConferenciaCarregamentoPage = () => {
     return () => { supabase.removeChannel(channel); };
   }, [unitId]);
 
-  const getTbrItemClass = (tbr: Tbr) => {
+  const getTbrItemClass = (tbr: Tbr, isInActiveRide?: boolean) => {
     if (tbr._duplicate || tbr._triplicate) return "bg-red-100 text-red-700 border-red-300";
     if (tbr._yellowHighlight) return "bg-yellow-100 text-yellow-700 border-yellow-300";
     if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
       return "bg-green-100 border-green-400 text-green-800";
     }
-    // Red if TBR is in open piso entries (returned to floor)
-    if (pisoTbrCodes.has(tbr.code.toUpperCase())) return "bg-red-100 text-red-700 border-red-300";
+    // Red if TBR is in open piso entries (returned to floor) — but NOT if it's currently in an active ride
+    if (!isInActiveRide && pisoTbrCodes.has(tbr.code.toUpperCase())) return "bg-red-100 text-red-700 border-red-300";
     if (tbr.trip_number && tbr.trip_number >= 3) return "bg-orange-100 text-orange-700 border-orange-300";
     if (tbr.trip_number === 2) return "bg-purple-100 text-purple-700 border-purple-300";
     return "bg-muted/50";
@@ -1735,8 +1736,8 @@ const ConferenciaCarregamentoPage = () => {
                               return (
                               <div ref={(el) => { tbrListRefs.current[ride.id] = el; }} className="max-h-32 overflow-y-auto space-y-1">
                                 {visibleTbrs.map((t, i) => (
-                                  <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
-                                    <span className="font-bold text-primary">{i + 1}.</span>
+                                   <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t, true))}>
+                                    <span className="font-bold text-primary">{visibleTbrs.length - i}.</span>
                                     <span className="font-mono">{t.code}</span>
                                     {t.scanned_at && (
                                       <span className="text-[10px] text-muted-foreground font-mono">
@@ -1891,8 +1892,8 @@ const ConferenciaCarregamentoPage = () => {
                     {focusedTbrs.length > 0 && (
                       <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
                         {focusedTbrs.map((t, i) => (
-                          <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t))}>
-                            <span className="font-bold text-primary">{i + 1}.</span>
+                          <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t, true))}>
+                            <span className="font-bold text-primary">{focusedTbrs.length - i}.</span>
                             <span className="font-mono">{t.code}</span>
                             {t.scanned_at && (
                               <span className="text-[10px] text-muted-foreground font-mono">

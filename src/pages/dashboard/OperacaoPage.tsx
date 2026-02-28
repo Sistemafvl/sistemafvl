@@ -311,7 +311,7 @@ const OperacaoPage = () => {
                               .from("ride_tbrs")
                               .select("code, scanned_at")
                               .eq("ride_id", c.ride_id)
-                              .order("scanned_at", { ascending: true });
+                              .order("scanned_at", { ascending: false });
                             // Fetch returns for this ride
                             const [pisoR, psR, rtoR] = await Promise.all([
                               supabase.from("piso_entries").select("tbr_code").eq("ride_id", c.ride_id),
