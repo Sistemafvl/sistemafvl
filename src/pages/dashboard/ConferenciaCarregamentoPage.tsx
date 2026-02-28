@@ -652,17 +652,17 @@ const ConferenciaCarregamentoPage = () => {
       const { data: existingPiso } = await supabase
         .from("piso_entries")
         .select("id")
-        .eq("tbr_code", tbrToDelete.code)
+        .ilike("tbr_code", tbrToDelete.code)
         .eq("unit_id", unitId)
         .eq("status", "open")
         .maybeSingle();
 
       if (!existingPiso) {
-        // Check for closed entry to reopen
+        // Check for closed entry to reopen (case-insensitive)
         const { data: closedPiso } = await supabase
           .from("piso_entries")
           .select("id")
-          .eq("tbr_code", tbrToDelete.code)
+          .ilike("tbr_code", tbrToDelete.code)
           .eq("unit_id", unitId)
           .eq("status", "closed")
           .order("created_at", { ascending: false })
@@ -687,7 +687,7 @@ const ConferenciaCarregamentoPage = () => {
       const { data: rtoMatch } = await supabase
         .from("rto_entries")
         .select("id")
-        .eq("tbr_code", tbrToDelete.code)
+        .ilike("tbr_code", tbrToDelete.code)
         .eq("status", "closed")
         .eq("unit_id", unitId)
         .maybeSingle();
@@ -801,16 +801,18 @@ const ConferenciaCarregamentoPage = () => {
         }
 
         // Close piso and rto entries in parallel for speed
+        // Close piso and rto entries using case-insensitive match (fix case mismatch bug)
+        const closedAt = new Date().toISOString();
         await Promise.all([
           supabase
             .from("piso_entries")
-            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-            .eq("tbr_code", code)
+            .update({ status: "closed", closed_at: closedAt } as any)
+            .ilike("tbr_code", code)
             .eq("status", "open"),
           supabase
             .from("rto_entries")
-            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
-            .eq("tbr_code", code)
+            .update({ status: "closed", closed_at: closedAt } as any)
+            .ilike("tbr_code", code)
             .eq("status", "open"),
         ]);
 
