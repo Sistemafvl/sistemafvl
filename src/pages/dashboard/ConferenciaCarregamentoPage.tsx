@@ -185,6 +185,9 @@ const ConferenciaCarregamentoPage = () => {
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
+  const currentSnapRef = useRef<number>(0);
+  const currentRideIdsRef = useRef<string[]>([]);
+  const requestIdRef = useRef<number>(0);
 
   // Manual mode toggle per ride
   const [manualMode, setManualMode] = useState<Record<string, boolean>>({});
@@ -348,6 +351,16 @@ const ConferenciaCarregamentoPage = () => {
   const fetchRides = useCallback(async () => {
     if (!unitId) return;
 
+    // Concurrency control: only apply results from the latest request
+    const thisRequestId = ++requestIdRef.current;
+
+    // Preserve current carousel position before refetch
+    let preservedRideId: string | null = null;
+    if (emblaApi && currentRideIdsRef.current.length > 0) {
+      const snap = emblaApi.selectedScrollSnap();
+      preservedRideId = currentRideIdsRef.current[snap] ?? null;
+    }
+
     const { data } = await supabase
       .from("driver_rides")
       .select("*")
@@ -356,6 +369,9 @@ const ConferenciaCarregamentoPage = () => {
       .lte("completed_at", endDate.toISOString())
       .order("sequence_number", { ascending: true });
 
+    // Stale response check
+    if (thisRequestId !== requestIdRef.current) return;
+
     if (!data) { setRides([]); setIsLoading(false); return; }
 
     const driverIds = [...new Set(data.map((r) => r.driver_id))];
@@ -363,6 +379,9 @@ const ConferenciaCarregamentoPage = () => {
       .from("drivers_public")
       .select("id, name, avatar_url, car_model, car_plate, car_color")
       .in("id", driverIds);
+
+    // Stale response check
+    if (thisRequestId !== requestIdRef.current) return;
 
     const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
 
@@ -382,6 +401,8 @@ const ConferenciaCarregamentoPage = () => {
     });
 
     setRides(mapped);
+    // Update ref for realtime filtering
+    currentRideIdsRef.current = mapped.map(r => r.id);
 
     setLockedConferenteIds(prev => {
       const next = new Set(prev);
@@ -399,6 +420,9 @@ const ConferenciaCarregamentoPage = () => {
           .order("scanned_at", { ascending: false })
           .range(from, to)
       );
+
+      // Stale response check
+      if (thisRequestId !== requestIdRef.current) return;
 
       const grouped: Record<string, Tbr[]> = {};
       (tbrData).forEach((t: any) => {
@@ -427,7 +451,17 @@ const ConferenciaCarregamentoPage = () => {
       processedCodesRef.current = {};
     }
     setIsLoading(false);
-  }, [unitId, startDate, endDate]);
+
+    // Restore carousel position after data update
+    if (preservedRideId && emblaApi) {
+      requestAnimationFrame(() => {
+        const newIndex = mapped.findIndex(r => r.id === preservedRideId);
+        if (newIndex >= 0) {
+          emblaApi.scrollTo(newIndex, true);
+        }
+      });
+    }
+  }, [unitId, startDate, endDate, emblaApi]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
 
@@ -550,20 +584,58 @@ const ConferenciaCarregamentoPage = () => {
   useEffect(() => {
     if (!unitId) return;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const debouncedFetch = () => {
+    const debouncedFetch = (payload?: any) => {
       if (Date.now() < realtimeLockUntil.current) return;
+      // Filter ride_tbrs events: only react if ride_id belongs to current unit's rides
+      if (payload?.new?.ride_id || payload?.old?.ride_id) {
+        const eventRideId = payload.new?.ride_id || payload.old?.ride_id;
+        if (currentRideIdsRef.current.length > 0 && !currentRideIdsRef.current.includes(eventRideId)) return;
+      }
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { fetchRides(); }, 1500);
+      debounceTimer = setTimeout(() => { fetchRides(); }, 400);
     };
     const channel = supabase
       .channel("conferencia-" + unitId)
       .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, debouncedFetch)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, debouncedFetch)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, debouncedFetch)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, debouncedFetch)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
       .subscribe();
     return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
+
+  // Sync Embla carousel whenever displayRides list changes
+  useEffect(() => {
+    if (!emblaApi) return;
+    const onSelect = () => { currentSnapRef.current = emblaApi.selectedScrollSnap(); };
+    const onReInit = () => {
+      const snap = Math.min(currentSnapRef.current, emblaApi.scrollSnapList().length - 1);
+      if (snap >= 0) emblaApi.scrollTo(snap, true);
+    };
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onReInit);
+    // Re-init when list size changes
+    emblaApi.reInit();
+    return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onReInit); };
+  }, [emblaApi, rides.length]);
+
+  // Robust carousel navigation handlers
+  const handleCarouselPrev = useCallback(() => {
+    if (!emblaApi) return;
+    emblaApi.reInit();
+    const current = emblaApi.selectedScrollSnap();
+    const target = Math.max(0, current - 1);
+    emblaApi.scrollTo(target);
+  }, [emblaApi]);
+
+  const handleCarouselNext = useCallback(() => {
+    if (!emblaApi) return;
+    emblaApi.reInit();
+    const current = emblaApi.selectedScrollSnap();
+    const maxSnap = emblaApi.scrollSnapList().length - 1;
+    const target = Math.min(maxSnap, current + 1);
+    emblaApi.scrollTo(target);
+  }, [emblaApi]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
     // Lock immediately using state to force re-render
@@ -1529,10 +1601,10 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollPrev()}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={handleCarouselPrev}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => emblaApi?.scrollNext()}>
+            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={handleCarouselNext}>
               <ChevronRight className="h-4 w-4" />
             </Button>
 
