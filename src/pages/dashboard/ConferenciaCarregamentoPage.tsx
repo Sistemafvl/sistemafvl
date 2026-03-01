@@ -808,6 +808,9 @@ const ConferenciaCarregamentoPage = () => {
         // Track synchronously BEFORE async React setState
         processedCodesRef.current[rideId]?.add(code.toUpperCase());
 
+        // Block Realtime refresh for 3s to prevent flicker on optimistic insert
+        realtimeLockUntil.current = Date.now() + 3000;
+
         setTbrs((prev) => ({
           ...prev,
           [rideId]: [...(prev[rideId] ?? []), newTbr],
