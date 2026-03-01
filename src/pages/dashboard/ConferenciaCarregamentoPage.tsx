@@ -353,8 +353,6 @@ const ConferenciaCarregamentoPage = () => {
     // Concurrency control: only apply results from the latest request
     const thisRequestId = ++requestIdRef.current;
 
-    // Preserve current scroll position before refetch
-    const preservedScrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
 
     const { data } = await supabase
       .from("driver_rides")
@@ -447,14 +445,6 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-    // Restore scroll position after data update
-    if (preservedScrollLeft > 0) {
-      requestAnimationFrame(() => {
-        if (scrollContainerRef.current) {
-          scrollContainerRef.current.scrollLeft = preservedScrollLeft;
-        }
-      });
-    }
   }, [unitId, startDate, endDate]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
@@ -1588,8 +1578,8 @@ const ConferenciaCarregamentoPage = () => {
             </div>
           </div>
 
-          <div ref={scrollContainerRef} className="overflow-x-auto pb-2" style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent' }}>
-            <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
+          <div ref={scrollContainerRef} className="overflow-x-auto pb-2 [transform:rotateX(180deg)]" style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent' }}>
+            <div className="flex gap-4 [transform:rotateX(180deg)]" style={{ minWidth: 'max-content' }}>
               {displayRides.map((ride) => {
                 const status = ride.loading_status ?? "pending";
                 const rideTbrs = displayTbrs[ride.id] ?? [];
