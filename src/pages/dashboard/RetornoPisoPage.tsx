@@ -178,6 +178,31 @@ const RetornoPisoPage = () => {
     setSearching(true);
     setTbrCode(code);
 
+    // Check for duplicates across all occurrence tables
+    const [pisoCheck, psCheck, rtoCheck, dnrCheck] = await Promise.all([
+      supabase.from("piso_entries").select("id").ilike("tbr_code", code).eq("unit_id", unitSession!.id).eq("status", "open").limit(1),
+      supabase.from("ps_entries").select("id").ilike("tbr_code", code).eq("unit_id", unitSession!.id).eq("status", "open").limit(1),
+      supabase.from("rto_entries").select("id").ilike("tbr_code", code).eq("unit_id", unitSession!.id).eq("status", "open").limit(1),
+      supabase.from("dnr_entries").select("id").ilike("tbr_code", code).eq("unit_id", unitSession!.id).in("status", ["open", "analyzing"]).limit(1),
+    ]);
+
+    if (pisoCheck.data && pisoCheck.data.length > 0) {
+      toast({ title: "TBR já registrado", description: "Este TBR já está no Retorno Piso.", variant: "destructive" });
+      setTbrInput(""); setSearching(false); return;
+    }
+    if (psCheck.data && psCheck.data.length > 0) {
+      toast({ title: "TBR já registrado", description: "Este TBR já está registrado no PS.", variant: "destructive" });
+      setTbrInput(""); setSearching(false); return;
+    }
+    if (rtoCheck.data && rtoCheck.data.length > 0) {
+      toast({ title: "TBR já registrado", description: "Este TBR já está registrado no RTO.", variant: "destructive" });
+      setTbrInput(""); setSearching(false); return;
+    }
+    if (dnrCheck.data && dnrCheck.data.length > 0) {
+      toast({ title: "TBR já registrado", description: "Este TBR já está registrado no DNR.", variant: "destructive" });
+      setTbrInput(""); setSearching(false); return;
+    }
+
     const { data: tbrRows } = await supabase
       .from("ride_tbrs")
       .select("ride_id, trip_number")
