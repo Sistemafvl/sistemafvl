@@ -1,43 +1,21 @@
 
 
-## Plano: Corrigir fechamento de piso_entries — bug de case sensitivity
+## Problem
+When a TBR code is scanned in Retorno Piso, the system does not check if that TBR already exists as an open entry. This allows duplicate registrations of the same TBR code.
 
-### Causa raiz
-Quando um TBR é removido do carregamento, a `piso_entry` é criada com o código em **maiúsculo** (ex: `TBR314647445`). Quando o mesmo TBR é escaneado em outro motorista, o `code` é gravado em **minúsculo** (ex: `tbr314647445`). A lógica de fechamento usa `.eq("tbr_code", code)` que faz comparação **case-sensitive** no Postgres — resultado: a piso_entry nunca é fechada.
+## Solution
+Add a duplicate check in `handleTbrKeyDown` (around line 167) in `RetornoPisoPage.tsx`. Before opening the modal, query `piso_entries` for an existing open entry with the same `tbr_code` (case-insensitive) and same `unit_id`. If found, show a toast error and abort.
 
-### Correção
+### Implementation Steps
 
-**1. `ConferenciaCarregamentoPage.tsx` — fechar piso/rto ao escanear (L804-814)**
-- Converter `code` para uppercase antes de fechar: `.eq("tbr_code", code.toUpperCase())`
-- Alternativamente, usar `.ilike("tbr_code", code)` para match case-insensitive
-- Aplicar o mesmo fix na query de RTO
+1. **Add duplicate check in `handleTbrKeyDown`** (`src/pages/dashboard/RetornoPisoPage.tsx`)
+   - After TBR validation passes (line 176), before the ride_tbrs lookup, query:
+     ```sql
+     piso_entries WHERE tbr_code ilike code AND unit_id = unitSession.id AND status = 'open'
+     ```
+   - If a matching entry exists, show a destructive toast: "TBR já registrado no Retorno Piso" and return early without opening the modal.
 
-**2. `ConferenciaCarregamentoPage.tsx` — exclusão de TBR / reabrir piso (L660-696)**
-- Garantir que o código usado para buscar piso_entries fechadas também use case-insensitive
+2. **Also check other occurrence tables** (ps_entries, rto_entries, dnr_entries) for open entries with the same TBR code, showing the appropriate message for each (e.g., "TBR já registrado no PS").
 
-**3. `RetornoPisoPage.tsx` — auto-limpeza ao carregar (L125-135)**
-- Após carregar os entries open, verificar quais têm reason "Removido do carregamento" e cujo `tbr_code` existe em `ride_tbrs` (case-insensitive)
-- Auto-fechar essas entries e removê-las da lista exibida
-- Isso limpa os dados históricos já afetados pelo bug
-
-### Padrão da correção no scan
-
-```typescript
-// Antes (L804-809)
-supabase.from("piso_entries")
-  .update({ status: "closed", closed_at: ... })
-  .eq("tbr_code", code)
-  .eq("status", "open"),
-
-// Depois — normalizar para uppercase
-const upperCode = code.toUpperCase();
-supabase.from("piso_entries")
-  .update({ status: "closed", closed_at: ... })
-  .ilike("tbr_code", upperCode)
-  .eq("status", "open"),
-```
-
-### Auto-limpeza no RetornoPisoPage
-
-Após o `loadEntries`, filtrar entries com reason operacional que já estão em `ride_tbrs` e fechá-las automaticamente em background.
+This ensures the TBR uniqueness constraint is respected across the system -- a TBR can only exist in one active location at a time.
 
