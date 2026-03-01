@@ -1586,6 +1586,7 @@ const ConferenciaCarregamentoPage = () => {
                 const isLoadingStatus = status === "loading";
                 const isFinished = status === "finished";
                 const isCancelled = status === "cancelled";
+                const isMyRide = !!managerSession || ride.conferente_id === conferenteSession?.id;
 
                 return (
                   <div key={ride.id} className="w-[85vw] sm:w-[320px] shrink-0">
@@ -1732,12 +1733,12 @@ const ConferenciaCarregamentoPage = () => {
                         {/* Action Buttons */}
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
-                            {!isLoadingStatus && !isFinished && (
+                            {!isLoadingStatus && !isFinished && isMyRide && (
                               <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
                             )}
-                            {isLoadingStatus && (
+                            {isLoadingStatus && isMyRide && (
                               <>
                                 <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
                                   <CheckCircle className="h-3.5 w-3.5" /> Finalizar
@@ -1747,7 +1748,7 @@ const ConferenciaCarregamentoPage = () => {
                                 </Button>
                               </>
                             )}
-                            {isFinished && (
+                            {isFinished && isMyRide && (
                               <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={(e) => handleRetornar(ride.id, e)}>
                                 <RotateCcw className="h-3.5 w-3.5" /> Retornar
                               </Button>
@@ -1844,19 +1845,21 @@ const ConferenciaCarregamentoPage = () => {
                                       </span>
                                     )}
                                     <span className="flex-1" />
-                                    <button
-                                      onClick={() => handleDeleteTbr(t.id, ride.id)}
-                                      className="text-destructive hover:text-destructive/80 shrink-0"
-                                      title="Excluir TBR"
-                                    >
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
+                                    {isMyRide && (
+                                      <button
+                                        onClick={() => handleDeleteTbr(t.id, ride.id)}
+                                        className="text-destructive hover:text-destructive/80 shrink-0"
+                                        title="Excluir TBR"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    )}
                                   </div>
                                 ))}
                               </div>
                               );
                             })()}
-                            {isLoadingStatus && (
+                            {isLoadingStatus && isMyRide && (
                               <div className="flex gap-1 items-center">
                                 <div className="relative flex-1 max-w-[45%] sm:max-w-none">
                                   {!manualMode[ride.id] && (
@@ -1910,6 +1913,8 @@ const ConferenciaCarregamentoPage = () => {
       {focusedRideId && (() => {
         const ride = rides.find(r => r.id === focusedRideId);
         if (!ride) return null;
+        const isFocusMyRide = !!managerSession || ride.conferente_id === conferenteSession?.id;
+        if (!isFocusMyRide) { setFocusedRideId(null); return null; }
         const focusedTbrs = tbrs[ride.id] ?? [];
         const conferenteId = ride.conferente_id || (conferenteSession?.id ?? null);
         const selectedConferente = conferentes.find(c => c.id === conferenteId);
