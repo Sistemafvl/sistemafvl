@@ -1733,7 +1733,7 @@ const ConferenciaCarregamentoPage = () => {
                         {/* Action Buttons */}
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
-                            {!isLoadingStatus && !isFinished && isMyRide && (
+                            {!isLoadingStatus && !isFinished && (
                               <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
