@@ -814,6 +814,25 @@ const ConferenciaCarregamentoPage = () => {
         }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
+
+        // DB-level duplicate check before insert (safety net)
+        const { data: existingTbr } = await supabase
+          .from("ride_tbrs")
+          .select("id")
+          .eq("ride_id", rideId)
+          .ilike("code", code)
+          .eq("trip_number", tripNumber)
+          .limit(1);
+
+        if (existingTbr && existingTbr.length > 0) {
+          // Already exists in DB — remove from local state to avoid ghost entry
+          setTbrs((prev) => ({
+            ...prev,
+            [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId),
+          }));
+          return;
+        }
+
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         playSuccessBeep();
       } else if (count === 1) {
