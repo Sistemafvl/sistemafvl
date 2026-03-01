@@ -123,11 +123,11 @@ const OperacaoPage = () => {
     const driverMap = Object.fromEntries((driversRes.data ?? []).map((d) => [d.id, d]));
     const confMap = Object.fromEntries((confsRes.data ?? []).map((c) => [c.id, c.name]));
 
-    // Build set of TBR codes per ride
+    // Build set of TBR codes per ride (normalized to uppercase for case-insensitive comparison)
     const tbrCodesByRide: Record<string, Set<string>> = {};
     tbrsData.forEach((t) => {
       if (!tbrCodesByRide[t.ride_id]) tbrCodesByRide[t.ride_id] = new Set();
-      tbrCodesByRide[t.ride_id].add(t.code);
+      tbrCodesByRide[t.ride_id].add(t.code.toUpperCase());
     });
 
     // Count TBRs per ride
@@ -140,9 +140,10 @@ const OperacaoPage = () => {
     const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const returnTbrSets: Record<string, Set<string>> = {};
     [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
-      if (p.ride_id && p.tbr_code && tbrCodesByRide[p.ride_id]?.has(p.tbr_code)) {
+      const upperCode = p.tbr_code?.toUpperCase();
+      if (p.ride_id && upperCode && tbrCodesByRide[p.ride_id]?.has(upperCode)) {
         if (!returnTbrSets[p.ride_id]) returnTbrSets[p.ride_id] = new Set();
-        returnTbrSets[p.ride_id].add(p.tbr_code);
+        returnTbrSets[p.ride_id].add(upperCode);
       }
     });
     const issueCounts: Record<string, number> = {};
@@ -231,22 +232,22 @@ const OperacaoPage = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="rounded-lg border bg-card p-3 text-center">
               <Truck className="h-5 w-5 mx-auto text-primary mb-1" />
-              <p className="text-2xl font-bold">{totalCarregamentos}</p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalCarregamentos}</p>}
               <p className="text-xs text-muted-foreground flex items-center justify-center">Carregamentos <InfoButton text="Total de carregamentos realizados no dia selecionado." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
-              <p className="text-2xl font-bold">{totalTbrs}</p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalTbrs}</p>}
               <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs lidos <InfoButton text="Total de pacotes (TBRs) escaneados no dia." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
-              <p className="text-2xl font-bold">{totalRetornos}</p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalRetornos}</p>}
               <p className="text-xs text-muted-foreground flex items-center justify-center">Retornos piso <InfoButton text="Total de pacotes retornados ao piso (Piso, PS, RTO) no dia." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
-              <p className="text-2xl font-bold">{taxaConclusao}%</p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{taxaConclusao}%</p>}
               <p className="text-xs text-muted-foreground flex items-center justify-center">Conclusão <InfoButton text="Percentual de TBRs entregues com sucesso em relação ao total escaneado." /></p>
             </div>
           </div>
@@ -323,12 +324,12 @@ const OperacaoPage = () => {
                             const returnSet = new Set<string>();
                             const filteredPiso = (pisoR.data ?? []).filter((e: any) => !OPERATIONAL_PISO_REASONS.includes(e.reason ?? ""));
                             [...filteredPiso, ...(psR.data ?? []), ...(rtoR.data ?? [])].forEach((e: any) => {
-                              if (e.tbr_code) returnSet.add(e.tbr_code);
+                              if (e.tbr_code) returnSet.add(e.tbr_code.toUpperCase());
                             });
                             setTbrModalList((rideTbrs ?? []).map(t => ({
                               code: t.code,
                               scanned_at: t.scanned_at ?? "",
-                              hasReturn: returnSet.has(t.code),
+                              hasReturn: returnSet.has(t.code.toUpperCase()),
                             })));
                             setTbrModalLoading(false);
                           }}

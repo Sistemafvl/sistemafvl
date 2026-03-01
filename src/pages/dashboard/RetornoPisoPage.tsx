@@ -66,6 +66,7 @@ interface PisoEntry {
   reason: string;
   created_at: string;
   ride_id: string | null;
+  conferente_id?: string | null;
 }
 
 const RetornoPisoPage = () => {
@@ -124,15 +125,28 @@ const RetornoPisoPage = () => {
     if (data) setPsCustomReasons(data);
   };
 
+  const [conferenteNames, setConferenteNames] = useState<Record<string, string>>({});
+
   const loadEntries = async () => {
     if (!unitSession) return;
     const { data } = await supabase
       .from("piso_entries")
-      .select("id, tbr_code, driver_name, route, reason, created_at, ride_id")
+      .select("id, tbr_code, driver_name, route, reason, created_at, ride_id, conferente_id")
       .eq("unit_id", unitSession.id)
       .eq("status", "open")
       .order("created_at", { ascending: false });
-    const allEntries = data ?? [];
+    const allEntries = (data ?? []) as (PisoEntry & { conferente_id?: string | null })[];
+
+    // Fetch conferente names
+    const confIds = [...new Set(allEntries.map(e => e.conferente_id).filter(Boolean))] as string[];
+    if (confIds.length > 0) {
+      const { data: profiles } = await supabase.from("user_profiles").select("id, name").in("id", confIds);
+      const nameMap: Record<string, string> = {};
+      (profiles ?? []).forEach(p => { nameMap[p.id] = p.name; });
+      setConferenteNames(nameMap);
+    } else {
+      setConferenteNames({});
+    }
 
     // Auto-close operational entries whose TBR is already loaded in a ride
     const operationalEntries = allEntries.filter(e => OPERATIONAL_PISO_REASONS.includes(e.reason));
@@ -206,7 +220,7 @@ const RetornoPisoPage = () => {
     const { data: tbrRows } = await supabase
       .from("ride_tbrs")
       .select("ride_id, trip_number")
-      .eq("code", code)
+      .ilike("code", code)
       .order("scanned_at", { ascending: false })
       .limit(1);
 
@@ -472,6 +486,7 @@ const RetornoPisoPage = () => {
                     <TableHead className="font-bold">TBR</TableHead>
                     <TableHead className="font-bold">Motorista</TableHead>
                     <TableHead className="font-bold">Rota</TableHead>
+                    <TableHead className="font-bold">Conferente</TableHead>
                     <TableHead className="font-bold">Motivo</TableHead>
                     <TableHead className="font-bold">Data</TableHead>
                     <TableHead className="font-bold text-center">Ações</TableHead>
@@ -483,6 +498,7 @@ const RetornoPisoPage = () => {
                       <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                       <TableCell>{e.driver_name ?? "-"}</TableCell>
                       <TableCell>{e.route ?? "-"}</TableCell>
+                      <TableCell className="text-xs">{e.conferente_id ? (conferenteNames[e.conferente_id] ?? "-") : "-"}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{e.reason}</TableCell>
                       <TableCell className="text-xs">{format(new Date(e.created_at), "dd/MM/yyyy HH:mm")}</TableCell>
                       <TableCell className="text-center">
