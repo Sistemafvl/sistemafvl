@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, ChevronLeft, ChevronRight, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2 } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2 } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -23,7 +23,7 @@ import { format, differenceInMinutes } from "date-fns";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
-import useEmblaCarousel from "embla-carousel-react";
+
 
 interface RideWithDriver {
   id: string;
@@ -183,9 +183,8 @@ const ConferenciaCarregamentoPage = () => {
   const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
-  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false });
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
-  const currentSnapRef = useRef<number>(0);
   const currentRideIdsRef = useRef<string[]>([]);
   const requestIdRef = useRef<number>(0);
 
@@ -354,12 +353,8 @@ const ConferenciaCarregamentoPage = () => {
     // Concurrency control: only apply results from the latest request
     const thisRequestId = ++requestIdRef.current;
 
-    // Preserve current carousel position before refetch
-    let preservedRideId: string | null = null;
-    if (emblaApi && currentRideIdsRef.current.length > 0) {
-      const snap = emblaApi.selectedScrollSnap();
-      preservedRideId = currentRideIdsRef.current[snap] ?? null;
-    }
+    // Preserve current scroll position before refetch
+    const preservedScrollLeft = scrollContainerRef.current?.scrollLeft ?? 0;
 
     const { data } = await supabase
       .from("driver_rides")
@@ -452,16 +447,15 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-    // Restore carousel position after data update
-    if (preservedRideId && emblaApi) {
+    // Restore scroll position after data update
+    if (preservedScrollLeft > 0) {
       requestAnimationFrame(() => {
-        const newIndex = mapped.findIndex(r => r.id === preservedRideId);
-        if (newIndex >= 0) {
-          emblaApi.scrollTo(newIndex, true);
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollLeft = preservedScrollLeft;
         }
       });
     }
-  }, [unitId, startDate, endDate, emblaApi]);
+  }, [unitId, startDate, endDate]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
 
@@ -613,31 +607,6 @@ const ConferenciaCarregamentoPage = () => {
     return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
   }, [unitId, fetchRides]);
 
-  // Sync Embla carousel whenever displayRides list changes
-  useEffect(() => {
-    if (!emblaApi) return;
-    const onSelect = () => { currentSnapRef.current = emblaApi.selectedScrollSnap(); };
-    const onReInit = () => {
-      const snap = Math.min(currentSnapRef.current, emblaApi.scrollSnapList().length - 1);
-      if (snap >= 0) emblaApi.scrollTo(snap, true);
-    };
-    emblaApi.on("select", onSelect);
-    emblaApi.on("reInit", onReInit);
-    // Re-init when list size changes
-    emblaApi.reInit();
-    return () => { emblaApi.off("select", onSelect); emblaApi.off("reInit", onReInit); };
-  }, [emblaApi, rides.length]);
-
-  // Robust carousel navigation handlers
-  const handleCarouselPrev = useCallback(() => {
-    if (!emblaApi) return;
-    emblaApi.scrollPrev();
-  }, [emblaApi]);
-
-  const handleCarouselNext = useCallback(() => {
-    if (!emblaApi) return;
-    emblaApi.scrollNext();
-  }, [emblaApi]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
     // Lock immediately using state to force re-render
@@ -1603,14 +1572,7 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={handleCarouselPrev}>
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={handleCarouselNext}>
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-
-            <div className="flex items-center gap-3 ml-2 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm border bg-white" />
                 <span>1ª viagem</span>
@@ -1626,8 +1588,8 @@ const ConferenciaCarregamentoPage = () => {
             </div>
           </div>
 
-          <div ref={emblaRef} className="overflow-hidden">
-            <div className="flex">
+          <div ref={scrollContainerRef} className="overflow-x-auto pb-2" style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground) / 0.3) transparent' }}>
+            <div className="flex gap-4" style={{ minWidth: 'max-content' }}>
               {displayRides.map((ride) => {
                 const status = ride.loading_status ?? "pending";
                 const rideTbrs = displayTbrs[ride.id] ?? [];
@@ -1636,7 +1598,7 @@ const ConferenciaCarregamentoPage = () => {
                 const isCancelled = status === "cancelled";
 
                 return (
-                  <div key={ride.id} className="flex-[0_0_85vw] sm:flex-[0_0_320px] min-w-0 pl-4 first:pl-0">
+                  <div key={ride.id} className="w-[85vw] sm:w-[320px] shrink-0">
                     <Card className={cn(
                       "relative overflow-hidden h-full transition-colors",
                       isLoadingStatus && "bg-blue-50 border-blue-200",
