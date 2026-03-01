@@ -179,7 +179,7 @@ const ConferenciaCarregamentoPage = () => {
   const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
   const [driverNameFilter, setDriverNameFilter] = useState("");
   const [loginFilter, setLoginFilter] = useState("");
-  const [unitLogins, setUnitLogins] = useState<string[]>([]);
+  const [unitLogins, setUnitLogins] = useState<{login: string; password: string}[]>([]);
   const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
@@ -538,11 +538,11 @@ const ConferenciaCarregamentoPage = () => {
     const fetchLogins = async () => {
       const { data } = await supabase
         .from("unit_logins")
-        .select("login")
+        .select("login, password")
         .eq("unit_id", unitId)
         .eq("active", true)
         .order("login", { ascending: true });
-      setUnitLogins((data ?? []).map((l: any) => l.login));
+      setUnitLogins((data ?? []).map((l: any) => ({ login: l.login, password: l.password })));
     };
     fetchLogins();
   }, [unitId]);
@@ -1231,9 +1231,64 @@ const ConferenciaCarregamentoPage = () => {
     if (date) { date.setHours(23, 59, 59, 999); setEndDate(date); }
   };
 
+  const [loginEditPopoverOpen, setLoginEditPopoverOpen] = useState<string | null>(null);
+
+  const handleSelectLoginFromList = async (rideId: string, selectedLogin: { login: string; password: string }) => {
+    setLoginEditPopoverOpen(null);
+    setEditingField(null);
+    // Update both login and password
+    setRides((prev) =>
+      prev.map((r) => (r.id === rideId ? { ...r, login: selectedLogin.login, password: selectedLogin.password } : r))
+    );
+    await supabase.from("driver_rides").update({ login: selectedLogin.login, password: selectedLogin.password } as any).eq("id", rideId);
+    fetchRides();
+  };
+
   const renderEditableField = (ride: RideWithDriver, field: "route" | "login" | "password", icon: React.ReactNode, label: string) => {
     const value = ride[field];
     const isEditing = editingField?.rideId === ride.id && editingField?.field === field;
+
+    if (isEditing && field === "login") {
+      return (
+        <div className="flex items-center gap-2 w-full">
+          {icon}
+          <Popover open={loginEditPopoverOpen === ride.id} onOpenChange={(open) => {
+            setLoginEditPopoverOpen(open ? ride.id : null);
+            if (!open) { setEditingField(null); }
+          }}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-7 text-sm flex-1 justify-start font-normal px-2"
+                ref={(el) => { if (el && loginEditPopoverOpen !== ride.id) setLoginEditPopoverOpen(ride.id); }}
+              >
+                {editValue || "Selecionar login..."}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[250px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar login..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum login encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {unitLogins.map((ul) => (
+                      <CommandItem
+                        key={ul.login}
+                        value={ul.login}
+                        onSelect={() => handleSelectLoginFromList(ride.id, ul)}
+                      >
+                        <KeyRound className="h-3.5 w-3.5 mr-2 text-muted-foreground" />
+                        {ul.login}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+        </div>
+      );
+    }
 
     if (isEditing) {
       return (
@@ -1388,17 +1443,17 @@ const ConferenciaCarregamentoPage = () => {
                 <CommandList>
                   <CommandEmpty>Nenhum login encontrado.</CommandEmpty>
                   <CommandGroup>
-                    {unitLogins.map((login) => (
+                    {unitLogins.map((ul) => (
                       <CommandItem
-                        key={login}
-                        value={login}
+                        key={ul.login}
+                        value={ul.login}
                         onSelect={() => {
-                          setLoginFilter(login);
+                          setLoginFilter(ul.login);
                           setLoginPopoverOpen(false);
                         }}
                       >
-                        {login}
-                        {loginFilter === login && <Check className="ml-auto h-4 w-4" />}
+                        {ul.login}
+                        {loginFilter === ul.login && <Check className="ml-auto h-4 w-4" />}
                       </CommandItem>
                     ))}
                   </CommandGroup>
