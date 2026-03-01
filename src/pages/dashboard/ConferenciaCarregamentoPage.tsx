@@ -183,7 +183,7 @@ const ConferenciaCarregamentoPage = () => {
   const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
-  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false, dragFree: true });
+  const [emblaRef, emblaApi] = useEmblaCarousel({ align: "start", containScroll: false });
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
   const currentSnapRef = useRef<number>(0);
   const currentRideIdsRef = useRef<string[]>([]);
@@ -631,19 +631,12 @@ const ConferenciaCarregamentoPage = () => {
   // Robust carousel navigation handlers
   const handleCarouselPrev = useCallback(() => {
     if (!emblaApi) return;
-    emblaApi.reInit();
-    const current = emblaApi.selectedScrollSnap();
-    const target = Math.max(0, current - 1);
-    emblaApi.scrollTo(target);
+    emblaApi.scrollPrev();
   }, [emblaApi]);
 
   const handleCarouselNext = useCallback(() => {
     if (!emblaApi) return;
-    emblaApi.reInit();
-    const current = emblaApi.selectedScrollSnap();
-    const maxSnap = emblaApi.scrollSnapList().length - 1;
-    const target = Math.min(maxSnap, current + 1);
-    emblaApi.scrollTo(target);
+    emblaApi.scrollNext();
   }, [emblaApi]);
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
