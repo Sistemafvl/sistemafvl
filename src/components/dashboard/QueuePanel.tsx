@@ -178,12 +178,14 @@ const QueuePanel = () => {
 
   const [usedLoginsToday, setUsedLoginsToday] = useState<Set<string>>(new Set());
   const [routeHistory, setRouteHistory] = useState<string[]>([]);
+  const [loginHistory, setLoginHistory] = useState<string[]>([]);
 
   const openProgramModal = async (entry: QueueEntry) => {
     setSelectedEntry(entry);
     setRoute("");
     setSelectedLoginId("");
     setRouteHistory([]);
+    setLoginHistory([]);
     setShowProgramModal(true);
     if (unitId) {
       const { data } = await supabase.from("unit_logins").select("id, login").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -200,15 +202,16 @@ const QueuePanel = () => {
       const used = new Set<string>((ridesData ?? []).map((r: any) => r.login).filter(Boolean));
       setUsedLoginsToday(used);
 
-      // Fetch route history for this driver at this unit
-      const { data: routesData } = await supabase
+      // Fetch route and login history for this driver at this unit
+      const { data: historyData } = await supabase
         .from("driver_rides")
-        .select("route")
+        .select("route, login")
         .eq("driver_id", entry.driver_id)
-        .eq("unit_id", unitId)
-        .not("route", "is", null);
-      const uniqueRoutes = [...new Set((routesData ?? []).map((r: any) => r.route).filter(Boolean))].sort();
+        .eq("unit_id", unitId);
+      const uniqueRoutes = [...new Set((historyData ?? []).map((r: any) => r.route).filter(Boolean))].sort();
       setRouteHistory(uniqueRoutes as string[]);
+      const uniqueLogins = [...new Set((historyData ?? []).map((r: any) => r.login).filter(Boolean))].sort();
+      setLoginHistory(uniqueLogins as string[]);
     }
   };
 
@@ -485,6 +488,23 @@ const QueuePanel = () => {
               <Label htmlFor="route" className="font-semibold">Rota</Label>
               <Input id="route" placeholder="Informe a rota..." value={route} onChange={(e) => setRoute(e.target.value)} />
             </div>
+            {loginHistory.length > 0 && (
+              <div className="space-y-2">
+                <Label className="font-semibold">Logins anteriores</Label>
+                <div className="max-h-24 overflow-y-auto flex flex-wrap gap-1 p-2 border rounded-md bg-muted/30">
+                  {loginHistory.map(l => {
+                    const matchingLogin = unitLogins.find(ul => ul.login === l);
+                    return (
+                      <Button key={l} type="button" variant="outline" size="sm" className="h-7 text-xs gap-1"
+                        onClick={() => { if (matchingLogin) setSelectedLoginId(matchingLogin.id); }}>
+                        {l}
+                        {usedLoginsToday.has(l) && <Check className="h-3 w-3 text-emerald-500" />}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="login" className="font-semibold">Login</Label>
               {unitLogins.length > 0 ? (
