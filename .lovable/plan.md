@@ -1,21 +1,39 @@
 
 
-## Problem
-When a TBR code is scanned in Retorno Piso, the system does not check if that TBR already exists as an open entry. This allows duplicate registrations of the same TBR code.
+## Problema
 
-## Solution
-Add a duplicate check in `handleTbrKeyDown` (around line 167) in `RetornoPisoPage.tsx`. Before opening the modal, query `piso_entries` for an existing open entry with the same `tbr_code` (case-insensitive) and same `unit_id`. If found, show a toast error and abort.
+Existem TBRs duplicados na tabela `ride_tbrs` (mesmo `code`, mesmo `ride_id`, mesmo `trip_number`). A consulta no banco confirmou dezenas de duplicatas — alguns TBRs aparecem 3 ou 4 vezes no mesmo carregamento. A causa raiz é que o `processedCodesRef` (guarda em memória) é resetado ao navegar/recarregar a página, e não há verificação no banco antes do `insert`.
 
-### Implementation Steps
+## Solução — 3 camadas de proteção
 
-1. **Add duplicate check in `handleTbrKeyDown`** (`src/pages/dashboard/RetornoPisoPage.tsx`)
-   - After TBR validation passes (line 176), before the ride_tbrs lookup, query:
-     ```sql
-     piso_entries WHERE tbr_code ilike code AND unit_id = unitSession.id AND status = 'open'
-     ```
-   - If a matching entry exists, show a destructive toast: "TBR já registrado no Retorno Piso" and return early without opening the modal.
+### 1. Verificação no banco antes do insert (código)
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-2. **Also check other occurrence tables** (ps_entries, rto_entries, dnr_entries) for open entries with the same TBR code, showing the appropriate message for each (e.g., "TBR já registrado no PS").
+Na função `saveTbr`, logo antes da linha `await supabase.from("ride_tbrs").insert(...)` (linha ~817), adicionar uma consulta:
+```typescript
+const { data: existing } = await supabase
+  .from("ride_tbrs")
+  .select("id")
+  .eq("ride_id", rideId)
+  .ilike("code", code)
+  .eq("trip_number", tripNumber)
+  .limit(1);
 
-This ensures the TBR uniqueness constraint is respected across the system -- a TBR can only exist in one active location at a time.
+if (existing && existing.length > 0) return; // já existe, pula
+```
+
+### 2. Inicializar `processedCodesRef` ao carregar dados
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+Na função `fetchRides`, após carregar os TBRs do banco para cada ride, popular o `processedCodesRef` com os códigos existentes. Isso garante que mesmo após navegar para outra página e voltar, a guarda em memória esteja sincronizada.
+
+### 3. Índice único no banco de dados (migração SQL)
+Criar uma migração que:
+1. Remove duplicatas existentes (mantendo a entrada mais antiga por `scanned_at`)
+2. Cria um índice único: `CREATE UNIQUE INDEX ride_tbrs_unique_code_per_ride ON ride_tbrs (ride_id, trip_number, UPPER(code))`
+
+Isso torna impossível inserir duplicatas no nível do banco, mesmo se o código da aplicação falhar.
+
+### 4. Limpeza dos duplicados existentes
+A migração SQL vai deletar as linhas duplicadas antes de criar o índice, mantendo apenas o registro mais antigo de cada combinação `(ride_id, trip_number, code)`.
 
