@@ -70,7 +70,7 @@ interface PisoEntry {
 }
 
 const RetornoPisoPage = () => {
-  const { unitSession, managerSession } = useAuthStore();
+  const { unitSession, managerSession, conferenteSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -318,6 +318,7 @@ const RetornoPisoPage = () => {
       driver_name: trackInfo?.driver_name ?? null,
       route: trackInfo?.route ?? null,
       reason: selectedReason,
+      conferente_id: conferenteSession?.id ?? null,
     } as any);
     setSaving(false);
     if (error) {
