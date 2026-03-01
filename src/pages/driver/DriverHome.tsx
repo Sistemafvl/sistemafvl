@@ -320,6 +320,17 @@ const DriverHome = () => {
         </div>
       </div>
 
+      {/* System test notice */}
+      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex gap-3 items-start">
+        <Lightbulb className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+        <div className="text-sm space-y-1">
+          <p className="font-semibold text-blue-700 dark:text-blue-400">Sistema em fase de testes desde 28/02</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            As informações estão sendo ajustadas. Fiquem tranquilos — como o sistema começou a operar com dados reais a partir dessa data, alguns valores podem aparecer diferentes do esperado. Tudo será corrigido em breve!
+          </p>
+        </div>
+      </div>
+
       {loading ? (
         <p className="text-center text-muted-foreground italic py-8">Carregando...</p>
       ) : (
