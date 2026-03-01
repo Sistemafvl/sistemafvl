@@ -787,10 +787,10 @@ const ConferenciaCarregamentoPage = () => {
           playReincidenceBeep();
         }
 
-        // Close piso and rto entries in parallel for speed
-        // Close piso and rto entries using case-insensitive match (fix case mismatch bug)
+        // Close piso and rto entries in background (don't block optimistic UI)
+        // Case-insensitive match prevents mismatch by code casing
         const closedAt = new Date().toISOString();
-        await Promise.all([
+        void Promise.all([
           supabase
             .from("piso_entries")
             .update({ status: "closed", closed_at: closedAt } as any)
@@ -813,7 +813,7 @@ const ConferenciaCarregamentoPage = () => {
 
         setTbrs((prev) => ({
           ...prev,
-          [rideId]: [...(prev[rideId] ?? []), newTbr],
+          [rideId]: [newTbr, ...(prev[rideId] ?? [])],
         }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
@@ -844,7 +844,7 @@ const ConferenciaCarregamentoPage = () => {
           const updated = (prev[rideId] ?? []).map(t =>
             t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
           );
-          return { ...prev, [rideId]: [...updated, newTbr] };
+          return { ...prev, [rideId]: [newTbr, ...updated] };
         });
         playErrorBeep();
 
@@ -865,7 +865,7 @@ const ConferenciaCarregamentoPage = () => {
           const updated = (prev[rideId] ?? []).map(t =>
             t.code.toUpperCase() === code.toUpperCase() ? { ...t, _triplicate: true, _duplicate: false } : t
           );
-          return { ...prev, [rideId]: [...updated, newTbr] };
+          return { ...prev, [rideId]: [newTbr, ...updated] };
         });
         playErrorBeep();
 
