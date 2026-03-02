@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2 } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -222,6 +222,22 @@ const ConferenciaCarregamentoPage = () => {
 
   // Call driver
   const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
+
+  // Finalizar confirmation modal
+  const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
+
+  // Delete TBR with manager password
+  const [showDeleteTbrPasswordModal, setShowDeleteTbrPasswordModal] = useState(false);
+  const [deleteTbrPassword, setDeleteTbrPassword] = useState("");
+  const [deleteTbrPending, setDeleteTbrPending] = useState<{ tbrId: string; rideId: string } | null>(null);
+  const [deleteTbrLoading, setDeleteTbrLoading] = useState(false);
+
+  // Batch delete TBRs
+  const [selectedTbrsForDelete, setSelectedTbrsForDelete] = useState<Record<string, Set<string>>>({});
+  const [showBatchDeleteModal, setShowBatchDeleteModal] = useState(false);
+  const [batchDeletePassword, setBatchDeletePassword] = useState("");
+  const [batchDeleteRideId, setBatchDeleteRideId] = useState<string | null>(null);
+  const [batchDeleteLoading, setBatchDeleteLoading] = useState(false);
 
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
@@ -727,6 +743,69 @@ const ConferenciaCarregamentoPage = () => {
     }
     deletingRef.current.delete(tbrId);
     // Lock expires automatically after 5s - no need to reset
+  };
+
+  // Open password modal for individual TBR delete
+  const handleDeleteTbrWithPassword = (tbrId: string, rideId: string) => {
+    setDeleteTbrPending({ tbrId, rideId });
+    setDeleteTbrPassword("");
+    setShowDeleteTbrPasswordModal(true);
+  };
+
+  const confirmDeleteTbrWithPassword = async () => {
+    if (!deleteTbrPending || !unitId) return;
+    setDeleteTbrLoading(true);
+    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
+    const valid = (managers ?? []).some(m => m.manager_password === deleteTbrPassword);
+    if (!valid) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Senha incorreta", variant: "destructive" });
+      setDeleteTbrLoading(false);
+      return;
+    }
+    setShowDeleteTbrPasswordModal(false);
+    await handleDeleteTbr(deleteTbrPending.tbrId, deleteTbrPending.rideId);
+    setDeleteTbrPending(null);
+    setDeleteTbrLoading(false);
+  };
+
+  // Batch delete helpers
+  const toggleTbrSelection = (rideId: string, tbrId: string) => {
+    setSelectedTbrsForDelete(prev => {
+      const current = new Set(prev[rideId] ?? []);
+      if (current.has(tbrId)) current.delete(tbrId); else current.add(tbrId);
+      return { ...prev, [rideId]: current };
+    });
+  };
+
+  const getSelectedCount = (rideId: string) => selectedTbrsForDelete[rideId]?.size ?? 0;
+
+  const openBatchDeleteModal = (rideId: string) => {
+    setBatchDeleteRideId(rideId);
+    setBatchDeletePassword("");
+    setShowBatchDeleteModal(true);
+  };
+
+  const confirmBatchDelete = async () => {
+    if (!batchDeleteRideId || !unitId) return;
+    setBatchDeleteLoading(true);
+    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
+    const valid = (managers ?? []).some(m => m.manager_password === batchDeletePassword);
+    if (!valid) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Senha incorreta", variant: "destructive" });
+      setBatchDeleteLoading(false);
+      return;
+    }
+    setShowBatchDeleteModal(false);
+    const ids = [...(selectedTbrsForDelete[batchDeleteRideId] ?? [])];
+    for (const tbrId of ids) {
+      await handleDeleteTbr(tbrId, batchDeleteRideId);
+    }
+    setSelectedTbrsForDelete(prev => ({ ...prev, [batchDeleteRideId!]: new Set() }));
+    setBatchDeleteLoading(false);
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: `${ids.length} TBR(s) excluído(s) com sucesso` });
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -1740,7 +1819,7 @@ const ConferenciaCarregamentoPage = () => {
                             )}
                             {isLoadingStatus && isMyRide && (
                               <>
-                                <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => handleFinalizar(ride.id)}>
+                                <Button size="sm" variant="destructive" className="flex-1 gap-1" onClick={() => setFinalizarConfirmRideId(ride.id)}>
                                   <CheckCircle className="h-3.5 w-3.5" /> Finalizar
                                 </Button>
                                 <Button size="sm" variant="outline" className="gap-1" onClick={() => setFocusedRideId(ride.id)} title="Modo foco">
@@ -1846,19 +1925,32 @@ const ConferenciaCarregamentoPage = () => {
                                     )}
                                     <span className="flex-1" />
                                     {isMyRide && (
-                                      <button
-                                        onClick={() => handleDeleteTbr(t.id, ride.id)}
-                                        className="text-destructive hover:text-destructive/80 shrink-0"
-                                        title="Excluir TBR"
-                                      >
-                                        <X className="h-3.5 w-3.5" />
-                                      </button>
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <input
+                                          type="checkbox"
+                                          className="h-3 w-3 accent-destructive cursor-pointer"
+                                          checked={selectedTbrsForDelete[ride.id]?.has(t.id) ?? false}
+                                          onChange={() => toggleTbrSelection(ride.id, t.id)}
+                                        />
+                                        <button
+                                          onClick={() => handleDeleteTbrWithPassword(t.id, ride.id)}
+                                          className="text-destructive hover:text-destructive/80 shrink-0"
+                                          title="Excluir TBR"
+                                        >
+                                          <X className="h-3.5 w-3.5" />
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                 ))}
                               </div>
                               );
                             })()}
+                            {isMyRide && getSelectedCount(ride.id) > 0 && (
+                              <Button size="sm" variant="destructive" className="w-full gap-1 text-xs" onClick={() => openBatchDeleteModal(ride.id)}>
+                                <Trash2 className="h-3 w-3" /> Excluir selecionados ({getSelectedCount(ride.id)})
+                              </Button>
+                            )}
                             {isLoadingStatus && isMyRide && (
                               <div className="flex gap-1 items-center">
                                 <div className="relative flex-1 max-w-[45%] sm:max-w-none">
@@ -2001,12 +2093,25 @@ const ConferenciaCarregamentoPage = () => {
                               </span>
                             )}
                             <span className="flex-1" />
-                            <button onClick={() => handleDeleteTbr(t.id, ride.id)} className="text-destructive hover:text-destructive/80 shrink-0" title="Excluir TBR">
-                              <X className="h-3.5 w-3.5" />
-                            </button>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <input
+                                type="checkbox"
+                                className="h-3 w-3 accent-destructive cursor-pointer"
+                                checked={selectedTbrsForDelete[ride.id]?.has(t.id) ?? false}
+                                onChange={() => toggleTbrSelection(ride.id, t.id)}
+                              />
+                              <button onClick={() => handleDeleteTbrWithPassword(t.id, ride.id)} className="text-destructive hover:text-destructive/80 shrink-0" title="Excluir TBR">
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
+                    )}
+                    {getSelectedCount(ride.id) > 0 && (
+                      <Button size="sm" variant="destructive" className="w-full gap-1 text-xs" onClick={() => openBatchDeleteModal(ride.id)}>
+                        <Trash2 className="h-3 w-3" /> Excluir selecionados ({getSelectedCount(ride.id)})
+                      </Button>
                     )}
 
                     {/* TBR Input */}
@@ -2036,7 +2141,7 @@ const ConferenciaCarregamentoPage = () => {
 
                   {/* Actions */}
                   <div className="w-full flex gap-2 pt-2">
-                    <Button size="sm" variant="destructive" className="flex-1 gap-1 font-bold" onClick={() => handleFinalizar(ride.id)}>
+                    <Button size="sm" variant="destructive" className="flex-1 gap-1 font-bold" onClick={() => setFinalizarConfirmRideId(ride.id)}>
                       <CheckCircle className="h-3.5 w-3.5" /> Finalizar
                     </Button>
                     <Button size="sm" variant="outline" className="flex-1 gap-1" onClick={() => setFocusedRideId(null)}>
@@ -2329,6 +2434,126 @@ const ConferenciaCarregamentoPage = () => {
             >
               {deleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirmar Exclusão
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Finalizar Confirmation Modal */}
+      <Dialog open={!!finalizarConfirmRideId} onOpenChange={(open) => { if (!open) setFinalizarConfirmRideId(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-yellow-600">
+              <AlertTriangle className="h-5 w-5" /> Confirmar Finalização
+            </DialogTitle>
+            <DialogDescription>
+              Confirme com o motorista antes de finalizar o carregamento.
+            </DialogDescription>
+          </DialogHeader>
+          {finalizarConfirmRideId && (() => {
+            const ride = rides.find(r => r.id === finalizarConfirmRideId);
+            const rideTbrs = tbrs[finalizarConfirmRideId] ?? [];
+            return (
+              <div className="space-y-3 pt-2">
+                <div className="rounded-md border p-3 space-y-2 bg-muted/30">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">TBRs bipados:</span>
+                    <span className="font-bold text-lg">{rideTbrs.length}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Login do coletor:</span>
+                    <span className="font-bold font-mono">{ride?.login ?? "—"}</span>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground italic">
+                  ⚠ Verifique se o login utilizado no coletor da Amazon é o mesmo que aparece no card de carregamento. Isso é importante pois define o valor de pagamento do motorista.
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="outline" className="flex-1" onClick={() => setFinalizarConfirmRideId(null)}>
+                    Cancelar
+                  </Button>
+                  <Button variant="destructive" className="flex-1 font-bold" onClick={() => {
+                    handleFinalizar(finalizarConfirmRideId);
+                    setFinalizarConfirmRideId(null);
+                  }}>
+                    <CheckCircle className="h-4 w-4 mr-1" /> Confirmar e Finalizar
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete TBR Password Modal */}
+      <Dialog open={showDeleteTbrPasswordModal} onOpenChange={setShowDeleteTbrPasswordModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Excluir TBR
+            </DialogTitle>
+            <DialogDescription>
+              Digite a senha do gerente para autorizar a exclusão.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="delete-tbr-pw" className="font-semibold">Senha do Gerente</Label>
+              <Input
+                id="delete-tbr-pw"
+                type="password"
+                value={deleteTbrPassword}
+                onChange={(e) => setDeleteTbrPassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmDeleteTbrWithPassword(); }}
+                placeholder="Digite a senha..."
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={confirmDeleteTbrWithPassword}
+              variant="destructive"
+              className="w-full font-bold italic"
+              disabled={deleteTbrLoading || !deleteTbrPassword}
+            >
+              {deleteTbrLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Exclusão
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Delete TBR Password Modal */}
+      <Dialog open={showBatchDeleteModal} onOpenChange={setShowBatchDeleteModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
+              <Trash2 className="h-5 w-5" /> Excluir TBRs em Lote
+            </DialogTitle>
+            <DialogDescription>
+              {batchDeleteRideId && `${getSelectedCount(batchDeleteRideId)} TBR(s) selecionado(s). Digite a senha do gerente para autorizar.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label htmlFor="batch-delete-pw" className="font-semibold">Senha do Gerente</Label>
+              <Input
+                id="batch-delete-pw"
+                type="password"
+                value={batchDeletePassword}
+                onChange={(e) => setBatchDeletePassword(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") confirmBatchDelete(); }}
+                placeholder="Digite a senha..."
+                autoFocus
+              />
+            </div>
+            <Button
+              onClick={confirmBatchDelete}
+              variant="destructive"
+              className="w-full font-bold italic"
+              disabled={batchDeleteLoading || !batchDeletePassword}
+            >
+              {batchDeleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Confirmar Exclusão em Lote
             </Button>
           </div>
         </DialogContent>
