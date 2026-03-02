@@ -174,6 +174,32 @@ const RetornoPisoPage = () => {
       }
     }
 
+    // Auto-close piso_entries that already have a PS registered
+    const remainingEntries = allEntries.filter(e => !operationalEntries.some(op => op.id === e.id) || true);
+    const openCodes = remainingEntries.map(e => e.tbr_code.toLowerCase());
+    if (openCodes.length > 0) {
+      const { data: psMatches } = await supabase
+        .from("ps_entries")
+        .select("tbr_code")
+        .eq("unit_id", unitSession.id)
+        .in("tbr_code", openCodes);
+      if (psMatches && psMatches.length > 0) {
+        const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
+        const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
+        if (toClosePs.length > 0) {
+          const closePsIds = toClosePs.map(e => e.id);
+          await supabase
+            .from("piso_entries")
+            .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+            .in("id", closePsIds);
+          const closePsIdSet = new Set(closePsIds);
+          setEntries(remainingEntries.filter(e => !closePsIdSet.has(e.id)));
+          setLoading(false);
+          return;
+        }
+      }
+    }
+
     setEntries(allEntries);
     setLoading(false);
   };
