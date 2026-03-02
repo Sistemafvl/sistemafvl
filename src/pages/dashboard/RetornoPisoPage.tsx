@@ -557,7 +557,7 @@ const RetornoPisoPage = () => {
           <CardContent className="p-4 text-center space-y-1">
             <TrendingUp className="h-4 w-4 mx-auto text-destructive" />
             <p className="text-sm font-bold truncate">{topDriver ? topDriver[0] : "—"}</p>
-            <p className="text-[10px] text-muted-foreground">Top Motorista ({topDriver?.[1] ?? 0})</p>
+            <p className="text-[10px] text-muted-foreground">Motorista Ofensor ({topDriver?.[1] ?? 0})</p>
           </CardContent>
         </Card>
         <Card>
