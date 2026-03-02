@@ -28,6 +28,7 @@ import html2canvas from "html2canvas";
 // Types
 interface CycleRecord {
   qtd_pacotes: number;
+  qtd_pacotes_informado: number;
   abertura_galpao: string | null;
   hora_inicio_descarregamento: string | null;
   hora_termino_descarregamento: string | null;
@@ -50,6 +51,7 @@ interface DayMetrics {
 
 const EMPTY_RECORD: CycleRecord = {
   qtd_pacotes: 0,
+  qtd_pacotes_informado: 0,
   abertura_galpao: null,
   hora_inicio_descarregamento: null,
   hora_termino_descarregamento: null,
@@ -186,6 +188,7 @@ const CiclosPage = () => {
     if (cycleData) {
       setRecord({
         qtd_pacotes: (cycleData as any).qtd_pacotes ?? 0,
+        qtd_pacotes_informado: (cycleData as any).qtd_pacotes_informado ?? 0,
         abertura_galpao: (cycleData as any).abertura_galpao ?? null,
         hora_inicio_descarregamento: (cycleData as any).hora_inicio_descarregamento ?? null,
         hora_termino_descarregamento: (cycleData as any).hora_termino_descarregamento ?? null,
@@ -218,6 +221,7 @@ const CiclosPage = () => {
       unit_id: unitSession.id,
       record_date: dateStr,
       qtd_pacotes: record.qtd_pacotes,
+      qtd_pacotes_informado: record.qtd_pacotes_informado,
       abertura_galpao: record.abertura_galpao || null,
       hora_inicio_descarregamento: record.hora_inicio_descarregamento || null,
       hora_termino_descarregamento: record.hora_termino_descarregamento || null,
@@ -351,6 +355,15 @@ const CiclosPage = () => {
                       type="number"
                       value={record.qtd_pacotes || ""}
                       onChange={(e) => setRecord({ ...record, qtd_pacotes: parseInt(e.target.value) || 0 })}
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Qtd Pacotes Informado</Label>
+                    <Input
+                      type="number"
+                      value={record.qtd_pacotes_informado || ""}
+                      onChange={(e) => setRecord({ ...record, qtd_pacotes_informado: parseInt(e.target.value) || 0 })}
                       placeholder="0"
                     />
                   </div>
@@ -513,10 +526,25 @@ const CiclosPage = () => {
                 {/* Manual data */}
                 <div className="rounded-lg border p-2 space-y-1">
                   <h4 className="font-bold italic text-xs">Informações Complementares</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes</p>
                       <p className="font-bold">{record.qtd_pacotes || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Qtd Informado</p>
+                      <p className="font-bold">{record.qtd_pacotes_informado || "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Diferença</p>
+                      {(() => {
+                        const diff = (record.qtd_pacotes_informado || 0) - (record.qtd_pacotes || 0);
+                        return (
+                          <p className={cn("font-bold", diff > 0 ? "text-green-600" : diff < 0 ? "text-destructive" : "")}>
+                            {diff > 0 ? `+${diff}` : diff === 0 ? "0" : String(diff)}
+                          </p>
+                        );
+                      })()}
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">Abertura Galpão</p>

@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil } from "lucide-react";
+import { Calendar } from "@/components/ui/calendar";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil, CalendarIcon, Users, TrendingUp } from "lucide-react";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -22,6 +24,7 @@ import {
   Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList,
 } from "@/components/ui/command";
 import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import { translateStatus, OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
@@ -69,12 +72,24 @@ interface PisoEntry {
   conferente_id?: string | null;
 }
 
+interface ConferenteOption {
+  id: string;
+  name: string;
+}
+
 const RetornoPisoPage = () => {
   const { unitSession, managerSession, conferenteSession } = useAuthStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Filter state
+  const [filterStartDate, setFilterStartDate] = useState<Date | undefined>(undefined);
+  const [filterEndDate, setFilterEndDate] = useState<Date | undefined>(undefined);
+  const [filterConferente, setFilterConferente] = useState("");
+  const [filterMotorista, setFilterMotorista] = useState("");
+  const [conferenteOptions, setConferenteOptions] = useState<ConferenteOption[]>([]);
 
   const [tbrInput, setTbrInput] = useState("");
   const [searching, setSearching] = useState(false);
@@ -110,8 +125,15 @@ const RetornoPisoPage = () => {
       loadEntries();
       loadCustomReasons();
       loadPsCustomReasons();
+      loadConferenteOptions();
     }
   }, [unitSession]);
+
+  const loadConferenteOptions = async () => {
+    if (!unitSession) return;
+    const { data } = await supabase.from("user_profiles").select("id, name").eq("unit_id", unitSession.id).eq("active", true).order("name");
+    if (data) setConferenteOptions(data);
+  };
 
   const loadCustomReasons = async () => {
     if (!unitSession) return;
@@ -474,8 +496,79 @@ const RetornoPisoPage = () => {
   const allReasons = [...DEFAULT_REASONS, ...customReasons.map((r) => r.label)];
   const allPsReasons = [...DEFAULT_PS_REASONS, ...psCustomReasons.map(r => r.label)];
 
+  // Filtered entries
+  const filteredEntries = useMemo(() => {
+    let result = entries;
+    if (filterStartDate) {
+      result = result.filter(e => new Date(e.created_at) >= filterStartDate);
+    }
+    if (filterEndDate) {
+      const end = new Date(filterEndDate);
+      end.setHours(23, 59, 59, 999);
+      result = result.filter(e => new Date(e.created_at) <= end);
+    }
+    if (filterConferente) {
+      result = result.filter(e => e.conferente_id === filterConferente);
+    }
+    if (filterMotorista) {
+      result = result.filter(e => e.driver_name === filterMotorista);
+    }
+    return result;
+  }, [entries, filterStartDate, filterEndDate, filterConferente, filterMotorista]);
+
+  // Card metrics from filtered
+  const totalOpen = filteredEntries.length;
+  const reasonCounts: Record<string, number> = {};
+  const driverCounts: Record<string, number> = {};
+  const confCounts: Record<string, number> = {};
+  filteredEntries.forEach(e => {
+    reasonCounts[e.reason] = (reasonCounts[e.reason] || 0) + 1;
+    if (e.driver_name) driverCounts[e.driver_name] = (driverCounts[e.driver_name] || 0) + 1;
+    if (e.conferente_id) {
+      const name = conferenteNames[e.conferente_id] ?? e.conferente_id;
+      confCounts[name] = (confCounts[name] || 0) + 1;
+    }
+  });
+  const topReason = Object.entries(reasonCounts).sort((a, b) => b[1] - a[1])[0];
+  const topDriver = Object.entries(driverCounts).sort((a, b) => b[1] - a[1])[0];
+  const topConferente = Object.entries(confCounts).sort((a, b) => b[1] - a[1])[0];
+
+  const uniqueDriverNames = [...new Set(entries.map(e => e.driver_name).filter(Boolean) as string[])].sort();
+
   return (
     <div className="space-y-4">
+      {/* Indicator Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <PackageX className="h-4 w-4 mx-auto text-destructive" />
+            <p className="text-2xl font-bold">{totalOpen}</p>
+            <p className="text-[10px] text-muted-foreground">Total Abertos</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <AlertTriangle className="h-4 w-4 mx-auto text-amber-500" />
+            <p className="text-sm font-bold truncate">{topReason ? topReason[0] : "—"}</p>
+            <p className="text-[10px] text-muted-foreground">Top Motivo ({topReason?.[1] ?? 0})</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <TrendingUp className="h-4 w-4 mx-auto text-destructive" />
+            <p className="text-sm font-bold truncate">{topDriver ? topDriver[0] : "—"}</p>
+            <p className="text-[10px] text-muted-foreground">Top Motorista ({topDriver?.[1] ?? 0})</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Users className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-sm font-bold truncate">{topConferente ? topConferente[0] : "—"}</p>
+            <p className="text-[10px] text-muted-foreground">Top Conferente ({topConferente?.[1] ?? 0})</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">
@@ -484,6 +577,46 @@ const RetornoPisoPage = () => {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Filters */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("justify-start text-left font-normal text-xs h-9", !filterStartDate && "text-muted-foreground")}>
+                  <CalendarIcon className="mr-1 h-3 w-3" />
+                  {filterStartDate ? format(filterStartDate, "dd/MM/yy", { locale: ptBR }) : "Data início"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={filterStartDate} onSelect={setFilterStartDate} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+              </PopoverContent>
+            </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className={cn("justify-start text-left font-normal text-xs h-9", !filterEndDate && "text-muted-foreground")}>
+                  <CalendarIcon className="mr-1 h-3 w-3" />
+                  {filterEndDate ? format(filterEndDate, "dd/MM/yy", { locale: ptBR }) : "Data fim"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar mode="single" selected={filterEndDate} onSelect={setFilterEndDate} className={cn("p-3 pointer-events-auto")} locale={ptBR} />
+              </PopoverContent>
+            </Popover>
+            <Select value={filterConferente} onValueChange={(v) => setFilterConferente(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Conferente" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {conferenteOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterMotorista} onValueChange={(v) => setFilterMotorista(v === "all" ? "" : v)}>
+              <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Motorista" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {uniqueDriverNames.map(d => <SelectItem key={d} value={d}>{d}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -502,7 +635,7 @@ const RetornoPisoPage = () => {
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
-          ) : entries.length === 0 ? (
+          ) : filteredEntries.length === 0 ? (
             <p className="text-center text-muted-foreground italic py-8">Nenhum TBR no piso</p>
           ) : (
             <div className="rounded-md border overflow-x-auto">
@@ -519,7 +652,7 @@ const RetornoPisoPage = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {entries.map((e) => (
+                  {filteredEntries.map((e) => (
                     <TableRow key={e.id}>
                       <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                       <TableCell>{e.driver_name ?? "-"}</TableCell>

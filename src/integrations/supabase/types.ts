@@ -22,6 +22,7 @@ export type Database = {
           hora_termino_descarregamento: string | null
           id: string
           qtd_pacotes: number | null
+          qtd_pacotes_informado: number | null
           record_date: string
           unit_id: string
           updated_at: string
@@ -33,6 +34,7 @@ export type Database = {
           hora_termino_descarregamento?: string | null
           id?: string
           qtd_pacotes?: number | null
+          qtd_pacotes_informado?: number | null
           record_date?: string
           unit_id: string
           updated_at?: string
@@ -44,6 +46,7 @@ export type Database = {
           hora_termino_descarregamento?: string | null
           id?: string
           qtd_pacotes?: number | null
+          qtd_pacotes_informado?: number | null
           record_date?: string
           unit_id?: string
           updated_at?: string

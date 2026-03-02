@@ -209,8 +209,48 @@ const MotoristasParceirosPage = () => {
 
   const hasBankData = bankData && (bankData.bank_name || bankData.pix_key);
 
+  // Card metrics
+  const totalDrivers = allDrivers.length;
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  const activeDrivers = allDrivers.filter(d => d.lastOperation && new Date(d.lastOperation) >= thirtyDaysAgo).length;
+  const inactiveDrivers = totalDrivers - activeDrivers;
+  const uniqueStates = states.length;
+
   return (
     <div className="space-y-4">
+      {/* Indicator Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Truck className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">{totalDrivers}</p>
+            <p className="text-[10px] text-muted-foreground">Total Cadastrados</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Eye className="h-4 w-4 mx-auto text-green-600" />
+            <p className="text-2xl font-bold text-green-600">{activeDrivers}</p>
+            <p className="text-[10px] text-muted-foreground">Ativos (30d)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Truck className="h-4 w-4 mx-auto text-muted-foreground" />
+            <p className="text-2xl font-bold text-muted-foreground">{inactiveDrivers}</p>
+            <p className="text-[10px] text-muted-foreground">Inativos (30d)</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Search className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">{uniqueStates}</p>
+            <p className="text-[10px] text-muted-foreground">Estados</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">
