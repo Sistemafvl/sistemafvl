@@ -796,8 +796,55 @@ const PSPage = () => {
   const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
   const paginatedEntries = entries.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
+  // Card metrics
+  const totalPs = entries.length;
+  const openPs = entries.filter(e => e.status === "open").length;
+  const closedPs = entries.filter(e => e.status === "closed").length;
+  const psReasonCounts: Record<string, number> = {};
+  entries.forEach(e => {
+    const r = e.reason ?? e.description;
+    if (r) psReasonCounts[r] = (psReasonCounts[r] || 0) + 1;
+  });
+  const topPsReason = Object.entries(psReasonCounts).sort((a, b) => b[1] - a[1])[0];
+  const sellerCount = entries.filter(e => e.is_seller).length;
+  const sellerPct = totalPs > 0 ? ((sellerCount / totalPs) * 100).toFixed(1) : "0";
+
   return (
     <div className="space-y-4">
+      {/* Indicator Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <AlertTriangle className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">{totalPs}</p>
+            <p className="text-[10px] text-muted-foreground">Total PS</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <CheckCircle className="h-4 w-4 mx-auto text-green-600" />
+            <p className="text-lg font-bold">
+              <span className="text-amber-500">{openPs}</span> / <span className="text-green-600">{closedPs}</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">Abertos / Finalizados</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <FileText className="h-4 w-4 mx-auto text-amber-500" />
+            <p className="text-sm font-bold truncate">{topPsReason ? topPsReason[0] : "—"}</p>
+            <p className="text-[10px] text-muted-foreground">Top Motivo ({topPsReason?.[1] ?? 0})</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <Search className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">{sellerPct}%</p>
+            <p className="text-[10px] text-muted-foreground">% Seller</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 font-bold italic">

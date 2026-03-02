@@ -193,11 +193,57 @@ const DNRPage = () => {
     return <Badge className="bg-green-600 text-white text-xs">Finalizado s/ Desconto</Badge>;
   };
 
+  // Compute card metrics
+  const totalDnrs = entries.length;
+  const totalValue = entries.reduce((sum, e) => sum + Number(e.dnr_value), 0);
+  const openCount = entries.filter(e => e.status === "open").length;
+  const analyzingCount = entries.filter(e => e.status === "analyzing").length;
+  const closedCount = entries.filter(e => e.status === "closed").length;
+  const discountedValue = entries.filter(e => e.discounted).reduce((sum, e) => sum + Number(e.dnr_value), 0);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <FileWarning className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold italic">DNR</h1>
+      </div>
+
+      {/* Indicator Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <FileWarning className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">{totalDnrs}</p>
+            <p className="text-[10px] text-muted-foreground">Total DNRs</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <DollarSign className="h-4 w-4 mx-auto text-primary" />
+            <p className="text-2xl font-bold">R${totalValue.toFixed(2)}</p>
+            <p className="text-[10px] text-muted-foreground">Valor Total</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <AlertTriangle className="h-4 w-4 mx-auto text-amber-500" />
+            <p className="text-lg font-bold">
+              <span className="text-destructive">{openCount}</span>
+              {" / "}
+              <span className="text-amber-500">{analyzingCount}</span>
+              {" / "}
+              <span className="text-green-600">{closedCount}</span>
+            </p>
+            <p className="text-[10px] text-muted-foreground">Abertos / Analisando / Fechados</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 text-center space-y-1">
+            <DollarSign className="h-4 w-4 mx-auto text-destructive" />
+            <p className="text-2xl font-bold text-destructive">R${discountedValue.toFixed(2)}</p>
+            <p className="text-[10px] text-muted-foreground">Valor c/ Desconto</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Registration Form */}

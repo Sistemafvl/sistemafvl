@@ -1,0 +1,1 @@
+ALTER TABLE cycle_records ADD COLUMN qtd_pacotes_informado integer DEFAULT 0;
