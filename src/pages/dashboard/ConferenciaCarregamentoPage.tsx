@@ -1743,19 +1743,11 @@ const ConferenciaCarregamentoPage = () => {
                     )}>
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge + Bell icon (top-left) */}
-                        <div className="absolute top-3 left-3 flex flex-col items-center gap-1">
-                          <div className="flex flex-col items-center gap-0.5">
-                            <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1" title="TBRs Lidos (total escaneado)">
-                              <ScanBarcode className="h-3 w-3" />
-                              {rideTbrs.length + (removedTbrCounts[ride.id] || 0)}
-                            </Badge>
-                            {(removedTbrCounts[ride.id] || 0) > 0 && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold gap-0.5 border-green-400 text-green-700" title="TBRs Final (no carregamento)">
-                                <CheckCircle className="h-2.5 w-2.5" />
-                                {rideTbrs.length}
-                              </Badge>
-                            )}
-                          </div>
+                        <div className="absolute top-2 left-2 flex flex-col items-center gap-1">
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-bold gap-0.5" title="TBRs no carregamento">
+                            <ScanBarcode className="h-2.5 w-2.5" />
+                            {rideTbrs.length}
+                          </Badge>
                           {ride.queue_entry_id && !isCancelled && !isFinished && (
                             <button
                               onClick={async () => {
@@ -2102,16 +2094,10 @@ const ConferenciaCarregamentoPage = () => {
                   {/* Header */}
                   <div className="w-full flex items-center justify-between">
                     <div className="flex items-center gap-1.5">
-                      <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1" title="TBRs Lidos">
-                        <ScanBarcode className="h-3 w-3" />
-                        {focusedTbrs.length + (removedTbrCounts[ride.id] || 0)}
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-bold gap-0.5" title="TBRs no carregamento">
+                        <ScanBarcode className="h-2.5 w-2.5" />
+                        {focusedTbrs.length}
                       </Badge>
-                      {(removedTbrCounts[ride.id] || 0) > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold gap-0.5 border-green-400 text-green-700" title="TBRs Final">
-                          <CheckCircle className="h-2.5 w-2.5" />
-                          {focusedTbrs.length}
-                        </Badge>
-                      )}
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
