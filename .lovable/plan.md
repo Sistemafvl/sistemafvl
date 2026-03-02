@@ -2,96 +2,80 @@
 
 ## Plano de Implementação (6 mudanças)
 
-### 1. Renomear "Retorno Piso" para "Insucessos" no menu
+### 1. TBRs removidos do carregamento nao devem contar como "lidos" (Anexo 1)
 
-**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx` (linha 51)
+**Problema**: Quando um TBR é excluído de um carregamento (vai para Insucessos) e carregado em outro motorista, ele continua contando no `rideTbrs.length` do carregamento original. O TBR deveria ser descontado de todos os contadores.
 
-Alterar `{ title: "Retorno Piso", ... }` para `{ title: "Insucessos", ... }`. Manter a URL e o ícone iguais.
+**Lógica**: O TBR já é removido da tabela `ride_tbrs` ao ser excluído (handleDeleteTbr faz `DELETE`), mas o código já trata isso corretamente pois `ride_tbrs` é a source of truth. O problema pode estar no fato de que o re-fetch demora ou o `piso_entries` com motivo "Removido do carregamento" referencia o `ride_id` original.
 
-Tambem atualizar quaisquer referências visuais ao nome "Retorno Piso" em labels de métricas no `DashboardMetrics.tsx` (linha 243, label "Retornos Piso abertos" -> "Insucessos abertos") e no `DashboardHome.tsx` (caso exista referência ao texto).
+**Verificação necessária**: Na verdade, ao excluir o TBR, `handleDeleteTbr` já remove de `ride_tbrs`. O `rideTbrs.length` deveria ser correto após re-fetch. O counter no badge (linha 1685) e "TBRs Lidos (N)" (linhas 1904, 2081) já refletem `ride_tbrs` que existe. Se o TBR foi deletado do ride_tbrs, não aparece mais.
 
----
+O problema real está nos **outros módulos** que contam TBRs por ride_id (Operação, Ciclos, DriverRides, Folha de Pagamento, Matriz). Nesses módulos, o `ride_tbrs` já é correto pois o TBR deletado sai da tabela. Nao deve haver inconsistencia.
 
-### 2. Spinner no botão PDF do PS
+**Verificação adicional**: Possivel que o `ride_tbrs` DELETE nao esteja funcionando ou o cache esteja stale. Precisarei verificar se o `DELETE` no `ride_tbrs` está de fato ocorrendo. Se o TBR aparece como "Removido do carregamento" no piso mas ainda está no `ride_tbrs`, isso é um bug.
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+**Correção real**: Garantir que em **todos os pontos** onde contamos TBRs (OperacaoPage, CiclosPage, DashboardMetrics, DriverRides, relatórios), excluímos TBRs que estão no `piso_entries` com motivo "Removido do carregamento" referenciando aquele `ride_id`. Nao basta contar `ride_tbrs.length` — precisa verificar se o TBR ainda está la. Mas o `handleDeleteTbr` JÁ faz `DELETE` do `ride_tbrs`. Então o TBR nao deveria estar mais na tabela.
 
-- Adicionar estado `generatingPdf` (boolean)
-- No `generatePDF`, setar `true` no início e `false` no final
-- No botão PDF (linha ~895), mostrar `Loader2 animate-spin` em vez de `FileText` enquanto `generatingPdf === true`, e desabilitar o botão
+**Vou verificar na DB** se há TBRs que ficam na ride_tbrs mesmo após exclusão, o que indicaria que a deleção falha silenciosamente. Se o DELETE funciona, o problema é que o UI não atualiza. Vou implementar:
 
----
+- Verificar que handleDeleteTbr realmente apaga do ride_tbrs
+- Em OperacaoPage, CiclosPage e demais, os contadores já usam ride_tbrs (correto)
+- No card da Conferência, o counter já reflete ride_tbrs atual
 
-### 3. Modal de confirmação ao Finalizar carregamento
+**Arquivos**: `ConferenciaCarregamentoPage.tsx`, `OperacaoPage.tsx`, `CiclosPage.tsx`, `DriverRides.tsx`
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+### 2. Filtro de Rota na Conferência Carregamento (Anexo 2)
 
-- Adicionar estado `finalizarConfirmRideId: string | null`
-- Ao clicar "Finalizar" (linhas 1743 e 2039), em vez de chamar `handleFinalizar` diretamente, setar `finalizarConfirmRideId = ride.id`
-- Criar um `Dialog` de confirmação com:
-  - Icone de alerta amarelo
-  - Texto: "Confirme com o motorista antes de finalizar:"
-  - Exibir: **Quantidade de TBRs bipados** e **Login utilizado no coletor**
-  - Botão "Confirmar e Finalizar" que chama `handleFinalizar(finalizarConfirmRideId)` e fecha o modal
-  - Botão "Cancelar" que fecha o modal
+**Arquivo**: `ConferenciaCarregamentoPage.tsx`
 
----
+- Alterar layout de 3 filtros (cada `sm:w-1/3`) para 4 filtros (cada `sm:w-1/4`)
+- Adicionar novo filtro de rota como Popover/Command (dropdown com buscador), similar ao filtro de login
+- Listar rotas extraídas dos `rides` carregados no dia (valores únicos do campo `route`)
+- Filtrar `displayRides` pelo campo `route` quando selecionado
 
-### 4. Remover filtros de calendário dos cards de gráficos na Visão Geral + Substituir "Status dos carregamentos" por "Média diária por motorista"
+### 3. Modal de confirmação ao Iniciar carregamento (Anexo 3)
 
-**Arquivo:** `src/components/dashboard/DashboardMetrics.tsx`
+**Arquivo**: `ConferenciaCarregamentoPage.tsx`
 
-- Remover o componente `DateRangeFilter` e os estados `barDates`, `lineDates`, `pieDates`
-- Os 3 cards de gráficos passam a usar apenas os filtros globais `startDate`/`endDate`
-- Substituir o card "Status dos carregamentos" (PieChart) por uma **lista de motoristas com média diária de TBRs finalizados**:
-  - Buscar `driver_rides` finalizados no período, com contagem de TBRs por motorista
-  - Calcular a média diária (total TBRs / dias no período)
-  - Exibir lista paginada (5 por página) com nome do motorista e média
+- Adicionar estado `iniciarConfirmRideId: string | null`
+- Ao clicar "Iniciar", setar `iniciarConfirmRideId` em vez de chamar `handleIniciar` diretamente
+- Dialog perguntando se o conferente ativo (nome exibido) vai realmente conferir o carregamento daquele motorista
+- Botão "Confirmar e Iniciar" que chama `handleIniciar(iniciarConfirmRideId)`
 
-**Arquivo:** `src/components/dashboard/DashboardInsights.tsx`
+### 4. Contagem de TBRs por ciclo (Anexo 4 e 5)
 
-- Remover os `DateRangeFilter` dos 3 `PaginatedRankingCard`
-- Remover os estados `driverDates`, `returnDates`, `confDates`
-- Os cards usam apenas os filtros globais `startDate`/`endDate` passados via props
+**Arquivo**: `CiclosPage.tsx`
 
----
+Na interface `DayMetrics`, adicionar:
+- `cycle1Tbrs`, `cycle2Tbrs`, `cycle3Tbrs`: contagem de TBRs lidos nos carregamentos de cada ciclo
+- Computar somando `ride_tbrs` dos rides que caem em cada corte temporal
+- Exibir abaixo do número de carregamentos em cada card de ciclo
+- No relatório (modal), exibir também abaixo da qtd de veículos
 
-### 5. Exclusão de TBR com senha do gerente + exclusão em lote
+### 5. Linha do tempo de rastreamento TBR (Anexo 6)
 
-**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+**Arquivo**: `DashboardHome.tsx`
 
-Mudanças no card inline (linhas ~1848-1856) e no Focus Mode (linhas ~2003-2006):
+Substituir os badges de status (PS/RTO/DNR/Piso) por uma **linha do tempo cronológica**:
 
-- **Exclusão individual**: Ao clicar no X, abrir um modal pedindo a senha do gerente (`manager_password`). Validar contra a tabela `managers`. Só excluir se a senha for correta.
+- Ao buscar um TBR, consultar **todas** as tabelas (ride_tbrs, piso_entries, ps_entries, rto_entries, dnr_entries) onde o código aparece
+- Para cada registro, criar um evento com: hora, conferente (buscar via conferente_id), ação/status, motivo/motorista
+- Ordenar cronologicamente e exibir como timeline vertical com linhas pontilhadas entre eventos
+- Formato: `[HH:mm] [Conferente] — Status: Descrição`
+- Exemplos de eventos:
+  - "Origem: Conferência Carregamento (Motorista X)"
+  - "Status: Insucesso — Removido do carregamento"
+  - "Status: Carregado (Motorista Y)"
+  - "Status: PS Aberto — Descrição"
+  - "Status: RTO — Descrição"
+  - "Status: DNR Aberto — R$50.00"
 
-- **Exclusão em lote**:
-  - Adicionar checkbox ao lado de cada TBR na lista (visível apenas para `isMyRide`)
-  - Adicionar estado `selectedTbrsForDelete: Record<string, Set<string>>` (por ride_id)
-  - Quando há TBRs selecionados, mostrar botão "Excluir selecionados (N)" que abre o mesmo modal de senha do gerente
-  - Após validar senha, chamar `handleDeleteTbr` para cada TBR selecionado (em sequência ou paralelo)
-  - Cada TBR excluído segue o fluxo existente: vai para Insucessos (piso_entries) com motivo "Removido do carregamento"
-
----
-
-### 6. Verificação do mecanismo de amarelo (3 bipagens)
-
-O mecanismo já está implementado e funcionando:
-- Quando um TBR é bipado 3 vezes, o sistema detecta como triplicata
-- Remove as 2 cópias extras e marca a original com `_yellowHighlight: true`
-- O `getTbrItemClass` aplica `bg-yellow-100 text-yellow-700 border-yellow-300`
-- O campo `highlight: "yellow"` é salvo no banco (`ride_tbrs.highlight`)
-
-Nenhuma alteração necessaria neste mecanismo.
-
----
-
-### Resumo de Arquivos Afetados
+### Resumo de Arquivos
 
 | Arquivo | Mudanças |
 |---------|---------|
-| `DashboardSidebar.tsx` | Renomear menu |
-| `PSPage.tsx` | Spinner no PDF |
-| `ConferenciaCarregamentoPage.tsx` | Modal finalizar + senha gerente para excluir + exclusão em lote |
-| `DashboardMetrics.tsx` | Remover filtros cards + substituir pie chart por média diária |
-| `DashboardInsights.tsx` | Remover filtros cards |
+| `ConferenciaCarregamentoPage.tsx` | Filtro de rota + Modal Iniciar |
+| `CiclosPage.tsx` | TBRs por ciclo nos cards e relatório |
+| `DashboardHome.tsx` | Timeline de rastreamento TBR |
+| `OperacaoPage.tsx` | Verificar contadores TBR |
 
