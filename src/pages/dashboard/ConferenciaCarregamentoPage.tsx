@@ -189,6 +189,7 @@ const ConferenciaCarregamentoPage = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
   const currentRideIdsRef = useRef<string[]>([]);
+  const [removedTbrCounts, setRemovedTbrCounts] = useState<Record<string, number>>({});
   const requestIdRef = useRef<number>(0);
 
   // Manual mode toggle per ride
@@ -463,6 +464,22 @@ const ConferenciaCarregamentoPage = () => {
       processedCodesRef.current = {};
     }
     setIsLoading(false);
+
+    // Fetch removed TBR counts per ride from piso_entries
+    if (rideIds.length > 0) {
+      const { data: removedEntries } = await supabase
+        .from("piso_entries")
+        .select("ride_id")
+        .in("ride_id", rideIds)
+        .eq("reason", "Removido do carregamento");
+      const counts: Record<string, number> = {};
+      (removedEntries ?? []).forEach((e: any) => {
+        counts[e.ride_id] = (counts[e.ride_id] || 0) + 1;
+      });
+      setRemovedTbrCounts(counts);
+    } else {
+      setRemovedTbrCounts({});
+    }
 
   }, [unitId, startDate, endDate]);
 
@@ -1727,10 +1744,18 @@ const ConferenciaCarregamentoPage = () => {
                       <CardContent className="p-4 flex flex-col items-center gap-3">
                         {/* TBR Counter badge + Bell icon (top-left) */}
                         <div className="absolute top-3 left-3 flex flex-col items-center gap-1">
-                          <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1">
-                            <ScanBarcode className="h-3 w-3" />
-                            {rideTbrs.length}
-                          </Badge>
+                          <div className="flex flex-col items-center gap-0.5">
+                            <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1" title="TBRs Lidos (total escaneado)">
+                              <ScanBarcode className="h-3 w-3" />
+                              {rideTbrs.length + (removedTbrCounts[ride.id] || 0)}
+                            </Badge>
+                            {(removedTbrCounts[ride.id] || 0) > 0 && (
+                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold gap-0.5 border-green-400 text-green-700" title="TBRs Final (no carregamento)">
+                                <CheckCircle className="h-2.5 w-2.5" />
+                                {rideTbrs.length}
+                              </Badge>
+                            )}
+                          </div>
                           {ride.queue_entry_id && !isCancelled && !isFinished && (
                             <button
                               onClick={async () => {
@@ -1946,10 +1971,18 @@ const ConferenciaCarregamentoPage = () => {
                         {/* TBR Area */}
                         {(isLoadingStatus || isFinished) && (
                           <div className="w-full space-y-2 border-t pt-3">
-                            <p className="text-xs font-bold italic flex items-center gap-1">
-                              <ScanBarcode className="h-3.5 w-3.5 text-primary" />
-                              TBRs Lidos ({rideTbrs.length})
-                            </p>
+                            <div className="flex items-center gap-3">
+                              <p className="text-xs font-bold italic flex items-center gap-1">
+                                <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+                                TBRs Lidos ({rideTbrs.length + (removedTbrCounts[ride.id] || 0)})
+                              </p>
+                              {(removedTbrCounts[ride.id] || 0) > 0 && (
+                                <p className="text-xs font-bold italic flex items-center gap-1 text-green-700">
+                                  <CheckCircle className="h-3.5 w-3.5" />
+                                  TBRs Final ({rideTbrs.length})
+                                </p>
+                              )}
+                            </div>
                             {rideTbrs.length > 0 && (() => {
                               const visibleTbrs = isSearchActive
                                 ? rideTbrs.filter(t => t.code.toLowerCase().includes(tbrSearchCommitted.toLowerCase()))
@@ -2068,10 +2101,18 @@ const ConferenciaCarregamentoPage = () => {
                 <CardContent className="p-5 flex flex-col items-center gap-3">
                   {/* Header */}
                   <div className="w-full flex items-center justify-between">
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1">
-                      <ScanBarcode className="h-3 w-3" />
-                      {focusedTbrs.length}
-                    </Badge>
+                    <div className="flex items-center gap-1.5">
+                      <Badge variant="secondary" className="text-xs px-2 py-0.5 font-bold gap-1" title="TBRs Lidos">
+                        <ScanBarcode className="h-3 w-3" />
+                        {focusedTbrs.length + (removedTbrCounts[ride.id] || 0)}
+                      </Badge>
+                      {(removedTbrCounts[ride.id] || 0) > 0 && (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-bold gap-0.5 border-green-400 text-green-700" title="TBRs Final">
+                          <CheckCircle className="h-2.5 w-2.5" />
+                          {focusedTbrs.length}
+                        </Badge>
+                      )}
+                    </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
                         <Hash className="h-3.5 w-3.5 mr-0.5" />
@@ -2123,10 +2164,18 @@ const ConferenciaCarregamentoPage = () => {
 
                   {/* TBR List */}
                   <div className="w-full space-y-2 border-t pt-3">
-                    <p className="text-xs font-bold italic flex items-center gap-1">
-                      <ScanBarcode className="h-3.5 w-3.5 text-primary" />
-                      TBRs Lidos ({focusedTbrs.length})
-                    </p>
+                    <div className="flex items-center gap-3">
+                      <p className="text-xs font-bold italic flex items-center gap-1">
+                        <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+                        TBRs Lidos ({focusedTbrs.length + (removedTbrCounts[ride.id] || 0)})
+                      </p>
+                      {(removedTbrCounts[ride.id] || 0) > 0 && (
+                        <p className="text-xs font-bold italic flex items-center gap-1 text-green-700">
+                          <CheckCircle className="h-3.5 w-3.5" />
+                          TBRs Final ({focusedTbrs.length})
+                        </p>
+                      )}
+                    </div>
                     {focusedTbrs.length > 0 && (
                       <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
                         {focusedTbrs.map((t, i) => (
