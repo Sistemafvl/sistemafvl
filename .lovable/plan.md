@@ -1,27 +1,45 @@
 
 
-## Plano de Implementação (2 mudanças)
+## Problema
 
-### 1. Fechar piso_entry ao Finalizar PS
+O `handleFinalize` no PSPage.tsx agora fecha a `piso_entry` ao finalizar um PS — mas isso só funciona **daqui para frente**. Os TBRs que **já tinham** PS finalizado antes dessa mudança continuam aparecendo na lista de Insucessos porque nunca foram fechados retroativamente.
 
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
+## Solução
 
-Na função `handleFinalize` (linha 475), após fechar o `ps_entries`, executar update no `piso_entries` para fechar registros abertos com o mesmo `tbr_code` e `unit_id`.
+Adicionar auto-close na função `loadEntries` do `RetornoPisoPage.tsx`: após carregar os registros abertos, verificar se algum deles já possui um `ps_entries` (aberto ou fechado) na mesma unidade. Se sim, fechar automaticamente essas `piso_entries`.
 
-### 2. Ícone "olho" nos eventos PS da Timeline
+### Implementação
 
-**Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` — função `loadEntries` (após o bloco de auto-close operacional, linha ~175)
 
-- Expandir a interface `TimelineEvent` com campos opcionais: `photo_url`, `reason`, `observations`, `is_seller`
-- No bloco de construção de timeline para PS (linha 219-228), incluir esses campos do `ps_entries`
-- Adicionar estado `psDetailEvent` para controlar qual evento está sendo visualizado
-- Na renderização da timeline (linha 477-502), para eventos do tipo `"ps"` que tenham `photo_url` ou dados extras, exibir um ícone `Eye` clicável
-- Ao clicar, abrir um mini modal/popover inline mostrando: foto (se houver), motivo, observações, seller
+1. Coletar os `tbr_code` dos registros abertos restantes
+2. Consultar `ps_entries` na mesma `unit_id` com esses códigos (qualquer status)
+3. Para cada match, fechar a `piso_entry` correspondente e removê-la da lista exibida
 
-### Arquivos Afetados
+```typescript
+// Auto-close piso_entries que já têm PS registrado
+const remainingEntries = allEntries; // ou filtrado após operacionais
+const openCodes = remainingEntries.map(e => e.tbr_code.toLowerCase());
+if (openCodes.length > 0) {
+  const { data: psMatches } = await supabase
+    .from("ps_entries")
+    .select("tbr_code")
+    .eq("unit_id", unitSession.id)
+    .in("tbr_code", openCodes);
+  if (psMatches && psMatches.length > 0) {
+    const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
+    const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
+    if (toClosePs.length > 0) {
+      await supabase.from("piso_entries")
+        .update({ status: "closed", closed_at: new Date().toISOString() })
+        .in("id", toClosePs.map(e => e.id));
+      // remover da lista exibida
+    }
+  }
+}
+```
 
 | Arquivo | Mudança |
 |---------|---------|
-| `PSPage.tsx` | Fechar `piso_entry` aberta ao finalizar PS |
-| `DashboardHome.tsx` | Ícone Eye nos eventos PS + modal de detalhes |
+| `RetornoPisoPage.tsx` | Auto-close de piso_entries com PS existente no `loadEntries` |
 
