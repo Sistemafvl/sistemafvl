@@ -36,13 +36,18 @@ interface TbrResult {
   car_model: string | null;
   car_plate: string | null;
   car_color: string | null;
-  ps_status: { open: boolean; description: string } | null;
-  rto_status: { open: boolean; description: string } | null;
-  dnr_status: { status: string; value: number } | null;
-  piso_status: { status: string; reason: string } | null;
   composite_status: string;
   entry_date: string | null;
   entry_source: string | null;
+  timeline: TimelineEvent[];
+}
+
+interface TimelineEvent {
+  timestamp: string;
+  conferente: string | null;
+  action: string;
+  detail: string;
+  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso";
 }
 
 const DashboardHome = () => {
@@ -135,163 +140,155 @@ const DashboardHome = () => {
       setTbrResult(null);
       setTbrNotFound(false);
 
-      const { data: tbrData } = await supabase
-        .from("ride_tbrs")
-        .select("*")
-        .eq("code", code)
-        .limit(1);
+      // Build timeline by querying ALL tables for this TBR code
+      const [allRideTbrs, allPiso, allPs, allRto, allDnr] = await Promise.all([
+        supabase.from("ride_tbrs").select("*, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").eq("code", code),
+        supabase.from("piso_entries").select("*").ilike("tbr_code", code),
+        supabase.from("ps_entries").select("*").ilike("tbr_code", code),
+        supabase.from("rto_entries").select("*").ilike("tbr_code", code),
+        supabase.from("dnr_entries").select("*").ilike("tbr_code", code),
+      ]);
 
-      if (!tbrData || tbrData.length === 0) {
-        // Fallback: buscar nas tabelas de ocorrências
-        const [psCheck, rtoCheck, dnrCheck, pisoCheck] = await Promise.all([
-          supabase.from("ps_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-          supabase.from("rto_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-          supabase.from("dnr_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-          supabase.from("piso_entries").select("*").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        ]);
+      const rideTbrs = allRideTbrs.data ?? [];
+      const pisoEntries = allPiso.data ?? [];
+      const psEntries = allPs.data ?? [];
+      const rtoEntries = allRto.data ?? [];
+      const dnrEntries = allDnr.data ?? [];
 
-        const foundEntry = dnrCheck.data || psCheck.data || rtoCheck.data || pisoCheck.data;
-
-        if (!foundEntry) {
-          setTbrNotFound(true);
-          setTbrLoading(false);
-          return;
-        }
-
-        // Determine entry source and date
-        let entrySource: string | null = null;
-        let entryDate: string | null = null;
-        if (dnrCheck.data) { entrySource = "DNR"; entryDate = dnrCheck.data.created_at; }
-        else if (psCheck.data) { entrySource = "PS"; entryDate = psCheck.data.created_at; }
-        else if (rtoCheck.data) { entrySource = "RTO"; entryDate = rtoCheck.data.created_at; }
-        else if (pisoCheck.data) { entrySource = "Insucessos"; entryDate = pisoCheck.data.created_at; }
-
-        // Get unit name
-        const unitId = (foundEntry as any).unit_id;
-        const unitRes = unitId
-          ? await supabase.from("units").select("name").eq("id", unitId).maybeSingle()
-          : { data: null };
-
-        // Get conferente name if available
-        const confId = (foundEntry as any).conferente_id;
-        const confRes = confId
-          ? await supabase.from("user_profiles").select("name").eq("id", confId).maybeSingle()
-          : { data: null };
-
-        const driverName = dnrCheck.data?.driver_name || psCheck.data?.driver_name || rtoCheck.data?.driver_name || pisoCheck.data?.driver_name || null;
-        const route = dnrCheck.data?.route || psCheck.data?.route || rtoCheck.data?.route || pisoCheck.data?.route || null;
-
-        const computeFallbackStatus = (): string => {
-          if (dnrCheck.data) {
-            if (dnrCheck.data.status === "open") return "DNR Aberto";
-            if (dnrCheck.data.status === "analyzing") return "Em Análise DNR";
-            if (dnrCheck.data.status === "closed") return "DNR Finalizado";
-          }
-          if (psCheck.data && psCheck.data.status === "open") return "PS Aberto";
-          if (rtoCheck.data && rtoCheck.data.status === "open") return "RTO Aberto";
-          if (pisoCheck.data && pisoCheck.data.status === "open") return "Insucessos";
-          return "Sem carregamento";
-        };
-
-        setTbrResult({
-          code,
-          scanned_at: (foundEntry as any).created_at ?? "",
-          ride_id: (foundEntry as any).ride_id ?? "",
-          driver_name: driverName ?? "Desconhecido",
-          route,
-          login: dnrCheck.data?.login ?? null,
-          unit_name: unitRes.data?.name ?? "—",
-          conferente_name: confRes.data?.name ?? dnrCheck.data?.conferente_name ?? null,
-          started_at: null,
-          finished_at: null,
-          loading_status: null,
-          sequence_number: null,
-          car_model: dnrCheck.data?.car_model ?? null,
-          car_plate: dnrCheck.data?.car_plate ?? null,
-          car_color: dnrCheck.data?.car_color ?? null,
-          ps_status: psCheck.data ? { open: psCheck.data.status === "open", description: psCheck.data.description } : null,
-          rto_status: rtoCheck.data ? { open: rtoCheck.data.status === "open", description: rtoCheck.data.description } : null,
-          dnr_status: dnrCheck.data ? { status: dnrCheck.data.status, value: Number(dnrCheck.data.dnr_value) } : null,
-          piso_status: pisoCheck.data ? { status: pisoCheck.data.status, reason: pisoCheck.data.reason } : null,
-          composite_status: computeFallbackStatus(),
-          entry_date: entryDate,
-          entry_source: entrySource,
-        });
-        setTbrLoading(false);
-        return;
-      }
-
-      const tbr = tbrData[0];
-      const rideId = tbr.ride_id;
-
-      // Fetch ride
-      const rideRes = await supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle();
-
-      const ride = rideRes.data;
-      if (!ride) {
+      if (rideTbrs.length === 0 && pisoEntries.length === 0 && psEntries.length === 0 && rtoEntries.length === 0 && dnrEntries.length === 0) {
         setTbrNotFound(true);
         setTbrLoading(false);
         return;
       }
 
-      // Parallel: driver, unit, conferente, ps, rto, dnr, piso
-      const [driverRes, unitRes, confRes, psRes, rtoRes, dnrRes, pisoRes] = await Promise.all([
-        supabase.from("drivers_public").select("name, car_model, car_plate, car_color").eq("id", ride.driver_id).maybeSingle(),
-        supabase.from("units").select("name").eq("id", ride.unit_id).maybeSingle(),
-        ride.conferente_id
-          ? supabase.from("user_profiles").select("name").eq("id", ride.conferente_id).maybeSingle()
-          : Promise.resolve({ data: null }),
-        supabase.from("ps_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("rto_entries").select("description, status").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("dnr_entries").select("status, dnr_value").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
-        supabase.from("piso_entries").select("status, reason").eq("tbr_code", code).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      // Collect conferente IDs to fetch names
+      const confIds = new Set<string>();
+      rideTbrs.forEach((rt: any) => { if (rt.driver_rides?.conferente_id) confIds.add(rt.driver_rides.conferente_id); });
+      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((e: any) => { if (e.conferente_id) confIds.add(e.conferente_id); });
+
+      // Fetch conferente names and driver names
+      const confIdsArr = [...confIds];
+      const driverIds = [...new Set(rideTbrs.map((rt: any) => rt.driver_rides?.driver_id).filter(Boolean))];
+
+      const [confRes, driverRes, unitRes] = await Promise.all([
+        confIdsArr.length > 0 ? supabase.from("user_profiles").select("id, name").in("id", confIdsArr) : Promise.resolve({ data: [] as any[] }),
+        driverIds.length > 0 ? supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color").in("id", driverIds) : Promise.resolve({ data: [] as any[] }),
+        rideTbrs.length > 0 ? supabase.from("units").select("id, name").eq("id", (rideTbrs[0] as any).driver_rides?.unit_id).maybeSingle() : Promise.resolve({ data: null }),
       ]);
 
-      // Compute composite status
-      const computeCompositeStatus = (): string => {
-        const dnr = dnrRes.data;
-        const ps = psRes.data;
-        const rto = rtoRes.data;
-        const piso = pisoRes.data;
+      const confMap = new Map((confRes.data ?? []).map((c: any) => [c.id, c.name]));
+      const driverMap = new Map((driverRes.data ?? []).map((d: any) => [d.id, d]));
 
-        // DNR takes priority if open/analyzing
-        if (dnr) {
-          if (dnr.status === "open") return "DNR Aberto";
-          if (dnr.status === "analyzing") return "Em Análise DNR";
+      // Build timeline events
+      const timeline: TimelineEvent[] = [];
+
+      rideTbrs.forEach((rt: any) => {
+        const ride = rt.driver_rides;
+        const driver = driverMap.get(ride?.driver_id);
+        const confName = ride?.conferente_id ? confMap.get(ride.conferente_id) ?? null : null;
+        timeline.push({
+          timestamp: rt.scanned_at ?? ride?.completed_at ?? "",
+          conferente: confName,
+          action: "Origem: Conferência Carregamento",
+          detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+          type: "origin",
+        });
+      });
+
+      pisoEntries.forEach((p: any) => {
+        const confName = p.conferente_id ? confMap.get(p.conferente_id) ?? null : null;
+        const isRemoval = p.reason === "Removido do carregamento" || p.reason === "Carregamento resetado" || p.reason === "Carregamento cancelado";
+        timeline.push({
+          timestamp: p.created_at,
+          conferente: confName,
+          action: isRemoval ? "Status: Insucesso" : "Status: Retorno Piso",
+          detail: `${p.reason}${p.driver_name ? ` • ${p.driver_name}` : ""}`,
+          type: isRemoval ? "removal" : "piso",
+        });
+        if (p.closed_at) {
+          timeline.push({
+            timestamp: p.closed_at,
+            conferente: confName,
+            action: "Status: Piso Fechado",
+            detail: p.reason,
+            type: "piso",
+          });
         }
-        // PS open
-        if (ps && ps.status === "open") return "PS Aberto";
-        // RTO open
-        if (rto && rto.status === "open") return "RTO Aberto";
-        // Piso open
-        if (piso && piso.status === "open") return "Insucessos";
-        // Fallback to ride loading_status translated
-        return translateStatus(ride.loading_status);
+      });
+
+      psEntries.forEach((ps: any) => {
+        const confName = ps.conferente_id ? confMap.get(ps.conferente_id) ?? null : null;
+        timeline.push({
+          timestamp: ps.created_at,
+          conferente: confName,
+          action: ps.status === "open" ? "Status: PS Aberto" : "Status: PS Fechado",
+          detail: ps.description,
+          type: "ps",
+        });
+      });
+
+      rtoEntries.forEach((rto: any) => {
+        const confName = rto.conferente_id ? confMap.get(rto.conferente_id) ?? null : null;
+        timeline.push({
+          timestamp: rto.created_at,
+          conferente: confName,
+          action: rto.status === "open" ? "Status: RTO Aberto" : "Status: RTO Fechado",
+          detail: rto.description,
+          type: "rto",
+        });
+      });
+
+      dnrEntries.forEach((dnr: any) => {
+        timeline.push({
+          timestamp: dnr.created_at,
+          conferente: dnr.conferente_name ?? null,
+          action: dnr.status === "open" ? "Status: DNR Aberto" : dnr.status === "analyzing" ? "Status: DNR Em Análise" : "Status: DNR Fechado",
+          detail: `R$${Number(dnr.dnr_value).toFixed(2)}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
+          type: "dnr",
+        });
+      });
+
+      // Sort chronologically
+      timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+      // Build result from first ride or fallback
+      const firstRide = rideTbrs.length > 0 ? (rideTbrs[0] as any).driver_rides : null;
+      const firstDriver = firstRide ? driverMap.get(firstRide.driver_id) : null;
+
+      // Compute composite status
+      const computeStatus = (): string => {
+        const lastDnr = dnrEntries.find((d: any) => d.status === "open");
+        if (lastDnr) return "DNR Aberto";
+        const lastPs = psEntries.find((p: any) => p.status === "open");
+        if (lastPs) return "PS Aberto";
+        const lastRto = rtoEntries.find((r: any) => r.status === "open");
+        if (lastRto) return "RTO Aberto";
+        const lastPiso = pisoEntries.find((p: any) => p.status === "open");
+        if (lastPiso) return "Insucessos";
+        if (firstRide) return translateStatus(firstRide.loading_status);
+        return "Sem carregamento";
       };
 
       setTbrResult({
-        code: tbr.code,
-        scanned_at: tbr.scanned_at ?? "",
-        ride_id: rideId,
-        driver_name: driverRes.data?.name ?? "Desconhecido",
-        route: ride.route,
-        login: ride.login,
+        code,
+        scanned_at: rideTbrs[0]?.scanned_at ?? pisoEntries[0]?.created_at ?? "",
+        ride_id: firstRide?.id ?? "",
+        driver_name: firstDriver?.name ?? dnrEntries[0]?.driver_name ?? pisoEntries[0]?.driver_name ?? "Desconhecido",
+        route: firstRide?.route ?? pisoEntries[0]?.route ?? null,
+        login: firstRide?.login ?? dnrEntries[0]?.login ?? null,
         unit_name: unitRes.data?.name ?? "—",
-        conferente_name: confRes.data?.name ?? null,
-        started_at: ride.started_at,
-        finished_at: ride.finished_at,
-        loading_status: ride.loading_status,
-        sequence_number: ride.sequence_number,
-        car_model: driverRes.data?.car_model ?? null,
-        car_plate: driverRes.data?.car_plate ?? null,
-        car_color: driverRes.data?.car_color ?? null,
-        ps_status: psRes.data ? { open: psRes.data.status === "open", description: psRes.data.description } : null,
-        rto_status: rtoRes.data ? { open: rtoRes.data.status === "open", description: rtoRes.data.description } : null,
-        dnr_status: dnrRes.data ? { status: dnrRes.data.status, value: Number(dnrRes.data.dnr_value) } : null,
-        piso_status: pisoRes.data ? { status: pisoRes.data.status, reason: pisoRes.data.reason } : null,
-        composite_status: computeCompositeStatus(),
-        entry_date: tbr.scanned_at ?? null,
-        entry_source: "Conferência Carregamento",
+        conferente_name: firstRide?.conferente_id ? confMap.get(firstRide.conferente_id) ?? null : null,
+        started_at: firstRide?.started_at ?? null,
+        finished_at: firstRide?.finished_at ?? null,
+        loading_status: firstRide?.loading_status ?? null,
+        sequence_number: firstRide?.sequence_number ?? null,
+        car_model: firstDriver?.car_model ?? null,
+        car_plate: firstDriver?.car_plate ?? null,
+        car_color: firstDriver?.car_color ?? null,
+        composite_status: computeStatus(),
+        entry_date: rideTbrs[0]?.scanned_at ?? pisoEntries[0]?.created_at ?? null,
+        entry_source: rideTbrs.length > 0 ? "Conferência Carregamento" : pisoEntries.length > 0 ? "Insucessos" : psEntries.length > 0 ? "PS" : rtoEntries.length > 0 ? "RTO" : "DNR",
+        timeline,
       });
       setTbrLoading(false);
     }
@@ -465,78 +462,47 @@ const DashboardHome = () => {
                 <p className="text-sm text-muted-foreground italic text-center py-4">TBR não encontrado.</p>
               ) : tbrResult ? (
                 <div className="space-y-3 text-sm">
-                   {/* Badges PS / RTO / DNR / Piso */}
-                   {(tbrResult.ps_status || tbrResult.rto_status || tbrResult.dnr_status || tbrResult.piso_status) && (
-                     <div className="flex flex-wrap gap-2">
-                       {tbrResult.dnr_status && (
-                         tbrResult.dnr_status.status === "open" ? (
-                           <Badge variant="destructive" className="text-xs">
-                             DNR Aberto — R${tbrResult.dnr_status.value.toFixed(2)}
-                           </Badge>
-                         ) : tbrResult.dnr_status.status === "analyzing" ? (
-                           <Badge className="bg-amber-600 text-white text-xs">
-                             DNR Em Análise — R${tbrResult.dnr_status.value.toFixed(2)}
-                           </Badge>
-                         ) : (
-                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
-                             DNR Finalizado — R${tbrResult.dnr_status.value.toFixed(2)}
-                           </Badge>
-                         )
-                       )}
-                       {tbrResult.piso_status && (
-                         tbrResult.piso_status.status === "open" ? (
-                           <Badge className="bg-purple-600 text-white text-xs">
-                             Retorno Piso — {tbrResult.piso_status.reason}
-                           </Badge>
-                         ) : (
-                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
-                             Piso Finalizado — {tbrResult.piso_status.reason}
-                           </Badge>
-                         )
-                       )}
-                       {tbrResult.ps_status && (
-                         tbrResult.ps_status.open ? (
-                           <Badge variant="destructive" className="text-xs">
-                             PS Aberto — {tbrResult.ps_status.description}
-                           </Badge>
-                         ) : (
-                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
-                             PS Finalizado — {tbrResult.ps_status.description}
-                           </Badge>
-                         )
-                       )}
-                       {tbrResult.rto_status && (
-                         tbrResult.rto_status.open ? (
-                           <Badge className="bg-orange-600 text-white text-xs">
-                             RTO Aberto — {tbrResult.rto_status.description}
-                           </Badge>
-                         ) : (
-                           <Badge variant="outline" className="text-xs border-muted-foreground text-muted-foreground">
-                             RTO Finalizado — {tbrResult.rto_status.description}
-                           </Badge>
-                         )
-                       )}
-                     </div>
-                   )}
                   <div className="grid grid-cols-2 gap-2">
                     <div><strong>Motorista:</strong> {tbrResult.driver_name}</div>
                     <div><strong>Rota:</strong> {tbrResult.route || "—"}</div>
-                    <div><strong>Carro:</strong> {[tbrResult.car_model, tbrResult.car_color].filter(Boolean).join(" • ") || "—"}</div>
-                    <div><strong>Placa:</strong> {tbrResult.car_plate || "—"}</div>
-                    <div><strong>Login:</strong> {tbrResult.login || "—"}</div>
                     <div><strong>Unidade:</strong> {tbrResult.unit_name}</div>
-                    <div><strong>Conferente:</strong> {tbrResult.conferente_name || "—"}</div>
-                    <div><strong>Sequência:</strong> {tbrResult.sequence_number ?? "—"}º</div>
                     <div><strong>Status:</strong> <span className="font-semibold">{tbrResult.composite_status}</span></div>
-                    <div><strong>Início:</strong> {tbrResult.started_at ? format(new Date(tbrResult.started_at), "dd/MM/yyyy HH:mm") : "—"}</div>
-                    <div><strong>Término:</strong> {tbrResult.finished_at ? format(new Date(tbrResult.finished_at), "dd/MM/yyyy HH:mm") : "—"}</div>
-                    {tbrResult.entry_date && (
-                      <div><strong>Lançamento:</strong> {format(new Date(tbrResult.entry_date), "dd/MM/yyyy HH:mm")}</div>
-                    )}
-                    {tbrResult.entry_source && (
-                      <div><strong>Origem:</strong> {tbrResult.entry_source}</div>
-                    )}
                   </div>
+
+                  {/* Timeline */}
+                  {tbrResult.timeline.length > 0 && (
+                    <div className="mt-4">
+                      <h4 className="font-bold italic text-xs mb-3 text-muted-foreground uppercase tracking-wide">Linha do Tempo</h4>
+                      <div className="relative pl-4 space-y-0">
+                        {tbrResult.timeline.map((evt, i) => {
+                          const color = evt.type === "origin" ? "text-primary" : evt.type === "removal" ? "text-destructive" : evt.type === "loaded" ? "text-primary" : evt.type === "ps" ? "text-destructive" : evt.type === "rto" ? "text-amber-600" : evt.type === "dnr" ? "text-destructive" : "text-muted-foreground";
+                          const dotColor = evt.type === "origin" ? "bg-primary" : evt.type === "removal" ? "bg-destructive" : evt.type === "ps" ? "bg-destructive" : evt.type === "rto" ? "bg-amber-600" : evt.type === "dnr" ? "bg-destructive" : "bg-muted-foreground";
+                          return (
+                            <div key={i} className="relative pb-4">
+                              {/* Vertical line */}
+                              {i < tbrResult.timeline.length - 1 && (
+                                <div className="absolute left-[-12px] top-3 bottom-0 w-px border-l-2 border-dashed border-muted-foreground/30" />
+                              )}
+                              {/* Dot */}
+                              <div className={`absolute left-[-15px] top-1.5 h-2 w-2 rounded-full ${dotColor}`} />
+                              <div className="text-xs space-y-0.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-muted-foreground font-mono">
+                                    {evt.timestamp ? format(new Date(evt.timestamp), "dd/MM HH:mm") : "—"}
+                                  </span>
+                                  {evt.conferente && (
+                                    <span className="text-muted-foreground">[{evt.conferente}]</span>
+                                  )}
+                                </div>
+                                <p className={`font-semibold ${color}`}>{evt.action}</p>
+                                <p className="text-muted-foreground">{evt.detail}</p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : null}
             </div>

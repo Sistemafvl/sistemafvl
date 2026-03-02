@@ -179,8 +179,11 @@ const ConferenciaCarregamentoPage = () => {
   const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
   const [driverNameFilter, setDriverNameFilter] = useState("");
   const [loginFilter, setLoginFilter] = useState("");
+  const [routeFilter, setRouteFilter] = useState("");
+  const [routePopoverOpen, setRoutePopoverOpen] = useState(false);
   const [unitLogins, setUnitLogins] = useState<{login: string; password: string}[]>([]);
   const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
+  const [iniciarConfirmRideId, setIniciarConfirmRideId] = useState<string | null>(null);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1356,7 +1359,11 @@ const ConferenciaCarregamentoPage = () => {
   // All conferentes see all rides - session is only for auto-filling conferente on "Iniciar"
   const displayRides = (isSearchActive ? searchRides : rides)
     .filter(r => !driverNameFilter || r.driver_name?.toLowerCase().includes(driverNameFilter.toLowerCase()))
-    .filter(r => !loginFilter || r.login === loginFilter);
+    .filter(r => !loginFilter || r.login === loginFilter)
+    .filter(r => !routeFilter || r.route === routeFilter);
+
+  // Extract unique routes from today's rides for filter
+  const uniqueRoutes = [...new Set(rides.map(r => r.route).filter(Boolean) as string[])].sort();
   const displayTbrs = isSearchActive ? searchTbrs : tbrs;
 
   const handleStartDateSelect = (date: Date | undefined) => {
@@ -1527,7 +1534,7 @@ const ConferenciaCarregamentoPage = () => {
       {/* Filters */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative sm:w-1/3">
+          <div className="relative sm:w-1/4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-10"
@@ -1543,7 +1550,7 @@ const ConferenciaCarregamentoPage = () => {
             )}
           </div>
 
-          <div className="relative sm:w-1/3">
+          <div className="relative sm:w-1/4">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-10"
@@ -1560,9 +1567,9 @@ const ConferenciaCarregamentoPage = () => {
 
           <Popover open={loginPopoverOpen} onOpenChange={setLoginPopoverOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="sm:w-1/3 h-10 justify-start gap-2 font-normal">
+              <Button variant="outline" className="sm:w-1/4 h-10 justify-start gap-2 font-normal">
                 <KeyRound className="h-4 w-4 text-muted-foreground" />
-                {loginFilter || "Filtrar por login..."}
+                <span className="truncate">{loginFilter || "Login..."}</span>
                 {loginFilter && (
                   <button
                     onClick={(e) => { e.stopPropagation(); setLoginFilter(""); }}
@@ -1590,6 +1597,46 @@ const ConferenciaCarregamentoPage = () => {
                       >
                         {ul.login}
                         {loginFilter === ul.login && <Check className="ml-auto h-4 w-4" />}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
+
+          <Popover open={routePopoverOpen} onOpenChange={setRoutePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="sm:w-1/4 h-10 justify-start gap-2 font-normal">
+                <MapPin className="h-4 w-4 text-muted-foreground" />
+                <span className="truncate">{routeFilter || "Rota..."}</span>
+                {routeFilter && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setRouteFilter(""); }}
+                    className="ml-auto"
+                  >
+                    <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                  </button>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar rota..." />
+                <CommandList>
+                  <CommandEmpty>Nenhuma rota encontrada.</CommandEmpty>
+                  <CommandGroup>
+                    {uniqueRoutes.map((route) => (
+                      <CommandItem
+                        key={route}
+                        value={route}
+                        onSelect={() => {
+                          setRouteFilter(route);
+                          setRoutePopoverOpen(false);
+                        }}
+                      >
+                        {route}
+                        {routeFilter === route && <Check className="ml-auto h-4 w-4" />}
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -1815,7 +1862,7 @@ const ConferenciaCarregamentoPage = () => {
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
                             {!isLoadingStatus && !isFinished && (
-                              <Button size="sm" className="flex-1 gap-1" onClick={() => handleIniciar(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
+                              <Button size="sm" className="flex-1 gap-1" onClick={() => setIniciarConfirmRideId(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
                             )}
@@ -2556,6 +2603,42 @@ const ConferenciaCarregamentoPage = () => {
             >
               {batchDeleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Confirmar Exclusão em Lote
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Iniciar Confirmation Modal */}
+      <Dialog open={!!iniciarConfirmRideId} onOpenChange={(open) => { if (!open) setIniciarConfirmRideId(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic">Confirmar Início de Carregamento</DialogTitle>
+            <DialogDescription className="text-sm">
+              {(() => {
+                const ride = rides.find(r => r.id === iniciarConfirmRideId);
+                const activeConf = conferenteSession?.name || conferentes.find(c => c.id === ride?.conferente_id)?.name;
+                return (
+                  <>
+                    Você confirma que <span className="font-semibold text-foreground">{activeConf || "o conferente selecionado"}</span> irá conferir o carregamento do motorista <span className="font-semibold text-foreground">{ride?.driver_name || "—"}</span>?
+                    <br /><br />
+                    <span className="text-xs text-muted-foreground">Certifique-se de que o conferente ativo corresponde ao usuário que realizará a bipagem dos TBRs.</span>
+                  </>
+                );
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2 justify-end pt-2">
+            <Button variant="outline" onClick={() => setIniciarConfirmRideId(null)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                if (iniciarConfirmRideId) {
+                  handleIniciar(iniciarConfirmRideId);
+                  setIniciarConfirmRideId(null);
+                }
+              }}
+              className="gap-1 font-bold italic"
+            >
+              <Play className="h-4 w-4" /> Confirmar e Iniciar
             </Button>
           </div>
         </DialogContent>

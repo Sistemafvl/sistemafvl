@@ -43,6 +43,9 @@ interface DayMetrics {
   cycle1: number;
   cycle2: number;
   cycle3: number;
+  cycle1Tbrs: number;
+  cycle2Tbrs: number;
+  cycle3Tbrs: number;
 }
 
 const EMPTY_RECORD: CycleRecord = {
@@ -81,6 +84,7 @@ const CiclosPage = () => {
 
     let totalTbrs = 0;
     let totalReturns = 0;
+    let allTbrsData: { ride_id: string; code: string }[] = [];
 
     if (rideIds.length > 0) {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
@@ -99,6 +103,7 @@ const CiclosPage = () => {
         ),
       ]);
 
+      allTbrsData = tbrsData;
       totalTbrs = tbrsData.length;
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
 
@@ -142,6 +147,14 @@ const CiclosPage = () => {
     const cycle2 = rideList.filter(r => r.completed_at <= cycle2Cutoff).length;
     const cycle3 = rideList.length;
 
+    // TBRs per cycle
+    const cycle1RideIds = new Set(rideList.filter(r => r.completed_at <= cycle1Cutoff).map(r => r.id));
+    const cycle2RideIds = new Set(rideList.filter(r => r.completed_at <= cycle2Cutoff).map(r => r.id));
+
+    const cycle1Tbrs = allTbrsData.filter(t => cycle1RideIds.has(t.ride_id)).length;
+    const cycle2Tbrs = allTbrsData.filter(t => cycle2RideIds.has(t.ride_id)).length;
+    const cycle3Tbrs = totalTbrs;
+
     return {
       totalRides: rideList.length,
       totalTbrs,
@@ -152,6 +165,9 @@ const CiclosPage = () => {
       cycle1,
       cycle2,
       cycle3,
+      cycle1Tbrs,
+      cycle2Tbrs,
+      cycle3Tbrs,
     };
   }, []);
 
@@ -380,6 +396,10 @@ const CiclosPage = () => {
                     <p className="text-3xl font-bold text-primary">{metrics.cycle1}</p>
                     <p className="text-xs text-muted-foreground">Até 08:30</p>
                     <Badge variant="outline" className="text-xs">{metrics.cycle1} carregamentos</Badge>
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" />
+                      <span className="font-semibold text-foreground">{metrics.cycle1Tbrs}</span> TBRs lidos
+                    </div>
                   </div>
                   <div className="rounded-lg border bg-card p-4 text-center space-y-2">
                     <div className="flex items-center justify-center gap-2">
@@ -389,6 +409,10 @@ const CiclosPage = () => {
                     <p className="text-3xl font-bold text-primary">{metrics.cycle2}</p>
                     <p className="text-xs text-muted-foreground">Até 09:30 (acumulado)</p>
                     <Badge variant="outline" className="text-xs">+{metrics.cycle2 - metrics.cycle1} no ciclo</Badge>
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" />
+                      <span className="font-semibold text-foreground">{metrics.cycle2Tbrs}</span> TBRs lidos
+                    </div>
                   </div>
                   <div className="rounded-lg border bg-card p-4 text-center space-y-2">
                     <div className="flex items-center justify-center gap-2">
@@ -398,6 +422,10 @@ const CiclosPage = () => {
                     <p className="text-3xl font-bold text-primary">{metrics.cycle3}</p>
                     <p className="text-xs text-muted-foreground">Total do dia</p>
                     <Badge variant="outline" className="text-xs">+{metrics.cycle3 - metrics.cycle2} no ciclo</Badge>
+                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
+                      <Package className="h-3 w-3" />
+                      <span className="font-semibold text-foreground">{metrics.cycle3Tbrs}</span> TBRs lidos
+                    </div>
                   </div>
                 </div>
               )}
@@ -512,14 +540,17 @@ const CiclosPage = () => {
                     <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 1 (até 08:30)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle1}</p>
+                      <p className="text-[10px] text-muted-foreground">{metrics.cycle1Tbrs} TBRs</p>
                     </div>
                     <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 2 (até 09:30)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle2}</p>
+                      <p className="text-[10px] text-muted-foreground">{metrics.cycle2Tbrs} TBRs</p>
                     </div>
                     <div className="text-center rounded-md border p-1.5">
                       <p className="text-xs text-muted-foreground">Ciclo 3 (total)</p>
                       <p className="text-lg font-bold text-primary">{metrics.cycle3}</p>
+                      <p className="text-[10px] text-muted-foreground">{metrics.cycle3Tbrs} TBRs</p>
                     </div>
                   </div>
                 </div>
