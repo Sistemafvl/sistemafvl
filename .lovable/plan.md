@@ -2,44 +2,38 @@
 
 ## Problema
 
-O `handleFinalize` no PSPage.tsx agora fecha a `piso_entry` ao finalizar um PS — mas isso só funciona **daqui para frente**. Os TBRs que **já tinham** PS finalizado antes dessa mudança continuam aparecendo na lista de Insucessos porque nunca foram fechados retroativamente.
+O auto-close não está funcionando por causa da **comparação case-sensitive**. O `.in("tbr_code", openCodes)` no Supabase/PostgreSQL é case-sensitive. Os códigos TBR no `piso_entries` estão em minúsculas (`tbr314129965`) mas no `ps_entries` estão em maiúsculas (`TBR314129965`), então o match falha.
 
-## Solução
+Além disso, a linha 178 tem um bug lógico: `|| true` anula o filtro completamente.
 
-Adicionar auto-close na função `loadEntries` do `RetornoPisoPage.tsx`: após carregar os registros abertos, verificar se algum deles já possui um `ps_entries` (aberto ou fechado) na mesma unidade. Se sim, fechar automaticamente essas `piso_entries`.
+## Correção
 
-### Implementação
+**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` — linhas 177-201
 
-**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` — função `loadEntries` (após o bloco de auto-close operacional, linha ~175)
+Trocar a busca `.in("tbr_code", openCodes)` por uma abordagem que normalize a comparação. Como o `.in()` do Supabase não suporta case-insensitive, a solução é buscar **todos** os `ps_entries` da unidade e comparar no client-side com `.toLowerCase()`, ou usar `.or()` com múltiplos `ilike`. A abordagem mais simples e eficiente:
 
-1. Coletar os `tbr_code` dos registros abertos restantes
-2. Consultar `ps_entries` na mesma `unit_id` com esses códigos (qualquer status)
-3. Para cada match, fechar a `piso_entry` correspondente e removê-la da lista exibida
+1. Buscar `ps_entries` da unidade sem filtro de `tbr_code` (apenas `unit_id`)
+2. Fazer o match case-insensitive no JavaScript
+3. Corrigir o filtro `|| true` na linha 178
 
 ```typescript
-// Auto-close piso_entries que já têm PS registrado
-const remainingEntries = allEntries; // ou filtrado após operacionais
-const openCodes = remainingEntries.map(e => e.tbr_code.toLowerCase());
-if (openCodes.length > 0) {
-  const { data: psMatches } = await supabase
-    .from("ps_entries")
-    .select("tbr_code")
-    .eq("unit_id", unitSession.id)
-    .in("tbr_code", openCodes);
-  if (psMatches && psMatches.length > 0) {
-    const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
-    const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
-    if (toClosePs.length > 0) {
-      await supabase.from("piso_entries")
-        .update({ status: "closed", closed_at: new Date().toISOString() })
-        .in("id", toClosePs.map(e => e.id));
-      // remover da lista exibida
-    }
-  }
+// Linha 178: corrigir o filtro — remover || true
+const remainingEntries = allEntries;
+
+// Buscar TODOS os ps_entries da unidade para comparação case-insensitive
+const { data: psMatches } = await supabase
+  .from("ps_entries")
+  .select("tbr_code")
+  .eq("unit_id", unitSession.id);
+
+if (psMatches && psMatches.length > 0) {
+  const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
+  const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
+  // ... fechar e remover da lista
 }
 ```
 
 | Arquivo | Mudança |
 |---------|---------|
-| `RetornoPisoPage.tsx` | Auto-close de piso_entries com PS existente no `loadEntries` |
+| `RetornoPisoPage.tsx` | Corrigir comparação case-insensitive no auto-close de PS |
 
