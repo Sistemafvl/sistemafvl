@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, Users, ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, Users, ChevronLeft, ChevronRight, Trophy, TrendingUp, BarChart3, Target } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
@@ -31,6 +32,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [lineData, setLineData] = useState<{ day: string; count: number }[]>([]);
   const [driverAvgs, setDriverAvgs] = useState<DriverAvg[]>([]);
   const [driverAvgPage, setDriverAvgPage] = useState(0);
+  const [showDriverModal, setShowDriverModal] = useState(false);
 
   const fetchAll = useCallback(async () => {
     const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
@@ -299,12 +301,12 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setShowDriverModal(true)}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold italic flex items-center gap-1">
               <Users className="h-4 w-4 text-primary" />
               Média diária por motorista
-              <InfoButton text="Média de TBRs finalizados por dia por motorista no período selecionado." />
+              <InfoButton text="Clique para ver detalhes. Média de TBRs finalizados por dia por motorista no período selecionado." />
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -329,11 +331,11 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
                 </div>
                 {totalAvgPages > 1 && (
                   <div className="flex items-center justify-between mt-3 pt-2 border-t">
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={driverAvgPage === 0} onClick={() => setDriverAvgPage(driverAvgPage - 1)}>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={driverAvgPage === 0} onClick={(e) => { e.stopPropagation(); setDriverAvgPage(driverAvgPage - 1); }}>
                       <ChevronLeft className="h-3 w-3 mr-1" /> Anterior
                     </Button>
                     <span className="text-xs text-muted-foreground">{driverAvgPage + 1}/{totalAvgPages}</span>
-                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={driverAvgPage >= totalAvgPages - 1} onClick={() => setDriverAvgPage(driverAvgPage + 1)}>
+                    <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" disabled={driverAvgPage >= totalAvgPages - 1} onClick={(e) => { e.stopPropagation(); setDriverAvgPage(driverAvgPage + 1); }}>
                       Próximo <ChevronRight className="h-3 w-3 ml-1" />
                     </Button>
                   </div>
@@ -343,6 +345,121 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal BI - Média diária por motorista */}
+      <Dialog open={showDriverModal} onOpenChange={setShowDriverModal}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold italic">
+              <Trophy className="h-5 w-5 text-yellow-500" />
+              Análise de Performance — Média Diária por Motorista
+            </DialogTitle>
+          </DialogHeader>
+
+          {driverAvgs.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic text-center py-8">Sem dados no período selecionado.</p>
+          ) : (
+            <div className="space-y-5">
+              {/* KPI Summary */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div className="p-3 rounded-lg bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Motoristas</p>
+                  <p className="text-xl font-bold text-primary">{driverAvgs.length}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Maior Média</p>
+                  <p className="text-xl font-bold text-emerald-600">{driverAvgs[0]?.avg ?? 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Menor Média</p>
+                  <p className="text-xl font-bold text-red-600">{driverAvgs[driverAvgs.length - 1]?.avg ?? 0}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-muted/50 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase font-semibold">Média Geral</p>
+                  <p className="text-xl font-bold text-blue-600">
+                    {driverAvgs.length > 0 ? (driverAvgs.reduce((s, d) => s + d.avg, 0) / driverAvgs.length).toFixed(1) : 0}
+                  </p>
+                </div>
+              </div>
+
+              {/* Chart */}
+              <div>
+                <h3 className="text-sm font-bold italic flex items-center gap-1 mb-2">
+                  <BarChart3 className="h-4 w-4 text-primary" /> Distribuição de Performance
+                </h3>
+                <div className="h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={driverAvgs.slice(0, 15)} layout="vertical">
+                      <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                      <XAxis type="number" tick={{ fontSize: 10 }} />
+                      <YAxis dataKey="name" type="category" tick={{ fontSize: 10 }} width={100} />
+                      <Tooltip formatter={(val: number) => [`${val} TBRs/dia`, "Média"]} />
+                      <Bar dataKey="avg" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              {/* Insights */}
+              <div>
+                <h3 className="text-sm font-bold italic flex items-center gap-1 mb-2">
+                  <TrendingUp className="h-4 w-4 text-primary" /> Insights Analíticos
+                </h3>
+                <div className="space-y-2 text-sm">
+                  {driverAvgs.length >= 2 && (
+                    <div className="p-3 rounded-lg border border-border bg-muted/20">
+                      <p className="text-muted-foreground">
+                        <strong className="text-foreground">{driverAvgs[0].name}</strong> lidera com{" "}
+                        <strong className="text-primary">{driverAvgs[0].avg} TBRs/dia</strong>, superando a média geral em{" "}
+                        <strong className="text-emerald-600">
+                          {((driverAvgs[0].avg / (driverAvgs.reduce((s, d) => s + d.avg, 0) / driverAvgs.length) - 1) * 100).toFixed(0)}%
+                        </strong>.
+                      </p>
+                    </div>
+                  )}
+                  {(() => {
+                    const avg = driverAvgs.reduce((s, d) => s + d.avg, 0) / driverAvgs.length;
+                    const belowAvg = driverAvgs.filter(d => d.avg < avg);
+                    if (belowAvg.length > 0) {
+                      return (
+                        <div className="p-3 rounded-lg border border-border bg-muted/20">
+                          <p className="text-muted-foreground">
+                            <strong className="text-amber-600">{belowAvg.length} motorista{belowAvg.length > 1 ? "s" : ""}</strong> estão abaixo da média geral ({avg.toFixed(1)} TBRs/dia). Considere acompanhar: {belowAvg.slice(0, 3).map(d => d.name).join(", ")}{belowAvg.length > 3 ? "..." : ""}.
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
+                  <div className="p-3 rounded-lg border border-border bg-muted/20">
+                    <p className="text-muted-foreground flex items-center gap-1">
+                      <Target className="h-4 w-4 text-primary shrink-0" />
+                      A diferença entre o maior e menor desempenho é de <strong className="text-foreground">{(driverAvgs[0]?.avg - driverAvgs[driverAvgs.length - 1]?.avg).toFixed(1)} TBRs/dia</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full ranking */}
+              <div>
+                <h3 className="text-sm font-bold italic mb-2">Ranking Completo</h3>
+                <div className="space-y-1.5 max-h-[300px] overflow-y-auto">
+                  {driverAvgs.map((item, i) => (
+                    <div key={i} className="flex items-center gap-2 text-sm px-2 py-1.5 rounded hover:bg-muted/50">
+                      <span className={`font-bold w-6 text-center ${i === 0 ? "text-yellow-500" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-700" : "text-muted-foreground"}`}>
+                        {i + 1}º
+                      </span>
+                      <span className="flex-1 truncate">{item.name}</span>
+                      <span className="font-bold text-primary">{item.avg}</span>
+                      <span className="text-[10px] text-muted-foreground">TBRs/dia</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
