@@ -33,6 +33,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [driverAvgs, setDriverAvgs] = useState<DriverAvg[]>([]);
   const [driverAvgPage, setDriverAvgPage] = useState(0);
   const [showDriverModal, setShowDriverModal] = useState(false);
+  const [chartLoading, setChartLoading] = useState(true);
 
   const fetchAll = useCallback(async () => {
     const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
@@ -89,6 +90,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
   // Fetch chart data using global dates only
   const fetchChartData = useCallback(async () => {
+    setChartLoading(true);
     const todayStr = getBrazilTodayStr();
     const todayDate = new Date(todayStr);
 
@@ -212,6 +214,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     } else {
       setDriverAvgs([]);
     }
+    setChartLoading(false);
   }, [unitId, startDate, endDate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
@@ -272,15 +275,21 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             <CardTitle className="text-sm font-bold italic flex items-center gap-1">Carregamentos <InfoButton text="Evolução diária do número de carregamentos realizados na unidade." /></CardTitle>
           </CardHeader>
           <CardContent className="h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Bar dataKey="count" name="Carregamentos" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            {chartLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={barData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="count" name="Carregamentos" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -289,15 +298,21 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             <CardTitle className="text-sm font-bold italic flex items-center gap-1">TBRs escaneados <InfoButton text="Evolução diária do número de TBRs escaneados na unidade." /></CardTitle>
           </CardHeader>
           <CardContent className="h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={lineData}>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" name="TBRs" stroke="hsl(210, 70%, 55%)" strokeWidth={2} dot={{ r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
+            {chartLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={lineData}>
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+                  <XAxis dataKey="day" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="count" name="TBRs" stroke="hsl(210, 70%, 55%)" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -310,7 +325,11 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {driverAvgs.length === 0 ? (
+            {chartLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : driverAvgs.length === 0 ? (
               <p className="text-xs text-muted-foreground italic py-4 text-center">Sem dados no período</p>
             ) : (
               <>
