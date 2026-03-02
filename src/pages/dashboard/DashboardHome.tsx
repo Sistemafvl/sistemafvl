@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { translateStatus } from "@/lib/status-labels";
-import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -48,6 +48,10 @@ interface TimelineEvent {
   action: string;
   detail: string;
   type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso";
+  photo_url?: string | null;
+  reason?: string | null;
+  observations?: string | null;
+  is_seller?: boolean;
 }
 
 const DashboardHome = () => {
@@ -64,6 +68,7 @@ const DashboardHome = () => {
   const [tbrResult, setTbrResult] = useState<TbrResult | null>(null);
   const [tbrLoading, setTbrLoading] = useState(false);
   const [tbrNotFound, setTbrNotFound] = useState(false);
+  const [psDetailEvent, setPsDetailEvent] = useState<TimelineEvent | null>(null);
   const [tbrError, setTbrError] = useState("");
 
   // DNR stats
@@ -224,6 +229,10 @@ const DashboardHome = () => {
           action: ps.status === "open" ? "Status: PS Aberto" : "Status: PS Fechado",
           detail: ps.description,
           type: "ps",
+          photo_url: ps.photo_url,
+          reason: ps.reason,
+          observations: ps.observations,
+          is_seller: ps.is_seller,
         });
       });
 
@@ -493,6 +502,15 @@ const DashboardHome = () => {
                                   {evt.conferente && (
                                     <span className="text-muted-foreground">[{evt.conferente}]</span>
                                   )}
+                                  {evt.type === "ps" && (evt.photo_url || evt.reason || evt.observations) && (
+                                    <button
+                                      onClick={() => setPsDetailEvent(evt)}
+                                      className="text-muted-foreground hover:text-primary transition-colors"
+                                      title="Ver detalhes do PS"
+                                    >
+                                      <Eye className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
                                 <p className={`font-semibold ${color}`}>{evt.action}</p>
                                 <p className="text-muted-foreground">{evt.detail}</p>
@@ -506,6 +524,38 @@ const DashboardHome = () => {
                 </div>
               ) : null}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PS Detail Modal */}
+      {psDetailEvent && (
+        <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={() => setPsDetailEvent(null)}>
+          <div className="bg-background rounded-lg shadow-xl max-w-sm w-full p-4 space-y-3" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-sm">Detalhes do PS</h3>
+              <button onClick={() => setPsDetailEvent(null)} className="text-muted-foreground hover:text-foreground">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {psDetailEvent.photo_url && (
+              <img src={psDetailEvent.photo_url} alt="Foto PS" className="w-full rounded-md object-cover max-h-48" />
+            )}
+            {psDetailEvent.reason && (
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold">Motivo:</span>
+                <p className="text-sm">{psDetailEvent.reason}</p>
+              </div>
+            )}
+            {psDetailEvent.observations && (
+              <div>
+                <span className="text-xs text-muted-foreground font-semibold">Observações:</span>
+                <p className="text-sm">{psDetailEvent.observations}</p>
+              </div>
+            )}
+            {psDetailEvent.is_seller && (
+              <Badge variant="secondary" className="text-xs">Seller</Badge>
+            )}
           </div>
         </div>
       )}
