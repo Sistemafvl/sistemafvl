@@ -474,6 +474,17 @@ const PSPage = () => {
 
   const handleFinalize = async (id: string) => {
     await supabase.from("ps_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", id);
+    
+    // Fechar piso_entry aberta com mesmo tbr_code
+    const entry = entries.find(e => e.id === id);
+    if (entry && unitSession) {
+      await supabase.from("piso_entries")
+        .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+        .ilike("tbr_code", entry.tbr_code)
+        .eq("unit_id", unitSession.id)
+        .eq("status", "open");
+    }
+    
     setEntries(prev => prev.map(e => e.id === id ? { ...e, status: "closed" } : e));
     toast({ title: "PS finalizado" });
   };
