@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -52,44 +53,70 @@ const AdminOverviewPage = () => {
       const start = startOfDay(parseISO(startDate)).toISOString();
       const end = endOfDay(parseISO(endDate)).toISOString();
 
-      let ridesQuery = supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, loading_status, started_at, finished_at").gte("completed_at", start).lte("completed_at", end);
-      let psQuery = supabase.from("ps_entries").select("id, unit_id, status, created_at").gte("created_at", start).lte("created_at", end);
-      let rtoQuery = supabase.from("rto_entries").select("id, unit_id, status, created_at").gte("created_at", start).lte("created_at", end);
-      let pisoQuery = supabase.from("piso_entries").select("id, unit_id, status, created_at").gte("created_at", start).lte("created_at", end);
-      let reviewsQuery = supabase.from("unit_reviews").select("id, unit_id, rating, created_at").gte("created_at", start).lte("created_at", end);
-
+      // Build unit filter
+      let unitFilter: { type: "single"; id: string } | { type: "multi"; ids: string[] } | null = null;
       if (selectedUnit !== "all") {
-        ridesQuery = ridesQuery.eq("unit_id", selectedUnit);
-        psQuery = psQuery.eq("unit_id", selectedUnit);
-        rtoQuery = rtoQuery.eq("unit_id", selectedUnit);
-        pisoQuery = pisoQuery.eq("unit_id", selectedUnit);
-        reviewsQuery = reviewsQuery.eq("unit_id", selectedUnit);
+        unitFilter = { type: "single", id: selectedUnit };
       } else if (selectedDomain !== "all") {
         const unitIds = filteredUnits.map((u) => u.id);
         if (unitIds.length > 0) {
-          ridesQuery = ridesQuery.in("unit_id", unitIds);
-          psQuery = psQuery.in("unit_id", unitIds);
-          rtoQuery = rtoQuery.in("unit_id", unitIds);
-          pisoQuery = pisoQuery.in("unit_id", unitIds);
-          reviewsQuery = reviewsQuery.in("unit_id", unitIds);
+          unitFilter = { type: "multi", ids: unitIds };
         }
       }
 
-      const [ridesRes, psRes, rtoRes, pisoRes, reviewsRes, driversRes, conferentesRes, tbrsRes] = await Promise.all([
-        ridesQuery, psQuery, rtoQuery, pisoQuery, reviewsQuery,
-        supabase.from("drivers_public").select("id, name, active"),
-        supabase.from("user_profiles").select("id, name, active, unit_id"),
-        supabase.from("ride_tbrs").select("id, ride_id"),
+      const addUnitFilter = (q: any) => {
+        if (!unitFilter) return q;
+        if (unitFilter.type === "single") return q.eq("unit_id", unitFilter.id);
+        return q.in("unit_id", unitFilter.ids);
+      };
+
+      // Paginated queries for date-filtered tables
+      const [ridesData, psData, rtoData, pisoData, reviewsData, driversData, conferentesData] = await Promise.all([
+        fetchAllRows((from, to) => addUnitFilter(
+          supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, loading_status, started_at, finished_at")
+            .gte("completed_at", start).lte("completed_at", end)
+        ).range(from, to)),
+        fetchAllRows((from, to) => addUnitFilter(
+          supabase.from("ps_entries").select("id, unit_id, status, created_at")
+            .gte("created_at", start).lte("created_at", end)
+        ).range(from, to)),
+        fetchAllRows((from, to) => addUnitFilter(
+          supabase.from("rto_entries").select("id, unit_id, status, created_at")
+            .gte("created_at", start).lte("created_at", end)
+        ).range(from, to)),
+        fetchAllRows((from, to) => addUnitFilter(
+          supabase.from("piso_entries").select("id, unit_id, status, created_at")
+            .gte("created_at", start).lte("created_at", end)
+        ).range(from, to)),
+        fetchAllRows((from, to) => addUnitFilter(
+          supabase.from("unit_reviews").select("id, unit_id, rating, created_at")
+            .gte("created_at", start).lte("created_at", end)
+        ).range(from, to)),
+        fetchAllRows((from, to) =>
+          supabase.from("drivers_public").select("id, name, active").range(from, to)
+        ),
+        fetchAllRows((from, to) =>
+          supabase.from("user_profiles").select("id, name, active, unit_id").range(from, to)
+        ),
       ]);
 
-      setRides(ridesRes.data || []);
-      setPsEntries(psRes.data || []);
-      setRtoEntries(rtoRes.data || []);
-      setPisoEntries(pisoRes.data || []);
-      setReviews(reviewsRes.data || []);
-      setDrivers(driversRes.data || []);
-      setConferentes(conferentesRes.data || []);
-      setTbrs(tbrsRes.data || []);
+      setRides(ridesData);
+      setPsEntries(psData);
+      setRtoEntries(rtoData);
+      setPisoEntries(pisoData);
+      setReviews(reviewsData);
+      setDrivers(driversData);
+      setConferentes(conferentesData);
+
+      // TBRs: fetch only for the ride IDs we got (with chunking + pagination)
+      const rideIds = ridesData.map((r: any) => r.id);
+      const tbrsData = await fetchAllRowsWithIn(
+        (ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", ids).range(from, to),
+        rideIds
+      );
+      setTbrs(tbrsData);
+
       setLoading(false);
     };
     fetchData();
