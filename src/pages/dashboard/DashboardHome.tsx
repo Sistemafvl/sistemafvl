@@ -61,8 +61,8 @@ const DashboardHome = () => {
   const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
   const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
   const [tbrSearch, setTbrSearch] = useState("");
-  const [feedbackAvg, setFeedbackAvg] = useState(0);
-  const [feedbackTotal, setFeedbackTotal] = useState(0);
+  const [feedbackAvg, setFeedbackAvg] = useState<number | null>(null);
+  const [feedbackTotal, setFeedbackTotal] = useState<number | null>(null);
   const [showTbrModal, setShowTbrModal] = useState(false);
   const [searchedTbr, setSearchedTbr] = useState("");
   const [tbrResult, setTbrResult] = useState<TbrResult | null>(null);
@@ -358,11 +358,17 @@ const DashboardHome = () => {
           <div className="flex-1">
             <p className="text-sm font-semibold text-muted-foreground">Avaliação da Unidade</p>
             <div className="flex items-center gap-3 mt-0.5">
-              <span className="text-2xl font-bold text-amber-500">{feedbackAvg > 0 ? feedbackAvg.toFixed(1) : "—"}</span>
-              <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <MessageSquare className="h-3 w-3" />
-                {feedbackTotal} feedbacks
-              </span>
+              {feedbackAvg === null ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : (
+                <>
+                  <span className="text-2xl font-bold text-amber-500">{feedbackAvg > 0 ? feedbackAvg.toFixed(1) : "—"}</span>
+                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                    <MessageSquare className="h-3 w-3" />
+                    {feedbackTotal} feedbacks
+                  </span>
+                </>
+              )}
             </div>
           </div>
           <div className="flex gap-0.5">

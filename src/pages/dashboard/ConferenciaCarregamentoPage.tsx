@@ -1691,10 +1691,8 @@ const ConferenciaCarregamentoPage = () => {
       </div>
 
       {isLoading ? (
-        <div className="flex gap-4">
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
         </div>
       ) : isSearchLoading ? (
         <div className="flex items-center justify-center py-12">
