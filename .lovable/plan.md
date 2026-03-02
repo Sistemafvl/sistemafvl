@@ -1,78 +1,97 @@
 
 
-## Plano de Correção e Melhorias
+## Plano de Implementação (6 mudanças)
 
-### 1. Bug dos Números na Operação + Spinners nos Cards Indicadores
+### 1. Renomear "Retorno Piso" para "Insucessos" no menu
 
-**Problema**: Os 4 cards indicadores (Carregamentos, TBRs lidos, Retornos piso, Conclusão) mostram valores computados de `cards` que começa vazio. Os valores aparecem como `0` durante o carregamento e podem flashar dados incorretos antes da carga completa. Além disso, comparações case-sensitive entre TBR codes de `ride_tbrs` e `piso_entries`/`ps_entries`/`rto_entries` podem causar contagens erradas (ex: `tbr123` vs `TBR123`).
+**Arquivo:** `src/components/dashboard/DashboardSidebar.tsx` (linha 51)
 
-**Arquivo**: `src/pages/dashboard/OperacaoPage.tsx`
+Alterar `{ title: "Retorno Piso", ... }` para `{ title: "Insucessos", ... }`. Manter a URL e o ícone iguais.
 
-**Correções**:
-- Adicionar spinner (Loader2) nos 4 cards indicadores enquanto `loading === true`
-- Normalizar todos os códigos TBR para uppercase nas comparações (`tbrCodesByRide`, `returnTbrSets`, `returnSet` no modal)
-- No modal de detalhes, normalizar `returnSet` para uppercase
+Tambem atualizar quaisquer referências visuais ao nome "Retorno Piso" em labels de métricas no `DashboardMetrics.tsx` (linha 243, label "Retornos Piso abertos" -> "Insucessos abertos") e no `DashboardHome.tsx` (caso exista referência ao texto).
 
-### 2. Sugestão de Logins Anteriores no Modal de Programação
+---
 
-**Arquivo**: `src/components/dashboard/QueuePanel.tsx`
+### 2. Spinner no botão PDF do PS
 
-**Mudanças**:
-- Ao abrir o modal, buscar os logins anteriores do motorista naquela unidade (`driver_rides` filtrado por `driver_id` + `unit_id`, campo `login`)
-- Exibir seção "Logins anteriores" acima do campo Login, com botões clicáveis (igual a "Rotas anteriores")
-- Se o login já foi usado hoje, mostrar um tick verde ao lado do nome (usar `usedLoginsToday` que já existe)
-- Ao clicar num login anterior, selecionar o login correspondente no combobox
+**Arquivo:** `src/pages/dashboard/PSPage.tsx`
 
-### 3. Coluna "Conferente" no Retorno Piso
+- Adicionar estado `generatingPdf` (boolean)
+- No `generatePDF`, setar `true` no início e `false` no final
+- No botão PDF (linha ~895), mostrar `Loader2 animate-spin` em vez de `FileText` enquanto `generatingPdf === true`, e desabilitar o botão
 
-**Arquivo**: `src/pages/dashboard/RetornoPisoPage.tsx`
+---
 
-**Mudanças**:
-- Adicionar `conferente_id` ao select da query `loadEntries`
-- Buscar nomes dos conferentes via `user_profiles` para os IDs encontrados
-- Adicionar coluna "Conferente" na tabela entre "Rota" e "Motivo"
-- Exibir o nome do conferente que registrou o TBR no piso
+### 3. Modal de confirmação ao Finalizar carregamento
 
-### 4. Case-Insensitive para TBR em Todo o Sistema
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-**Arquivos afetados**: `OperacaoPage.tsx`, `RetornoPisoPage.tsx` e qualquer comparação de TBR code
+- Adicionar estado `finalizarConfirmRideId: string | null`
+- Ao clicar "Finalizar" (linhas 1743 e 2039), em vez de chamar `handleFinalizar` diretamente, setar `finalizarConfirmRideId = ride.id`
+- Criar um `Dialog` de confirmação com:
+  - Icone de alerta amarelo
+  - Texto: "Confirme com o motorista antes de finalizar:"
+  - Exibir: **Quantidade de TBRs bipados** e **Login utilizado no coletor**
+  - Botão "Confirmar e Finalizar" que chama `handleFinalizar(finalizarConfirmRideId)` e fecha o modal
+  - Botão "Cancelar" que fecha o modal
 
-**Mudanças**:
-- Em `OperacaoPage.tsx`: normalizar `t.code.toUpperCase()` ao construir `tbrCodesByRide` e ao comparar em `returnTbrSets`
-- Em `RetornoPisoPage.tsx`: usar `.ilike()` nas buscas de `ride_tbrs` (já usa `.ilike()` nas verificações de duplicidade, mas a busca principal na linha 209 usa `.eq("code", code)` - mudar para `.ilike("code", code)`)
-- No modal de detalhes da Operação: normalizar `returnSet` para uppercase
+---
 
-### Detalhes Técnicos
+### 4. Remover filtros de calendário dos cards de gráficos na Visão Geral + Substituir "Status dos carregamentos" por "Média diária por motorista"
 
-**Operação - Spinners nos cards**:
-```
-// Dentro do grid de indicadores, cada card mostra:
-{loading ? <Loader2 className="animate-spin" /> : <p>{valor}</p>}
-```
+**Arquivo:** `src/components/dashboard/DashboardMetrics.tsx`
 
-**Case-insensitive fix no OperacaoPage**:
-```
-tbrCodesByRide[t.ride_id].add(t.code.toUpperCase());
-// ...
-tbrCodesByRide[p.ride_id]?.has(p.tbr_code.toUpperCase())
-```
+- Remover o componente `DateRangeFilter` e os estados `barDates`, `lineDates`, `pieDates`
+- Os 3 cards de gráficos passam a usar apenas os filtros globais `startDate`/`endDate`
+- Substituir o card "Status dos carregamentos" (PieChart) por uma **lista de motoristas com média diária de TBRs finalizados**:
+  - Buscar `driver_rides` finalizados no período, com contagem de TBRs por motorista
+  - Calcular a média diária (total TBRs / dias no período)
+  - Exibir lista paginada (5 por página) com nome do motorista e média
 
-**Logins anteriores no QueuePanel**:
-```
-// Buscar logins anteriores do motorista
-const { data: loginsData } = await supabase
-  .from("driver_rides")
-  .select("login")
-  .eq("driver_id", entry.driver_id)
-  .eq("unit_id", unitId)
-  .not("login", "is", null);
-const uniqueLogins = [...new Set(loginsData.map(r => r.login))];
-```
+**Arquivo:** `src/components/dashboard/DashboardInsights.tsx`
 
-**Conferente no Retorno Piso**:
-```
-// Adicionar conferente_id ao select
-.select("id, tbr_code, driver_name, route, reason, created_at, ride_id, conferente_id")
-// Buscar nomes via user_profiles
-```
+- Remover os `DateRangeFilter` dos 3 `PaginatedRankingCard`
+- Remover os estados `driverDates`, `returnDates`, `confDates`
+- Os cards usam apenas os filtros globais `startDate`/`endDate` passados via props
+
+---
+
+### 5. Exclusão de TBR com senha do gerente + exclusão em lote
+
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+
+Mudanças no card inline (linhas ~1848-1856) e no Focus Mode (linhas ~2003-2006):
+
+- **Exclusão individual**: Ao clicar no X, abrir um modal pedindo a senha do gerente (`manager_password`). Validar contra a tabela `managers`. Só excluir se a senha for correta.
+
+- **Exclusão em lote**:
+  - Adicionar checkbox ao lado de cada TBR na lista (visível apenas para `isMyRide`)
+  - Adicionar estado `selectedTbrsForDelete: Record<string, Set<string>>` (por ride_id)
+  - Quando há TBRs selecionados, mostrar botão "Excluir selecionados (N)" que abre o mesmo modal de senha do gerente
+  - Após validar senha, chamar `handleDeleteTbr` para cada TBR selecionado (em sequência ou paralelo)
+  - Cada TBR excluído segue o fluxo existente: vai para Insucessos (piso_entries) com motivo "Removido do carregamento"
+
+---
+
+### 6. Verificação do mecanismo de amarelo (3 bipagens)
+
+O mecanismo já está implementado e funcionando:
+- Quando um TBR é bipado 3 vezes, o sistema detecta como triplicata
+- Remove as 2 cópias extras e marca a original com `_yellowHighlight: true`
+- O `getTbrItemClass` aplica `bg-yellow-100 text-yellow-700 border-yellow-300`
+- O campo `highlight: "yellow"` é salvo no banco (`ride_tbrs.highlight`)
+
+Nenhuma alteração necessaria neste mecanismo.
+
+---
+
+### Resumo de Arquivos Afetados
+
+| Arquivo | Mudanças |
+|---------|---------|
+| `DashboardSidebar.tsx` | Renomear menu |
+| `PSPage.tsx` | Spinner no PDF |
+| `ConferenciaCarregamentoPage.tsx` | Modal finalizar + senha gerente para excluir + exclusão em lote |
+| `DashboardMetrics.tsx` | Remover filtros cards + substituir pie chart por média diária |
+| `DashboardInsights.tsx` | Remover filtros cards |
 
