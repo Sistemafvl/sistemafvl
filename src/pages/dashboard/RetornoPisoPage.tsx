@@ -175,14 +175,13 @@ const RetornoPisoPage = () => {
     }
 
     // Auto-close piso_entries that already have a PS registered
-    const remainingEntries = allEntries.filter(e => !operationalEntries.some(op => op.id === e.id) || true);
-    const openCodes = remainingEntries.map(e => e.tbr_code.toLowerCase());
-    if (openCodes.length > 0) {
+    const remainingEntries = allEntries;
+    if (remainingEntries.length > 0) {
+      // Fetch ALL ps_entries for this unit to do case-insensitive comparison client-side
       const { data: psMatches } = await supabase
         .from("ps_entries")
         .select("tbr_code")
-        .eq("unit_id", unitSession.id)
-        .in("tbr_code", openCodes);
+        .eq("unit_id", unitSession.id);
       if (psMatches && psMatches.length > 0) {
         const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
         const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
