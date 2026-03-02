@@ -4,14 +4,9 @@ import { fetchAllRows } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange } from "@/lib/utils";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn } from "@/lib/utils";
 
 interface Props {
   unitId: string;
@@ -29,43 +24,7 @@ interface ConferenteRank {
   count: number;
 }
 
-interface CardDateRange {
-  start?: Date;
-  end?: Date;
-}
-
 const PAGE_SIZE = 5;
-
-const DateRangeFilter = ({ value, onChange }: { value: CardDateRange; onChange: (v: CardDateRange) => void }) => {
-  const [startOpen, setStartOpen] = useState(false);
-  const [endOpen, setEndOpen] = useState(false);
-  
-  return (
-    <div className="flex items-center gap-1">
-      <Popover open={startOpen} onOpenChange={setStartOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
-            <CalendarIcon className="h-3 w-3 mr-1" />
-            {value.start ? format(value.start, "dd/MM") : "De"}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 z-50" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <Calendar mode="single" selected={value.start} onSelect={(d) => { onChange({ ...value, start: d ?? undefined }); setStartOpen(false); }} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
-        </PopoverContent>
-      </Popover>
-      <Popover open={endOpen} onOpenChange={setEndOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 px-1.5 text-[10px] text-muted-foreground">
-            {value.end ? format(value.end, "dd/MM") : "Até"}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0 z-50" align="end" onOpenAutoFocus={(e) => e.preventDefault()}>
-          <Calendar mode="single" selected={value.end} onSelect={(d) => { onChange({ ...value, end: d ?? undefined }); setEndOpen(false); }} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
-        </PopoverContent>
-      </Popover>
-    </div>
-  );
-};
 
 const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   const [topDrivers, setTopDrivers] = useState<DriverRank[]>([]);
@@ -76,32 +35,25 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   const [avgLoadTime, setAvgLoadTime] = useState("");
   const [bestDay, setBestDay] = useState("");
 
-  // Per-card date overrides
-  const [driverDates, setDriverDates] = useState<CardDateRange>({});
-  const [returnDates, setReturnDates] = useState<CardDateRange>({});
-  const [confDates, setConfDates] = useState<CardDateRange>({});
-
   // Pagination
   const [driverPage, setDriverPage] = useState(0);
   const [returnPage, setReturnPage] = useState(0);
   const [confPage, setConfPage] = useState(0);
 
-  const getSince = useCallback((cardDates: CardDateRange) => {
-    const s = cardDates.start || startDate;
-    if (s) return s.toISOString();
+  const getSince = useCallback(() => {
+    if (startDate) return startDate.toISOString();
     const d = new Date();
     d.setDate(d.getDate() - 30);
     return d.toISOString();
   }, [startDate]);
 
-  const getUntil = useCallback((cardDates: CardDateRange) => {
-    const e = cardDates.end || endDate;
-    return e ? e.toISOString() : undefined;
+  const getUntil = useCallback(() => {
+    return endDate ? endDate.toISOString() : undefined;
   }, [endDate]);
 
   const fetchInsights = useCallback(async () => {
-    const since = getSince({});
-    const until = getUntil({});
+    const since = getSince();
+    const until = getUntil();
 
     let ridesQuery = supabase
       .from("driver_rides")
@@ -155,10 +107,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     }
   }, [unitId, startDate, endDate, getSince, getUntil]);
 
-  // Fetch top drivers with per-card dates — uses RPC to count TBRs (not rides)
   const fetchTopDrivers = useCallback(async () => {
-    const since = getSince(driverDates);
-    const until = getUntil(driverDates);
+    const since = getSince();
+    const until = getUntil();
 
     const { data: rpcData } = await supabase.rpc("get_top_drivers_by_tbrs", {
       p_unit_id: unitId,
@@ -169,11 +120,11 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     if (!rpcData || rpcData.length === 0) { setTopDrivers([]); return; }
     setTopDrivers(rpcData.map((r: any) => ({ name: r.driver_name ?? "Desconhecido", count: Number(r.tbr_count) })));
     setDriverPage(0);
-  }, [unitId, driverDates, getSince, getUntil]);
+  }, [unitId, getSince, getUntil]);
 
   const fetchTopReturns = useCallback(async () => {
-    const since = getSince(returnDates);
-    const until = getUntil(returnDates);
+    const since = getSince();
+    const until = getUntil();
 
     const [pisoData, rtoData, psData] = await Promise.all([
       fetchAllRows<{ driver_name: string | null; tbr_code: string; reason: string | null }>((from, to) =>
@@ -197,11 +148,11 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     });
     setTopReturns(Object.entries(driverTbrSets).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count));
     setReturnPage(0);
-  }, [unitId, returnDates, getSince, getUntil]);
+  }, [unitId, getSince, getUntil]);
 
   const fetchTopConferentes = useCallback(async () => {
-    const since = getSince(confDates);
-    const until = getUntil(confDates);
+    const since = getSince();
+    const until = getUntil();
 
     const confRides = await fetchAllRows<{ conferente_id: string | null }>((from, to) => {
       let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
@@ -218,7 +169,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const confMap = new Map((confs ?? []).map(c => [c.id, c.name]));
     setTopConferentes(sorted.map(([id, count]) => ({ name: confMap.get(id) ?? "Desconhecido", count })));
     setConfPage(0);
-  }, [unitId, confDates, getSince, getUntil]);
+  }, [unitId, getSince, getUntil]);
 
   useEffect(() => { fetchInsights(); }, [fetchInsights]);
   useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
@@ -226,11 +177,10 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
-    title, icon: Icon, data, color, page, setPage, dates, setDates, infoText,
+    title, icon: Icon, data, color, page, setPage, infoText,
   }: {
     title: string; icon: any; data: DriverRank[] | ConferenteRank[]; color: string;
     page: number; setPage: (p: number) => void;
-    dates: CardDateRange; setDates: (d: CardDateRange) => void;
     infoText?: string;
   }) => {
     const totalPages = Math.ceil(data.length / PAGE_SIZE);
@@ -238,13 +188,12 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
 
     return (
       <Card>
-        <CardHeader className="pb-2 flex flex-row items-center justify-between">
+        <CardHeader className="pb-2">
           <CardTitle className="text-sm font-bold italic flex items-center gap-2">
             <Icon className={`h-4 w-4 ${color}`} />
             {title}
             {infoText && <InfoButton text={infoText} />}
           </CardTitle>
-          <DateRangeFilter value={dates} onChange={setDates} />
         </CardHeader>
         <CardContent>
           {data.length === 0 ? (
@@ -286,9 +235,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} dates={driverDates} setDates={setDriverDates} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos) no período." />
-        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} dates={returnDates} setDates={setReturnDates} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO) no período." />
-        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} dates={confDates} setDates={setConfDates} infoText="Conferentes que mais escanearam TBRs no período." />
+        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos) no período." />
+        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO) no período." />
+        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} infoText="Conferentes que mais escanearam TBRs no período." />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

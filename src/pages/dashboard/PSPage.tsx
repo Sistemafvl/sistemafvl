@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil } from "lucide-react";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2 } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import { toast } from "@/hooks/use-toast";
@@ -105,6 +105,7 @@ const PSPage = () => {
   const [isSeller, setIsSeller] = useState(false);
   const [observations, setObservations] = useState("");
   const [editingEntry, setEditingEntry] = useState<PsEntry | null>(null);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -595,6 +596,8 @@ const PSPage = () => {
   };
 
   const generatePDF = async () => {
+    setGeneratingPdf(true);
+    try {
     const doc = new jsPDF();
     const pageW = doc.internal.pageSize.getWidth();
     const pageH = doc.internal.pageSize.getHeight();
@@ -763,6 +766,9 @@ const PSPage = () => {
     addFooter(doc, pageW, pageH);
     doc.save(`PS_Relatorio_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
     toast({ title: "PDF gerado com sucesso" });
+    } finally {
+      setGeneratingPdf(false);
+    }
   };
 
   const addFooter = (doc: jsPDF, pageW: number, pageH: number) => {
@@ -892,8 +898,8 @@ const PSPage = () => {
               </PopoverContent>
             </Popover>
 
-            <Button variant="outline" size="sm" onClick={generatePDF} className="gap-1">
-              <FileText className="h-3.5 w-3.5" /> PDF
+            <Button variant="outline" size="sm" onClick={generatePDF} className="gap-1" disabled={generatingPdf}>
+              {generatingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} PDF
             </Button>
           </div>
 

@@ -164,7 +164,7 @@ const DashboardHome = () => {
         if (dnrCheck.data) { entrySource = "DNR"; entryDate = dnrCheck.data.created_at; }
         else if (psCheck.data) { entrySource = "PS"; entryDate = psCheck.data.created_at; }
         else if (rtoCheck.data) { entrySource = "RTO"; entryDate = rtoCheck.data.created_at; }
-        else if (pisoCheck.data) { entrySource = "Retorno Piso"; entryDate = pisoCheck.data.created_at; }
+        else if (pisoCheck.data) { entrySource = "Insucessos"; entryDate = pisoCheck.data.created_at; }
 
         // Get unit name
         const unitId = (foundEntry as any).unit_id;
@@ -189,7 +189,7 @@ const DashboardHome = () => {
           }
           if (psCheck.data && psCheck.data.status === "open") return "PS Aberto";
           if (rtoCheck.data && rtoCheck.data.status === "open") return "RTO Aberto";
-          if (pisoCheck.data && pisoCheck.data.status === "open") return "Retorno Piso";
+          if (pisoCheck.data && pisoCheck.data.status === "open") return "Insucessos";
           return "Sem carregamento";
         };
 
@@ -264,7 +264,7 @@ const DashboardHome = () => {
         // RTO open
         if (rto && rto.status === "open") return "RTO Aberto";
         // Piso open
-        if (piso && piso.status === "open") return "Retorno Piso";
+        if (piso && piso.status === "open") return "Insucessos";
         // Fallback to ride loading_status translated
         return translateStatus(ride.loading_status);
       };
