@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Upload, CheckCircle, Loader2, FileText, Pencil } from "lucide-react";
+import { DollarSign, Upload, CheckCircle, Loader2, FileText, Pencil, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
@@ -133,6 +133,25 @@ const DriverRecebiveis = () => {
       <h1 className="text-2xl font-bold italic flex items-center gap-2">
         <DollarSign className="h-6 w-6 text-primary" /> Recebíveis
       </h1>
+
+      {/* NF instruction alert */}
+      <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex gap-3 items-start">
+        <AlertCircle className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+        <div className="text-sm space-y-1">
+          <p className="font-semibold text-blue-700 dark:text-blue-400">Importante: Emissão de Nota Fiscal</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Emita sua NF dentro do prazo estipulado e confira atentamente as seguintes informações antes do envio:
+          </p>
+          <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-1">
+            <li><strong>CNPJ Favela Llog:</strong> 45.957.516/0014-81</li>
+            <li><strong>Código de Prestação de Serviço:</strong> 16.02.01</li>
+            <li><strong>Valor dos Serviços:</strong> deve corresponder ao valor do relatório</li>
+          </ul>
+          <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+            Em caso de divergência nessas informações, o pagamento ficará retido até a devida correção da nota fiscal.
+          </p>
+        </div>
+      </div>
 
       {loading ? (
         <div className="space-y-3">

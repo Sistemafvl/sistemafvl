@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package, AlertTriangle } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -136,6 +136,18 @@ const DriverRides = () => {
         <Car className="h-5 w-5 text-primary" />
         Corridas
       </h1>
+
+      {/* Login verification alert */}
+      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex gap-3 items-start">
+        <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+        <div className="text-sm space-y-1">
+          <p className="font-semibold text-amber-700 dark:text-amber-400">Atenção: Verifique seu login antes de cada operação</p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Certifique-se de que o login utilizado no coletor da Amazon corresponde exatamente ao que consta na sua programação no sistema FVL. 
+            Divergências entre os logins podem causar inconsistências operacionais, administrativas e impactar diretamente no cálculo do seu pagamento.
+          </p>
+        </div>
+      </div>
 
       <div className="flex flex-wrap gap-2 items-center">
         <Popover>
