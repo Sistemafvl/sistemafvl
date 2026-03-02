@@ -1,39 +1,65 @@
 
 
-## Problema
+## Plano de Implementação — Cards, Indicadores e Insights em 5 Páginas
 
-O auto-close não está funcionando por causa da **comparação case-sensitive**. O `.in("tbr_code", openCodes)` no Supabase/PostgreSQL é case-sensitive. Os códigos TBR no `piso_entries` estão em minúsculas (`tbr314129965`) mas no `ps_entries` estão em maiúsculas (`TBR314129965`), então o match falha.
+### 1. Insucessos (RetornoPisoPage.tsx)
 
-Além disso, a linha 178 tem um bug lógico: `|| true` anula o filtro completamente.
+**Filtros adicionais:**
+- Filtro de data (início/fim) com Calendar popover para filtrar `piso_entries` por `created_at`
+- Select de Conferente (carregado de `user_profiles` da unidade)
+- Select de Motorista (extraído dos entries únicos)
 
-## Correção
+**Cards indicadores (acima da tabela):**
+- Total de Insucessos abertos
+- Top Motivo (motivo mais frequente)
+- Top Motorista ofensor (mais insucessos)
+- Top Conferente (mais registros)
 
-**Arquivo:** `src/pages/dashboard/RetornoPisoPage.tsx` — linhas 177-201
+### 2. Motoristas Parceiros (MotoristasParceirosPage.tsx)
 
-Trocar a busca `.in("tbr_code", openCodes)` por uma abordagem que normalize a comparação. Como o `.in()` do Supabase não suporta case-insensitive, a solução é buscar **todos** os `ps_entries` da unidade e comparar no client-side com `.toLowerCase()`, ou usar `.or()` com múltiplos `ilike`. A abordagem mais simples e eficiente:
+**Cards indicadores (acima dos filtros):**
+- Total de Motoristas cadastrados
+- Motoristas Ativos (com operação nos últimos 30 dias)
+- Motoristas Inativos (sem operação nos últimos 30 dias)
+- Estados distintos representados
 
-1. Buscar `ps_entries` da unidade sem filtro de `tbr_code` (apenas `unit_id`)
-2. Fazer o match case-insensitive no JavaScript
-3. Corrigir o filtro `|| true` na linha 178
+### 3. PS - Problem Solve (PSPage.tsx)
 
-```typescript
-// Linha 178: corrigir o filtro — remover || true
-const remainingEntries = allEntries;
+**Cards indicadores (acima da tabela):**
+- Total PS no período
+- PS Abertos vs Finalizados
+- Top Motivo PS
+- % Seller (is_seller = true)
 
-// Buscar TODOS os ps_entries da unidade para comparação case-insensitive
-const { data: psMatches } = await supabase
-  .from("ps_entries")
-  .select("tbr_code")
-  .eq("unit_id", unitSession.id);
+### 4. DNR (DNRPage.tsx)
 
-if (psMatches && psMatches.length > 0) {
-  const psSet = new Set(psMatches.map(p => p.tbr_code.toLowerCase()));
-  const toClosePs = remainingEntries.filter(e => psSet.has(e.tbr_code.toLowerCase()));
-  // ... fechar e remover da lista
-}
-```
+**Cards indicadores (acima das tabs):**
+- Total DNRs registrados
+- Valor total DNR (R$)
+- DNRs Abertos / Analisando / Finalizados
+- Valor total com desconto aplicado
+
+### 5. Ciclos (CiclosPage.tsx)
+
+**Novo campo:** `qtd_pacotes_informado` (manual, entre Qtd Pacotes e Abertura Galpão)
+
+**Relatório (modal):** Na seção "Informações Complementares", exibir:
+- Qtd Pacotes (existente)
+- Qtd Pacotes Informado (novo)
+- Diferença (Informado - Pacotes), com cor verde se positivo, vermelho se negativo
+
+**Migração SQL:** Adicionar coluna `qtd_pacotes_informado integer default 0` na tabela `cycle_records`.
+
+---
+
+### Arquivos Afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `RetornoPisoPage.tsx` | Corrigir comparação case-insensitive no auto-close de PS |
+| `RetornoPisoPage.tsx` | Filtros de data/conferente/motorista + 4 cards indicadores |
+| `MotoristasParceirosPage.tsx` | 4 cards indicadores |
+| `PSPage.tsx` | 4 cards indicadores |
+| `DNRPage.tsx` | 4 cards indicadores |
+| `CiclosPage.tsx` | Campo "Qtd Pacotes Informado" + exibição no relatório com diferença |
+| **Migração SQL** | `ALTER TABLE cycle_records ADD COLUMN qtd_pacotes_informado integer DEFAULT 0` |
 
