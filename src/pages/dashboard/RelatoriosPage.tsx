@@ -1,5 +1,8 @@
 import { useState, useRef, useCallback } from "react";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -28,6 +31,7 @@ const RelatoriosPage = () => {
   });
   const [loading, setLoading] = useState<string | null>(null);
   const [showPayrollModal, setShowPayrollModal] = useState(false);
+  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [payrollSearch, setPayrollSearch] = useState("");
 
   // Payroll state
@@ -440,7 +444,8 @@ const RelatoriosPage = () => {
         // Apply minimum packages: if tbrCount < min, bump to min
         const minPkg = minPkgMap.get(driverId) ?? 0;
         if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
-        return { date, login: info.login, tbrCount, returns, value: (tbrCount - returns) * tbrVal };
+        const completed = tbrCount - returns;
+        return { date, login: info.login, tbrCount, returns, completed, value: completed * tbrVal };
       });
 
       const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
@@ -492,7 +497,7 @@ const RelatoriosPage = () => {
   };
 
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: fetchPayroll, secondAction: consultPayroll, espelhoAction: fetchPayrollEspelho },
+    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: () => setShowGenerateConfirm(true), secondAction: consultPayroll, espelhoAction: fetchPayrollEspelho },
     { key: "daily", title: "Resumo Diário", description: "Consolidado operacional por dia do período", icon: BarChart3, action: fetchDailySummary },
     { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: fetchReturns },
     { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: fetchRanking },
@@ -650,6 +655,26 @@ const RelatoriosPage = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Confirmação para Gerar Folha */}
+      <Dialog open={showGenerateConfirm} onOpenChange={setShowGenerateConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic">Gerar Folha de Pagamento?</DialogTitle>
+            <DialogDescription className="pt-2">
+              Ao confirmar, será gerado um relatório final. Os motoristas serão notificados e poderão realizar o envio da Nota Fiscal de serviço pelo aplicativo.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setShowGenerateConfirm(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={() => { setShowGenerateConfirm(false); fetchPayroll(); }} className="font-bold italic">
+              Confirmar e Gerar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };

@@ -466,6 +466,14 @@ const PSPage = () => {
       toast({ title: "Erro ao gravar PS", variant: "destructive" });
       return;
     }
+
+    // Remover TBR da ride_tbrs se está em carregamento ativo
+    if (history?.ride_id) {
+      await supabase.from("ride_tbrs").delete()
+        .eq("ride_id", history.ride_id)
+        .ilike("code", tbrCode);
+    }
+
     toast({ title: "PS registrado com sucesso" });
     closeModal();
     loadEntries();
@@ -793,8 +801,7 @@ const PSPage = () => {
     doc.text(`Página ${pageNum}`, pageW - 14, pageH - 5, { align: "right" });
   };
 
-  const totalPages = Math.ceil(entries.length / ITEMS_PER_PAGE);
-  const paginatedEntries = entries.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  // Pagination removed — all entries rendered directly
 
   // Card metrics
   const totalPs = entries.length;
@@ -985,7 +992,7 @@ const PSPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedEntries.map((e) => (
+                    {entries.map((e) => (
                       <TableRow key={e.id}>
                         <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                         <TableCell>{e.driver_name ?? "-"}</TableCell>
@@ -1032,19 +1039,7 @@ const PSPage = () => {
                   </TableBody>
                 </Table>
               </div>
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-2">
-                  <span className="text-sm text-muted-foreground">Página {page} de {totalPages} ({entries.length} registros)</span>
-                  <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-                      <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>
-                      Próxima <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                </div>
-              )}
+              {/* Pagination removed */}
             </>
           )}
         </CardContent>

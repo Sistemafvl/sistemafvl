@@ -193,10 +193,32 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
         tbrCountByRide[t.ride_id] = (tbrCountByRide[t.ride_id] || 0) + 1;
       });
 
-      // Calc per driver
+      // Fetch returns (piso, ps, rto) to discount from totals
+      const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
+        fetchAllRows<{ ride_id: string }>((from, to) =>
+          supabase.from("piso_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string }>((from, to) =>
+          supabase.from("ps_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        ),
+        fetchAllRows<{ ride_id: string }>((from, to) =>
+          supabase.from("rto_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        ),
+      ]);
+
+      const returnsByRide: Record<string, number> = {};
+      [...pisoReturns, ...psReturns, ...rtoReturns].forEach(r => {
+        if (r.ride_id) returnsByRide[r.ride_id] = (returnsByRide[r.ride_id] || 0) + 1;
+      });
+
+      // Calc per driver (completed = tbrs - returns)
       const driverTotals: Record<string, number> = {};
       Object.entries(driverRideIds).forEach(([driverId, rIds]) => {
-        driverTotals[driverId] = rIds.reduce((sum, rid) => sum + (tbrCountByRide[rid] || 0), 0);
+        driverTotals[driverId] = rIds.reduce((sum, rid) => {
+          const tbrs = tbrCountByRide[rid] || 0;
+          const returns = returnsByRide[rid] || 0;
+          return sum + Math.max(tbrs - returns, 0);
+        }, 0);
       });
 
       const driverIds = Object.keys(driverTotals);

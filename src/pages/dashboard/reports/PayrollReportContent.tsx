@@ -20,6 +20,7 @@ export interface DriverPayrollData {
     login: string | null;
     tbrCount: number;
     returns: number;
+    completed: number;
     value: number;
   }[];
   totalTbrs: number;
@@ -85,11 +86,11 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
       >
         {/* Individual driver pages */}
         {data.map((d) => {
-          const loginDayMap = new Map<string, Map<string, { tbrs: number; returns: number }>>();
+          const loginDayMap = new Map<string, Map<string, { tbrs: number; returns: number; completed: number }>>();
           d.days.forEach((day) => {
             const login = day.login || "Sem login";
             if (!loginDayMap.has(login)) loginDayMap.set(login, new Map());
-            loginDayMap.get(login)!.set(day.date, { tbrs: day.tbrCount, returns: day.returns });
+            loginDayMap.get(login)!.set(day.date, { tbrs: day.tbrCount, returns: day.returns, completed: day.completed ?? (day.tbrCount - day.returns) });
           });
           const logins = [...loginDayMap.keys()].sort();
           const completionRate = d.totalTbrs > 0 ? ((d.totalCompleted / d.totalTbrs) * 100).toFixed(1) : "0.0";
@@ -157,12 +158,16 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <tbody>
                   {logins.map((login, idx) => {
                     const dayData = loginDayMap.get(login)!;
-                    const loginTotal = allDates.reduce((s, date) => s + (dayData.get(date)?.tbrs ?? 0), 0);
+                    const loginTotal = allDates.reduce((s, date) => {
+                      const dd = dayData.get(date);
+                      return s + ((dd?.tbrs ?? 0) - (dd?.returns ?? 0));
+                    }, 0);
                     return (
                       <tr key={login}>
                         <td style={cellStyle({ fontWeight: 600, textAlign: "left", whiteSpace: "nowrap", background: altRowBg(idx) })}>{login}</td>
                         {allDates.map((date) => {
-                          const val = dayData.get(date)?.tbrs ?? 0;
+                          const dd = dayData.get(date);
+                          const val = (dd?.tbrs ?? 0) - (dd?.returns ?? 0);
                           return (
                             <td key={date} style={cellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>
                               {val || "—"}
@@ -176,10 +181,11 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   <tr>
                     <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>TOTAL</td>
                     {allDates.map((date) => {
-                      const dayTotal = d.days.find((day) => day.date === date)?.tbrCount ?? 0;
+                      const day = d.days.find((day) => day.date === date);
+                      const dayTotal = day ? (day.completed ?? (day.tbrCount - day.returns)) : 0;
                       return <td key={date} style={cellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{dayTotal || "—"}</td>;
                     })}
-                    <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{d.totalTbrs}</td>
+                    <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{d.totalCompleted}</td>
                   </tr>
                 </tbody>
               </table>
@@ -223,7 +229,8 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                     {d.driver.pixKey && <div style={{ fontSize: "8px", color: "#888", fontWeight: 400 }}>PIX: {d.driver.pixKey}</div>}
                   </td>
                   {allDates.map((date) => {
-                    const val = d.days.find((day) => day.date === date)?.tbrCount ?? 0;
+                    const day = d.days.find((day) => day.date === date);
+                    const val = day ? (day.completed ?? (day.tbrCount - day.returns)) : 0;
                     return <td key={date} style={cellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>{val || "—"}</td>;
                   })}
                   <td style={cellStyle({ background: altRowBg(idx) })}>{d.totalTbrs}</td>
@@ -241,7 +248,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
               <tr>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>TOTAL</td>
                 {allDates.map((date) => {
-                  const dayTotal = data.reduce((s, d) => s + (d.days.find((day) => day.date === date)?.tbrCount ?? 0), 0);
+                  const dayTotal = data.reduce((s, d) => {
+                    const day = d.days.find((day) => day.date === date);
+                    return s + (day ? (day.completed ?? (day.tbrCount - day.returns)) : 0);
+                  }, 0);
                   return <td key={date} style={cellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{dayTotal || "—"}</td>;
                 })}
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.tealLight })}>{grandTotalTbrs}</td>

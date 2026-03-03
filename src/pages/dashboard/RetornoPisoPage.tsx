@@ -372,6 +372,14 @@ const RetornoPisoPage = () => {
       toast({ title: "Erro ao gravar", variant: "destructive" });
       return;
     }
+
+    // Remover TBR da ride_tbrs se está em carregamento ativo
+    if (trackInfo?.ride_id) {
+      await supabase.from("ride_tbrs").delete()
+        .eq("ride_id", trackInfo.ride_id)
+        .ilike("code", tbrCode);
+    }
+
     toast({ title: "Retorno Piso registrado" });
     setModalOpen(false);
     setTrackInfo(null);
@@ -483,6 +491,14 @@ const RetornoPisoPage = () => {
 
     if (!error) {
       await supabase.from("piso_entries").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", psEntry.id);
+
+      // Remover TBR da ride_tbrs se está em carregamento ativo
+      if (psEntry.ride_id) {
+        await supabase.from("ride_tbrs").delete()
+          .eq("ride_id", psEntry.ride_id)
+          .ilike("code", psEntry.tbr_code);
+      }
+
       setEntries(prev => prev.filter(e => e.id !== psEntry.id));
       toast({ title: "PS registrado com sucesso" });
     } else {
