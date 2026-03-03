@@ -992,35 +992,34 @@ const ConferenciaCarregamentoPage = () => {
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       } else if (count >= 2) {
-        newTbr._triplicate = true;
-        setTbrs((prev) => {
-          const updated = (prev[rideId] ?? []).map(t =>
-            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _triplicate: true, _duplicate: false } : t
-          );
-          return { ...prev, [rideId]: [newTbr, ...updated] };
-        });
+        // 3x beep: don't add the 3rd TBR at all. Remove the 2nd duplicate immediately, keep 1st as yellow.
         playErrorBeep();
 
         const firstTbr = occurrences[0];
         const secondId = occurrences[1]?.id;
+
         // Save yellow highlight to DB immediately so any refetch restores it permanently
         if (firstTbr?.id) {
           supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", firstTbr.id).then(() => {});
         }
-        // Extend realtime lock to prevent refetch from clearing yellow highlight during cleanup
+        // Delete the 2nd duplicate from DB
+        if (secondId) {
+          supabase.from("ride_tbrs").delete().eq("id", secondId).then(() => {});
+        }
+
+        // Extend realtime lock to prevent refetch from overwriting
         realtimeLockUntil.current = Date.now() + 15000;
-        setTimeout(() => {
-          setTbrs((prev) => {
-            const list = prev[rideId] ?? [];
-            const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());
-            const first = matching[0];
-            const idsToRemove = new Set([tempId, secondId].filter(Boolean));
-            const filtered = list
-              .filter(t => !idsToRemove.has(t.id))
-              .map(t => t.id === first?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
-            return { ...prev, [rideId]: filtered };
-          });
-        }, 1000);
+
+        // Immediately update local state: remove 2nd duplicate, mark 1st as yellow
+        setTbrs((prev) => {
+          const list = prev[rideId] ?? [];
+          const idsToRemove = new Set([secondId].filter(Boolean));
+          const filtered = list
+            .filter(t => !idsToRemove.has(t.id))
+            .map(t => t.id === firstTbr?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
+          return { ...prev, [rideId]: filtered };
+        });
+
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       }
