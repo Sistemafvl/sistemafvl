@@ -992,31 +992,35 @@ const ConferenciaCarregamentoPage = () => {
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       } else if (count >= 2) {
-        // 3x beep: don't add the 3rd TBR at all. Remove the 2nd duplicate immediately, keep 1st as yellow.
+        // 3x beep: don't add the 3rd TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
         playErrorBeep();
 
-        const firstTbr = occurrences[0];
-        const secondId = occurrences[1]?.id;
+        // Sort occurrences by scanned_at ascending so the oldest (real DB entry) is first
+        const sorted = [...occurrences].sort((a, b) => 
+          new Date(a.scanned_at || 0).getTime() - new Date(b.scanned_at || 0).getTime()
+        );
+        const realEntry = sorted[0]; // oldest = real DB entry
+        const duplicateIds = sorted.slice(1).map(t => t.id); // all others are temp/duplicates
 
         // Save yellow highlight to DB immediately so any refetch restores it permanently
-        if (firstTbr?.id) {
-          supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", firstTbr.id).then(() => {});
+        if (realEntry?.id) {
+          supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", realEntry.id).then(() => {});
         }
-        // Delete the 2nd duplicate from DB
-        if (secondId) {
-          supabase.from("ride_tbrs").delete().eq("id", secondId).then(() => {});
+        // Delete duplicate entries from DB (they may be temp or real duplicates)
+        for (const dupId of duplicateIds) {
+          if (dupId) supabase.from("ride_tbrs").delete().eq("id", dupId).then(() => {});
         }
 
         // Extend realtime lock to prevent refetch from overwriting
         realtimeLockUntil.current = Date.now() + 15000;
 
-        // Immediately update local state: remove 2nd duplicate, mark 1st as yellow
+        // Immediately update local state: remove all duplicates, mark real entry as yellow
+        const idsToRemove = new Set(duplicateIds.filter(Boolean));
         setTbrs((prev) => {
           const list = prev[rideId] ?? [];
-          const idsToRemove = new Set([secondId].filter(Boolean));
           const filtered = list
             .filter(t => !idsToRemove.has(t.id))
-            .map(t => t.id === firstTbr?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
+            .map(t => t.id === realEntry?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
           return { ...prev, [rideId]: filtered };
         });
 

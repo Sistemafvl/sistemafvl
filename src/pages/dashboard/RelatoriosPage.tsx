@@ -342,10 +342,10 @@ const RelatoriosPage = () => {
     const rideIds = rides.map(r => r.id);
 
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const [driversRes, allPiso, allPs, allRto, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
+    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
-      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-        supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
+        supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
       ),
       fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
         supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
@@ -363,6 +363,8 @@ const RelatoriosPage = () => {
     );
 
     const drivers = driversRes.data ?? [];
+    // Filter out operational piso reasons (e.g. "Removido do carregamento") - they are NOT real returns
+    const allPiso = allPisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const allTbrs = tbrsData;
     const driverMap = new Map(drivers.map(d => [d.id, d]));
     const customValueMap = new Map<string, number>();
@@ -408,11 +410,11 @@ const RelatoriosPage = () => {
       const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
         const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
 
-        // 2. Coletar códigos que retornaram neste dia
+        // 2. Coletar códigos que retornaram neste dia (case-insensitive)
         const returnCodesForDay = new Set<string>();
         [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
           if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) {
-            returnCodesForDay.add(p.tbr_code);
+            returnCodesForDay.add(p.tbr_code.toUpperCase());
           }
         });
 
@@ -422,18 +424,18 @@ const RelatoriosPage = () => {
           .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
 
         const netReturns = new Set<string>();
-        returnCodesForDay.forEach(code => {
+        returnCodesForDay.forEach(codeUpper => {
           let lastRideId: string | null = null;
           for (const ride of sortedDayRides) {
-            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code === code)) {
+            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code.toUpperCase() === codeUpper)) {
               lastRideId = ride.id;
             }
           }
           if (lastRideId) {
             const hasReturnInLast = [...allPiso, ...allPs, ...allRto].some(
-              (p: any) => p.ride_id === lastRideId && p.tbr_code === code
+              (p: any) => p.ride_id === lastRideId && p.tbr_code.toUpperCase() === codeUpper
             );
-            if (hasReturnInLast) netReturns.add(code);
+            if (hasReturnInLast) netReturns.add(codeUpper);
           }
         });
 
