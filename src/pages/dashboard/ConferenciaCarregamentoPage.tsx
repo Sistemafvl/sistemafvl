@@ -1003,12 +1003,13 @@ const ConferenciaCarregamentoPage = () => {
 
         const firstTbr = occurrences[0];
         const secondId = occurrences[1]?.id;
-        // Extend realtime lock to prevent refetch from clearing yellow highlight
-        realtimeLockUntil.current = Date.now() + 8000;
-        setTimeout(async () => {
-          if (firstTbr?.id) {
-            await supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", firstTbr.id);
-          }
+        // Save yellow highlight to DB immediately so any refetch restores it permanently
+        if (firstTbr?.id) {
+          supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", firstTbr.id).then(() => {});
+        }
+        // Extend realtime lock to prevent refetch from clearing yellow highlight during cleanup
+        realtimeLockUntil.current = Date.now() + 15000;
+        setTimeout(() => {
           setTbrs((prev) => {
             const list = prev[rideId] ?? [];
             const matching = list.filter(t => t.code.toUpperCase() === code.toUpperCase());

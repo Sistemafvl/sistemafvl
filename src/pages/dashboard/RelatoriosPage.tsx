@@ -407,8 +407,6 @@ const RelatoriosPage = () => {
 
       const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
         const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
-        // 1. Contar TBRs únicos por código (evita duplicação quando pacote sai em 2 corridas no mesmo dia)
-        const uniqueTbrCodes = new Set(rTbrs.map((t: any) => t.code));
 
         // 2. Coletar códigos que retornaram neste dia
         const returnCodesForDay = new Set<string>();
@@ -439,7 +437,7 @@ const RelatoriosPage = () => {
           }
         });
 
-        let tbrCount = uniqueTbrCodes.size;
+        let tbrCount = rTbrs.length;
         const returns = netReturns.size;
         // Apply minimum packages: if tbrCount < min, bump to min
         const minPkg = minPkgMap.get(driverId) ?? 0;

@@ -187,17 +187,25 @@ const DashboardHome = () => {
       // Build timeline events
       const timeline: TimelineEvent[] = [];
 
-      rideTbrs.forEach((rt: any) => {
+      // Sort rideTbrs chronologically to differentiate first load from re-loads
+      const sortedRideTbrs = [...rideTbrs].sort((a: any, b: any) => {
+        const ta = new Date(a.scanned_at ?? a.driver_rides?.completed_at ?? 0).getTime();
+        const tb = new Date(b.scanned_at ?? b.driver_rides?.completed_at ?? 0).getTime();
+        return ta - tb;
+      });
+      let isFirstLoad = true;
+      sortedRideTbrs.forEach((rt: any) => {
         const ride = rt.driver_rides;
         const driver = driverMap.get(ride?.driver_id);
         const confName = ride?.conferente_id ? confMap.get(ride.conferente_id) ?? null : null;
         timeline.push({
           timestamp: rt.scanned_at ?? ride?.completed_at ?? "",
           conferente: confName,
-          action: "Origem: Conferência Carregamento",
+          action: isFirstLoad ? "Origem: Conferência Carregamento" : "Re-carregado: Conferência Carregamento",
           detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-          type: "origin",
+          type: isFirstLoad ? "origin" : "loaded",
         });
+        isFirstLoad = false;
       });
 
       pisoEntries.forEach((p: any) => {
