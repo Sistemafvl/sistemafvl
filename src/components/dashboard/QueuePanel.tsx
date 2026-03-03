@@ -96,6 +96,8 @@ const QueuePanel = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [addingToQueue, setAddingToQueue] = useState(false);
+  const [driverFreqUnit, setDriverFreqUnit] = useState<string | null>(null);
+  const [nameFreqUnits, setNameFreqUnits] = useState<Record<string, string>>({});
 
   // Name search states
   const [nameSearch, setNameSearch] = useState("");
@@ -277,12 +279,28 @@ const QueuePanel = () => {
     fetchQueue();
   };
 
+  const fetchDriverFreqUnit = async (driverId: string) => {
+    const { data } = await supabase
+      .from("driver_rides")
+      .select("unit_id")
+      .eq("driver_id", driverId)
+      .order("completed_at", { ascending: false })
+      .limit(100);
+    if (!data || data.length === 0) return null;
+    const counts: Record<string, number> = {};
+    data.forEach(r => { counts[r.unit_id] = (counts[r.unit_id] || 0) + 1; });
+    const topUnitId = Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+    const { data: unitData } = await supabase.from("units_public").select("name").eq("id", topUnitId).maybeSingle();
+    return unitData?.name ?? null;
+  };
+
   const handleSearchDriver = async () => {
     const cpf = cpfSearch.replace(/\D/g, "");
     if (cpf.length < 11) { setSearchError("CPF deve ter 11 dígitos."); return; }
     setSearchLoading(true);
     setSearchError("");
     setFoundDriver(null);
+    setDriverFreqUnit(null);
 
     const { data, error } = await supabase
       .from("drivers_public")
@@ -292,13 +310,16 @@ const QueuePanel = () => {
       .maybeSingle();
 
     if (error || !data) { setSearchError("Motorista não encontrado."); }
-    else { setFoundDriver(data as FoundDriver); }
+    else {
+      setFoundDriver(data as FoundDriver);
+      fetchDriverFreqUnit(data.id).then(u => setDriverFreqUnit(u));
+    }
     setSearchLoading(false);
   };
 
   // Name search with debounce
   useEffect(() => {
-    if (!nameSearch.trim()) { setNameResults([]); return; }
+    if (!nameSearch.trim()) { setNameResults([]); setNameFreqUnits({}); return; }
     if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current);
     nameDebounceRef.current = setTimeout(async () => {
       setNameSearchLoading(true);
@@ -308,7 +329,15 @@ const QueuePanel = () => {
         .ilike("name", `%${nameSearch.trim()}%`)
         .eq("active", true)
         .limit(10);
-      setNameResults((data ?? []) as FoundDriver[]);
+      const results = (data ?? []) as FoundDriver[];
+      setNameResults(results);
+      // Fetch freq units for all results
+      const freqMap: Record<string, string> = {};
+      await Promise.all(results.map(async (d) => {
+        const u = await fetchDriverFreqUnit(d.id);
+        if (u) freqMap[d.id] = u;
+      }));
+      setNameFreqUnits(freqMap);
       setNameSearchLoading(false);
     }, 400);
     return () => { if (nameDebounceRef.current) clearTimeout(nameDebounceRef.current); };
@@ -552,7 +581,7 @@ const QueuePanel = () => {
                   {nameResults.map(d => (
                     <button
                       key={d.id}
-                      onClick={() => { setFoundDriver(d); setNameResults([]); }}
+                      onClick={() => { setFoundDriver(d); setNameResults([]); setDriverFreqUnit(null); fetchDriverFreqUnit(d.id).then(u => setDriverFreqUnit(u)); }}
                       className="w-full text-left p-2 rounded hover:bg-muted text-xs flex items-center gap-2"
                     >
                       <Avatar className="h-8 w-8 shrink-0">
@@ -566,6 +595,9 @@ const QueuePanel = () => {
                         <p className="text-muted-foreground">
                           CPF: {maskCPF(d.cpf)} · {d.car_model} {d.car_color || ""} · {d.car_plate}
                         </p>
+                        {nameFreqUnits[d.id] && (
+                          <p className="text-muted-foreground">📍 Unidade frequente: {nameFreqUnits[d.id]}</p>
+                        )}
                       </div>
                     </button>
                   ))}
@@ -611,6 +643,9 @@ const QueuePanel = () => {
                 <div className="text-sm space-y-1">
                   <p><strong>Veículo:</strong> {foundDriver.car_model} — {foundDriver.car_color || "N/A"}</p>
                   <p><strong>Placa:</strong> {foundDriver.car_plate}</p>
+                  {driverFreqUnit && (
+                    <p className="text-xs text-muted-foreground">📍 Unidade mais frequente: <strong>{driverFreqUnit}</strong></p>
+                  )}
                 </div>
                 <Button onClick={handleAddToQueue} disabled={addingToQueue} className="w-full font-bold italic">
                   {addingToQueue && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}

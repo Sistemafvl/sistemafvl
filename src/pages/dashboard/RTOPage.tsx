@@ -181,6 +181,14 @@ const RTOPage = () => {
     setSaving(false);
 
     if (error) return;
+
+    // Remover TBR da ride_tbrs se está em carregamento ativo
+    if (history?.ride_id) {
+      await supabase.from("ride_tbrs").delete()
+        .eq("ride_id", history.ride_id)
+        .ilike("code", tbrCode);
+    }
+
     setModalOpen(false);
     setHistory(null);
     loadEntries();
