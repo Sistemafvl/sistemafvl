@@ -1,94 +1,48 @@
 
 
-## Plano de Implementação — 7 Ajustes
+## Plano Revisado — 3 Correções
 
-### 1. Modal de confirmação no botão "Gerar" da Folha de Pagamento
+### 1. Discrepância no relatório de pagamento (Anexos 1-4)
+
 **Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
 
-Adicionar um estado `showGenerateConfirm` e um `Dialog` de confirmação que aparece ao clicar em "Gerar". O modal exibirá:
-- Título: "Gerar Folha de Pagamento?"
-- Mensagem informativa: "Ao confirmar, será gerado um relatório final. Os motoristas serão notificados e poderão realizar o envio da Nota Fiscal de serviço pelo aplicativo."
-- Botões: "Cancelar" e "Confirmar e Gerar"
+**Problema:** Linha 411 usa `new Set(rTbrs.map(t => t.code))` para deduplicar TBRs por código. Quando um TBR é carregado, vai pro insucesso, e é re-carregado no mesmo dia, o Set conta como 1, mas a Operação conta como 2 (um por ride). Isso causa a diferença de 133 vs 134 e 72 vs 73.
 
-Ao confirmar, chama `fetchPayroll()` normalmente.
+**Correção:** Usar `rTbrs.length` em vez de `uniqueTbrCodes.size` para o `tbrCount`. Remover a variável `uniqueTbrCodes`. Ajustar a lógica de `netReturns` para contar por instância (não por código único).
 
 ---
 
-### 2. Coluna do dia na Folha de Pagamento deve mostrar TBRs concluídos (não total)
-**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx` (fetchPayrollData) + `src/pages/dashboard/reports/PayrollReportContent.tsx`
+### 2. Amarelo permanente no TBR bipado 3x (Anexos 5-6)
 
-**Problema:** Na tabela Login x Dias do PDF, a coluna do dia mostra `tbrCount` (total de TBRs). Deveria mostrar `tbrCount - returns` (concluídos). A Sarah tem 58 TBRs e 2 retornos, mas o dia mostra 58 — deveria mostrar 56.
+**Arquivo:** `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
 
-**Correção:** Adicionar o campo `completed` na estrutura `days[]` do payroll (`tbrCount - returns`). Atualizar `PayrollReportContent` para usar `completed` na tabela de Login x Dias e na linha TOTAL.
+**Problema:** O amarelo já é salvo no banco (`highlight: "yellow"`) e lido no refetch (linha 452), mas o `setTimeout` de 1 segundo atrasa o `UPDATE` no banco. Se um realtime event dispara antes, o refetch ainda lê `highlight: null` e perde o amarelo.
 
----
+**Correção:**
+1. Executar o `await supabase.update({ highlight: "yellow" })` **imediatamente** (não dentro do setTimeout)
+2. Manter o setTimeout apenas para a limpeza visual dos duplicatas temporários
+3. Aumentar o realtime lock para 15 segundos para dar margem
 
-### 3. TBR registrado no Insucesso deve ser removido do carregamento do motorista
-**Arquivos:** `src/pages/dashboard/RetornoPisoPage.tsx`, `src/pages/dashboard/PSPage.tsx`
-
-**Problema:** Quando um TBR é registrado no Insucesso/PS/RTO durante o carregamento ativo, ele não sai da lista `ride_tbrs`. Isso impede re-bipagem e mantém contadores inflados.
-
-**Correção:** Após salvar uma entrada em `piso_entries` (handleSave), `ps_entries` (handleSave) ou similar, executar:
-```typescript
-// Remover TBR da ride_tbrs se está em carregamento ativo
-if (trackInfo?.ride_id) {
-  await supabase.from("ride_tbrs").delete()
-    .eq("ride_id", trackInfo.ride_id)
-    .ilike("code", tbrCode);
-}
-```
-
-Isso garante que:
-- O TBR sai da lista de carregamento do motorista
-- Os contadores (badge e "TBRs Lidos") refletem a contagem correta
-- O TBR pode ser bipado em outro carregamento se necessário
+Assim o amarelo é gravado no banco instantaneamente e qualquer refetch subsequente o restaura via `t.highlight === "yellow"` — ficando amarelo **para sempre**.
 
 ---
 
-### 4. Cards "Top Motoristas (Entregas)" e "Média diária por motorista" devem contabilizar entregas concluídas
-**Arquivo:** `src/components/dashboard/DashboardMetrics.tsx`
+### 3. Timeline cronológica do TBR (Anexo 7)
 
-**Problema:** Os cards mostram total de TBRs escaneados, sem descontar retornos (piso, PS, RTO).
+**Arquivo:** `src/pages/dashboard/DashboardHome.tsx`
 
-**Correção:** Na lógica de cálculo do `driverTotals` (linha ~198), buscar também `piso_entries`, `ps_entries` e `rto_entries` para os ride_ids do período. Descontar os retornos dos totais por motorista antes de calcular média e ranking. Usar contagem de TBRs concluídos (total - retornos) em vez de total bruto.
+**Problema:** Linha 197 marca TODOS os registros em `ride_tbrs` como "Origem: Conferência Carregamento". O rastro real deveria ser: Carregamento → Insucesso → Re-carregamento → Insucesso → Re-carregamento.
 
----
-
-### 5. Unidade mais frequente do motorista no modal de busca da fila
-**Arquivo:** `src/components/dashboard/QueuePanel.tsx`
-
-No modal "Adicionar Motorista na Fila", após encontrar o motorista (no card `foundDriver`), buscar a unidade mais frequente:
-```typescript
-const { data: topUnit } = await supabase
-  .from("driver_rides")
-  .select("unit_id, units!inner(name)")
-  .eq("driver_id", driver.id)
-  .order("completed_at", { ascending: false })
-  .limit(100);
-```
-Contar `unit_id` mais frequente e exibir o nome da unidade abaixo dos dados do veículo como: "📍 Unidade mais frequente: SSP9"
-
-Também exibir no resultado da busca por nome (lista de resultados).
-
----
-
-### 6. Remover paginação da tela PS
-**Arquivo:** `src/pages/dashboard/PSPage.tsx`
-
-Remover `ITEMS_PER_PAGE`, `page`, `totalPages`, `paginatedEntries`. Renderizar `entries` diretamente na tabela em vez de `paginatedEntries`. Remover o bloco de navegação de páginas (linhas 1035-1047).
-
----
-
-### 7. Registro no system_updates
-Inserir registro das alterações implementadas na tabela `system_updates`.
+**Correção:** 
+1. Ordenar `rideTbrs` por `scanned_at` crescente
+2. O primeiro registro recebe "Origem: Conferência Carregamento"
+3. Os registros seguintes recebem "Re-carregado: Conferência Carregamento"
+4. Os eventos de piso/PS/RTO já aparecem corretamente entre eles pela ordenação cronológica final
 
 ---
 
 ### Arquivos afetados
-1. `src/pages/dashboard/RelatoriosPage.tsx` — modal de confirmação + coluna concluídos
-2. `src/pages/dashboard/reports/PayrollReportContent.tsx` — coluna concluídos no PDF
-3. `src/pages/dashboard/RetornoPisoPage.tsx` — remover TBR da ride_tbrs ao registrar insucesso
-4. `src/pages/dashboard/PSPage.tsx` — remover paginação + remover TBR da ride_tbrs ao registrar PS
-5. `src/components/dashboard/DashboardMetrics.tsx` — entregas concluídas nos cards
-6. `src/components/dashboard/QueuePanel.tsx` — unidade frequente do motorista
+1. `src/pages/dashboard/RelatoriosPage.tsx` — corrigir contagem de TBRs
+2. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — amarelo permanente
+3. `src/pages/dashboard/DashboardHome.tsx` — timeline cronológica
 
