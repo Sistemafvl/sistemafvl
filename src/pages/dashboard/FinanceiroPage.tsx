@@ -7,8 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2, Trash2, RefreshCw } from "lucide-react";
-import { recalcAllPayrollReports } from "@/lib/payroll-recalc";
+import { DollarSign, ChevronLeft, FileText, CheckCircle, Clock, Download, CalendarIcon, Search, Users, TrendingUp, Loader2, Trash2 } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -43,11 +42,6 @@ const FinanceiroPage = () => {
   const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
-
-  // Recalc modal state
-  const [showRecalcModal, setShowRecalcModal] = useState(false);
-  const [recalcPassword, setRecalcPassword] = useState("");
-  const [recalcing, setRecalcing] = useState(false);
 
   const unitId = unitSession?.id;
 
@@ -174,40 +168,6 @@ const FinanceiroPage = () => {
       toast({ title: "Erro", description: "Erro ao excluir relatório.", variant: "destructive" });
     }
     setDeleting(false);
-  };
-
-  const handleRecalcAll = async () => {
-    if (!unitId) return;
-    setRecalcing(true);
-    try {
-      const { data: managers } = await supabase
-        .from("managers")
-        .select("manager_password")
-        .eq("unit_id", unitId)
-        .eq("active", true);
-      const valid = (managers ?? []).some((m: any) => m.manager_password === recalcPassword);
-      if (!valid) {
-        toast({ title: "Erro", description: "Senha do gerente inválida.", variant: "destructive" });
-        setRecalcing(false);
-        return;
-      }
-      const result = await recalcAllPayrollReports(unitId);
-      await supabase.from("system_updates").insert({
-        type: "fix",
-        module: "Financeiro",
-        description: `Correção retroativa de ${result.fixed}/${result.total} relatórios de folha de pagamento da unidade. Recálculo de TBRs, retornos e valores com regra corrigida.`,
-      } as any);
-      toast({
-        title: "Correção concluída",
-        description: `${result.fixed} de ${result.total} relatórios recalculados com sucesso.${result.errors.length ? ` ${result.errors.length} erros.` : ""}`,
-      });
-      setShowRecalcModal(false);
-      setRecalcPassword("");
-      await loadReports();
-    } catch {
-      toast({ title: "Erro", description: "Erro ao recalcular relatórios.", variant: "destructive" });
-    }
-    setRecalcing(false);
   };
 
   const filteredReports = useMemo(() => {
@@ -366,9 +326,6 @@ const FinanceiroPage = () => {
         <h1 className="text-2xl font-bold italic flex items-center gap-2">
           <DollarSign className="h-6 w-6 text-primary" /> Financeiro
         </h1>
-        <Button variant="outline" size="sm" className="gap-2" onClick={() => setShowRecalcModal(true)}>
-          <RefreshCw className="h-3.5 w-3.5" /> Corrigir Relatórios
-        </Button>
       </div>
 
       {/* Summary cards */}
@@ -543,34 +500,6 @@ const FinanceiroPage = () => {
         </div>
       )}
 
-      {/* Recalc confirmation modal */}
-      {showRecalcModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/80" onClick={() => { setShowRecalcModal(false); setRecalcPassword(""); }} />
-          <div className="relative z-50 w-full max-w-sm border bg-background p-6 shadow-lg rounded-lg animate-in fade-in-0 zoom-in-95">
-            <h3 className="text-lg font-bold mb-2">Corrigir Relatórios</h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Esta ação recalcula <strong>todos</strong> os relatórios de folha de pagamento desta unidade com a regra corrigida (filtro de piso operacional, comparação case-insensitive). Os IDs e NFs vinculadas serão preservados. Digite a senha do gerente para confirmar.
-            </p>
-            <Input
-              type="password"
-              placeholder="Senha do gerente"
-              value={recalcPassword}
-              onChange={(e) => setRecalcPassword(e.target.value)}
-              className="mb-4"
-            />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setShowRecalcModal(false); setRecalcPassword(""); }}>
-                Cancelar
-              </Button>
-              <Button className="flex-1" onClick={handleRecalcAll} disabled={!recalcPassword || recalcing}>
-                {recalcing ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
-                Corrigir
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
