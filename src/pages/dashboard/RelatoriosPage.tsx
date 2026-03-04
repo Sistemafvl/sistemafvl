@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye } from "lucide-react";
+import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -20,6 +20,9 @@ import PayrollReportContent, { type DriverPayrollData } from "./reports/PayrollR
 import DailySummaryReportContent, { type DailySummaryRow } from "./reports/DailySummaryReportContent";
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
 import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
+import {
+  Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
+} from "@/components/ui/table";
 
 const RelatoriosPage = () => {
   const { unitSession } = useAuthStore();
@@ -30,9 +33,11 @@ const RelatoriosPage = () => {
     const d = new Date(); d.setHours(23, 59, 59, 999); return d;
   });
   const [loading, setLoading] = useState<string | null>(null);
-  const [showPayrollModal, setShowPayrollModal] = useState(false);
-  const [showGenerateConfirm, setShowGenerateConfirm] = useState(false);
   const [payrollSearch, setPayrollSearch] = useState("");
+
+  // Modal state
+  const [payrollMode, setPayrollMode] = useState<"consult" | "espelho" | "gerar" | null>(null);
+  const [savingPayroll, setSavingPayroll] = useState(false);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -53,6 +58,9 @@ const RelatoriosPage = () => {
   const [rankingData, setRankingData] = useState<RankingRow[] | null>(null);
   const rankingRef = useRef<HTMLDivElement>(null);
 
+  // Expanded driver in modal
+  const [expandedDriver, setExpandedDriver] = useState<string | null>(null);
+
   const unitId = unitSession?.id;
   const generatedBy = unitSession?.user_name || "Sistema";
 
@@ -69,33 +77,42 @@ const RelatoriosPage = () => {
     return { uName, tVal, logo };
   };
 
-  // ── Payroll ──
-  const fetchPayroll = async () => {
+  // Open modal for Espelho or Gerar (fetch data first, then show modal)
+  const openPayrollModal = async (mode: "consult" | "espelho" | "gerar") => {
     if (!unitId) return;
-    setLoading("payroll");
+    setLoading(mode === "consult" ? "consult" : mode === "espelho" ? "espelho" : "payroll");
     try {
       const common = await ensureCommon();
       if (!common) { setLoading(null); return; }
-
       const result = await fetchPayrollData(common);
       if (!result) { setLoading(null); return; }
+      setPayrollMode(mode);
+    } catch {
+      toast({ title: "Erro", description: "Erro ao buscar dados.", variant: "destructive" });
+    }
+    setLoading(null);
+  };
 
+  // Save to DB + mark DNRs + generate PDF
+  const handleConfirmAndGenerate = async () => {
+    if (!unitId || !payrollData) return;
+    setSavingPayroll(true);
+    try {
       // Save to payroll_reports
       const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
         unit_id: unitId,
         generated_by: generatedBy,
         period_start: format(startDate, "yyyy-MM-dd"),
         period_end: format(endDate, "yyyy-MM-dd"),
-        report_data: result,
+        report_data: payrollData,
       } as any).select("id").single();
 
       // Mark DNRs as reported in this payroll
       if (savedReport && (savedReport as any).id) {
         const reportId = (savedReport as any).id;
-        // Get dnrIdsUsed from the fetched data
         const { data: usedDnrs } = await supabase.from("dnr_entries")
           .select("id")
-          .eq("unit_id", unitId!)
+          .eq("unit_id", unitId)
           .eq("status", "closed")
           .eq("discounted", true)
           .is("reported_in_payroll_id" as any, null)
@@ -110,14 +127,32 @@ const RelatoriosPage = () => {
         }
       }
 
-      setTimeout(async () => {
-        if (payrollRef.current) {
-          await generatePDFFromContainer(payrollRef.current, `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
-          toast({ title: "PDF gerado!", description: "Folha de pagamento baixada com sucesso." });
-        }
-      }, 500);
-    } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
-    setLoading(null);
+      // Generate PDF
+      await new Promise((r) => setTimeout(r, 500));
+      if (payrollRef.current) {
+        await generatePDFFromContainer(payrollRef.current, `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+        toast({ title: "PDF gerado!", description: "Folha de pagamento salva e baixada com sucesso." });
+      }
+      setPayrollMode(null);
+    } catch {
+      toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" });
+    }
+    setSavingPayroll(false);
+  };
+
+  // Generate PDF only (espelho, no save)
+  const handleDownloadPDF = async () => {
+    setSavingPayroll(true);
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      if (payrollRef.current) {
+        await generatePDFFromContainer(payrollRef.current, `espelho_folha_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+        toast({ title: "Espelho gerado!", description: "PDF de consulta baixado com sucesso." });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao gerar PDF.", variant: "destructive" });
+    }
+    setSavingPayroll(false);
   };
 
   // ── Daily Summary ──
@@ -157,7 +192,6 @@ const RelatoriosPage = () => {
       const ps = psData;
       const rto = rtoData;
 
-      // Group by day
       const dayMap = new Map<string, DailySummaryRow>();
       rides.forEach(r => {
         const day = format(new Date(r.completed_at), "yyyy-MM-dd");
@@ -165,7 +199,6 @@ const RelatoriosPage = () => {
         dayMap.get(day)!.loadings++;
       });
 
-      // Count TBRs per day via ride
       const rideToDay = new Map<string, string>();
       rides.forEach(r => rideToDay.set(r.id, format(new Date(r.completed_at), "yyyy-MM-dd")));
       allTbrs.forEach(t => {
@@ -173,12 +206,10 @@ const RelatoriosPage = () => {
         if (day && dayMap.has(day)) dayMap.get(day)!.tbrs++;
       });
 
-      // Returns per day
       piso.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.piso++; });
       ps.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.ps++; });
       rto.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.rto++; });
 
-      // Active drivers per day
       const dayDrivers = new Map<string, Set<string>>();
       rides.forEach(r => {
         const day = format(new Date(r.completed_at), "yyyy-MM-dd");
@@ -187,7 +218,6 @@ const RelatoriosPage = () => {
       });
       dayDrivers.forEach((set, day) => { if (dayMap.has(day)) dayMap.get(day)!.activeDrivers = set.size; });
 
-      // Total returns
       dayMap.forEach(row => { row.totalReturns = row.piso + row.ps + row.rto; });
 
       const rows = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
@@ -290,7 +320,6 @@ const RelatoriosPage = () => {
         const driverRides = rides.filter(r => r.driver_id === did);
         const driverRideIds = driverRides.map(r => r.id);
         const tbrs = allTbrs.filter(t => driverRideIds.includes(t.ride_id)).length;
-        // Unique tbr_code returns
         const returnTbrSet = new Set<string>();
         allReturns.forEach((r: any) => { if (r.ride_id && driverRideIds.includes(r.ride_id) && r.tbr_code) returnTbrSet.add(r.tbr_code); });
         const returns = returnTbrSet.size;
@@ -315,20 +344,6 @@ const RelatoriosPage = () => {
         }
       }, 500);
     } catch { toast({ title: "Erro", description: "Erro ao gerar relatório.", variant: "destructive" }); }
-    setLoading(null);
-  };
-
-  // Consultar payroll (view only, no PDF)
-  const consultPayroll = async () => {
-    if (!unitId) return;
-    setLoading("consult");
-    try {
-      const common = await ensureCommon();
-      if (!common) { setLoading(null); return; }
-      // Reuse fetchPayroll logic but don't generate PDF
-      await fetchPayrollData(common);
-      setShowPayrollModal(true);
-    } catch { toast({ title: "Erro", description: "Erro ao consultar relatório.", variant: "destructive" }); }
     setLoading(null);
   };
 
@@ -363,7 +378,6 @@ const RelatoriosPage = () => {
     );
 
     const drivers = driversRes.data ?? [];
-    // Filter out operational piso reasons (e.g. "Removido do carregamento") - they are NOT real returns
     const allPiso = allPisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const allTbrs = tbrsData;
     const driverMap = new Map(drivers.map(d => [d.id, d]));
@@ -379,11 +393,9 @@ const RelatoriosPage = () => {
       .is("reported_in_payroll_id" as any, null)
       .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
     const dnrByDriver = new Map<string, number>();
-    const dnrIdsUsed: string[] = [];
     (dnrData ?? []).forEach((d: any) => { 
       if (d.driver_id) {
         dnrByDriver.set(d.driver_id, (dnrByDriver.get(d.driver_id) ?? 0) + Number(d.dnr_value));
-        dnrIdsUsed.push(d.id);
       }
     });
 
@@ -410,7 +422,6 @@ const RelatoriosPage = () => {
       const days = Array.from(dayMap.entries()).sort().map(([date, info]) => {
         const rTbrs = allTbrs.filter(t => info.rideIds.includes(t.ride_id));
 
-        // 2. Coletar códigos que retornaram neste dia (case-insensitive)
         const returnCodesForDay = new Set<string>();
         [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
           if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) {
@@ -418,7 +429,6 @@ const RelatoriosPage = () => {
           }
         });
 
-        // 3. Calcular retornos líquidos (excluir re-tentativas bem-sucedidas)
         const sortedDayRides = driverRides
           .filter(r => info.rideIds.includes(r.id))
           .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
@@ -441,7 +451,6 @@ const RelatoriosPage = () => {
 
         let tbrCount = rTbrs.length;
         const returns = netReturns.size;
-        // Apply minimum packages: if tbrCount < min, bump to min
         const minPkg = minPkgMap.get(driverId) ?? 0;
         if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
         const completed = tbrCount - returns;
@@ -477,31 +486,32 @@ const RelatoriosPage = () => {
     return result;
   };
 
-  // Espelho: generate PDF without saving to database
-  const fetchPayrollEspelho = async () => {
-    if (!unitId) return;
-    setLoading("espelho");
-    try {
-      const common = await ensureCommon();
-      if (!common) { setLoading(null); return; }
-      const result = await fetchPayrollData(common);
-      if (!result) { setLoading(null); return; }
-      setTimeout(async () => {
-        if (payrollRef.current) {
-          await generatePDFFromContainer(payrollRef.current, `espelho_folha_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
-          toast({ title: "Espelho gerado!", description: "PDF de consulta baixado com sucesso." });
-        }
-      }, 500);
-    } catch { toast({ title: "Erro", description: "Erro ao gerar espelho.", variant: "destructive" }); }
-    setLoading(null);
-  };
-
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText, action: () => setShowGenerateConfirm(true), secondAction: consultPayroll, espelhoAction: fetchPayrollEspelho },
+    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText,
+      action: () => openPayrollModal("gerar"),
+      secondAction: () => openPayrollModal("consult"),
+      espelhoAction: () => openPayrollModal("espelho"),
+    },
     { key: "daily", title: "Resumo Diário", description: "Consolidado operacional por dia do período", icon: BarChart3, action: fetchDailySummary },
     { key: "returns", title: "Relatório de Retornos", description: "Todos os retornos (Piso, PS, RTO) do período", icon: RotateCcw, action: fetchReturns },
     { key: "performance", title: "Ranking Performance", description: "Classificação dos motoristas por desempenho", icon: Trophy, action: fetchRanking },
   ];
+
+  const filteredPayroll = payrollData?.filter((d) => {
+    if (!payrollSearch.trim()) return true;
+    const q = payrollSearch.toLowerCase();
+    return (
+      d.driver.name?.toLowerCase().includes(q) ||
+      d.driver.cpf?.toLowerCase().includes(q) ||
+      d.driver.car_plate?.toLowerCase().includes(q) ||
+      d.driver.car_model?.toLowerCase().includes(q) ||
+      d.driver.pixKey?.toLowerCase().includes(q)
+    );
+  }) ?? [];
+
+  const modalTitle = payrollMode === "gerar" ? "Gerar — Folha de Pagamento"
+    : payrollMode === "espelho" ? "Espelho — Folha de Pagamento"
+    : "Consulta — Folha de Pagamento";
 
   return (
     <>
@@ -561,8 +571,8 @@ const RelatoriosPage = () => {
                         Espelho
                       </Button>
                     )}
-                    <Button size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.action} disabled={loading === r.key}>
-                      {loading === r.key ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                    <Button size="sm" className="flex-1 gap-1 text-xs px-2" onClick={r.action} disabled={loading === r.key || loading === "payroll"}>
+                      {(loading === r.key || loading === "payroll") ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
                       Gerar
                     </Button>
                   </div>
@@ -578,7 +588,7 @@ const RelatoriosPage = () => {
         </div>
       </div>
 
-      {/* Off-screen report containers — permanently fixed off-screen so browser calculates layout before html2canvas capture */}
+      {/* Off-screen report containers */}
       <div style={{ position: "fixed", left: "-9999px", top: 0, width: "1122px", zIndex: -1 }}>
         {payrollData && (
           <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
@@ -598,41 +608,79 @@ const RelatoriosPage = () => {
         )}
       </div>
 
-      {/* Payroll Consult Modal */}
-      {showPayrollModal && payrollData && (
+      {/* Payroll Preview Modal */}
+      {payrollMode && payrollData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="fixed inset-0 bg-black/80" onClick={() => setShowPayrollModal(false)} />
+          <div className="fixed inset-0 bg-black/80" onClick={() => { if (!savingPayroll) setPayrollMode(null); }} />
           <div className="relative z-50 w-full max-w-4xl max-h-[90vh] overflow-y-auto border bg-background p-6 shadow-lg sm:rounded-lg animate-in fade-in-0 zoom-in-95">
-            <button onClick={() => setShowPayrollModal(false)} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
+            <button onClick={() => { if (!savingPayroll) setPayrollMode(null); }} className="absolute right-4 top-4 rounded-sm opacity-70 hover:opacity-100">
               <X className="h-4 w-4" />
             </button>
-            <h2 className="text-lg font-bold italic mb-4">Consulta — Folha de Pagamento</h2>
-            <p className="text-sm text-muted-foreground mb-4">
-              {format(startDate, "dd/MM/yyyy")} até {format(endDate, "dd/MM/yyyy")} • {payrollData.length} motorista(s)
-            </p>
+
+            {/* Header with action button */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+              <div className="flex-1">
+                <h2 className="text-lg font-bold italic">{modalTitle}</h2>
+                <p className="text-sm text-muted-foreground">
+                  {format(startDate, "dd/MM/yyyy")} até {format(endDate, "dd/MM/yyyy")} • {payrollData.length} motorista(s)
+                </p>
+              </div>
+              {payrollMode === "espelho" && (
+                <Button size="sm" className="gap-2 shrink-0" onClick={handleDownloadPDF} disabled={savingPayroll}>
+                  {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                  Baixar PDF
+                </Button>
+              )}
+              {payrollMode === "gerar" && (
+                <Button size="sm" className="gap-2 shrink-0" onClick={handleConfirmAndGenerate} disabled={savingPayroll}>
+                  {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+                  Confirmar e Gerar
+                </Button>
+              )}
+            </div>
+
+            {payrollMode === "gerar" && (
+              <p className="text-xs text-muted-foreground bg-muted/50 rounded-md p-2 mb-4">
+                ⚠️ Ao confirmar, será gerado um relatório final. Os motoristas serão notificados para envio da NF.
+              </p>
+            )}
+
             <Input
               value={payrollSearch}
               onChange={(e) => setPayrollSearch(e.target.value)}
               placeholder="Buscar por nome, CPF, placa..."
               className="mb-4 h-9 text-sm"
             />
+
+            {/* Summary totals */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div className="rounded-lg border p-2 text-center">
+                <p className="text-xs text-muted-foreground">Total TBRs</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalTbrs, 0)}</p>
+              </div>
+              <div className="rounded-lg border p-2 text-center">
+                <p className="text-xs text-muted-foreground">Retornos</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalReturns, 0)}</p>
+              </div>
+              <div className="rounded-lg border p-2 text-center">
+                <p className="text-xs text-muted-foreground">Concluídos</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalCompleted, 0)}</p>
+              </div>
+              <div className="rounded-lg border p-2 text-center">
+                <p className="text-xs text-muted-foreground">Valor Total</p>
+                <p className="font-bold text-primary">{formatCurrency(payrollData.reduce((s, d) => s + d.totalValue, 0))}</p>
+              </div>
+            </div>
+
+            {/* Driver cards with expandable daily detail */}
             <div className="space-y-3">
-              {payrollData
-                .filter((d) => {
-                  if (!payrollSearch.trim()) return true;
-                  const q = payrollSearch.toLowerCase();
-                  return (
-                    d.driver.name?.toLowerCase().includes(q) ||
-                    d.driver.cpf?.toLowerCase().includes(q) ||
-                    d.driver.car_plate?.toLowerCase().includes(q) ||
-                    d.driver.car_model?.toLowerCase().includes(q) ||
-                    d.driver.pixKey?.toLowerCase().includes(q)
-                  );
-                })
-                .map((d) => (
+              {filteredPayroll.map((d) => (
                 <Card key={d.driver.id}>
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start">
+                    <div
+                      className="flex justify-between items-start cursor-pointer"
+                      onClick={() => setExpandedDriver(expandedDriver === d.driver.id ? null : d.driver.id)}
+                    >
                       <div>
                         <p className="font-bold">{d.driver.name}</p>
                         <p className="text-xs text-muted-foreground">{d.driver.cpf} • {d.driver.car_plate}</p>
@@ -648,6 +696,44 @@ const RelatoriosPage = () => {
                       {d.dnrDiscount > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount)}</strong></div>}
                       {d.bonus > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus)}</strong></div>}
                     </div>
+
+                    {/* Expandable daily detail table */}
+                    {expandedDriver === d.driver.id && d.days.length > 0 && (
+                      <div className="mt-3 border-t pt-3">
+                        <p className="text-xs font-semibold text-muted-foreground mb-2">Detalhamento por dia</p>
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead className="text-xs h-8 px-2">Data</TableHead>
+                                <TableHead className="text-xs h-8 px-2">Login</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right">TBRs</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right">Retornos</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right">Concluídos</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right">Valor</TableHead>
+                              </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                              {d.days.map((day) => (
+                                <TableRow key={day.date}>
+                                  <TableCell className="text-xs px-2 py-1.5">{format(new Date(day.date + "T12:00:00"), "dd/MM")}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5">{day.login || "—"}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5 text-right">{day.returns}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.completed}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5 text-right">{formatCurrency(day.value)}</TableCell>
+                                </TableRow>
+                              ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-[10px] text-muted-foreground mt-2 cursor-pointer hover:underline"
+                       onClick={() => setExpandedDriver(expandedDriver === d.driver.id ? null : d.driver.id)}>
+                      {expandedDriver === d.driver.id ? "▲ Recolher detalhes" : "▼ Ver detalhes por dia"}
+                    </p>
                   </CardContent>
                 </Card>
               ))}
@@ -655,26 +741,6 @@ const RelatoriosPage = () => {
           </div>
         </div>
       )}
-
-      {/* Modal de Confirmação para Gerar Folha */}
-      <Dialog open={showGenerateConfirm} onOpenChange={setShowGenerateConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-bold italic">Gerar Folha de Pagamento?</DialogTitle>
-            <DialogDescription className="pt-2">
-              Ao confirmar, será gerado um relatório final. Os motoristas serão notificados e poderão realizar o envio da Nota Fiscal de serviço pelo aplicativo.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setShowGenerateConfirm(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => { setShowGenerateConfirm(false); fetchPayroll(); }} className="font-bold italic">
-              Confirmar e Gerar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </>
   );
 };
