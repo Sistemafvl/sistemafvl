@@ -1,47 +1,48 @@
 
+Plano objetivo para corrigir o alerta “É sua vez” e o som contínuo
 
-## Plano — 3 Correções: Alerta Sonoro, Notificação Global, Performance em Operação
+1) Causa raiz confirmada (por que está disparando antes do sino)
+- O backend de programação de carregamento (`supabase/functions/create-ride-with-login/index.ts`) está gravando `called_at` no momento de “Definir programação”.
+- Como `DriverCallAlert` usa `called_at` como gatilho, o motorista recebe alerta sem o conferente clicar no sino.
+- Além disso, o som atual é um beep curto em ciclos; em alguns celulares ele acaba soando como “1 beep”.
 
-### 1. Bug: Alerta dispara ao carregar a página (não apenas no sino)
+2) Ajuste principal (alertar só quando clicar no sino)
+- Alterar `create-ride-with-login` para NÃO setar `called_at` ao criar/programar carga.
+- Na atualização da `queue_entry` da programação, manter apenas status/completed_at e limpar campos de chamada:
+  - `called_at: null`
+  - `called_by_name: null`
+- Resultado: programar carga não dispara mais “Sua Vez!”.
 
-**Causa raiz**: Em `DriverQueue.tsx`, `lastCalledAtRef` inicia como `null`. Quando o motorista abre a página e o `queue_entry` já tem `called_at` (de qualquer momento anterior), a condição `called_at !== null` dispara o alerta imediatamente.
+3) Blindagem no app do motorista (evitar falso positivo legado)
+- Em `src/components/dashboard/DriverCallAlert.tsx`:
+  - Considerar chamada válida somente quando houver `called_at` + `called_by_name` (chamada explícita via sino).
+  - Ignorar registros antigos que tenham `called_at` sem `called_by_name` (resíduo de regra antiga).
+  - Priorizar leitura da `queue_entry_id` da corrida ativa do motorista (pending/loading do dia), para não misturar com entradas antigas da fila.
 
-**Correção** em `DriverQueue.tsx`:
-- Na primeira execução de `fetchActiveRide` e `fetchQueue`, apenas **gravar** o `called_at` atual em `lastCalledAtRef` sem disparar o alerta. Usar um `initialLoadDoneRef` para distinguir o primeiro fetch dos subsequentes.
-- O alerta só dispara quando `called_at` **muda** após o carregamento inicial (ou seja, quando o conferente clica no sino em tempo real).
+4) Som e vibração contínuos até “CIENTE”
+- Reescrever a engine de áudio do `DriverCallAlert` para modo realmente contínuo:
+  - Web Audio contínuo (tom/sirene) enquanto `isAlerting=true`.
+  - Fallback com `<audio loop>` (em vez de recriar áudio por beep).
+- Manter vibração em loop contínuo.
+- Parar som + vibração apenas no botão `CIENTE` (sem auto-stop por polling/realtime).
 
-### 2. Som toca apenas uma vez — deve ser loop contínuo + vibração
+5) Escopo de arquivos
+- `supabase/functions/create-ride-with-login/index.ts`
+- `src/components/dashboard/DriverCallAlert.tsx`
+- (sem migração de banco)
 
-**Causa**: O `createAlertAudio` com `startBeeping` já implementa intervalo de 1.5s, mas o `triggerCallAlert` é chamado múltiplas vezes (tanto em `fetchActiveRide` quanto em `fetchQueue`), e a condição de guarda `if (isPlaying) return` pode estar conflitando.
+Detalhes técnicos (resumo)
+- Gatilho correto de chamada passa a ser “evento de sino” (que já grava `called_at` e `called_by_name` em `ConferenciaCarregamentoPage`).
+- Programação de carga não deve escrever `called_at`.
+- Áudio em loop contínuo evita comportamento de beep único em mobile.
 
-**Correção**: Verificar que `startBeeping` realmente mantém o loop ativo. O som e vibração devem persistir até o clique em "Ciente". Garantir que não há chamadas duplicadas quebrando o intervalo.
-
-### 3. Alerta deve funcionar em QUALQUER tela do motorista (não só na Fila)
-
-**Causa**: A lógica de polling de `called_at` só existe em `DriverQueue.tsx`. Se o motorista está em Visão Geral ou outra tela, não recebe o alerta.
-
-**Correção**:
-- Mover a lógica de detecção de chamada para o `DriverLayout.tsx` (componente wrapper de todas as telas do motorista).
-- Criar um componente `DriverCallAlert` que:
-  - Faz polling do `queue_entry` com `called_at` via realtime subscription
-  - Toca beep contínuo + vibração quando detecta nova chamada
-  - Mostra overlay/banner fixo com "Sua Vez!", nome do conferente e botão "Ciente"
-  - Funciona independente da rota atual
-
-### 4. Operação: Performance deve mostrar total original (incluindo insucessos removidos)
-
-**Causa**: `total_tbrs` conta apenas TBRs restantes em `ride_tbrs`. Quando um insucesso é registrado, o TBR é deletado de `ride_tbrs`, reduzindo o `total_tbrs`. O usuário quer ver `8/9` (8 concluídos de 9 originais).
-
-**Correção** em `OperacaoPage.tsx`:
-- Calcular `total_original = total_tbrs + piso_returns` (TBRs atuais + insucessos válidos)
-- `concluidos = total_original - piso_returns` (que é simplesmente `total_tbrs` atual)
-- Exibir `concluidos/total_original` em vez de `concluidos/total_tbrs`
-- Performance = `concluidos / total_original * 100`
-
-Na prática: `total_original = c.total_tbrs + c.piso_returns`, exibir `{c.total_tbrs}/{total_original}` e calcular performance como `(c.total_tbrs / total_original) * 100`.
-
-### Arquivos afetados
-1. `src/pages/driver/DriverQueue.tsx` — corrigir detecção inicial de `called_at`
-2. `src/components/dashboard/DriverLayout.tsx` — adicionar componente de alerta global
-3. `src/pages/dashboard/OperacaoPage.tsx` — ajustar cálculo de performance
-
+Validação pós-implementação
+1. Programar motorista sem clicar no sino:
+- Não pode aparecer “Sua Vez!”, nem som, nem vibração.
+2. Clicar no sino no card do carregamento:
+- Overlay “SUA VEZ!” aparece com nome do conferente.
+- Som contínuo + vibração contínua iniciam.
+3. Navegar para outras telas do motorista:
+- Alerta continua ativo.
+4. Clicar em `CIENTE`:
+- Som e vibração param imediatamente.
