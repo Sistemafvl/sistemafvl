@@ -166,40 +166,96 @@ const DashboardHome = () => {
         return;
       }
 
+      // Collect all ride_ids from return entries to reconstruct deleted ride_tbrs
+      const returnRideIds = new Set<string>();
+      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((e: any) => {
+        if (e.ride_id) returnRideIds.add(e.ride_id);
+      });
+      // Identify ride_ids that have return entries but NO ride_tbr record (deleted by trigger)
+      const rideTbrRideIds = new Set(rideTbrs.map((rt: any) => rt.ride_id));
+      const missingRideIds = [...returnRideIds].filter(rid => !rideTbrRideIds.has(rid));
+
+      // Fetch the driver_rides for missing ride_ids to reconstruct loading events
+      let missingRidesData: any[] = [];
+      if (missingRideIds.length > 0) {
+        const { data } = await supabase
+          .from("driver_rides")
+          .select("id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id")
+          .in("id", missingRideIds);
+        missingRidesData = data ?? [];
+      }
+
       // Collect conferente IDs to fetch names
       const confIds = new Set<string>();
       rideTbrs.forEach((rt: any) => { if (rt.driver_rides?.conferente_id) confIds.add(rt.driver_rides.conferente_id); });
       [...pisoEntries, ...psEntries, ...rtoEntries].forEach((e: any) => { if (e.conferente_id) confIds.add(e.conferente_id); });
+      missingRidesData.forEach((r: any) => { if (r.conferente_id) confIds.add(r.conferente_id); });
 
       // Fetch conferente names and driver names
       const confIdsArr = [...confIds];
-      const driverIds = [...new Set(rideTbrs.map((rt: any) => rt.driver_rides?.driver_id).filter(Boolean))];
+      const driverIds = [...new Set([
+        ...rideTbrs.map((rt: any) => rt.driver_rides?.driver_id).filter(Boolean),
+        ...missingRidesData.map((r: any) => r.driver_id).filter(Boolean),
+      ])];
+
+      const firstUnitId = rideTbrs.length > 0
+        ? (rideTbrs[0] as any).driver_rides?.unit_id
+        : missingRidesData.length > 0 ? missingRidesData[0].unit_id : null;
 
       const [confRes, driverRes, unitRes] = await Promise.all([
         confIdsArr.length > 0 ? supabase.from("user_profiles").select("id, name").in("id", confIdsArr) : Promise.resolve({ data: [] as any[] }),
         driverIds.length > 0 ? supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color").in("id", driverIds) : Promise.resolve({ data: [] as any[] }),
-        rideTbrs.length > 0 ? supabase.from("units").select("id, name").eq("id", (rideTbrs[0] as any).driver_rides?.unit_id).maybeSingle() : Promise.resolve({ data: null }),
+        firstUnitId ? supabase.from("units").select("id, name").eq("id", firstUnitId).maybeSingle() : Promise.resolve({ data: null }),
       ]);
 
       const confMap = new Map((confRes.data ?? []).map((c: any) => [c.id, c.name]));
       const driverMap = new Map((driverRes.data ?? []).map((d: any) => [d.id, d]));
+      const missingRidesMap = new Map(missingRidesData.map((r: any) => [r.id, r]));
 
       // Build timeline events
       const timeline: TimelineEvent[] = [];
 
-      // Sort rideTbrs chronologically to differentiate first load from re-loads
-      const sortedRideTbrs = [...rideTbrs].sort((a: any, b: any) => {
-        const ta = new Date(a.scanned_at ?? a.driver_rides?.completed_at ?? 0).getTime();
-        const tb = new Date(b.scanned_at ?? b.driver_rides?.completed_at ?? 0).getTime();
-        return ta - tb;
+      // Combine real ride_tbrs + synthetic events from missing rides
+      interface LoadEvent { timestamp: string; ride: any; isReal: boolean; }
+      const loadEvents: LoadEvent[] = [];
+
+      // Real ride_tbrs
+      rideTbrs.forEach((rt: any) => {
+        loadEvents.push({
+          timestamp: rt.scanned_at ?? rt.driver_rides?.completed_at ?? "",
+          ride: rt.driver_rides,
+          isReal: true,
+        });
       });
+
+      // Synthetic loading events from return entries whose ride_tbr was deleted
+      missingRideIds.forEach(rideId => {
+        const ride = missingRidesMap.get(rideId);
+        if (!ride) return;
+        // Find the earliest return entry for this ride to place loading event before it
+        const returnTimestamps = [...pisoEntries, ...psEntries, ...rtoEntries]
+          .filter((e: any) => e.ride_id === rideId)
+          .map((e: any) => new Date(e.created_at).getTime());
+        const earliestReturn = returnTimestamps.length > 0 ? Math.min(...returnTimestamps) : new Date(ride.completed_at).getTime();
+        // Place loading event 1 second before the return
+        const syntheticTimestamp = new Date(earliestReturn - 1000).toISOString();
+        loadEvents.push({
+          timestamp: syntheticTimestamp,
+          ride,
+          isReal: false,
+        });
+      });
+
+      // Sort all load events chronologically
+      loadEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
       let isFirstLoad = true;
-      sortedRideTbrs.forEach((rt: any) => {
-        const ride = rt.driver_rides;
+      loadEvents.forEach((evt) => {
+        const ride = evt.ride;
         const driver = driverMap.get(ride?.driver_id);
         const confName = ride?.conferente_id ? confMap.get(ride.conferente_id) ?? null : null;
         timeline.push({
-          timestamp: rt.scanned_at ?? ride?.completed_at ?? "",
+          timestamp: evt.timestamp,
           conferente: confName,
           action: isFirstLoad ? "Origem: Conferência Carregamento" : "Re-carregado: Conferência Carregamento",
           detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
@@ -268,8 +324,8 @@ const DashboardHome = () => {
       // Sort chronologically
       timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-      // Build result from first ride or fallback
-      const firstRide = rideTbrs.length > 0 ? (rideTbrs[0] as any).driver_rides : null;
+      // Build result from first ride or fallback (check real ride_tbrs first, then missing rides)
+      const firstRide = rideTbrs.length > 0 ? (rideTbrs[0] as any).driver_rides : (missingRidesData.length > 0 ? missingRidesData[0] : null);
       const firstDriver = firstRide ? driverMap.get(firstRide.driver_id) : null;
 
       // Compute composite status
