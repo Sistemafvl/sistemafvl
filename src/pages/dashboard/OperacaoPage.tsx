@@ -36,6 +36,7 @@ interface DriverCard {
   total_tbrs: number;
   piso_returns: number;
   all_returns: number;
+  all_ever_removed: number;
 }
 
 interface TbrDetail {
@@ -166,6 +167,18 @@ const OperacaoPage = () => {
     const allReturnCounts: Record<string, number> = {};
     Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
+    // Count ALL ever-removed TBRs per ride (including operational) — for totalLidos
+    const allEverRemovedSets: Record<string, Set<string>> = {};
+    [...pisoRaw, ...psData, ...rtoData].forEach((p: any) => {
+      const upperCode = p.tbr_code?.toUpperCase();
+      if (p.ride_id && upperCode) {
+        if (!allEverRemovedSets[p.ride_id]) allEverRemovedSets[p.ride_id] = new Set();
+        allEverRemovedSets[p.ride_id].add(upperCode);
+      }
+    });
+    const allEverRemovedCounts: Record<string, number> = {};
+    Object.entries(allEverRemovedSets).forEach(([rideId, set]) => { allEverRemovedCounts[rideId] = set.size; });
+
     const result: DriverCard[] = rides.map((r) => {
       const d = driverMap[r.driver_id];
       return {
@@ -186,6 +199,7 @@ const OperacaoPage = () => {
         total_tbrs: tbrCounts[r.id] ?? 0,
         piso_returns: issueCounts[r.id] ?? 0,
         all_returns: allReturnCounts[r.id] ?? 0,
+        all_ever_removed: allEverRemovedCounts[r.id] ?? 0,
       };
     });
 
@@ -196,7 +210,8 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalLidos = totalTbrsAtual + totalAllReturns;
+  const totalAllEverRemoved = cards.reduce((s, c) => s + c.all_ever_removed, 0);
+  const totalLidos = totalTbrsAtual + totalAllEverRemoved;
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -265,8 +280,8 @@ const OperacaoPage = () => {
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos - totalAllReturns}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Entregues <InfoButton text="TBRs entregues com sucesso (lidos menos insucessos)." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalTbrsAtual}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Entregues <InfoButton text="TBRs que o motorista possui para entregar (ride_tbrs atual)." /></p>
             </div>
           </div>
 
@@ -280,7 +295,7 @@ const OperacaoPage = () => {
           ) : (
             <div className="grid gap-3">
               {filteredCards.map((c) => {
-                  const totalLidosCard = c.total_tbrs + c.all_returns;
+                  const totalLidosCard = c.total_tbrs + c.all_ever_removed;
                   const entregues = c.total_tbrs;
                   const driverTbrValue = customValueMap.get(c.driver_id) ?? tbrValue;
                   const totalGanho = entregues * driverTbrValue;
@@ -357,7 +372,7 @@ const OperacaoPage = () => {
                             {totalLidosCard} <span className="text-xs font-normal">lidos</span>
                           </p>
                           <Badge className="text-[10px] mt-1 bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/20">
-                            {totalLidosCard - c.all_returns} concluído{(totalLidosCard - c.all_returns) !== 1 ? "s" : ""}
+                            {entregues} concluído{entregues !== 1 ? "s" : ""}
                           </Badge>
                           {c.all_returns > 0 && (
                             <Badge variant="destructive" className="text-[10px] mt-1">

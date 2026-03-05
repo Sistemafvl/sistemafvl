@@ -476,17 +476,35 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-    // Fetch removed TBR counts per ride from piso_entries
+    // Fetch removed TBR counts per ride from ALL sources (piso + ps + rto)
     if (rideIds.length > 0) {
       const { fetchAllRowsWithIn: fetchAllWithIn } = await import("@/lib/supabase-helpers");
-      const removedEntries = await fetchAllWithIn<{ ride_id: string }>(
-        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", ids).eq("reason", "Removido do carregamento").range(from, to),
-        rideIds
-      );
-      const counts: Record<string, number> = {};
-      removedEntries.forEach((e: any) => {
-        counts[e.ride_id] = (counts[e.ride_id] || 0) + 1;
+      const [removedPiso, removedPs, removedRto] = await Promise.all([
+        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+      ]);
+      // Count unique codes per ride that are NOT in current ride_tbrs
+      const currentTbrCodes: Record<string, Set<string>> = processedCodesRef.current;
+      const removedSets: Record<string, Set<string>> = {};
+      [...removedPiso, ...removedPs, ...removedRto].forEach((e: any) => {
+        if (!e.ride_id || !e.tbr_code) return;
+        const upper = e.tbr_code.toUpperCase();
+        if (currentTbrCodes[e.ride_id]?.has(upper)) return;
+        if (!removedSets[e.ride_id]) removedSets[e.ride_id] = new Set();
+        removedSets[e.ride_id].add(upper);
       });
+      const counts: Record<string, number> = {};
+      Object.entries(removedSets).forEach(([rideId, set]) => { counts[rideId] = set.size; });
       setRemovedTbrCounts(counts);
     } else {
       setRemovedTbrCounts({});
