@@ -1,71 +1,42 @@
 
 
-## Plano: Eliminar Limite de 1000 Registros em Todo o Sistema
+## Diagnóstico e Plano de Correção: Divergência Operação vs Conferência + Remoção do X
 
-### Resumo
+### Causa raiz identificada
 
-Sim, vou corrigir **todas** as queries vulneráveis. Identifiquei **7 arquivos** com queries que ainda podem truncar dados acima de 1000 registros. As queries já protegidas (OperacaoPage, CiclosPage, DNRPage, PSPage, RTOPage, RelatoriosPage, DashboardMetrics gráficos, DriverRides, FeedbacksPage TBRs) continuam intactas.
+O botão **X** na lista de TBRs deleta o registro de `ride_tbrs` e cria um `piso_entry` com reason `"Removido do carregamento"`. Como esse motivo está em `OPERATIONAL_PISO_REASONS`, ele é **excluído de todas as contagens de retorno** em todo o sistema. Resultado: o TBR some do `ride_tbrs` (não conta como concluído) E some dos retornos (não conta como insucesso). O total original encolhe e os números ficam errados.
 
-### Queries a Corrigir
+No caso do Willian Santos: se 102 TBRs foram removidos via X e 3 tiveram insucesso real, `ride_tbrs` mostra poucos registros e `all_returns` mostra só 3, resultando em 0/3 ao invés do total real.
 
-**1. MatrizOverview.tsx** (ALTA prioridade — agrega múltiplas unidades)
-- Linhas 62-71: 8 queries diretas sem paginação (rides, PS, RTO, DNR, piso, reviews, drivers, settings)
-- Converter todas para `fetchAllRows`
+### Correções
 
-**2. MatrizUnidades.tsx** (ALTA prioridade)
-- Linhas 40-45: 6 queries diretas (rides, PS, RTO, DNR, piso, reviews)
-- Converter para `fetchAllRows`
+**1. Remover botão X de excluir TBR** (`ConferenciaCarregamentoPage.tsx`)
+- Remover o `<button>` com ícone `<X>` nas duas views: lista normal (linhas ~2030-2036) e modo foco (linhas ~2208-2210)
+- Remover `handleDeleteTbr`, `handleDeleteTbrWithPassword`, `confirmDeleteTbrWithPassword` e modais relacionados (modal de senha individual)
+- Remover botão "Excluir selecionados" (batch delete) e `confirmBatchDelete`
+- **Manter checkboxes** conforme solicitado
+- Manter `handleDeleteTbr` internamente apenas para uso do sistema (reset/cancel), mas remover acesso do usuário
 
-**3. MatrizMotoristas.tsx** (MÉDIA)
-- Linhas 49-54: queries de `drivers_public`, `dnr_entries`, `ps_entries`, `unit_settings`, `custom_values`, `min_packages` sem paginação
-- Converter para `fetchAllRows`
+**2. Corrigir cálculo da Operação** (`OperacaoPage.tsx`)
+- Incluir piso entries com reason `"Removido do carregamento"` no total original (para reconstruir o total escaneado historicamente)
+- Fórmula: `total_original = ride_tbrs.count + retornos_reais + removidos_operacionais`
+- `concluidos = ride_tbrs.count + removidos_operacionais` (itens removidos manualmente não são insucessos, foram retirados antes da rota)
+- `retornos_exibidos` = apenas piso/ps/rto não-operacionais
+- Performance = `(total_original - retornos_reais) / total_original * 100`
 
-**4. MatrizFinanceiro.tsx** (MÉDIA)
-- Linha 43: `dnr_entries` sem paginação
-- Converter para `fetchAllRows`
+**3. Alinhar cálculo financeiro** (`RelatoriosPage.tsx`)
+- Verificar que a folha de pagamento (payroll) usa a mesma lógica: `tbrCount` deve incluir TBRs removidos operacionalmente para não subcontar
+- `completed = tbrCount - net_returns` (onde net_returns exclui operacionais)
 
-**5. DashboardHome.tsx** (MÉDIA)
-- Linhas 87-90: `unit_reviews` sem paginação (média de avaliações)
-- Linhas 102-105: `dnr_entries` sem paginação (contadores DNR)
-- Converter para `fetchAllRows`
+**4. Alinhar demais páginas** 
+- `CiclosPage.tsx`, `DashboardInsights.tsx`, `DriverRides.tsx` — mesma lógica de reconstrução do total original
+- Garantir consistência: "Removido do carregamento" conta como TBR escaneado (total), mas não como insucesso (retorno)
 
-**6. ConferenciaCarregamentoPage.tsx** (MÉDIA)
-- Linhas 472-476: `piso_entries` removidos sem paginação
-- Linhas 499-503: busca global de TBRs (`ride_tbrs.ilike`) sem paginação
-- Linhas 553-557: TBRs de rides encontrados na busca sem paginação
-- Converter para `fetchAllRows`
-
-**7. ConfiguracoesPage.tsx** (BAIXA)
-- Linha 99: `driver_custom_values` sem paginação
-- Linha 109: `driver_bonus` sem paginação
-- Linha 115: `driver_minimum_packages` sem paginação
-- Linha 129: `driver_rides` para buscar motoristas sem paginação
-- Converter para `fetchAllRows`
-
-**8. FeedbacksPage.tsx** (BAIXA)
-- Linha 57-61: `driver_rides` sem paginação (rides por driver)
-- Converter para `fetchAllRows`
-
-**9. FinanceiroPage.tsx** (BAIXA)
-- Linhas 55-59: `payroll_reports` sem paginação
-- Linhas 63-66: `driver_invoices` sem paginação
-- Converter para `fetchAllRows`
-
-**10. RetornoPisoPage.tsx** (BAIXA)
-- Linhas 154-159: `piso_entries` abertos sem paginação
-- Converter para `fetchAllRows`
-
-### Outras Limitações Verificadas
-
-- **`.in()` com arrays muito grandes**: já tratado pelo `chunkArray` no helper. Sem risco.
-- **`count: exact, head: true`**: usado no DashboardMetrics para contagens — isso é server-side, sem limite de 1000. OK.
-- **RPCs**: `get_unit_tbr_count`, `get_top_drivers_by_tbrs`, `get_ride_tbr_counts` — executam server-side, sem limite. OK.
-- **Nova unidade**: não cria limitação nova; o risco é proporcional ao volume de dados, não ao número de unidades.
-
-### Abordagem Técnica
-- Importar `fetchAllRows` (e `fetchAllRowsWithIn` quando necessário para `.in()`)
-- Adicionar `.range(from, to)` em cada query convertida
-- Manter a mesma lógica de negócio, apenas garantindo paginação automática
-
-### Total: ~25 queries em 10 arquivos
+### Arquivos afetados
+1. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — remover X, batch delete, modais de senha
+2. `src/pages/dashboard/OperacaoPage.tsx` — incluir "Removido" no total original
+3. `src/pages/dashboard/RelatoriosPage.tsx` — incluir "Removido" no tbrCount da folha
+4. `src/pages/dashboard/CiclosPage.tsx` — mesma correção
+5. `src/components/dashboard/DashboardInsights.tsx` — mesma correção
+6. `src/pages/driver/DriverRides.tsx` — mesma correção
 
