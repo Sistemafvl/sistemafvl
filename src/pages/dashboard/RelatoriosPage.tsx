@@ -169,15 +169,15 @@ const RelatoriosPage = () => {
           .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString()),
         fetchAllRows<{ id: string; created_at: string }>((from, to) =>
           supabase.from("piso_entries").select("id, created_at").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
         fetchAllRows<{ id: string; created_at: string }>((from, to) =>
           supabase.from("ps_entries").select("id, created_at").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
         fetchAllRows<{ id: string; created_at: string }>((from, to) =>
           supabase.from("rto_entries").select("id, created_at").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
       ]);
 
@@ -187,7 +187,7 @@ const RelatoriosPage = () => {
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const allTbrs = rideIds.length > 0
         ? await fetchAllRowsWithIn<{ ride_id: string }>(
-            (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).range(from, to),
+            (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
             rideIds)
         : [];
       const piso = pisoData;
@@ -248,15 +248,15 @@ const RelatoriosPage = () => {
       const [pisoRaw, psRaw, rtoRaw] = await Promise.all([
         fetchAllRows<any>((from, to) =>
           supabase.from("piso_entries").select("tbr_code, reason, driver_name, route, created_at").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
         fetchAllRows<any>((from, to) =>
           supabase.from("ps_entries").select("tbr_code, description, driver_name, route, created_at").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
         fetchAllRows<any>((from, to) =>
           supabase.from("rto_entries").select("tbr_code, description, driver_name, route, created_at, cep").eq("unit_id", unitId)
-            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).range(from, to)
+            .gte("created_at", startDate.toISOString()).lte("created_at", endDate.toISOString()).order("id").range(from, to)
         ),
       ]);
 
@@ -299,20 +299,20 @@ const RelatoriosPage = () => {
       const [driversRes, pisoRaw, psRankData, rtoRankData] = await Promise.all([
         supabase.from("drivers_public").select("id, name").in("id", driverIds),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
       ]);
       const tbrsData = await fetchAllRowsWithIn<{ ride_id: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
         rideIds
       );
 
@@ -366,15 +366,15 @@ const RelatoriosPage = () => {
     const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
-        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-        (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-        (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
@@ -383,7 +383,7 @@ const RelatoriosPage = () => {
       supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
     ]);
     const tbrsData = await fetchAllRowsWithIn<{ ride_id: string; code: string }>(
-      (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).range(from, to),
+      (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
       rideIds
     );
 

@@ -433,7 +433,7 @@ const ConferenciaCarregamentoPage = () => {
         (ids) => (from, to) =>
           supabase.from("ride_tbrs").select("*")
             .in("ride_id", ids)
-            .order("scanned_at", { ascending: false })
+            .order("id")
             .range(from, to),
         rideIds
       );

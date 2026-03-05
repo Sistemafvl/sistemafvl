@@ -86,7 +86,7 @@ const DashboardHome = () => {
     const fetchFeedback = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id).range(from, to)
+        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id).order("id").range(from, to)
       );
       setFeedbackTotal(revs.length);
       setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
@@ -100,7 +100,7 @@ const DashboardHome = () => {
     const fetchDnr = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id).range(from, to)
+        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id).order("id").range(from, to)
       );
       const open = all.filter(e => e.status === "open");
       const analyzing = all.filter(e => e.status === "analyzing");

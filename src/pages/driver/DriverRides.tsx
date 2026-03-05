@@ -59,15 +59,15 @@ const DriverRides = () => {
       const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
@@ -76,7 +76,7 @@ const DriverRides = () => {
 
       // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
       const tbrsData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       );
 
@@ -187,11 +187,10 @@ const DriverRides = () => {
             </p>
           ) : (
             rides.map((ride, idx) => {
-              const totalOriginal = (ride.tbrCount ?? 0) + (ride.returnCount ?? 0);
-              const concluidos = totalOriginal - (ride.returnCount ?? 0);
-              const totalGanho = concluidos * (ride.tbrValue ?? 0);
-              const mediaTbr = totalOriginal > 0 ? totalGanho / totalOriginal : 0;
-              const performance = totalOriginal > 0 ? (concluidos / totalOriginal) * 100 : 0;
+              const totalLidos = (ride.tbrCount ?? 0) + (ride.returnCount ?? 0);
+              const entregues = totalLidos - (ride.returnCount ?? 0);
+              const totalGanho = entregues * (ride.tbrValue ?? 0);
+              const performance = totalLidos > 0 ? (entregues / totalLidos) * 100 : 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);
 
               return (
@@ -250,19 +249,19 @@ const DriverRides = () => {
                       <span className="text-xs font-bold text-emerald-600">R${totalGanho.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
-                      <TrendingUp className="h-3 w-3 text-blue-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Valor TBR</span>
-                      <span className="text-xs font-bold text-blue-600">R${(ride.tbrValue ?? 0).toFixed(2).replace(".", ",")}</span>
+                      <Package className="h-3 w-3 text-blue-600 mb-0.5" />
+                      <span className="text-[10px] text-muted-foreground leading-none">Lidos</span>
+                      <span className="text-xs font-bold text-blue-600">{totalLidos}</span>
                     </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
-                      <Target className="h-3 w-3 text-amber-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
-                      <span className="text-xs font-bold text-amber-600">{performance.toFixed(0)}%</span>
+                    <div className="flex flex-col items-center p-1.5 rounded-md bg-red-500/10 border border-red-500/20">
+                      <AlertTriangle className="h-3 w-3 text-red-600 mb-0.5" />
+                      <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
+                      <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
                     </div>
                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
-                      <Package className="h-3 w-3 text-purple-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">TBRs</span>
-                      <span className="text-xs font-bold text-purple-600">{concluidos}</span>
+                      <Target className="h-3 w-3 text-purple-600 mb-0.5" />
+                      <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
+                      <span className="text-xs font-bold text-purple-600">{performance.toFixed(0)}%</span>
                     </div>
                   </div>
                 </div>

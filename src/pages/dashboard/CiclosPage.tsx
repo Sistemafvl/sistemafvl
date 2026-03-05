@@ -92,19 +92,19 @@ const CiclosPage = () => {
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [tbrsData, pisoRaw, psData, rtoData] = await Promise.all([
         fetchAllRowsWithIn<{ ride_id: string; code: string }>(
-          (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
       ]);

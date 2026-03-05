@@ -54,12 +54,12 @@ const FinanceiroPage = () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
     const reportsData = await fetchAllRows<any>((from, to) =>
-      supabase.from("payroll_reports" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
+      supabase.from("payroll_reports" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
     );
     setReports(reportsData);
 
     const allInvoices = await fetchAllRows<any>((from, to) =>
-      supabase.from("driver_invoices" as any).select("payroll_report_id, file_url").eq("unit_id", unitId).range(from, to)
+      supabase.from("driver_invoices" as any).select("payroll_report_id, file_url").eq("unit_id", unitId).order("id").range(from, to)
     );
 
     const counts: Record<string, number> = {};

@@ -44,14 +44,14 @@ const MatrizMotoristas = () => {
     import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
       Promise.all([
         fetchAllRows<any>((from, to) =>
-          supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).range(from, to)
+          supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)
         ),
-        fetchAllRows<any>((from, to) => supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, active").range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, driver_id, dnr_value, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, active").order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, driver_id, dnr_value, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
       ]).then(([ridesData, driversData, dnrData, psData, settingsData, customData, minPkgData]) => {
         setRides(ridesData);
         setDrivers(driversData);
@@ -64,7 +64,7 @@ const MatrizMotoristas = () => {
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
           fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).range(from, to)
+            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
           ).then(data => setTbrs(data));
         } else setTbrs([]);
       });

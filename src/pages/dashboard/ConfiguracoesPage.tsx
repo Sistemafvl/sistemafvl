@@ -130,7 +130,7 @@ const ConfiguracoesPage = () => {
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
     if (!unitId || !term.trim()) { setter([]); return; }
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const rides = await fetchAllRows<{ driver_id: string }>((from, to) => supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId).range(from, to));
+    const rides = await fetchAllRows<{ driver_id: string }>((from, to) => supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId).order("id").range(from, to));
     if (!rides.length) { setter([]); return; }
     const driverIds = [...new Set(rides.map(r => r.driver_id))];
     if (driverIds.length === 0) { setter([]); return; }

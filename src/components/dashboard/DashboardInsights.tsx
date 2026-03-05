@@ -89,13 +89,13 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     // Return rate
     const [pisoAll, rtoAll, psAll] = await Promise.all([
       fetchAllRows<{ tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("piso_entries").select("tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
     ]);
     const filteredPisoAll = pisoAll.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
@@ -136,13 +136,13 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
 
     const [pisoData, rtoData, psData] = await Promise.all([
       fetchAllRows<{ driver_name: string | null; tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("driver_name, tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("piso_entries").select("driver_name, tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).range(from, to)
+        supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
       ),
     ]);
 
@@ -165,7 +165,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const confRides = await fetchAllRows<{ conferente_id: string | null }>((from, to) => {
       let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
       if (until) q = q.lte("completed_at", until);
-      return q.range(from, to);
+      return q.order("id").range(from, to);
     });
 
     if (confRides.length === 0) { setTopConferentes([]); return; }
