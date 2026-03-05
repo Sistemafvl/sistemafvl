@@ -191,6 +191,8 @@ const ConferenciaCarregamentoPage = () => {
   const currentRideIdsRef = useRef<string[]>([]);
   const [removedTbrCounts, setRemovedTbrCounts] = useState<Record<string, number>>({});
   const requestIdRef = useRef<number>(0);
+  // Persistent scan counter: rideId → code → totalScans (survives timeout cleanup)
+  const scanCountsRef = useRef<Record<string, Record<string, number>>>({});
 
   // Manual mode toggle per ride
   const [manualMode, setManualMode] = useState<Record<string, boolean>>({});
@@ -685,9 +687,13 @@ const ConferenciaCarregamentoPage = () => {
     const tbrToDelete = (tbrs[rideId] ?? []).find(t => t.id === tbrId)
       || (searchTbrs[rideId] ?? []).find(t => t.id === tbrId);
 
-    // Optimistic UI removal + sync processedCodesRef
+    // Optimistic UI removal + sync processedCodesRef + reset scan count
     if (tbrToDelete) {
       processedCodesRef.current[rideId]?.delete(tbrToDelete.code.toUpperCase());
+      // Reset scan count so re-scanning starts fresh
+      if (scanCountsRef.current[rideId]) {
+        delete scanCountsRef.current[rideId][tbrToDelete.code.toUpperCase()];
+      }
     }
     setTbrs((prev) => ({
       ...prev,
@@ -865,7 +871,13 @@ const ConferenciaCarregamentoPage = () => {
       const tempId = crypto.randomUUID();
       const newTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString() };
 
-      if (count === 0) {
+      // Persistent scan count (independent of local state timing)
+      if (!scanCountsRef.current[rideId]) scanCountsRef.current[rideId] = {};
+      const prevScanCount = scanCountsRef.current[rideId][code.toUpperCase()] || 0;
+      const totalScans = prevScanCount + 1;
+      scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
+
+      if (totalScans === 1 && count === 0) {
         const { data: previousTbrs } = await supabase
           .from("ride_tbrs")
           .select("id, ride_id")
@@ -976,21 +988,15 @@ const ConferenciaCarregamentoPage = () => {
 
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         playSuccessBeep();
-      } else if (count === 1) {
-        // 2nd beep: duplicate confirmed — mark yellow permanently
+      } else if (totalScans === 2) {
+        // 2nd beep: temporary red warning, NO yellow — accidental double-scan is common
         newTbr._duplicate = true;
-
-        // Find the real (oldest) entry to mark as yellow
-        const realEntry = occurrences[0];
-        if (realEntry?.id) {
-          void supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", realEntry.id);
-        }
 
         realtimeLockUntil.current = Date.now() + 15000;
 
         setTbrs((prev) => {
           const updated = (prev[rideId] ?? []).map(t =>
-            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true, _yellowHighlight: true } : t
+            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
           );
           return { ...prev, [rideId]: [newTbr, ...updated] };
         });
@@ -1007,7 +1013,7 @@ const ConferenciaCarregamentoPage = () => {
         }, 1000);
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-      } else if (count >= 2) {
+      } else if (totalScans >= 3) {
         // 3x beep: don't add the 3rd TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
         playErrorBeep();
 
