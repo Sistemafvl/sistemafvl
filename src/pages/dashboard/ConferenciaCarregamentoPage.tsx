@@ -245,6 +245,13 @@ const ConferenciaCarregamentoPage = () => {
   const [batchDeleteRideId, setBatchDeleteRideId] = useState<string | null>(null);
   const [batchDeleteLoading, setBatchDeleteLoading] = useState(false);
 
+  // Batch insucesso
+  const [showBatchInsucessoModal, setShowBatchInsucessoModal] = useState(false);
+  const [batchInsucessoRideId, setBatchInsucessoRideId] = useState<string | null>(null);
+  const [batchInsucessoReason, setBatchInsucessoReason] = useState("");
+  const [batchInsucessoLoading, setBatchInsucessoLoading] = useState(false);
+  const [batchInsucessoReasons, setBatchInsucessoReasons] = useState<string[]>([]);
+
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
@@ -831,6 +838,68 @@ const ConferenciaCarregamentoPage = () => {
     setBatchDeleteLoading(false);
     const { toast } = await import("@/hooks/use-toast");
     toast({ title: `${ids.length} TBR(s) excluído(s) com sucesso` });
+  };
+
+  // Batch insucesso helpers
+  const BATCH_INSUCESSO_DEFAULT_REASONS = [
+    "1ª tentativa de entrega",
+    "2ª tentativa de entrega",
+    "3ª tentativa de entrega",
+    "Endereço não localizado",
+  ];
+
+  const openBatchInsucessoModal = async (rideId: string) => {
+    setBatchInsucessoRideId(rideId);
+    setBatchInsucessoReason("");
+    setShowBatchInsucessoModal(true);
+    // Load custom reasons
+    if (unitId) {
+      const { data } = await supabase.from("piso_reasons").select("label").eq("unit_id", unitId).order("created_at");
+      const custom = (data ?? []).map((r: any) => r.label);
+      setBatchInsucessoReasons([...BATCH_INSUCESSO_DEFAULT_REASONS, ...custom]);
+    } else {
+      setBatchInsucessoReasons(BATCH_INSUCESSO_DEFAULT_REASONS);
+    }
+  };
+
+  const confirmBatchInsucesso = async () => {
+    if (!batchInsucessoRideId || !unitId || !batchInsucessoReason) return;
+    setBatchInsucessoLoading(true);
+    const ride = rides.find(r => r.id === batchInsucessoRideId);
+    const selectedIds = [...(selectedTbrsForDelete[batchInsucessoRideId] ?? [])];
+    const rideTbrsList = tbrs[batchInsucessoRideId] ?? [];
+    const selectedTbrItems = rideTbrsList.filter(t => selectedIds.includes(t.id));
+
+    if (selectedTbrItems.length === 0) {
+      setBatchInsucessoLoading(false);
+      return;
+    }
+
+    const conferenteId = conferenteSession?.id || ride?.conferente_id || null;
+    const inserts = selectedTbrItems.map(t => ({
+      tbr_code: t.code,
+      unit_id: unitId,
+      reason: batchInsucessoReason,
+      driver_name: ride?.driver_name ?? null,
+      route: ride?.route ?? null,
+      ride_id: batchInsucessoRideId,
+      conferente_id: conferenteId,
+    }));
+
+    const { error } = await supabase.from("piso_entries").insert(inserts as any);
+    if (error) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Erro ao lançar insucessos", description: error.message, variant: "destructive" });
+      setBatchInsucessoLoading(false);
+      return;
+    }
+
+    setSelectedTbrsForDelete(prev => ({ ...prev, [batchInsucessoRideId!]: new Set() }));
+    setShowBatchInsucessoModal(false);
+    setBatchInsucessoLoading(false);
+    await fetchRides();
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: `${selectedTbrItems.length} TBR(s) enviado(s) para insucessos` });
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -2016,11 +2085,25 @@ const ConferenciaCarregamentoPage = () => {
                                 <ScanBarcode className="h-3.5 w-3.5 text-primary" />
                                 TBRs Lidos ({rideTbrs.length + (removedTbrCounts[ride.id] || 0)})
                               </p>
-                              {(removedTbrCounts[ride.id] || 0) > 0 && (
-                                <p className="text-xs font-bold italic flex items-center gap-1 text-green-700">
-                                  <CheckCircle className="h-3.5 w-3.5" />
-                                  TBRs Final ({rideTbrs.length})
-                                </p>
+                              {(() => {
+                                const reincidencias = rideTbrs.filter(t => t._yellowHighlight).length;
+                                return reincidencias > 0 ? (
+                                  <p className="text-xs font-bold italic flex items-center gap-1 text-yellow-600">
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                    Reincidências ({reincidencias})
+                                  </p>
+                                ) : null;
+                              })()}
+                              {isMyRide && getSelectedCount(ride.id) > 0 && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-6 text-[10px] px-2 gap-1 border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                                  onClick={() => openBatchInsucessoModal(ride.id)}
+                                >
+                                  <AlertTriangle className="h-3 w-3" />
+                                  Insucesso ({getSelectedCount(ride.id)})
+                                </Button>
                               )}
                             </div>
                             {rideTbrs.length > 0 && (() => {
@@ -2191,11 +2274,25 @@ const ConferenciaCarregamentoPage = () => {
                         <ScanBarcode className="h-3.5 w-3.5 text-primary" />
                         TBRs Lidos ({focusedTbrs.length + (removedTbrCounts[ride.id] || 0)})
                       </p>
-                      {(removedTbrCounts[ride.id] || 0) > 0 && (
-                        <p className="text-xs font-bold italic flex items-center gap-1 text-green-700">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          TBRs Final ({focusedTbrs.length})
-                        </p>
+                      {(() => {
+                        const reincidencias = focusedTbrs.filter(t => t._yellowHighlight).length;
+                        return reincidencias > 0 ? (
+                          <p className="text-xs font-bold italic flex items-center gap-1 text-yellow-600">
+                            <AlertTriangle className="h-3.5 w-3.5" />
+                            Reincidências ({reincidencias})
+                          </p>
+                        ) : null;
+                      })()}
+                      {getSelectedCount(ride.id) > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-[10px] px-2 gap-1 border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                          onClick={() => openBatchInsucessoModal(ride.id)}
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          Insucesso ({getSelectedCount(ride.id)})
+                        </Button>
                       )}
                     </div>
                     {focusedTbrs.length > 0 && (
@@ -2628,6 +2725,46 @@ const ConferenciaCarregamentoPage = () => {
               className="gap-1 font-bold italic"
             >
               <Play className="h-4 w-4" /> Confirmar e Iniciar
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Batch Insucesso Modal */}
+      <Dialog open={showBatchInsucessoModal} onOpenChange={(open) => { if (!open) setShowBatchInsucessoModal(false); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-yellow-700">
+              <AlertTriangle className="h-5 w-5" /> Insucesso em Lote
+            </DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const count = batchInsucessoRideId ? getSelectedCount(batchInsucessoRideId) : 0;
+                return `Enviar ${count} TBR(s) selecionado(s) para insucessos. Escolha o motivo abaixo.`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">Motivo do Insucesso</Label>
+              <Select value={batchInsucessoReason} onValueChange={setBatchInsucessoReason}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o motivo..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {batchInsucessoReasons.map((reason) => (
+                    <SelectItem key={reason} value={reason}>{reason}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={confirmBatchInsucesso}
+              disabled={!batchInsucessoReason || batchInsucessoLoading}
+              className="w-full gap-2 font-bold italic"
+            >
+              {batchInsucessoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
+              Confirmar Insucesso em Lote
             </Button>
           </div>
         </DialogContent>
