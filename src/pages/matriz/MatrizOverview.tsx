@@ -58,41 +58,41 @@ const MatrizOverview = () => {
     const end = endOfDay(new Date(dateEnd)).toISOString();
 
     setLoading(true);
-    Promise.all([
-      supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, finished_at, loading_status").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end),
-      supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("dnr_entries").select("id, unit_id, status, dnr_value, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("piso_entries").select("id, unit_id, status, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("drivers_public").select("id, name"),
-      supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
-      supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
-      supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds),
-    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR, driversR, settingsR, customR, minPkgR]) => {
-      setRides(ridesR.data || []);
-      setPsEntries(psR.data || []);
-      setRtoEntries(rtoR.data || []);
-      setDnrEntries(dnrR.data || []);
-      setPisoEntries(pisoR.data || []);
-      setReviews(reviewsR.data || []);
-      setDrivers(driversR.data || []);
-      setUnitSettings(settingsR.data || []);
-      setCustomValues(customR.data || []);
-      setMinPackages((minPkgR.data as any[]) || []);
-      setLoading(false);
+    import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+      Promise.all([
+        fetchAllRows<any>((from, to) => supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, finished_at, loading_status").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, status, dnr_value, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("piso_entries").select("id, unit_id, status, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("drivers_public").select("id, name").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).range(from, to)),
+      ]).then(([ridesData, psData, rtoData, dnrData, pisoData, reviewsData, driversData, settingsData, customData, minPkgData]) => {
+        setRides(ridesData);
+        setPsEntries(psData);
+        setRtoEntries(rtoData);
+        setDnrEntries(dnrData);
+        setPisoEntries(pisoData);
+        setReviews(reviewsData);
+        setDrivers(driversData);
+        setUnitSettings(settingsData);
+        setCustomValues(customData);
+        setMinPackages(minPkgData);
+        setLoading(false);
 
-      // Fetch TBRs with pagination (bypass 1000 limit)
-      const rideIds = (ridesR.data || []).map((r: any) => r.id);
-      if (rideIds.length > 0) {
-        import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+        // Fetch TBRs with pagination (bypass 1000 limit)
+        const rideIds = ridesData.map((r: any) => r.id);
+        if (rideIds.length > 0) {
           fetchAllRows<{ id: string; ride_id: string; scanned_at: string }>((from, to) =>
             supabase.from("ride_tbrs").select("id, ride_id, scanned_at").in("ride_id", rideIds).range(from, to)
           ).then(data => setTbrs(data));
-        });
-      } else {
-        setTbrs([]);
-      }
+        } else {
+          setTbrs([]);
+        }
+      });
     });
   }, [domainUnits, filterUnit, dateStart, dateEnd]);
 

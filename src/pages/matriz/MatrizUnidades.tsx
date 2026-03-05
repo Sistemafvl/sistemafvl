@@ -36,29 +36,29 @@ const MatrizUnidades = () => {
     const start = startOfDay(new Date(dateStart)).toISOString();
     const end = endOfDay(new Date(dateEnd)).toISOString();
     setLoading(true);
-    Promise.all([
-      supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end),
-      supabase.from("ps_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("rto_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("dnr_entries").select("id, unit_id, status, dnr_value").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("piso_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-      supabase.from("unit_reviews").select("id, unit_id, rating").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-    ]).then(([ridesR, psR, rtoR, dnrR, pisoR, reviewsR]) => {
-      setRides(ridesR.data || []);
-      setPsEntries(psR.data || []);
-      setRtoEntries(rtoR.data || []);
-      setDnrEntries(dnrR.data || []);
-      setPisoEntries(pisoR.data || []);
-      setReviews(reviewsR.data || []);
-      setLoading(false);
-      const rideIds = (ridesR.data || []).map((r: any) => r.id);
-      if (rideIds.length > 0) {
-        import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+    import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
+      Promise.all([
+        fetchAllRows<any>((from, to) => supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("rto_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, status, dnr_value").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("piso_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+      ]).then(([ridesData, psData, rtoData, dnrData, pisoData, reviewsData]) => {
+        setRides(ridesData);
+        setPsEntries(psData);
+        setRtoEntries(rtoData);
+        setDnrEntries(dnrData);
+        setPisoEntries(pisoData);
+        setReviews(reviewsData);
+        setLoading(false);
+        const rideIds = ridesData.map((r: any) => r.id);
+        if (rideIds.length > 0) {
           fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
             supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).range(from, to)
           ).then(data => setTbrs(data));
-        });
-      } else setTbrs([]);
+        } else setTbrs([]);
+      });
     });
   }, [units, dateStart, dateEnd]);
 

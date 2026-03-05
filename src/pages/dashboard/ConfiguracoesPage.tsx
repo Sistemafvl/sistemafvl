@@ -96,8 +96,9 @@ const ConfiguracoesPage = () => {
 
   const fetchCustomValues = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase.from("driver_custom_values").select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
-    if (!data) { setCustomValues([]); return; }
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    if (!data.length) { setCustomValues([]); return; }
     const driverIds = data.map(d => d.driver_id);
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
     const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
@@ -106,19 +107,21 @@ const ConfiguracoesPage = () => {
 
   const fetchBonuses = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase.from("driver_bonus").select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
-    setBonuses((data ?? []) as Bonus[]);
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_bonus").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    setBonuses(data as Bonus[]);
   }, [unitId]);
 
   const fetchMinPackages = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase.from("driver_minimum_packages" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false });
-    if (!data) { setMinPackages([]); return; }
-    const driverIds = (data as any[]).map((d: any) => d.driver_id);
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    if (!data.length) { setMinPackages([]); return; }
+    const driverIds = data.map((d: any) => d.driver_id);
     if (!driverIds.length) { setMinPackages([]); return; }
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
     const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
-    setMinPackages((data as any[]).map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
+    setMinPackages(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
   }, [unitId]);
 
   useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages]);
@@ -126,8 +129,9 @@ const ConfiguracoesPage = () => {
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
     if (!unitId || !term.trim()) { setter([]); return; }
-    const { data: rides } = await supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId);
-    if (!rides) { setter([]); return; }
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const rides = await fetchAllRows<{ driver_id: string }>((from, to) => supabase.from("driver_rides").select("driver_id").eq("unit_id", unitId).range(from, to));
+    if (!rides.length) { setter([]); return; }
     const driverIds = [...new Set(rides.map(r => r.driver_id))];
     if (driverIds.length === 0) { setter([]); return; }
     const { data } = await supabase.from("drivers_public").select("id, name, cpf").in("id", driverIds).or(`name.ilike.%${term}%,cpf.ilike.%${term}%`).limit(10);

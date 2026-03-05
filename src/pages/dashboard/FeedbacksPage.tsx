@@ -27,13 +27,10 @@ const FeedbacksPage = () => {
     if (!unitId) return;
     const fetchData = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("unit_reviews")
-        .select("*")
-        .eq("unit_id", unitId)
-        .order("created_at", { ascending: false });
-
-      const revs = data ?? [];
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const revs = await fetchAllRows<any>((from, to) =>
+        supabase.from("unit_reviews").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
+      );
       setReviews(revs);
 
       if (revs.length > 0) {
@@ -54,13 +51,9 @@ const FeedbacksPage = () => {
 
         // Fetch performance: rides count and tbrs count per driver
         const { fetchAllRows } = await import("@/lib/supabase-helpers");
-        const ridesRes = await supabase
-          .from("driver_rides")
-          .select("id, driver_id")
-          .in("driver_id", driverIds)
-          .eq("unit_id", unitId);
-        
-        const rideData = ridesRes.data ?? [];
+        const rideData = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
+          supabase.from("driver_rides").select("id, driver_id").in("driver_id", driverIds).eq("unit_id", unitId).range(from, to)
+        );
         const rideIdsForTbrs = rideData.map((r: any) => r.id);
         
         const tbrsData = rideIdsForTbrs.length > 0
