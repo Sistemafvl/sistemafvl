@@ -2027,13 +2027,6 @@ const ConferenciaCarregamentoPage = () => {
                                           checked={selectedTbrsForDelete[ride.id]?.has(t.id) ?? false}
                                           onChange={() => toggleTbrSelection(ride.id, t.id)}
                                         />
-                                        <button
-                                          onClick={() => handleDeleteTbrWithPassword(t.id, ride.id)}
-                                          className="text-destructive hover:text-destructive/80 shrink-0"
-                                          title="Excluir TBR"
-                                        >
-                                          <X className="h-3.5 w-3.5" />
-                                        </button>
                                       </div>
                                     )}
                                   </div>
@@ -2041,11 +2034,6 @@ const ConferenciaCarregamentoPage = () => {
                               </div>
                               );
                             })()}
-                            {isMyRide && getSelectedCount(ride.id) > 0 && (
-                              <Button size="sm" variant="destructive" className="w-full gap-1 text-xs" onClick={() => openBatchDeleteModal(ride.id)}>
-                                <Trash2 className="h-3 w-3" /> Excluir selecionados ({getSelectedCount(ride.id)})
-                              </Button>
-                            )}
                             {isLoadingStatus && isMyRide && (
                               <div className="flex gap-1 items-center">
                                 <div className="relative flex-1 max-w-[45%] sm:max-w-none">
@@ -2205,18 +2193,10 @@ const ConferenciaCarregamentoPage = () => {
                                 checked={selectedTbrsForDelete[ride.id]?.has(t.id) ?? false}
                                 onChange={() => toggleTbrSelection(ride.id, t.id)}
                               />
-                              <button onClick={() => handleDeleteTbrWithPassword(t.id, ride.id)} className="text-destructive hover:text-destructive/80 shrink-0" title="Excluir TBR">
-                                <X className="h-3.5 w-3.5" />
-                              </button>
                             </div>
                           </div>
                         ))}
                       </div>
-                    )}
-                    {getSelectedCount(ride.id) > 0 && (
-                      <Button size="sm" variant="destructive" className="w-full gap-1 text-xs" onClick={() => openBatchDeleteModal(ride.id)}>
-                        <Trash2 className="h-3 w-3" /> Excluir selecionados ({getSelectedCount(ride.id)})
-                      </Button>
                     )}
 
                     {/* TBR Input */}
@@ -2587,80 +2567,6 @@ const ConferenciaCarregamentoPage = () => {
               </div>
             );
           })()}
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete TBR Password Modal */}
-      <Dialog open={showDeleteTbrPasswordModal} onOpenChange={setShowDeleteTbrPasswordModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" /> Excluir TBR
-            </DialogTitle>
-            <DialogDescription>
-              Digite a senha do gerente para autorizar a exclusão.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="delete-tbr-pw" className="font-semibold">Senha do Gerente</Label>
-              <Input
-                id="delete-tbr-pw"
-                type="password"
-                value={deleteTbrPassword}
-                onChange={(e) => setDeleteTbrPassword(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") confirmDeleteTbrWithPassword(); }}
-                placeholder="Digite a senha..."
-                autoFocus
-              />
-            </div>
-            <Button
-              onClick={confirmDeleteTbrWithPassword}
-              variant="destructive"
-              className="w-full font-bold italic"
-              disabled={deleteTbrLoading || !deleteTbrPassword}
-            >
-              {deleteTbrLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirmar Exclusão
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Batch Delete TBR Password Modal */}
-      <Dialog open={showBatchDeleteModal} onOpenChange={setShowBatchDeleteModal}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="font-bold italic flex items-center gap-2 text-destructive">
-              <Trash2 className="h-5 w-5" /> Excluir TBRs em Lote
-            </DialogTitle>
-            <DialogDescription>
-              {batchDeleteRideId && `${getSelectedCount(batchDeleteRideId)} TBR(s) selecionado(s). Digite a senha do gerente para autorizar.`}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <Label htmlFor="batch-delete-pw" className="font-semibold">Senha do Gerente</Label>
-              <Input
-                id="batch-delete-pw"
-                type="password"
-                value={batchDeletePassword}
-                onChange={(e) => setBatchDeletePassword(e.target.value)}
-                onKeyDown={(e) => { if (e.key === "Enter") confirmBatchDelete(); }}
-                placeholder="Digite a senha..."
-                autoFocus
-              />
-            </div>
-            <Button
-              onClick={confirmBatchDelete}
-              variant="destructive"
-              className="w-full font-bold italic"
-              disabled={batchDeleteLoading || !batchDeletePassword}
-            >
-              {batchDeleteLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-              Confirmar Exclusão em Lote
-            </Button>
-          </div>
         </DialogContent>
       </Dialog>
 
