@@ -1,40 +1,47 @@
 
 
-## Plano: Substituir "TBRs Final" por Contador Amarelo + Botão Insucesso em Lote
+## Diagnóstico: Por que os números divergem
 
-### Contexto
+**Causa raiz identificada:** A fórmula de "lidos" é diferente entre as duas páginas.
 
-**Anexo 1:** O contador verde "TBRs Final" será removido. No lugar, um contador amarelo mostrando quantos TBRs foram marcados com highlight amarelo (bipados 3+ vezes). Confirmo: quando um TBR vai para insucessos (piso_entries), o trigger `auto_remove_tbr_from_ride` já remove automaticamente da `ride_tbrs`, descontabilizando do carregamento.
+**Conferência:** `TBRs Lidos = rideTbrs.length + piso_entries com "Removido do carregamento"`
 
-**Anexo 2:** Criar um botão ao lado do "TBRs Lidos" para lançar insucessos em lote. O conferente seleciona TBRs via checkbox, clica no botão, escolhe o motivo, e todos são enviados para piso_entries (insucessos).
+**Operação:** `Lidos = ride_tbrs.count + retornos NÃO-operacionais (piso filtrado + ps + rto)`
+
+O problema: quando um TBR é removido do carregamento (razão "Removido do carregamento"), o trigger remove ele da `ride_tbrs`. Na Operação, esse TBR é filtrado pelo `OPERATIONAL_PISO_REASONS` e desaparece completamente — não conta em `ride_tbrs` nem em `all_returns`. Resultado: Thiago tem 96 TBRs na Conferência mas apenas 15 na Operação (os ~81 removidos operacionalmente sumiram).
+
+Além disso, a Conferência também está incompleta: só adiciona de volta "Removido do carregamento", mas ignora TBRs removidos via PS/RTO/outros piso.
 
 ---
 
-### 1. Remover "TBRs Final" e adicionar contador "Reincidências" (amarelo)
+## Plano de Correção
 
-Em `ConferenciaCarregamentoPage.tsx`, nos dois locais onde aparece "TBRs Final" (card normal ~linha 2019 e focus mode ~linha 2194):
+### 1. Operação (`OperacaoPage.tsx`)
 
-- Remover o bloco condicional do "TBRs Final" verde
-- Adicionar um contador amarelo: `⚠ Reincidências (X)` — conta TBRs com `_yellowHighlight === true` no array `rideTbrs`/`focusedTbrs`
+Mudar a contagem para incluir TODOS os TBRs removidos (qualquer razão):
 
-### 2. Botão "Insucesso Lote" na área de TBRs
+- Buscar `pisoRaw` SEM filtrar por `OPERATIONAL_PISO_REASONS` para o cálculo de "lidos"
+- Nova variável `allEverRemoved` = códigos únicos de ALL piso + ps + rto que NÃO estão mais em `ride_tbrs`
+- `totalLidosCard = ride_tbrs.count + allEverRemoved.size`
+- `insucessos = non-operational return codes` (manter filtro atual)
+- `concluídos = ride_tbrs.count` (items que o motorista tem = entregues)
+- Performance = `concluídos / totalLidosCard * 100`
 
-Ao lado do indicador "TBRs Lidos", adicionar um botão pequeno (ícone `AlertTriangle`) que aparece quando há TBRs selecionados via checkbox.
+### 2. Conferência (`ConferenciaCarregamentoPage.tsx`)
 
-**Fluxo:**
-1. Conferente marca checkboxes nos TBRs desejados (já existem checkboxes!)
-2. Clica no botão "Insucesso Lote"
-3. Modal abre com lista de motivos (mesmos `DEFAULT_REASONS` + `piso_reasons` customizados da unidade)
-4. Escolhe o motivo → confirma
-5. Para cada TBR selecionado: insere em `piso_entries` com o motivo escolhido (o trigger `auto_remove_tbr_from_ride` remove automaticamente da `ride_tbrs`)
-6. Atualiza a UI
+Corrigir `removedTbrCounts` para contar TODOS os TBRs removidos (não só "Removido do carregamento"):
 
-**Detalhes técnicos:**
-- Novo state: `showBatchInsucessoModal`, `batchInsucessoRideId`, `batchInsucessoReason`, `batchInsucessoLoading`
-- Carregar motivos: buscar `piso_reasons` da unidade + `DEFAULT_REASONS`
-- No insert de cada TBR: `{ tbr_code, unit_id, reason, driver_name, route, ride_id, conferente_id }`
-- Após inserção, limpar seleção e re-fetch rides
+- Buscar unique codes de `piso_entries` (qualquer razão) + `ps_entries` + `rto_entries` por ride
+- Contar apenas os que NÃO estão em `ride_tbrs` atual
+- `TBRs Lidos = rideTbrs.length + removedCount`
+
+### 3. Driver views (`DriverHome.tsx`, `DriverRides.tsx`)
+
+Mesma lógica: incluir todos os removidos no cálculo de "lidos" e manter "insucessos" como apenas não-operacionais.
 
 ### Arquivos afetados
-1. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — remover "TBRs Final", adicionar contador amarelo, adicionar botão + modal de insucesso em lote
+1. `src/pages/dashboard/OperacaoPage.tsx`
+2. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+3. `src/pages/driver/DriverHome.tsx`
+4. `src/pages/driver/DriverRides.tsx`
 
