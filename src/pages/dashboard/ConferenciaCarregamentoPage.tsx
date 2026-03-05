@@ -919,6 +919,12 @@ const ConferenciaCarregamentoPage = () => {
           playReincidenceBeep();
         }
 
+        // Delete old ride_tbrs from previous rides (prevents ghost entries)
+        if (previousTbrs && previousTbrs.length > 0) {
+          const prevIds = previousTbrs.map(t => t.id);
+          void supabase.from("ride_tbrs").delete().in("id", prevIds);
+        }
+
         // Close piso and rto entries in background (don't block optimistic UI)
         // Case-insensitive match prevents mismatch by code casing
         const closedAt = new Date().toISOString();
