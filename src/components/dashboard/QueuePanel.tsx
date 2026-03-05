@@ -90,6 +90,7 @@ const QueuePanel = () => {
   const [isPulsing, setIsPulsing] = useState(false);
   const prevCountRef = useRef(0);
   const prevIdsRef = useRef<Set<string>>(new Set());
+  const initialFetchDoneRef = useRef(false);
   const [queueToasts, setQueueToasts] = useState<QueueToastItem[]>([]);
   const [queueSearch, setQueueSearch] = useState("");
   const [animating, setAnimating] = useState<{ idx: number; direction: "up" | "down" } | null>(null);
@@ -156,9 +157,9 @@ const QueuePanel = () => {
       };
     });
 
-    // Detect new drivers that just joined
+    // Detect new drivers that just joined (skip only the very first fetch)
     const currentIds = new Set(newEntries.map(e => e.id));
-    if (prevIdsRef.current.size > 0) {
+    if (initialFetchDoneRef.current) {
       const newOnes = newEntries.filter(e => !prevIdsRef.current.has(e.id));
       if (newOnes.length > 0) {
         setQueueToasts(prev => [
@@ -171,6 +172,7 @@ const QueuePanel = () => {
         ]);
       }
     }
+    initialFetchDoneRef.current = true;
     prevIdsRef.current = currentIds;
 
     if (newEntries.length > prevCountRef.current && prevCountRef.current >= 0) {
