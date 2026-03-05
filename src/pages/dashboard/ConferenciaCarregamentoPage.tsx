@@ -189,7 +189,7 @@ const ConferenciaCarregamentoPage = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [focusedRideId, setFocusedRideId] = useState<string | null>(null);
   const currentRideIdsRef = useRef<string[]>([]);
-  const [removedTbrCounts, setRemovedTbrCounts] = useState<Record<string, number>>({});
+  
   const requestIdRef = useRef<number>(0);
   // Persistent scan counter: rideId → code → totalScans (survives timeout cleanup)
   const scanCountsRef = useRef<Record<string, Record<string, number>>>({});
@@ -476,39 +476,7 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-    // Fetch removed TBR counts per ride from ALL sources (piso + ps + rto)
-    if (rideIds.length > 0) {
-      const { fetchAllRowsWithIn: fetchAllWithIn } = await import("@/lib/supabase-helpers");
-      const [removedPiso, removedPs, removedRto] = await Promise.all([
-        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
-          rideIds
-        ),
-        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
-          rideIds
-        ),
-        fetchAllWithIn<{ ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
-          rideIds
-        ),
-      ]);
-      // Count unique codes per ride that are NOT in current ride_tbrs
-      const currentTbrCodes: Record<string, Set<string>> = processedCodesRef.current;
-      const removedSets: Record<string, Set<string>> = {};
-      [...removedPiso, ...removedPs, ...removedRto].forEach((e: any) => {
-        if (!e.ride_id || !e.tbr_code) return;
-        const upper = e.tbr_code.toUpperCase();
-        if (currentTbrCodes[e.ride_id]?.has(upper)) return;
-        if (!removedSets[e.ride_id]) removedSets[e.ride_id] = new Set();
-        removedSets[e.ride_id].add(upper);
-      });
-      const counts: Record<string, number> = {};
-      Object.entries(removedSets).forEach(([rideId, set]) => { counts[rideId] = set.size; });
-      setRemovedTbrCounts(counts);
-    } else {
-      setRemovedTbrCounts({});
-    }
+  
 
   }, [unitId, startDate, endDate]);
 
@@ -2101,7 +2069,7 @@ const ConferenciaCarregamentoPage = () => {
                             <div className="flex items-center gap-3">
                               <p className="text-xs font-bold italic flex items-center gap-1">
                                 <ScanBarcode className="h-3.5 w-3.5 text-primary" />
-                                TBRs Lidos ({rideTbrs.length + (removedTbrCounts[ride.id] || 0)})
+                                TBRs Lidos ({rideTbrs.length})
                               </p>
                               {(() => {
                                 const reincidencias = rideTbrs.filter(t => t._yellowHighlight).length;
@@ -2290,7 +2258,7 @@ const ConferenciaCarregamentoPage = () => {
                     <div className="flex items-center gap-3">
                       <p className="text-xs font-bold italic flex items-center gap-1">
                         <ScanBarcode className="h-3.5 w-3.5 text-primary" />
-                        TBRs Lidos ({focusedTbrs.length + (removedTbrCounts[ride.id] || 0)})
+                        TBRs Lidos ({focusedTbrs.length})
                       </p>
                       {(() => {
                         const reincidencias = focusedTbrs.filter(t => t._yellowHighlight).length;

@@ -24,7 +24,6 @@ interface Ride {
   unit_name?: string;
   tbrCount?: number;
   returnCount?: number;
-  allRemovedCount?: number;
   tbrValue?: number;
 }
 
@@ -100,23 +99,13 @@ const DriverRides = () => {
       const returnCountMap = new Map<string, number>();
       returnTbrSets.forEach((set, rideId) => returnCountMap.set(rideId, set.size));
 
-      // Count ALL removed TBRs per ride (including operational) — for totalLidos
-      const allRemovedSets = new Map<string, Set<string>>();
-      [...pisoRaw, ...psData, ...rtoData].forEach((r: any) => {
-        if (r.ride_id && r.tbr_code) {
-          if (!allRemovedSets.has(r.ride_id)) allRemovedSets.set(r.ride_id, new Set());
-          allRemovedSets.get(r.ride_id)!.add(String(r.tbr_code).toUpperCase());
-        }
-      });
-      const allRemovedCountMap = new Map<string, number>();
-      allRemovedSets.forEach((set, rideId) => allRemovedCountMap.set(rideId, set.size));
+  
 
       setRides(data.map((r) => ({
         ...r,
         unit_name: unitMap.get(r.unit_id) ?? "—",
         tbrCount: tbrCountMap.get(r.id) ?? 0,
         returnCount: returnCountMap.get(r.id) ?? 0,
-        allRemovedCount: allRemovedCountMap.get(r.id) ?? 0,
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
       })));
       setLoading(false);
@@ -200,7 +189,7 @@ const DriverRides = () => {
             </p>
           ) : (
             rides.map((ride, idx) => {
-              const totalLidos = (ride.tbrCount ?? 0) + (ride.allRemovedCount ?? 0);
+              const totalLidos = ride.tbrCount ?? 0;
               const entregues = ride.tbrCount ?? 0;
               const totalGanho = entregues * (ride.tbrValue ?? 0);
               const performance = totalLidos > 0 ? (entregues / totalLidos) * 100 : 0;
