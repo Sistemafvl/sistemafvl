@@ -1,48 +1,71 @@
 
-Plano objetivo para corrigir o alerta “É sua vez” e o som contínuo
 
-1) Causa raiz confirmada (por que está disparando antes do sino)
-- O backend de programação de carregamento (`supabase/functions/create-ride-with-login/index.ts`) está gravando `called_at` no momento de “Definir programação”.
-- Como `DriverCallAlert` usa `called_at` como gatilho, o motorista recebe alerta sem o conferente clicar no sino.
-- Além disso, o som atual é um beep curto em ciclos; em alguns celulares ele acaba soando como “1 beep”.
+## Plano: Eliminar Limite de 1000 Registros em Todo o Sistema
 
-2) Ajuste principal (alertar só quando clicar no sino)
-- Alterar `create-ride-with-login` para NÃO setar `called_at` ao criar/programar carga.
-- Na atualização da `queue_entry` da programação, manter apenas status/completed_at e limpar campos de chamada:
-  - `called_at: null`
-  - `called_by_name: null`
-- Resultado: programar carga não dispara mais “Sua Vez!”.
+### Resumo
 
-3) Blindagem no app do motorista (evitar falso positivo legado)
-- Em `src/components/dashboard/DriverCallAlert.tsx`:
-  - Considerar chamada válida somente quando houver `called_at` + `called_by_name` (chamada explícita via sino).
-  - Ignorar registros antigos que tenham `called_at` sem `called_by_name` (resíduo de regra antiga).
-  - Priorizar leitura da `queue_entry_id` da corrida ativa do motorista (pending/loading do dia), para não misturar com entradas antigas da fila.
+Sim, vou corrigir **todas** as queries vulneráveis. Identifiquei **7 arquivos** com queries que ainda podem truncar dados acima de 1000 registros. As queries já protegidas (OperacaoPage, CiclosPage, DNRPage, PSPage, RTOPage, RelatoriosPage, DashboardMetrics gráficos, DriverRides, FeedbacksPage TBRs) continuam intactas.
 
-4) Som e vibração contínuos até “CIENTE”
-- Reescrever a engine de áudio do `DriverCallAlert` para modo realmente contínuo:
-  - Web Audio contínuo (tom/sirene) enquanto `isAlerting=true`.
-  - Fallback com `<audio loop>` (em vez de recriar áudio por beep).
-- Manter vibração em loop contínuo.
-- Parar som + vibração apenas no botão `CIENTE` (sem auto-stop por polling/realtime).
+### Queries a Corrigir
 
-5) Escopo de arquivos
-- `supabase/functions/create-ride-with-login/index.ts`
-- `src/components/dashboard/DriverCallAlert.tsx`
-- (sem migração de banco)
+**1. MatrizOverview.tsx** (ALTA prioridade — agrega múltiplas unidades)
+- Linhas 62-71: 8 queries diretas sem paginação (rides, PS, RTO, DNR, piso, reviews, drivers, settings)
+- Converter todas para `fetchAllRows`
 
-Detalhes técnicos (resumo)
-- Gatilho correto de chamada passa a ser “evento de sino” (que já grava `called_at` e `called_by_name` em `ConferenciaCarregamentoPage`).
-- Programação de carga não deve escrever `called_at`.
-- Áudio em loop contínuo evita comportamento de beep único em mobile.
+**2. MatrizUnidades.tsx** (ALTA prioridade)
+- Linhas 40-45: 6 queries diretas (rides, PS, RTO, DNR, piso, reviews)
+- Converter para `fetchAllRows`
 
-Validação pós-implementação
-1. Programar motorista sem clicar no sino:
-- Não pode aparecer “Sua Vez!”, nem som, nem vibração.
-2. Clicar no sino no card do carregamento:
-- Overlay “SUA VEZ!” aparece com nome do conferente.
-- Som contínuo + vibração contínua iniciam.
-3. Navegar para outras telas do motorista:
-- Alerta continua ativo.
-4. Clicar em `CIENTE`:
-- Som e vibração param imediatamente.
+**3. MatrizMotoristas.tsx** (MÉDIA)
+- Linhas 49-54: queries de `drivers_public`, `dnr_entries`, `ps_entries`, `unit_settings`, `custom_values`, `min_packages` sem paginação
+- Converter para `fetchAllRows`
+
+**4. MatrizFinanceiro.tsx** (MÉDIA)
+- Linha 43: `dnr_entries` sem paginação
+- Converter para `fetchAllRows`
+
+**5. DashboardHome.tsx** (MÉDIA)
+- Linhas 87-90: `unit_reviews` sem paginação (média de avaliações)
+- Linhas 102-105: `dnr_entries` sem paginação (contadores DNR)
+- Converter para `fetchAllRows`
+
+**6. ConferenciaCarregamentoPage.tsx** (MÉDIA)
+- Linhas 472-476: `piso_entries` removidos sem paginação
+- Linhas 499-503: busca global de TBRs (`ride_tbrs.ilike`) sem paginação
+- Linhas 553-557: TBRs de rides encontrados na busca sem paginação
+- Converter para `fetchAllRows`
+
+**7. ConfiguracoesPage.tsx** (BAIXA)
+- Linha 99: `driver_custom_values` sem paginação
+- Linha 109: `driver_bonus` sem paginação
+- Linha 115: `driver_minimum_packages` sem paginação
+- Linha 129: `driver_rides` para buscar motoristas sem paginação
+- Converter para `fetchAllRows`
+
+**8. FeedbacksPage.tsx** (BAIXA)
+- Linha 57-61: `driver_rides` sem paginação (rides por driver)
+- Converter para `fetchAllRows`
+
+**9. FinanceiroPage.tsx** (BAIXA)
+- Linhas 55-59: `payroll_reports` sem paginação
+- Linhas 63-66: `driver_invoices` sem paginação
+- Converter para `fetchAllRows`
+
+**10. RetornoPisoPage.tsx** (BAIXA)
+- Linhas 154-159: `piso_entries` abertos sem paginação
+- Converter para `fetchAllRows`
+
+### Outras Limitações Verificadas
+
+- **`.in()` com arrays muito grandes**: já tratado pelo `chunkArray` no helper. Sem risco.
+- **`count: exact, head: true`**: usado no DashboardMetrics para contagens — isso é server-side, sem limite de 1000. OK.
+- **RPCs**: `get_unit_tbr_count`, `get_top_drivers_by_tbrs`, `get_ride_tbr_counts` — executam server-side, sem limite. OK.
+- **Nova unidade**: não cria limitação nova; o risco é proporcional ao volume de dados, não ao número de unidades.
+
+### Abordagem Técnica
+- Importar `fetchAllRows` (e `fetchAllRowsWithIn` quando necessário para `.in()`)
+- Adicionar `.range(from, to)` em cada query convertida
+- Manter a mesma lógica de negócio, apenas garantindo paginação automática
+
+### Total: ~25 queries em 10 arquivos
+
