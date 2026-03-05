@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Bell, AlertTriangle } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Bell, CheckCircle, Info } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -43,7 +43,6 @@ const generateBeepWav = (): string => {
   const fileSize = 44 + dataSize;
   const buffer = new ArrayBuffer(fileSize);
   const view = new DataView(buffer);
-  // RIFF header
   const writeString = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
   writeString(0, "RIFF"); view.setUint32(4, fileSize - 8, true); writeString(8, "WAVE");
   writeString(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
@@ -62,7 +61,6 @@ const generateBeepWav = (): string => {
 
 const BEEP_DATA_URI = generateBeepWav();
 
-// Global AudioContext - initialized on first user interaction
 let globalAudioCtx: AudioContext | null = null;
 let audioCtxInitialized = false;
 
@@ -79,14 +77,12 @@ const initAudioContext = () => {
   };
   document.addEventListener("click", handler, { once: true });
   document.addEventListener("touchstart", handler, { once: true });
-  // Try immediately in case we're already in an interaction
   try {
     globalAudioCtx = new AudioContext();
     if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
   } catch {}
 };
 
-// Generate alert beep using Web Audio API with fallback
 const createAlertAudio = () => {
   let isPlaying = false;
   let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -105,7 +101,6 @@ const createAlertAudio = () => {
       osc.start();
       osc.stop(globalAudioCtx.currentTime + 0.3);
     } catch {
-      // Fallback: use Audio element with valid WAV
       try {
         const audio = new Audio(BEEP_DATA_URI);
         audio.volume = 0.8;
@@ -145,9 +140,11 @@ const DriverQueue = () => {
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
   const [tbrCount, setTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [isCalled, setIsCalled] = useState(false);
   const alertAudioRef = useRef(createAlertAudio());
   const lastCalledAtRef = useRef<string | null>(null);
   const alertToastIdRef = useRef<string | null>(null);
+  const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -156,6 +153,41 @@ const DriverQueue = () => {
 
   const inQueue = !!myEntry;
   const isApproved = myEntry?.status === "approved";
+
+  // Start vibration loop
+  const startVibration = useCallback(() => {
+    if (vibrationIntervalRef.current) return;
+    try {
+      navigator.vibrate?.([500, 200, 500, 200, 500]);
+    } catch {}
+    vibrationIntervalRef.current = setInterval(() => {
+      try {
+        navigator.vibrate?.([500, 200, 500, 200, 500]);
+      } catch {}
+    }, 2000);
+  }, []);
+
+  // Stop vibration
+  const stopVibration = useCallback(() => {
+    if (vibrationIntervalRef.current) {
+      clearInterval(vibrationIntervalRef.current);
+      vibrationIntervalRef.current = null;
+    }
+    try {
+      navigator.vibrate?.(0);
+    } catch {}
+  }, []);
+
+  // Dismiss call alert
+  const dismissCallAlert = useCallback(() => {
+    setIsCalled(false);
+    alertAudioRef.current.stopBeeping();
+    stopVibration();
+    if (alertToastIdRef.current) {
+      dismiss(alertToastIdRef.current);
+      alertToastIdRef.current = null;
+    }
+  }, [dismiss, stopVibration]);
 
   // Fetch TBR count for active ride
   useEffect(() => {
@@ -198,14 +230,15 @@ const DriverQueue = () => {
     const ride = data && data.length > 0 ? data[0] : null;
     setActiveRide(ride as ActiveRide | null);
 
-    // Calculate queue position
-    if (ride) {
+    // Calculate queue position using sequence_number
+    if (ride && ride.sequence_number) {
       const { count } = await supabase
         .from("driver_rides")
         .select("*", { count: "exact", head: true })
         .eq("unit_id", ride.unit_id)
         .in("loading_status", ["pending", "loading"])
-        .lte("completed_at", ride.completed_at);
+        .gte("completed_at", today.toISOString())
+        .lte("sequence_number", ride.sequence_number);
       setQueuePosition(count ?? null);
     } else {
       setQueuePosition(null);
@@ -260,8 +293,11 @@ const DriverQueue = () => {
   }, [unitId, driverId]);
 
   const triggerCallAlert = () => {
+    setIsCalled(true);
     // Start beeping sound
     alertAudioRef.current.startBeeping();
+    // Start vibration
+    startVibration();
 
     // Show persistent toast
     const { id } = toast({
@@ -271,23 +307,23 @@ const DriverQueue = () => {
       duration: Infinity,
       onOpenChange: (open) => {
         if (!open) {
-          alertAudioRef.current.stopBeeping();
-          alertToastIdRef.current = null;
+          dismissCallAlert();
         }
       },
     });
     alertToastIdRef.current = id;
   };
 
-  // Cleanup audio on unmount
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       alertAudioRef.current.stopBeeping();
+      stopVibration();
       if (alertToastIdRef.current) {
         dismiss(alertToastIdRef.current);
       }
     };
-  }, [dismiss]);
+  }, [dismiss, stopVibration]);
 
   useEffect(() => {
     fetchQueue();
@@ -417,6 +453,17 @@ const DriverQueue = () => {
                 </div>
               </div>
             )}
+
+            {/* Amazon Flex info text */}
+            {(activeRide.login || activeRide.password) && (
+              <div className="flex items-start gap-2 rounded-md bg-muted/50 border border-border p-3">
+                <Info className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <p className="text-xs text-muted-foreground">
+                  O login e senha abaixo são para acessar o <span className="font-semibold">Amazon Flex</span>. Após finalizar o carregamento, você pode consultá-los em <span className="font-semibold">Corridas</span> no menu.
+                </p>
+              </div>
+            )}
+
             {activeRide.login && (
               <div className="flex items-center gap-3">
                 <LogIn className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -437,13 +484,31 @@ const DriverQueue = () => {
             )}
 
             {queuePosition !== null && (
-              <Card className="border-primary/50 bg-primary/5">
-                <CardContent className="flex items-center gap-3 py-4 px-4">
-                  <Hash className="h-6 w-6 text-primary flex-shrink-0" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Posição na Fila</p>
-                    <p className="text-3xl font-bold text-primary">{queuePosition}º</p>
+              <Card className={`border-primary/50 bg-primary/5 ${isCalled ? "animate-pulse border-destructive bg-destructive/10" : ""}`}>
+                <CardContent className="flex items-center justify-between py-4 px-4">
+                  <div className="flex items-center gap-3">
+                    <Hash className="h-6 w-6 text-primary flex-shrink-0" />
+                    <div>
+                      <p className="text-sm text-muted-foreground">Posição na Fila</p>
+                      <p className={`text-3xl font-bold ${isCalled ? "text-destructive" : "text-primary"}`}>
+                        {queuePosition}º
+                        {isCalled && (
+                          <span className="text-lg ml-2 text-destructive animate-pulse">— Sua Vez!</span>
+                        )}
+                      </p>
+                    </div>
                   </div>
+                  {isCalled && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground gap-1"
+                      onClick={dismissCallAlert}
+                    >
+                      <CheckCircle className="h-4 w-4" />
+                      Ciente
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             )}
