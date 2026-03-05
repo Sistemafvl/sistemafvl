@@ -427,13 +427,15 @@ const ConferenciaCarregamentoPage = () => {
 
     const rideIds = mapped.map((r) => r.id);
     if (rideIds.length > 0) {
-      // Use pagination to fetch ALL TBRs (bypass 1000 row limit)
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const tbrData = await fetchAllRows<any>((from, to) =>
-        supabase.from("ride_tbrs").select("*")
-          .in("ride_id", rideIds)
-          .order("scanned_at", { ascending: false })
-          .range(from, to)
+      // Use pagination + chunking to fetch ALL TBRs (bypass 1000 row limit and large .in() lists)
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
+      const tbrData = await fetchAllRowsWithIn<any>(
+        (ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("*")
+            .in("ride_id", ids)
+            .order("scanned_at", { ascending: false })
+            .range(from, to),
+        rideIds
       );
 
       // Stale response check
@@ -469,9 +471,10 @@ const ConferenciaCarregamentoPage = () => {
 
     // Fetch removed TBR counts per ride from piso_entries
     if (rideIds.length > 0) {
-      const { fetchAllRows: fetchAll } = await import("@/lib/supabase-helpers");
-      const removedEntries = await fetchAll<{ ride_id: string }>((from, to) =>
-        supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds).eq("reason", "Removido do carregamento").range(from, to)
+      const { fetchAllRowsWithIn: fetchAllWithIn } = await import("@/lib/supabase-helpers");
+      const removedEntries = await fetchAllWithIn<{ ride_id: string }>(
+        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", ids).eq("reason", "Removido do carregamento").range(from, to),
+        rideIds
       );
       const counts: Record<string, number> = {};
       removedEntries.forEach((e: any) => {

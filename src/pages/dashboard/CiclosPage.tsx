@@ -89,19 +89,23 @@ const CiclosPage = () => {
     let allTbrsData: { ride_id: string; code: string }[] = [];
 
     if (rideIds.length > 0) {
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [tbrsData, pisoRaw, psData, rtoData] = await Promise.all([
-        fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
-          supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string; code: string }>(
+          (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
       ]);
 
@@ -113,7 +117,7 @@ const CiclosPage = () => {
       const returnSet = new Set<string>();
       [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
         if (e.ride_id && e.tbr_code) {
-          returnSet.add(`${e.ride_id}:${e.tbr_code}`);
+          returnSet.add(`${e.ride_id}:${String(e.tbr_code).toUpperCase()}`);
         }
       });
       totalReturns = returnSet.size;

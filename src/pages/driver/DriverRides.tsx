@@ -55,25 +55,29 @@ const DriverRides = () => {
       const unitIds = [...new Set(data.map((r) => r.unit_id))];
       const rideIds = data.map((r) => r.id);
 
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
-          supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
       ]);
 
-      // Fetch TBRs with pagination (bypass 1000 limit)
-      const tbrsData = await fetchAllRows<{ id: string; ride_id: string; code: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds).range(from, to)
+      // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
+      const tbrsData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).range(from, to),
+        rideIds
       );
 
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
@@ -89,7 +93,7 @@ const DriverRides = () => {
       [...pisoData, ...psData, ...rtoData].forEach((r: any) => {
         if (r.ride_id && r.tbr_code) {
           if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
-          returnTbrSets.get(r.ride_id)!.add(r.tbr_code);
+          returnTbrSets.get(r.ride_id)!.add(String(r.tbr_code).toUpperCase());
         }
       });
       const returnCountMap = new Map<string, number>();

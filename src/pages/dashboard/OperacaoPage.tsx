@@ -86,7 +86,7 @@ const OperacaoPage = () => {
     const confIds = [...new Set(rides.filter((r) => r.conferente_id).map((r) => r.conferente_id!))];
     const rideIds = rides.map((r) => r.id);
 
-    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
     const [driversRes, confsRes, settingsRes, customValuesRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, car_model, car_plate, car_color, avatar_url").in("id", driverIds),
       confIds.length > 0
@@ -96,19 +96,23 @@ const OperacaoPage = () => {
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitSession.id),
     ]);
 
-    // Fetch TBRs with pagination (bypass 1000 limit)
-    const tbrsData = await fetchAllRows<{ ride_id: string; code: string }>((from, to) =>
-      supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", rideIds).range(from, to)
-    );
-    const [pisoRaw, psData, rtoData] = await Promise.all([
-      fetchAllRows<{ ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
+    // Fetch TBRs/retornos with pagination + chunking (bypass 1000 limit and large .in() lists)
+    const [tbrsData, pisoRaw, psData, rtoData] = await Promise.all([
+      fetchAllRowsWithIn<{ ride_id: string; code: string }>(
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).range(from, to),
+        rideIds
       ),
-      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
+        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+        rideIds
       ),
-      fetchAllRows<{ ride_id: string; tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+      fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
+        (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        rideIds
+      ),
+      fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
+        (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        rideIds
       ),
     ]);
 
