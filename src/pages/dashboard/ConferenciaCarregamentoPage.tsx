@@ -873,6 +873,30 @@ const ConferenciaCarregamentoPage = () => {
       const totalScans = prevScanCount + 1;
       scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
 
+      // Check if TBR has a closed PS — if so, block it permanently
+      if (totalScans === 1) {
+        const { data: closedPs } = await supabase
+          .from("ps_entries")
+          .select("id")
+          .ilike("tbr_code", code)
+          .eq("status", "closed")
+          .limit(1);
+        if (closedPs && closedPs.length > 0) {
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
+          toast({
+            title: "TBR finalizado no PS",
+            description: "Este TBR já foi finalizado no Problem Solve e não pode ser carregado novamente.",
+            variant: "destructive",
+          });
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+          // Reset scan count so it doesn't accumulate
+          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
+          return;
+        }
+      }
+
       if (totalScans === 1 && count === 0) {
         const { data: previousTbrs } = await supabase
           .from("ride_tbrs")
