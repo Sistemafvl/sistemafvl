@@ -353,9 +353,12 @@ const OperacaoPage = () => {
                             setTbrModalLoading(false);
                           }}
                         >
-                          <p className={cn("text-xl font-bold", c.all_returns > 0 ? "text-amber-600" : "text-green-600")}>
+                        <p className={cn("text-xl font-bold", c.all_returns > 0 ? "text-amber-600" : "text-green-600")}>
                             {totalLidosCard} <span className="text-xs font-normal">lidos</span>
                           </p>
+                          <Badge className="text-[10px] mt-1 bg-emerald-500/15 text-emerald-700 border-emerald-500/30 hover:bg-emerald-500/20">
+                            {totalLidosCard - c.all_returns} concluído{(totalLidosCard - c.all_returns) !== 1 ? "s" : ""}
+                          </Badge>
                           {c.all_returns > 0 && (
                             <Badge variant="destructive" className="text-[10px] mt-1">
                               {c.all_returns} insucesso{c.all_returns > 1 ? "s" : ""}
