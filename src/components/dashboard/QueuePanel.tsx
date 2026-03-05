@@ -76,12 +76,22 @@ const LoginCombobox = ({ logins, usedLoginsToday, value, onSelect }: { logins: {
   );
 };
 
+// Toast notification for new queue entries
+interface QueueToastItem {
+  id: string;
+  driverName: string;
+  createdAt: number;
+}
+
 const QueuePanel = () => {
   const { unitSession } = useAuthStore();
   const [open, setOpen] = useState(false);
   const [entries, setEntries] = useState<QueueEntry[]>([]);
   const [isPulsing, setIsPulsing] = useState(false);
   const prevCountRef = useRef(0);
+  const prevIdsRef = useRef<Set<string>>(new Set());
+  const [queueToasts, setQueueToasts] = useState<QueueToastItem[]>([]);
+  const [queueSearch, setQueueSearch] = useState("");
   const [animating, setAnimating] = useState<{ idx: number; direction: "up" | "down" } | null>(null);
 
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
@@ -106,6 +116,15 @@ const QueuePanel = () => {
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const unitId = unitSession?.id;
+
+  // Auto-dismiss toasts after 5s
+  useEffect(() => {
+    if (queueToasts.length === 0) return;
+    const timer = setTimeout(() => {
+      setQueueToasts(prev => prev.slice(1));
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [queueToasts]);
 
   const fetchQueue = useCallback(async () => {
     if (!unitId) return;
@@ -136,6 +155,23 @@ const QueuePanel = () => {
         car_color: d?.car_color ?? undefined,
       };
     });
+
+    // Detect new drivers that just joined
+    const currentIds = new Set(newEntries.map(e => e.id));
+    if (prevIdsRef.current.size > 0) {
+      const newOnes = newEntries.filter(e => !prevIdsRef.current.has(e.id));
+      if (newOnes.length > 0) {
+        setQueueToasts(prev => [
+          ...prev,
+          ...newOnes.map(e => ({
+            id: e.id,
+            driverName: e.driver_name ?? "Motorista",
+            createdAt: Date.now(),
+          })),
+        ]);
+      }
+    }
+    prevIdsRef.current = currentIds;
 
     if (newEntries.length > prevCountRef.current && prevCountRef.current >= 0) {
       setIsPulsing(true);
@@ -378,9 +414,27 @@ const QueuePanel = () => {
   };
 
   const count = entries.length;
+  const filteredEntries = queueSearch.trim()
+    ? entries.filter(e => e.driver_name?.toLowerCase().includes(queueSearch.toLowerCase()))
+    : entries;
 
   return (
     <>
+      {/* Animated toasts above the Fila button */}
+      <div className="fixed bottom-[76px] right-6 z-50 flex flex-col-reverse gap-2 pointer-events-none">
+        {queueToasts.map((t, i) => (
+          <div
+            key={t.id}
+            className="pointer-events-auto animate-in slide-in-from-bottom-4 fade-in duration-500 bg-primary text-primary-foreground rounded-lg px-4 py-2 shadow-lg flex items-center gap-2 text-sm font-medium"
+            style={{ animationDelay: `${i * 100}ms` }}
+          >
+            <Users className="h-4 w-4 shrink-0" />
+            <span className="truncate max-w-[200px]">{t.driverName}</span>
+            <span className="text-primary-foreground/70 text-xs">entrou na fila</span>
+          </div>
+        ))}
+      </div>
+
       <button
         onClick={handleOpenPanel}
         className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 rounded-full bg-primary px-4 py-3 text-primary-foreground shadow-lg hover:bg-primary/90 transition-all ${
@@ -417,13 +471,31 @@ const QueuePanel = () => {
             </SheetTitle>
           </SheetHeader>
 
+          {/* Search filter */}
+          <div className="px-3 pt-3 pb-1">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar motorista na fila..."
+                value={queueSearch}
+                onChange={(e) => setQueueSearch(e.target.value)}
+                className="pl-8 h-9 text-sm"
+              />
+              {queueSearch && (
+                <button onClick={() => setQueueSearch("")} className="absolute right-2 top-1/2 -translate-y-1/2">
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {entries.length === 0 ? (
+            {filteredEntries.length === 0 ? (
               <div className="text-center text-muted-foreground italic py-12 text-sm">
-                Nenhum motorista na fila
+                {entries.length === 0 ? "Nenhum motorista na fila" : "Nenhum resultado encontrado"}
               </div>
             ) : (
-              entries.map((entry, idx) => (
+              filteredEntries.map((entry, idx) => (
                 <div
                   key={entry.id}
                   className="flex items-center gap-2 p-2 rounded-lg border border-border bg-card"

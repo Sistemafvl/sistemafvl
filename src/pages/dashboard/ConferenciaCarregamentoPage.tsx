@@ -977,10 +977,20 @@ const ConferenciaCarregamentoPage = () => {
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         playSuccessBeep();
       } else if (count === 1) {
+        // 2nd beep: duplicate confirmed — mark yellow permanently
         newTbr._duplicate = true;
+
+        // Find the real (oldest) entry to mark as yellow
+        const realEntry = occurrences[0];
+        if (realEntry?.id) {
+          void supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", realEntry.id);
+        }
+
+        realtimeLockUntil.current = Date.now() + 15000;
+
         setTbrs((prev) => {
           const updated = (prev[rideId] ?? []).map(t =>
-            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
+            t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true, _yellowHighlight: true } : t
           );
           return { ...prev, [rideId]: [newTbr, ...updated] };
         });
