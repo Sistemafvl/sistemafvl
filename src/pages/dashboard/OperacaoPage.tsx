@@ -35,6 +35,7 @@ interface DriverCard {
   completed_at: string;
   total_tbrs: number;
   piso_returns: number;
+  all_returns: number;
 }
 
 interface TbrDetail {
@@ -136,7 +137,7 @@ const OperacaoPage = () => {
       tbrCounts[t.ride_id] = (tbrCounts[t.ride_id] || 0) + 1;
     });
 
-    // Count unique tbr_codes per ride for returns (only if TBR still in ride)
+    // Count unique tbr_codes per ride for returns (only if TBR still in ride — for loading list display)
     const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const returnTbrSets: Record<string, Set<string>> = {};
     [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
@@ -148,6 +149,18 @@ const OperacaoPage = () => {
     });
     const issueCounts: Record<string, number> = {};
     Object.entries(returnTbrSets).forEach(([rideId, set]) => { issueCounts[rideId] = set.size; });
+
+    // Count ALL returns per ride (including removed TBRs) — for performance calculation
+    const allReturnTbrSets: Record<string, Set<string>> = {};
+    [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
+      const upperCode = p.tbr_code?.toUpperCase();
+      if (p.ride_id && upperCode) {
+        if (!allReturnTbrSets[p.ride_id]) allReturnTbrSets[p.ride_id] = new Set();
+        allReturnTbrSets[p.ride_id].add(upperCode);
+      }
+    });
+    const allReturnCounts: Record<string, number> = {};
+    Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
     const result: DriverCard[] = rides.map((r) => {
       const d = driverMap[r.driver_id];
@@ -168,6 +181,7 @@ const OperacaoPage = () => {
         completed_at: r.completed_at,
         total_tbrs: tbrCounts[r.id] ?? 0,
         piso_returns: issueCounts[r.id] ?? 0,
+        all_returns: allReturnCounts[r.id] ?? 0,
       };
     });
 
@@ -176,9 +190,10 @@ const OperacaoPage = () => {
   };
 
   const totalCarregamentos = cards.length;
-  const totalTbrs = cards.reduce((s, c) => s + c.total_tbrs, 0);
-  const totalRetornos = cards.reduce((s, c) => s + c.piso_returns, 0);
-  const taxaConclusao = totalTbrs > 0 ? (((totalTbrs - totalRetornos) / totalTbrs) * 100).toFixed(1) : "0";
+  const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
+  const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
+  const totalOriginal = totalTbrsAtual + totalAllReturns;
+  const taxaConclusao = totalOriginal > 0 ? ((totalTbrsAtual / totalOriginal) * 100).toFixed(1) : "0";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -237,13 +252,13 @@ const OperacaoPage = () => {
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalTbrs}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs lidos <InfoButton text="Total de pacotes (TBRs) escaneados no dia." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalOriginal}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs total <InfoButton text="Total original de pacotes (TBRs) incluindo insucessos removidos." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalRetornos}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Retornos piso <InfoButton text="Total de pacotes retornados ao piso (Piso, PS, RTO) no dia." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalAllReturns}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Retornos piso <InfoButton text="Total de pacotes retornados (Piso, PS, RTO) incluindo removidos da lista." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
@@ -262,11 +277,12 @@ const OperacaoPage = () => {
           ) : (
             <div className="grid gap-3">
               {filteredCards.map((c) => {
-                  const concluidos = c.total_tbrs - c.piso_returns;
+                  const totalOriginalCard = c.total_tbrs + c.all_returns;
+                  const concluidos = c.total_tbrs;
                   const driverTbrValue = customValueMap.get(c.driver_id) ?? tbrValue;
                   const totalGanho = concluidos * driverTbrValue;
-                  const mediaTbr = c.total_tbrs > 0 ? totalGanho / c.total_tbrs : 0;
-                  const performance = c.total_tbrs > 0 ? (concluidos / c.total_tbrs) * 100 : 0;
+                  const mediaTbr = totalOriginalCard > 0 ? totalGanho / totalOriginalCard : 0;
+                  const performance = totalOriginalCard > 0 ? (concluidos / totalOriginalCard) * 100 : 0;
                   const tempoMin = c.started_at && c.finished_at
                     ? differenceInMinutes(new Date(c.finished_at), new Date(c.started_at))
                     : null;
@@ -334,13 +350,13 @@ const OperacaoPage = () => {
                             setTbrModalLoading(false);
                           }}
                         >
-                          <p className={cn("text-xl font-bold", c.piso_returns > 0 ? "text-destructive" : "text-green-600")}>
-                            {concluidos}/{c.total_tbrs}
+                          <p className={cn("text-xl font-bold", c.all_returns > 0 ? "text-destructive" : "text-green-600")}>
+                            {concluidos}/{totalOriginalCard}
                           </p>
                           <p className="text-[10px] text-muted-foreground">concluídos</p>
-                          {c.piso_returns > 0 && (
+                          {c.all_returns > 0 && (
                             <Badge variant="destructive" className="text-[10px] mt-1">
-                              {c.piso_returns} retorno{c.piso_returns > 1 ? "s" : ""}
+                              {c.all_returns} retorno{c.all_returns > 1 ? "s" : ""}
                             </Badge>
                           )}
                         </div>
