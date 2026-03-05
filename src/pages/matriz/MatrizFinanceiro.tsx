@@ -40,16 +40,16 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) =>
           supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).range(from, to)
         ),
-        supabase.from("dnr_entries").select("id, unit_id, dnr_value, status, discounted").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end),
-        supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
-        supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
-        supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds),
-      ]).then(([ridesData, dnrR, settingsR, customR, minPkgR]) => {
+        fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, dnr_value, status, discounted").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).range(from, to)),
+      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData]) => {
         setRides(ridesData);
-        setDnrEntries(dnrR.data || []);
-        setSettings(settingsR.data || []);
-        setCustomValues(customR.data || []);
-        setMinPackages((minPkgR.data as any[]) || []);
+        setDnrEntries(dnrData);
+        setSettings(settingsData);
+        setCustomValues(customData);
+        setMinPackages(minPkgData);
         setLoading(false);
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {

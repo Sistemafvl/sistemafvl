@@ -151,13 +151,10 @@ const RetornoPisoPage = () => {
 
   const loadEntries = async () => {
     if (!unitSession) return;
-    const { data } = await supabase
-      .from("piso_entries")
-      .select("id, tbr_code, driver_name, route, reason, created_at, ride_id, conferente_id")
-      .eq("unit_id", unitSession.id)
-      .eq("status", "open")
-      .order("created_at", { ascending: false });
-    const allEntries = (data ?? []) as (PisoEntry & { conferente_id?: string | null })[];
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const allEntries = await fetchAllRows<PisoEntry & { conferente_id?: string | null }>((from, to) =>
+      supabase.from("piso_entries").select("id, tbr_code, driver_name, route, reason, created_at, ride_id, conferente_id").eq("unit_id", unitSession.id).eq("status", "open").order("created_at", { ascending: false }).range(from, to)
+    );
 
     // Fetch conferente names
     const confIds = [...new Set(allEntries.map(e => e.conferente_id).filter(Boolean))] as string[];

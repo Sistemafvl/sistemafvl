@@ -469,13 +469,12 @@ const ConferenciaCarregamentoPage = () => {
 
     // Fetch removed TBR counts per ride from piso_entries
     if (rideIds.length > 0) {
-      const { data: removedEntries } = await supabase
-        .from("piso_entries")
-        .select("ride_id")
-        .in("ride_id", rideIds)
-        .eq("reason", "Removido do carregamento");
+      const { fetchAllRows: fetchAll } = await import("@/lib/supabase-helpers");
+      const removedEntries = await fetchAll<{ ride_id: string }>((from, to) =>
+        supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds).eq("reason", "Removido do carregamento").range(from, to)
+      );
       const counts: Record<string, number> = {};
-      (removedEntries ?? []).forEach((e: any) => {
+      removedEntries.forEach((e: any) => {
         counts[e.ride_id] = (counts[e.ride_id] || 0) + 1;
       });
       setRemovedTbrCounts(counts);
@@ -496,13 +495,12 @@ const ConferenciaCarregamentoPage = () => {
     }
 
     // Global search: find TBRs across ALL units
-    const { data: matchingTbrs } = await supabase
-      .from("ride_tbrs")
-      .select("*")
-      .ilike("code", `%${searchTerm.trim()}%`)
-      .order("scanned_at", { ascending: false });
+    const { fetchAllRows: fetchAll } = await import("@/lib/supabase-helpers");
+    const matchingTbrs = await fetchAll<any>((from, to) =>
+      supabase.from("ride_tbrs").select("*").ilike("code", `%${searchTerm.trim()}%`).order("scanned_at", { ascending: false }).range(from, to)
+    );
 
-    if (!matchingTbrs || matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
+    if (matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
 
     const matchingRideIds = [...new Set(matchingTbrs.map(t => t.ride_id))];
 
@@ -550,14 +548,12 @@ const ConferenciaCarregamentoPage = () => {
 
     setSearchRides(mapped);
 
-    const { data: allTbrData } = await supabase
-      .from("ride_tbrs")
-      .select("*")
-      .in("ride_id", matchingRideIds)
-      .order("scanned_at", { ascending: false });
+    const allTbrData = await fetchAll<any>((from, to) =>
+      supabase.from("ride_tbrs").select("*").in("ride_id", matchingRideIds).order("scanned_at", { ascending: false }).range(from, to)
+    );
 
     const grouped: Record<string, Tbr[]> = {};
-    (allTbrData ?? []).forEach((t: any) => {
+    allTbrData.forEach((t: any) => {
       if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
       grouped[t.ride_id].push(t);
     });
