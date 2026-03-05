@@ -69,11 +69,16 @@ Deno.serve(async (req) => {
 
     const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
-    // Complete queue entry
+    // Complete queue entry — clear called_at/called_by_name to avoid triggering driver alert
     if (queue_entry_id) {
       await supabase
         .from("queue_entries")
-        .update({ status: "completed", called_at: new Date().toISOString(), completed_at: new Date().toISOString() })
+        .update({
+          status: "completed",
+          completed_at: new Date().toISOString(),
+          called_at: null,
+          called_by_name: null,
+        })
         .eq("id", queue_entry_id);
     }
 

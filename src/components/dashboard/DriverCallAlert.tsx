@@ -4,56 +4,88 @@ import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 
-// Generate a valid PCM WAV beep programmatically
-const generateBeepWav = (): string => {
+// --------------- Continuous siren via Web Audio API ---------------
+let globalAudioCtx: AudioContext | null = null;
+
+const ensureAudioCtx = (): AudioContext => {
+  if (!globalAudioCtx) globalAudioCtx = new AudioContext();
+  if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
+  return globalAudioCtx;
+};
+
+// Unlock AudioContext on first user gesture
+if (typeof document !== "undefined") {
+  const unlock = () => {
+    try { ensureAudioCtx(); } catch {}
+    document.removeEventListener("click", unlock);
+    document.removeEventListener("touchstart", unlock);
+  };
+  document.addEventListener("click", unlock, { once: true });
+  document.addEventListener("touchstart", unlock, { once: true });
+}
+
+/** Starts a continuous alternating siren (800Hz ↔ 1200Hz) and returns a stop function */
+const startSiren = (): (() => void) => {
+  try {
+    const ctx = ensureAudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 800;
+    gain.gain.value = 0.45;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    // Alternate between 800Hz and 1200Hz every 0.4s for siren effect
+    const interval = setInterval(() => {
+      osc.frequency.value = osc.frequency.value === 800 ? 1200 : 800;
+    }, 400);
+
+    osc.start();
+
+    return () => {
+      clearInterval(interval);
+      try { osc.stop(); } catch {}
+      try { osc.disconnect(); } catch {}
+      try { gain.disconnect(); } catch {}
+    };
+  } catch {
+    // Fallback: HTML5 Audio loop with generated WAV
+    const audio = createFallbackAudio();
+    audio.loop = true;
+    audio.play().catch(() => {});
+    return () => {
+      audio.pause();
+      audio.currentTime = 0;
+    };
+  }
+};
+
+/** Generate a short WAV beep for fallback */
+const createFallbackAudio = (): HTMLAudioElement => {
   const sampleRate = 8000;
-  const duration = 0.3;
-  const frequency = 1000;
+  const duration = 0.8;
   const numSamples = Math.floor(sampleRate * duration);
-  const dataSize = numSamples;
-  const fileSize = 44 + dataSize;
+  const fileSize = 44 + numSamples;
   const buffer = new ArrayBuffer(fileSize);
   const view = new DataView(buffer);
-  const writeString = (offset: number, str: string) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
-  writeString(0, "RIFF"); view.setUint32(4, fileSize - 8, true); writeString(8, "WAVE");
-  writeString(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true); view.setUint32(28, sampleRate, true);
-  view.setUint16(32, 1, true); view.setUint16(34, 8, true);
-  writeString(36, "data"); view.setUint32(40, dataSize, true);
+  const w = (o: number, s: string) => { for (let i = 0; i < s.length; i++) view.setUint8(o + i, s.charCodeAt(i)); };
+  w(0, "RIFF"); view.setUint32(4, fileSize - 8, true); w(8, "WAVE");
+  w(12, "fmt "); view.setUint32(16, 16, true); view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true); view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true); view.setUint16(32, 1, true); view.setUint16(34, 8, true);
+  w(36, "data"); view.setUint32(40, numSamples, true);
   for (let i = 0; i < numSamples; i++) {
-    const sample = 128 + Math.round(80 * Math.sin(2 * Math.PI * frequency * i / sampleRate));
-    view.setUint8(44 + i, sample);
+    const freq = i < numSamples / 2 ? 800 : 1200;
+    view.setUint8(44 + i, 128 + Math.round(80 * Math.sin(2 * Math.PI * freq * i / sampleRate)));
   }
   const bytes = new Uint8Array(buffer);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
-  return "data:audio/wav;base64," + btoa(binary);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return new Audio("data:audio/wav;base64," + btoa(bin));
 };
 
-const BEEP_DATA_URI = generateBeepWav();
-
-let globalAudioCtx: AudioContext | null = null;
-let audioCtxInitialized = false;
-
-const initAudioContext = () => {
-  if (audioCtxInitialized) return;
-  audioCtxInitialized = true;
-  const handler = () => {
-    try {
-      if (!globalAudioCtx) globalAudioCtx = new AudioContext();
-      if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
-    } catch {}
-    document.removeEventListener("click", handler);
-    document.removeEventListener("touchstart", handler);
-  };
-  document.addEventListener("click", handler, { once: true });
-  document.addEventListener("touchstart", handler, { once: true });
-  try {
-    globalAudioCtx = new AudioContext();
-    if (globalAudioCtx.state === "suspended") globalAudioCtx.resume();
-  } catch {}
-};
-
+// --------------- Component ---------------
 const DriverCallAlert = () => {
   const { unitSession } = useAuthStore();
   const driverId = unitSession?.user_profile_id;
@@ -64,55 +96,31 @@ const DriverCallAlert = () => {
 
   const initialLoadDoneRef = useRef(false);
   const lastCalledAtRef = useRef<string | null>(null);
-  const beepIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopSirenRef = useRef<(() => void) | null>(null);
   const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const beepWithWebAudio = useCallback(async () => {
-    try {
-      if (!globalAudioCtx) globalAudioCtx = new AudioContext();
-      if (globalAudioCtx.state === "suspended") await globalAudioCtx.resume();
-      const osc = globalAudioCtx.createOscillator();
-      const gain = globalAudioCtx.createGain();
-      osc.type = "square";
-      osc.frequency.value = 1000;
-      gain.gain.value = 0.5;
-      osc.connect(gain);
-      gain.connect(globalAudioCtx.destination);
-      osc.start();
-      osc.stop(globalAudioCtx.currentTime + 0.3);
-    } catch {
-      try {
-        const audio = new Audio(BEEP_DATA_URI);
-        audio.volume = 0.8;
-        await audio.play().catch(() => {});
-      } catch {}
-    }
-  }, []);
 
   const startAlert = useCallback(() => {
     setIsAlerting(true);
-    initAudioContext();
 
-    // Start beep loop
-    beepWithWebAudio();
-    if (!beepIntervalRef.current) {
-      beepIntervalRef.current = setInterval(beepWithWebAudio, 1500);
+    // Start continuous siren
+    if (!stopSirenRef.current) {
+      stopSirenRef.current = startSiren();
     }
 
-    // Start vibration loop
+    // Start continuous vibration
     if (!vibrationIntervalRef.current) {
       try { navigator.vibrate?.([500, 200, 500, 200, 500]); } catch {}
       vibrationIntervalRef.current = setInterval(() => {
         try { navigator.vibrate?.([500, 200, 500, 200, 500]); } catch {}
       }, 2000);
     }
-  }, [beepWithWebAudio]);
+  }, []);
 
   const stopAlert = useCallback(() => {
     setIsAlerting(false);
-    if (beepIntervalRef.current) {
-      clearInterval(beepIntervalRef.current);
-      beepIntervalRef.current = null;
+    if (stopSirenRef.current) {
+      stopSirenRef.current();
+      stopSirenRef.current = null;
     }
     if (vibrationIntervalRef.current) {
       clearInterval(vibrationIntervalRef.current);
@@ -124,7 +132,10 @@ const DriverCallAlert = () => {
   const checkCalledAt = useCallback(async () => {
     if (!driverId || !unitId) return;
 
-    // Check queue entry
+    let calledAt: string | null = null;
+    let callerName: string | null = null;
+
+    // 1) Check active queue entry (waiting/approved)
     const { data: queueEntry } = await supabase
       .from("queue_entries")
       .select("called_at, called_by_name")
@@ -135,10 +146,10 @@ const DriverCallAlert = () => {
       .limit(1)
       .maybeSingle();
 
-    // Also check via active ride's queue_entry
-    let calledAt = queueEntry?.called_at ?? null;
-    let callerName = queueEntry?.called_by_name ?? null;
+    calledAt = queueEntry?.called_at ?? null;
+    callerName = queueEntry?.called_by_name ?? null;
 
+    // 2) Also check via active ride's queue_entry
     if (!calledAt) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -162,14 +173,16 @@ const DriverCallAlert = () => {
       }
     }
 
+    // GUARD: Only valid call if BOTH called_at AND called_by_name exist
+    const isValidCall = !!calledAt && !!callerName;
+
     if (!initialLoadDoneRef.current) {
-      // First load: just store current value, don't alert
       initialLoadDoneRef.current = true;
       lastCalledAtRef.current = calledAt;
       return;
     }
 
-    if (calledAt && calledAt !== lastCalledAtRef.current) {
+    if (isValidCall && calledAt !== lastCalledAtRef.current) {
       lastCalledAtRef.current = calledAt;
       setCalledByName(callerName);
       startAlert();
@@ -183,7 +196,7 @@ const DriverCallAlert = () => {
     checkCalledAt();
   }, [checkCalledAt]);
 
-  // Realtime subscription
+  // Realtime: queue_entries
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
@@ -195,7 +208,7 @@ const DriverCallAlert = () => {
     return () => { supabase.removeChannel(channel); };
   }, [unitId, checkCalledAt]);
 
-  // Also listen to driver_rides changes
+  // Realtime: driver_rides
   useEffect(() => {
     if (!driverId) return;
     const channel = supabase
@@ -210,7 +223,7 @@ const DriverCallAlert = () => {
   // Cleanup on unmount
   useEffect(() => {
     return () => {
-      if (beepIntervalRef.current) clearInterval(beepIntervalRef.current);
+      if (stopSirenRef.current) stopSirenRef.current();
       if (vibrationIntervalRef.current) clearInterval(vibrationIntervalRef.current);
       try { navigator.vibrate?.(0); } catch {}
     };
