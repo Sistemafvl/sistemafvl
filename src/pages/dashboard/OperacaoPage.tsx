@@ -36,7 +36,6 @@ interface DriverCard {
   total_tbrs: number;
   piso_returns: number;
   all_returns: number;
-  all_ever_removed: number;
 }
 
 interface TbrDetail {
@@ -167,17 +166,7 @@ const OperacaoPage = () => {
     const allReturnCounts: Record<string, number> = {};
     Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
-    // Count ALL ever-removed TBRs per ride (including operational) — for totalLidos
-    const allEverRemovedSets: Record<string, Set<string>> = {};
-    [...pisoRaw, ...psData, ...rtoData].forEach((p: any) => {
-      const upperCode = p.tbr_code?.toUpperCase();
-      if (p.ride_id && upperCode) {
-        if (!allEverRemovedSets[p.ride_id]) allEverRemovedSets[p.ride_id] = new Set();
-        allEverRemovedSets[p.ride_id].add(upperCode);
-      }
-    });
-    const allEverRemovedCounts: Record<string, number> = {};
-    Object.entries(allEverRemovedSets).forEach(([rideId, set]) => { allEverRemovedCounts[rideId] = set.size; });
+  
 
     const result: DriverCard[] = rides.map((r) => {
       const d = driverMap[r.driver_id];
@@ -199,7 +188,7 @@ const OperacaoPage = () => {
         total_tbrs: tbrCounts[r.id] ?? 0,
         piso_returns: issueCounts[r.id] ?? 0,
         all_returns: allReturnCounts[r.id] ?? 0,
-        all_ever_removed: allEverRemovedCounts[r.id] ?? 0,
+        
       };
     });
 
@@ -210,8 +199,7 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalAllEverRemoved = cards.reduce((s, c) => s + c.all_ever_removed, 0);
-  const totalLidos = totalTbrsAtual + totalAllEverRemoved;
+  const totalLidos = totalTbrsAtual;
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -295,7 +283,7 @@ const OperacaoPage = () => {
           ) : (
             <div className="grid gap-3">
               {filteredCards.map((c) => {
-                  const totalLidosCard = c.total_tbrs + c.all_ever_removed;
+                  const totalLidosCard = c.total_tbrs;
                   const entregues = c.total_tbrs;
                   const driverTbrValue = customValueMap.get(c.driver_id) ?? tbrValue;
                   const totalGanho = entregues * driverTbrValue;

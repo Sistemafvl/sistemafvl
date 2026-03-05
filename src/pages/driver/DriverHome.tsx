@@ -198,22 +198,7 @@ const DriverHome = () => {
     const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
     totalGanho += totalBonus;
 
-    // Count ALL removed TBRs for totalLidos (including operational)
-    let totalAllRemoved = 0;
-    ridesByDay.forEach((rideIds) => {
-      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
-      const rideTbrCodes = new Set(dayTbrs.map((t: any) => String(t.code).toUpperCase()));
-      const removedCodes = new Set<string>();
-      [...allPisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
-        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) {
-          const upper = String(p.tbr_code).toUpperCase();
-          if (!rideTbrCodes.has(upper)) removedCodes.add(upper);
-        }
-      });
-      totalAllRemoved += removedCodes.size;
-    });
-
-    const totalLidos = totalTbrs + totalAllRemoved;
+    const totalLidos = totalTbrs;
     const concluidos = Math.max(0, totalTbrs - totalReturns);
     const taxaConclusao = totalLidos > 0 ? (concluidos / totalLidos) * 100 : 0;
     const workedDays = ridesByDay.size;
