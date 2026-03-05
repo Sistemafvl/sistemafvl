@@ -117,6 +117,20 @@ const RTOPage = () => {
     setSearching(true);
     setTbrCode(code);
 
+    // Check for closed PS — TBR finalizado não pode entrar em RTO
+    const { data: closedPsCheck } = await supabase
+      .from("ps_entries")
+      .select("id")
+      .ilike("tbr_code", code)
+      .eq("unit_id", unitSession!.id)
+      .eq("status", "closed")
+      .limit(1);
+    if (closedPsCheck && closedPsCheck.length > 0) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "TBR finalizado no PS", description: "Este TBR já foi finalizado no Problem Solve e não pode ser registrado novamente.", variant: "destructive" });
+      setTbrInput(""); setSearching(false); return;
+    }
+
     // Optionally fetch history for informational display
     const { data: tbrData } = await supabase
       .from("ride_tbrs")

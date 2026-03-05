@@ -232,6 +232,22 @@ const PSPage = () => {
         inputRef.current?.focus();
         return;
       }
+
+      // Check for closed PS — TBR finalizado não pode entrar novamente
+      const { data: closedPs } = await supabase
+        .from("ps_entries")
+        .select("id")
+        .ilike("tbr_code", code)
+        .eq("unit_id", unitSession.id)
+        .eq("status", "closed")
+        .limit(1);
+      if (closedPs && closedPs.length > 0) {
+        toast({ title: "TBR finalizado", description: "Este TBR já foi finalizado no PS e não pode ser registrado novamente.", variant: "destructive" });
+        setSearching(false);
+        setTbrInput("");
+        inputRef.current?.focus();
+        return;
+      }
     }
 
     const { data: tbrData } = await supabase
