@@ -1,52 +1,47 @@
 
 
-## Plano — 3 Correções no Painel do Motorista
+## Plano — 3 Correções: Alerta Sonoro, Notificação Global, Performance em Operação
 
-### 1. Contador de Posição na Fila errado
+### 1. Bug: Alerta dispara ao carregar a página (não apenas no sino)
 
-**Causa raiz**: A query em `fetchActiveRide` calcula `queuePosition` contando `driver_rides` com `loading_status IN ('pending','loading')` e `completed_at <= ride.completed_at`. O problema é que `completed_at` é o timestamp de criação do ride (default `now()`), e a comparação `<=` inclui o próprio registro. Mas além disso, rides de **outros dias** ou rides **cancelados** que ainda não tiveram `loading_status` atualizado podem estar inflando a contagem.
-
-**Correção** em `DriverQueue.tsx`:
-- Adicionar filtro `.gte("completed_at", today.toISOString())` para considerar apenas rides do dia atual (mesmo filtro já usado na query do próprio ride)
-- Usar `.lt("completed_at", ride.completed_at)` + somar 1, em vez de `.lte()`, para garantir que a posição seja baseada em quantos vieram **antes**, não incluindo duplicatas com mesmo timestamp
-- Alternativa mais simples e confiável: usar `sequence_number` diretamente — contar quantos rides pendentes/loading do dia têm `sequence_number` menor ou igual ao do motorista
-
-```typescript
-// Corrigido: contar apenas rides do dia com sequence <= meu
-const { count } = await supabase
-  .from("driver_rides")
-  .select("*", { count: "exact", head: true })
-  .eq("unit_id", ride.unit_id)
-  .in("loading_status", ["pending", "loading"])
-  .gte("completed_at", today.toISOString())
-  .lte("sequence_number", ride.sequence_number);
-setQueuePosition(count ?? null);
-```
-
-### 2. Texto informativo sobre Amazon Flex acima do Login
+**Causa raiz**: Em `DriverQueue.tsx`, `lastCalledAtRef` inicia como `null`. Quando o motorista abre a página e o `queue_entry` já tem `called_at` (de qualquer momento anterior), a condição `called_at !== null` dispara o alerta imediatamente.
 
 **Correção** em `DriverQueue.tsx`:
-- Adicionar um parágrafo informativo entre a Rota e o Login, explicando que o login e senha são para o Amazon Flex e que após finalizar o carregamento, podem ser consultados em "Corridas" no menu.
+- Na primeira execução de `fetchActiveRide` e `fetchQueue`, apenas **gravar** o `called_at` atual em `lastCalledAtRef` sem disparar o alerta. Usar um `initialLoadDoneRef` para distinguir o primeiro fetch dos subsequentes.
+- O alerta só dispara quando `called_at` **muda** após o carregamento inicial (ou seja, quando o conferente clica no sino em tempo real).
 
-### 3. Vibração ao chamar motorista + UI "Sua Vez!"
+### 2. Som toca apenas uma vez — deve ser loop contínuo + vibração
 
-O mecanismo de chamada já existe (`called_at` + `triggerCallAlert` com beep sonoro). Precisa adicionar:
+**Causa**: O `createAlertAudio` com `startBeeping` já implementa intervalo de 1.5s, mas o `triggerCallAlert` é chamado múltiplas vezes (tanto em `fetchActiveRide` quanto em `fetchQueue`), e a condição de guarda `if (isPlaying) return` pode estar conflitando.
 
-**No `triggerCallAlert`**:
-- Chamar `navigator.vibrate([500, 200, 500, 200, 500])` em loop (intervalo de 2s) para vibrar o celular continuamente
-- Parar vibração quando motorista clicar "Ciente"
+**Correção**: Verificar que `startBeeping` realmente mantém o loop ativo. O som e vibração devem persistir até o clique em "Ciente". Garantir que não há chamadas duplicadas quebrando o intervalo.
 
-**Na UI do card de Posição na Fila** (quando `called_at` existe):
-- Mudar o texto de "Xº" para "Xº - Sua Vez!" com destaque amarelo/vermelho pulsante
-- Adicionar botão "Ciente" que:
-  - Para a vibração (`navigator.vibrate(0)`)
-  - Para o beep sonoro
-  - Fecha o toast
-  - Limpa o `called_at` no banco (ou apenas localmente)
+### 3. Alerta deve funcionar em QUALQUER tela do motorista (não só na Fila)
 
-**No card de carregamento ativo** (view `activeRide`):
-- O campo `called_at` já é gerido pela ConferenciaCarregamentoPage (botão sino). Quando o `called_at` é setado e o motorista tem activeRide, mostrar a posição com "Sua Vez!" + vibração
+**Causa**: A lógica de polling de `called_at` só existe em `DriverQueue.tsx`. Se o motorista está em Visão Geral ou outra tela, não recebe o alerta.
+
+**Correção**:
+- Mover a lógica de detecção de chamada para o `DriverLayout.tsx` (componente wrapper de todas as telas do motorista).
+- Criar um componente `DriverCallAlert` que:
+  - Faz polling do `queue_entry` com `called_at` via realtime subscription
+  - Toca beep contínuo + vibração quando detecta nova chamada
+  - Mostra overlay/banner fixo com "Sua Vez!", nome do conferente e botão "Ciente"
+  - Funciona independente da rota atual
+
+### 4. Operação: Performance deve mostrar total original (incluindo insucessos removidos)
+
+**Causa**: `total_tbrs` conta apenas TBRs restantes em `ride_tbrs`. Quando um insucesso é registrado, o TBR é deletado de `ride_tbrs`, reduzindo o `total_tbrs`. O usuário quer ver `8/9` (8 concluídos de 9 originais).
+
+**Correção** em `OperacaoPage.tsx`:
+- Calcular `total_original = total_tbrs + piso_returns` (TBRs atuais + insucessos válidos)
+- `concluidos = total_original - piso_returns` (que é simplesmente `total_tbrs` atual)
+- Exibir `concluidos/total_original` em vez de `concluidos/total_tbrs`
+- Performance = `concluidos / total_original * 100`
+
+Na prática: `total_original = c.total_tbrs + c.piso_returns`, exibir `{c.total_tbrs}/{total_original}` e calcular performance como `(c.total_tbrs / total_original) * 100`.
 
 ### Arquivos afetados
-1. `src/pages/driver/DriverQueue.tsx` — todas as 3 correções
+1. `src/pages/driver/DriverQueue.tsx` — corrigir detecção inicial de `called_at`
+2. `src/components/dashboard/DriverLayout.tsx` — adicionar componente de alerta global
+3. `src/pages/dashboard/OperacaoPage.tsx` — ajustar cálculo de performance
 
