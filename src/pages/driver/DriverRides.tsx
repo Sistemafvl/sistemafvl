@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package, AlertTriangle } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -242,28 +242,33 @@ const DriverRides = () => {
                   </div>
 
                   {/* Mini-cards de métricas */}
-                  <div className="grid grid-cols-4 gap-1.5">
-                    <div className="flex flex-col items-center p-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-                      <DollarSign className="h-3 w-3 text-emerald-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Total</span>
-                      <span className="text-xs font-bold text-emerald-600">R${totalGanho.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
-                      <Package className="h-3 w-3 text-blue-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Lidos</span>
-                      <span className="text-xs font-bold text-blue-600">{totalLidos}</span>
-                    </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-md bg-red-500/10 border border-red-500/20">
-                      <AlertTriangle className="h-3 w-3 text-red-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
-                      <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
-                    </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
-                      <Target className="h-3 w-3 text-purple-600 mb-0.5" />
-                      <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
-                      <span className="text-xs font-bold text-purple-600">{performance.toFixed(0)}%</span>
-                    </div>
-                  </div>
+                    <div className="grid grid-cols-5 gap-1.5">
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
+                       <DollarSign className="h-3 w-3 text-emerald-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Total</span>
+                       <span className="text-xs font-bold text-emerald-600">R${totalGanho.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                     </div>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-blue-500/10 border border-blue-500/20">
+                       <Package className="h-3 w-3 text-blue-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Lidos</span>
+                       <span className="text-xs font-bold text-blue-600">{totalLidos}</span>
+                     </div>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-green-500/10 border border-green-500/20">
+                       <CheckCircle2 className="h-3 w-3 text-green-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Concl.</span>
+                       <span className="text-xs font-bold text-green-600">{entregues}</span>
+                     </div>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-red-500/10 border border-red-500/20">
+                       <AlertTriangle className="h-3 w-3 text-red-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
+                       <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
+                     </div>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
+                       <Target className="h-3 w-3 text-purple-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
+                       <span className="text-xs font-bold text-purple-600">{performance.toFixed(0)}%</span>
+                     </div>
+                   </div>
                 </div>
               );
             })
