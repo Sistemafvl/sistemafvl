@@ -15,6 +15,7 @@ interface QueueEntry {
   joined_at: string;
   called_at: string | null;
   completed_at: string | null;
+  called_by_name: string | null;
 }
 
 interface ActiveRide {
@@ -24,6 +25,7 @@ interface ActiveRide {
   password: string | null;
   sequence_number: number | null;
   loading_status: string | null;
+  queue_entry_id: string | null;
 }
 
 const formatElapsed = (totalSeconds: number) => {
@@ -141,6 +143,7 @@ const DriverQueue = () => {
   const [tbrCount, setTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [isCalled, setIsCalled] = useState(false);
+  const [calledByName, setCalledByName] = useState<string | null>(null);
   const alertAudioRef = useRef(createAlertAudio());
   const lastCalledAtRef = useRef<string | null>(null);
   const alertToastIdRef = useRef<string | null>(null);
@@ -220,7 +223,7 @@ const DriverQueue = () => {
 
     const { data } = await supabase
       .from("driver_rides")
-      .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id")
+      .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id, queue_entry_id")
       .eq("driver_id", driverId)
       .in("loading_status", ["pending", "loading"])
       .gte("completed_at", today.toISOString())
@@ -242,6 +245,20 @@ const DriverQueue = () => {
       setQueuePosition(count ?? null);
     } else {
       setQueuePosition(null);
+    }
+
+    // Check if driver was called via queue entry
+    if (ride && ride.queue_entry_id) {
+      const { data: qEntry } = await supabase
+        .from("queue_entries")
+        .select("called_at, called_by_name")
+        .eq("id", ride.queue_entry_id)
+        .single();
+      if (qEntry?.called_at && qEntry.called_at !== lastCalledAtRef.current) {
+        lastCalledAtRef.current = qEntry.called_at;
+        setCalledByName((qEntry as any).called_by_name ?? null);
+        triggerCallAlert();
+      }
     }
   }, [driverId]);
 
@@ -266,6 +283,7 @@ const DriverQueue = () => {
     // Check if driver was called
     if (mine && mine.called_at && mine.called_at !== lastCalledAtRef.current) {
       lastCalledAtRef.current = mine.called_at;
+      setCalledByName(mine.called_by_name ?? null);
       triggerCallAlert();
     }
 
@@ -485,29 +503,36 @@ const DriverQueue = () => {
 
             {queuePosition !== null && (
               <Card className={`border-primary/50 bg-primary/5 ${isCalled ? "animate-pulse border-destructive bg-destructive/10" : ""}`}>
-                <CardContent className="flex items-center justify-between py-4 px-4">
-                  <div className="flex items-center gap-3">
-                    <Hash className="h-6 w-6 text-primary flex-shrink-0" />
-                    <div>
-                      <p className="text-sm text-muted-foreground">Posição na Fila</p>
-                      <p className={`text-3xl font-bold ${isCalled ? "text-destructive" : "text-primary"}`}>
-                        {queuePosition}º
-                        {isCalled && (
-                          <span className="text-lg ml-2 text-destructive animate-pulse">— Sua Vez!</span>
-                        )}
-                      </p>
+                <CardContent className="flex flex-col gap-3 py-4 px-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Hash className="h-6 w-6 text-primary flex-shrink-0" />
+                      <div>
+                        <p className="text-sm text-muted-foreground">Posição na Fila</p>
+                        <p className={`text-3xl font-bold ${isCalled ? "text-destructive" : "text-primary"}`}>
+                          {queuePosition}º
+                          {isCalled && (
+                            <span className="text-lg ml-2 text-destructive animate-pulse">— Sua Vez!</span>
+                          )}
+                        </p>
+                      </div>
                     </div>
+                    {isCalled && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground gap-1"
+                        onClick={dismissCallAlert}
+                      >
+                        <CheckCircle className="h-4 w-4" />
+                        Ciente
+                      </Button>
+                    )}
                   </div>
-                  {isCalled && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground gap-1"
-                      onClick={dismissCallAlert}
-                    >
-                      <CheckCircle className="h-4 w-4" />
-                      Ciente
-                    </Button>
+                  {isCalled && calledByName && (
+                    <p className="text-sm text-muted-foreground">
+                      Conferente: <span className="font-semibold text-foreground">{calledByName}</span> vai carregar seu veículo.
+                    </p>
                   )}
                 </CardContent>
               </Card>

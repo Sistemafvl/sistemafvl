@@ -1,0 +1,1 @@
+ALTER TABLE public.queue_entries ADD COLUMN called_by_name text;

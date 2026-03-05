@@ -810,6 +810,7 @@ export type Database = {
       queue_entries: {
         Row: {
           called_at: string | null
+          called_by_name: string | null
           completed_at: string | null
           driver_id: string
           id: string
@@ -819,6 +820,7 @@ export type Database = {
         }
         Insert: {
           called_at?: string | null
+          called_by_name?: string | null
           completed_at?: string | null
           driver_id: string
           id?: string
@@ -828,6 +830,7 @@ export type Database = {
         }
         Update: {
           called_at?: string | null
+          called_by_name?: string | null
           completed_at?: string | null
           driver_id?: string
           id?: string

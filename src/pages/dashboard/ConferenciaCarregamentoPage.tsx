@@ -1776,7 +1776,8 @@ const ConferenciaCarregamentoPage = () => {
                             <button
                               onClick={async () => {
                                 setCallingDriverId(ride.queue_entry_id!);
-                                await supabase.from("queue_entries").update({ called_at: new Date().toISOString() } as any).eq("id", ride.queue_entry_id!);
+                                const callerName = conferenteSession?.name || managerSession?.name || "Conferente";
+                                await supabase.from("queue_entries").update({ called_at: new Date().toISOString(), called_by_name: callerName } as any).eq("id", ride.queue_entry_id!);
                                 const { toast } = await import("@/hooks/use-toast");
                                 toast({ title: "Motorista chamado!", description: "O motorista foi notificado." });
                                 setTimeout(() => setCallingDriverId(null), 2000);
