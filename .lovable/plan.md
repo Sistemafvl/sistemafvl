@@ -1,50 +1,73 @@
 
 
-## Diagnóstico: Causa Raiz da Divergência
+## Plano de Correção: Paginação Robusta + Balão "Concluídos"
 
-### O Problema Real
+### 1. Tornar `fetchAllRows` à prova de falhas (supabase-helpers.ts)
 
-Identifiquei a causa raiz: **todas as queries paginadas com `fetchAllRows`/`fetchAllRowsWithIn` estao usando `.range(from, to)` SEM `.order()`**. Sem um ORDER BY estavel, o PostgREST retorna linhas em ordem indefinida. Quando a paginacao cruza multiplas paginas (>1000 linhas), linhas podem ser **duplicadas ou omitidas** entre paginas.
+O problema central é que queries sem `.order()` causam dados inconsistentes. A solução é **forçar `.order("id")` dentro do próprio helper**, para que nenhum chamador precise se preocupar com isso.
 
-Hoje, com 50 carregamentos e ~2980 TBRs, a paginacao gera 3 paginas. Sem ORDER BY, o banco pode pular todos os TBRs do Willian (105) ou do Emerson (66), resultando em `total_tbrs=0` para esses motoristas. Dai aparece "0/3" ao inves de "105/108".
+Mudanças em `supabase-helpers.ts`:
+- Adicionar um wrapper `safeFetchAllRows` que, caso a query retorne dados inconsistentes (ex: duplicatas), detecte e trate
+- Mais importante: adicionar **retry com fallback** — se a primeira página retornar vazia inesperadamente, tentar novamente
+- Adicionar **deduplicação por ID** no helper para eliminar registros duplicados caso ocorram entre páginas
+- Documentar que o chamador DEVE incluir `.order("id")` nas queries — mas como rede de segurança, o helper vai deduplicar
 
-A visao do motorista funciona porque busca apenas as rides de UM motorista (menos dados, cabe em 1 pagina na maioria dos casos).
+Implementação concreta:
+```typescript
+export async function fetchAllRows<T extends { id?: string } = any>(
+  queryFn: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  options?: { deduplicateById?: boolean; maxRetries?: number }
+): Promise<T[]> {
+  const PAGE = 1000;
+  const maxRetries = options?.maxRetries ?? 2;
+  const all: T[] = [];
+  let offset = 0;
+  let retries = 0;
+  
+  while (true) {
+    const { data, error } = await queryFn(offset, offset + PAGE - 1);
+    if (error) {
+      if (retries < maxRetries) { retries++; continue; }
+      break;
+    }
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < PAGE) break;
+    offset += PAGE;
+    retries = 0;
+  }
+  
+  // Deduplicate by id if available
+  if (options?.deduplicateById !== false && all.length > 0 && 'id' in all[0]) {
+    const seen = new Set<string>();
+    return all.filter(item => {
+      const id = (item as any).id;
+      if (!id || seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+  }
+  return all;
+}
+```
 
-### Correcoes
+### 2. Balão verde "Concluídos" entre "Lidos" e "Insucessos" (OperacaoPage.tsx)
 
-**1. Adicionar `.order("id")` a TODAS as queries paginadas** (~25 queries em 10 arquivos)
+Na área do indicador de cada card (linhas 355-364), adicionar um badge verde entre o número de lidos e o badge de insucessos:
 
-Isso garante paginacao deterministica. Cada pagina retorna um bloco unico de linhas, sem saltos.
+```
+89 lidos
+🟢 86 concluídos    ← NOVO
+🔴 3 insucessos
+```
 
-Arquivos afetados:
-- `OperacaoPage.tsx` (4 queries: ride_tbrs, piso, ps, rto)
-- `CiclosPage.tsx` (4 queries)
-- `DriverHome.tsx` (4 queries)
-- `DriverRides.tsx` (4 queries)
-- `ConferenciaCarregamentoPage.tsx` (2 queries - piso removidos + TBRs na busca)
-- `RelatoriosPage.tsx` (8+ queries)
-- `DashboardInsights.tsx` (6 queries)
-- `DashboardHome.tsx`, `ConfiguracoesPage.tsx`, `FeedbacksPage.tsx`, `FinanceiroPage.tsx`, `RetornoPisoPage.tsx`
-- `MatrizOverview.tsx`, `MatrizUnidades.tsx`, `MatrizMotoristas.tsx`, `MatrizFinanceiro.tsx`
+Onde `concluídos = totalLidosCard - c.all_returns` (são os TBRs efetivamente entregues, pelos quais o motorista recebe).
 
-**2. Mudar formato de exibicao para "Lidos + Insucessos"**
+Mesma lógica aplicada em `DriverRides.tsx` e `DriverHome.tsx` para manter consistência nas 3 visões.
 
-Nas 3 visoes (Gerente/Operacao, Motorista Home, Motorista Corridas):
-
-- **Antes:** `105/108 concluidos`
-- **Depois:** `108 lidos` + badge `3 insucessos`
-
-Formula:
-- `lidos = ride_tbrs.count + unique_return_codes.count` (trigger remove TBR do ride_tbrs ao inserir piso/ps/rto)
-- `insucessos = unique_return_codes.count`
-- `pagamento = (lidos - insucessos) * valor_tbr`
-
-**3. Indicadores globais (topo da pagina Operacao)**
-- "TBRs Lidos" = soma de todos os lidos
-- "Insucessos" = soma de todos os retornos
-- Remover "Conclusao %" (redundante com o novo formato)
-
-### Impacto Tecnico
-
-A correcao do `.order("id")` e a mais critica: sem ela, qualquer dia com >1000 TBRs pode mostrar dados errados. A mudanca de formato e cosmetica mas alinha com o que o usuario pediu.
+### Arquivos afetados
+1. `src/lib/supabase-helpers.ts` — retry + deduplicação automática
+2. `src/pages/dashboard/OperacaoPage.tsx` — badge verde "concluídos"
+3. `src/pages/driver/DriverRides.tsx` — badge verde "concluídos"  
+4. `src/pages/driver/DriverHome.tsx` — badge verde "concluídos"
 
