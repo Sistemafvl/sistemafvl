@@ -1,73 +1,40 @@
 
 
-## Plano de Correção: Paginação Robusta + Balão "Concluídos"
+## Plano: Substituir "TBRs Final" por Contador Amarelo + Botão Insucesso em Lote
 
-### 1. Tornar `fetchAllRows` à prova de falhas (supabase-helpers.ts)
+### Contexto
 
-O problema central é que queries sem `.order()` causam dados inconsistentes. A solução é **forçar `.order("id")` dentro do próprio helper**, para que nenhum chamador precise se preocupar com isso.
+**Anexo 1:** O contador verde "TBRs Final" será removido. No lugar, um contador amarelo mostrando quantos TBRs foram marcados com highlight amarelo (bipados 3+ vezes). Confirmo: quando um TBR vai para insucessos (piso_entries), o trigger `auto_remove_tbr_from_ride` já remove automaticamente da `ride_tbrs`, descontabilizando do carregamento.
 
-Mudanças em `supabase-helpers.ts`:
-- Adicionar um wrapper `safeFetchAllRows` que, caso a query retorne dados inconsistentes (ex: duplicatas), detecte e trate
-- Mais importante: adicionar **retry com fallback** — se a primeira página retornar vazia inesperadamente, tentar novamente
-- Adicionar **deduplicação por ID** no helper para eliminar registros duplicados caso ocorram entre páginas
-- Documentar que o chamador DEVE incluir `.order("id")` nas queries — mas como rede de segurança, o helper vai deduplicar
+**Anexo 2:** Criar um botão ao lado do "TBRs Lidos" para lançar insucessos em lote. O conferente seleciona TBRs via checkbox, clica no botão, escolhe o motivo, e todos são enviados para piso_entries (insucessos).
 
-Implementação concreta:
-```typescript
-export async function fetchAllRows<T extends { id?: string } = any>(
-  queryFn: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
-  options?: { deduplicateById?: boolean; maxRetries?: number }
-): Promise<T[]> {
-  const PAGE = 1000;
-  const maxRetries = options?.maxRetries ?? 2;
-  const all: T[] = [];
-  let offset = 0;
-  let retries = 0;
-  
-  while (true) {
-    const { data, error } = await queryFn(offset, offset + PAGE - 1);
-    if (error) {
-      if (retries < maxRetries) { retries++; continue; }
-      break;
-    }
-    if (!data || data.length === 0) break;
-    all.push(...data);
-    if (data.length < PAGE) break;
-    offset += PAGE;
-    retries = 0;
-  }
-  
-  // Deduplicate by id if available
-  if (options?.deduplicateById !== false && all.length > 0 && 'id' in all[0]) {
-    const seen = new Set<string>();
-    return all.filter(item => {
-      const id = (item as any).id;
-      if (!id || seen.has(id)) return false;
-      seen.add(id);
-      return true;
-    });
-  }
-  return all;
-}
-```
+---
 
-### 2. Balão verde "Concluídos" entre "Lidos" e "Insucessos" (OperacaoPage.tsx)
+### 1. Remover "TBRs Final" e adicionar contador "Reincidências" (amarelo)
 
-Na área do indicador de cada card (linhas 355-364), adicionar um badge verde entre o número de lidos e o badge de insucessos:
+Em `ConferenciaCarregamentoPage.tsx`, nos dois locais onde aparece "TBRs Final" (card normal ~linha 2019 e focus mode ~linha 2194):
 
-```
-89 lidos
-🟢 86 concluídos    ← NOVO
-🔴 3 insucessos
-```
+- Remover o bloco condicional do "TBRs Final" verde
+- Adicionar um contador amarelo: `⚠ Reincidências (X)` — conta TBRs com `_yellowHighlight === true` no array `rideTbrs`/`focusedTbrs`
 
-Onde `concluídos = totalLidosCard - c.all_returns` (são os TBRs efetivamente entregues, pelos quais o motorista recebe).
+### 2. Botão "Insucesso Lote" na área de TBRs
 
-Mesma lógica aplicada em `DriverRides.tsx` e `DriverHome.tsx` para manter consistência nas 3 visões.
+Ao lado do indicador "TBRs Lidos", adicionar um botão pequeno (ícone `AlertTriangle`) que aparece quando há TBRs selecionados via checkbox.
+
+**Fluxo:**
+1. Conferente marca checkboxes nos TBRs desejados (já existem checkboxes!)
+2. Clica no botão "Insucesso Lote"
+3. Modal abre com lista de motivos (mesmos `DEFAULT_REASONS` + `piso_reasons` customizados da unidade)
+4. Escolhe o motivo → confirma
+5. Para cada TBR selecionado: insere em `piso_entries` com o motivo escolhido (o trigger `auto_remove_tbr_from_ride` remove automaticamente da `ride_tbrs`)
+6. Atualiza a UI
+
+**Detalhes técnicos:**
+- Novo state: `showBatchInsucessoModal`, `batchInsucessoRideId`, `batchInsucessoReason`, `batchInsucessoLoading`
+- Carregar motivos: buscar `piso_reasons` da unidade + `DEFAULT_REASONS`
+- No insert de cada TBR: `{ tbr_code, unit_id, reason, driver_name, route, ride_id, conferente_id }`
+- Após inserção, limpar seleção e re-fetch rides
 
 ### Arquivos afetados
-1. `src/lib/supabase-helpers.ts` — retry + deduplicação automática
-2. `src/pages/dashboard/OperacaoPage.tsx` — badge verde "concluídos"
-3. `src/pages/driver/DriverRides.tsx` — badge verde "concluídos"  
-4. `src/pages/driver/DriverHome.tsx` — badge verde "concluídos"
+1. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — remover "TBRs Final", adicionar contador amarelo, adicionar botão + modal de insucesso em lote
 
