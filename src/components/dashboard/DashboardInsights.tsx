@@ -101,9 +101,17 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const filteredPisoAll = pisoAll.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const allReturnTbrs = new Set<string>();
     [...filteredPisoAll, ...rtoAll, ...psAll].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
-    const { count: totalTbrs30 } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true });
-    if (totalTbrs30 && totalTbrs30 > 0) {
-      setReturnRate(Math.round((allReturnTbrs.size / totalTbrs30) * 1000) / 10);
+    
+    // Get total TBRs for this unit in the period (ride_tbrs via rides)
+    const rideIds = (rides30 ?? []).map(r => r.id);
+    let totalTbrsInPeriod = 0;
+    if (rideIds.length > 0) {
+      const { count } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rideIds);
+      totalTbrsInPeriod = count ?? 0;
+    }
+    const totalOriginal = totalTbrsInPeriod + allReturnTbrs.size;
+    if (totalOriginal > 0) {
+      setReturnRate(Math.round((allReturnTbrs.size / totalOriginal) * 1000) / 10);
     }
   }, [unitId, startDate, endDate, getSince, getUntil]);
 

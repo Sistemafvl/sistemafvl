@@ -84,17 +84,10 @@ const DriverRides = () => {
       const tbrCountMap = new Map<string, number>();
       tbrsData.forEach((t) => tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1));
 
-      // Build set of TBR codes per ride
-      const tbrCodesByRide = new Map<string, Set<string>>();
-      tbrsData.forEach((t) => {
-        if (!tbrCodesByRide.has(t.ride_id)) tbrCodesByRide.set(t.ride_id, new Set());
-        tbrCodesByRide.get(t.ride_id)!.add(t.code);
-      });
-
-      // Count unique tbr_codes per ride for returns (only if TBR still in ride)
+      // Count ALL unique return tbr_codes per ride (regardless of whether TBR still in ride)
       const returnTbrSets = new Map<string, Set<string>>();
       [...pisoData, ...psData, ...rtoData].forEach((r: any) => {
-        if (r.ride_id && r.tbr_code && tbrCodesByRide.get(r.ride_id)?.has(r.tbr_code)) {
+        if (r.ride_id && r.tbr_code) {
           if (!returnTbrSets.has(r.ride_id)) returnTbrSets.set(r.ride_id, new Set());
           returnTbrSets.get(r.ride_id)!.add(r.tbr_code);
         }
@@ -190,10 +183,11 @@ const DriverRides = () => {
             </p>
           ) : (
             rides.map((ride, idx) => {
-              const concluidos = Math.max(0, (ride.tbrCount ?? 0) - (ride.returnCount ?? 0));
+              const totalOriginal = (ride.tbrCount ?? 0) + (ride.returnCount ?? 0);
+              const concluidos = totalOriginal - (ride.returnCount ?? 0);
               const totalGanho = concluidos * (ride.tbrValue ?? 0);
-              const mediaTbr = (ride.tbrCount ?? 0) > 0 ? totalGanho / (ride.tbrCount ?? 1) : 0;
-              const performance = (ride.tbrCount ?? 0) > 0 ? (concluidos / (ride.tbrCount ?? 1)) * 100 : 0;
+              const mediaTbr = totalOriginal > 0 ? totalGanho / totalOriginal : 0;
+              const performance = totalOriginal > 0 ? (concluidos / totalOriginal) * 100 : 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);
 
               return (

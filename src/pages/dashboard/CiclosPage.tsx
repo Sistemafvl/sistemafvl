@@ -109,17 +109,10 @@ const CiclosPage = () => {
       totalTbrs = tbrsData.length;
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
 
-      // Build set of TBR codes per ride
-      const tbrCodesByRide: Record<string, Set<string>> = {};
-      tbrsData.forEach((t) => {
-        if (!tbrCodesByRide[t.ride_id]) tbrCodesByRide[t.ride_id] = new Set();
-        tbrCodesByRide[t.ride_id].add(t.code);
-      });
-
-      // Only count as return if TBR is still in ride_tbrs
+      // Count ALL unique return TBR codes per ride (regardless of whether still in ride_tbrs)
       const returnSet = new Set<string>();
       [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
-        if (e.ride_id && e.tbr_code && tbrCodesByRide[e.ride_id]?.has(e.tbr_code)) {
+        if (e.ride_id && e.tbr_code) {
           returnSet.add(`${e.ride_id}:${e.tbr_code}`);
         }
       });
@@ -300,8 +293,9 @@ const CiclosPage = () => {
     }
   };
 
-  const taxaConclusao = metrics && metrics.totalTbrs > 0
-    ? (((metrics.totalTbrs - metrics.totalReturns) / metrics.totalTbrs) * 100).toFixed(1)
+  const totalOriginal = metrics ? metrics.totalTbrs + metrics.totalReturns : 0;
+  const taxaConclusao = totalOriginal > 0
+    ? (((totalOriginal - metrics!.totalReturns) / totalOriginal) * 100).toFixed(1)
     : "0";
 
   return (
