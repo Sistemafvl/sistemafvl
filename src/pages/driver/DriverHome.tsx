@@ -24,6 +24,7 @@ const DriverHome = () => {
   const [rides, setRides] = useState<any[]>([]);
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
+  const [allPisoEntries, setAllPisoEntries] = useState<any[]>([]);
   const [psEntries, setPsEntries] = useState<any[]>([]);
   const [rtoEntries, setRtoEntries] = useState<any[]>([]);
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
@@ -92,6 +93,7 @@ const DriverHome = () => {
       );
 
       setTbrs(tbrData);
+      setAllPisoEntries(piRaw);
       const piData = piRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       setPisoEntries(piData);
       setPsEntries(psData);
@@ -196,14 +198,30 @@ const DriverHome = () => {
     const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
     totalGanho += totalBonus;
 
+    // Count ALL removed TBRs for totalLidos (including operational)
+    let totalAllRemoved = 0;
+    ridesByDay.forEach((rideIds) => {
+      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
+      const rideTbrCodes = new Set(dayTbrs.map((t: any) => String(t.code).toUpperCase()));
+      const removedCodes = new Set<string>();
+      [...allPisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) {
+          const upper = String(p.tbr_code).toUpperCase();
+          if (!rideTbrCodes.has(upper)) removedCodes.add(upper);
+        }
+      });
+      totalAllRemoved += removedCodes.size;
+    });
+
+    const totalLidos = totalTbrs + totalAllRemoved;
     const concluidos = Math.max(0, totalTbrs - totalReturns);
-    const taxaConclusao = totalTbrs > 0 ? (concluidos / totalTbrs) * 100 : 0;
+    const taxaConclusao = totalLidos > 0 ? (concluidos / totalLidos) * 100 : 0;
     const workedDays = ridesByDay.size;
     const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    return { totalRides, totalTbrs, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
-  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
+    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
+  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
 
   const chartData = useMemo(() => {
     const ridesByDay = new Map<string, number>();
@@ -277,7 +295,7 @@ const DriverHome = () => {
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
-    { label: "TBRs Lidos", value: metrics.totalTbrs, icon: Package, color: "text-blue-600" },
+    { label: "TBRs Lidos", value: metrics.totalLidos, icon: Package, color: "text-blue-600" },
     { label: "Total Ganho", value: `R$${metrics.totalGanho.toFixed(2)}`, icon: DollarSign, color: "text-emerald-600" },
     { label: "Entregues", value: metrics.concluidos, icon: Target, color: "text-emerald-600" },
     { label: "Insucessos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
