@@ -4,6 +4,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DriverSidebar from "./DriverSidebar";
+import DriverCallAlert from "./DriverCallAlert";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
@@ -33,6 +34,7 @@ const DriverLayout = () => {
           </div>
         </main>
       </div>
+      <DriverCallAlert />
     </SidebarProvider>
   );
 };
