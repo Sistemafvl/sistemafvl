@@ -64,16 +64,19 @@ const DriverHome = () => {
       const rideIds = r.map((x) => x.id);
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [piRaw, psData, rtoData, us, un, cv, bn] = await Promise.all([
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>((from, to) =>
-          supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
-        fetchAllRows<{ id: string; ride_id: string; tbr_code: string }>((from, to) =>
-          supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", rideIds).range(from, to)
+        fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          rideIds
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("units").select("id, name").in("id", unitIds),
@@ -83,8 +86,9 @@ const DriverHome = () => {
           .gte("period_start", startDate)
           .lte("period_start", endDate),
       ]);
-      const tbrData = await fetchAllRows<{ id: string; ride_id: string; code: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", rideIds).range(from, to)
+      const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).range(from, to),
+        rideIds
       );
 
       setTbrs(tbrData);
