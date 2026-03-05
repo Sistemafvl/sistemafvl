@@ -1,83 +1,57 @@
 
 
-## Diagnóstico — TBR permanece no carregamento após insucesso
+## Plano — 5 Correções e Melhorias
 
-### Causa raiz identificada
+### 1. Amarelo permanente para TBRs bipados 3x+
 
-O problema está em **dois pontos do código** e afeta **todas as unidades/domínios**:
+**Problema**: Apenas 2 TBRs ficaram amarelos. O highlight só é aplicado no momento exato do 3º bipe, mas se o TBR já estava no banco com `highlight: "yellow"` de uma sessão anterior, ou se foi bipado 3x em sequência rápida com race condition, o amarelo não persiste para todos os casos.
 
-**1. `saveTbr` em ConferenciaCarregamentoPage (linha 869-936):** Quando um TBR é re-escaneado em um novo carregamento (previousTbrs existem + pisoEntry encontrado), o sistema:
-- Fecha piso/rto entries do TBR ✓
-- Insere novo ride_tbr no novo carregamento ✓
-- **NÃO deleta o ride_tbr antigo do carregamento anterior** ✗
+**Causa**: Na renderização, `_yellowHighlight` é derivado de `t.highlight === "yellow"` no fetch. Porém, no fluxo de 3x bipe, o `count >= 2` depende de `occurrences` no estado local, que pode não refletir a realidade se o 2º bipe temporário já foi removido pelo timeout de 1s antes do 3º bipe chegar.
 
-Resultado: o TBR fica em DOIS carregamentos ao mesmo tempo.
+**Correção** em `ConferenciaCarregamentoPage.tsx`:
+- No branch `count === 1` (2º bipe), além de marcar `_duplicate`, salvar no banco `highlight: "yellow"` imediatamente — pois o 2º bipe já confirma duplicata.
+- Remover a dependência de um 3º bipe para o amarelo. Qualquer TBR bipado 2x ou mais fica amarelo permanente.
+- No branch `count >= 2` (3x+), manter a lógica de limpar duplicatas mas garantir que o realEntry já tem highlight.
 
-**2. Sem proteção no banco:** Não existe nenhum trigger que garanta a remoção automática do ride_tbr quando um registro de insucesso (piso/PS/RTO) é criado.
+### 2. Inconsistência no Espelho na primeira geração
 
-### Dados afetados confirmados
-- **SSP9**: 672 ride_tbrs "fantasma" (deviam ter sido removidos)
-- **UNIDADE 1**: 33 ride_tbrs "fantasma"
-- Principais razões: "Removido do carregamento" (409), "Troca de motorista" (113), motivos de insucesso regulares (150+)
+**Problema**: Na primeira vez que gera o Espelho com range de vários dias, os dados vêm errados. Na segunda vez, corrige.
 
-### Plano de correção em 3 camadas
+**Causa**: O `fetchPayrollData` faz muitas queries paralelas com `fetchAllRows` e `.in("ride_id", rideIds)`. Quando `rideIds` é muito grande (100+), o `.in()` pode atingir limites de URL/query. Na segunda chamada, cache do browser/conexão reaproveita e funciona.
 
-**Camada 1 — Trigger no banco (prevenção definitiva)**
+**Correção** em `RelatoriosPage.tsx`:
+- Particionar `rideIds` em chunks de 50 ao usar `.in()` em `fetchAllRows`, concatenando os resultados.
+- Criar helper `fetchInChunks` que divide arrays grandes para evitar truncamento silencioso.
+- Aplicar em todas as queries que usam `.in("ride_id", rideIds)` no `fetchPayrollData`.
 
-Criar um trigger `AFTER INSERT` em `piso_entries`, `ps_entries` e `rto_entries` que automaticamente deleta o ride_tbr correspondente. Isso garante que **qualquer** código que crie uma entrada de insucesso remove o TBR do carregamento, independente da página ou fluxo.
+### 3. Campo de busca/filtro na Fila de Motoristas
 
-```sql
-CREATE FUNCTION auto_remove_tbr_from_ride() ...
--- Quando piso/ps/rto é inserido com ride_id:
--- DELETE FROM ride_tbrs WHERE ride_id = NEW.ride_id AND UPPER(code) = UPPER(NEW.tbr_code)
-```
+**Correção** em `QueuePanel.tsx`:
+- Adicionar `Input` de busca abaixo do header da Sheet, antes da lista.
+- Filtrar `entries` por nome do motorista (case-insensitive, parcial).
+- Manter contagem total no badge, filtrar apenas visualmente.
 
-Isso cobre:
-- RetornoPisoPage (piso manual + PS via piso)
-- PSPage (PS direto)
-- RTOPage
-- Cancelamento de carregamento
-- Reset de carregamento
-- Qualquer futuro fluxo
+### 4. Toast animado quando motorista entra na fila
 
-**Camada 2 — Correção no frontend (re-escaneamento)**
+**Correção** em `QueuePanel.tsx`:
+- No `fetchQueue`, ao detectar novos motoristas (comparar IDs anteriores vs atuais), disparar toast customizado.
+- Renderizar toasts como mini-cards acima do botão "Fila" (position: fixed, bottom + offset).
+- Animação: slide-up + fade-in, empilhamento vertical, auto-dismiss em 5s.
+- Componente interno `QueueToast` com estado de pilha.
 
-Arquivo: `src/pages/dashboard/ConferenciaCarregamentoPage.tsx`
+### 5. Timeline do Rastreamento TBR incompleta
 
-No `saveTbr`, quando `previousTbrs` existem e `pisoEntries` confirmam insucesso (linha ~920): adicionar deleção dos ride_tbrs antigos ANTES de inserir o novo.
+**Problema**: Quando o `ride_tbr` é deletado pelo trigger de insucesso, a timeline perde o evento de carregamento.
 
-```typescript
-// Deletar ride_tbrs antigos do TBR em rides anteriores
-for (const prevTbr of previousTbrs) {
-  supabase.from("ride_tbrs").delete().eq("id", prevTbr.id);
-}
-```
-
-Isso é redundante com o trigger (camada 1), mas garante que a UI reflita imediatamente sem esperar realtime.
-
-**Camada 3 — Saneamento do histórico completo**
-
-Executar SQL de limpeza para deletar todos os ride_tbrs "fantasma" que já existem no banco — TBRs que estão em ride_tbrs mas têm um registro correspondente em piso_entries, ps_entries ou rto_entries para o mesmo ride_id.
-
-```sql
-DELETE FROM ride_tbrs WHERE id IN (
-  SELECT rt.id FROM ride_tbrs rt
-  WHERE EXISTS (SELECT 1 FROM piso_entries pe WHERE pe.ride_id = rt.ride_id AND UPPER(pe.tbr_code) = UPPER(rt.code))
-     OR EXISTS (SELECT 1 FROM ps_entries ps WHERE ps.ride_id = rt.ride_id AND UPPER(ps.tbr_code) = UPPER(rt.code))
-     OR EXISTS (SELECT 1 FROM rto_entries rto WHERE rto.ride_id = rt.ride_id AND UPPER(rto.tbr_code) = UPPER(rt.code))
-);
-```
-
-Isso corrige ~705 registros em todas as unidades de uma vez.
+**Correção** em `DashboardHome.tsx`:
+- Além de buscar `ride_tbrs`, reconstruir eventos de carregamento a partir de `piso_entries` e `ps_entries` que possuem `ride_id`.
+- Para cada `piso/ps/rto_entry` com `ride_id`, buscar a `driver_ride` correspondente e verificar se já existe um evento de `ride_tbrs` para aquele ride+code.
+- Se não existir (foi deletado pelo trigger), criar um evento sintético "Conferência Carregamento" com timestamp anterior ao do insucesso.
+- Buscar driver_rides por IDs coletados de piso/ps/rto entries para obter motorista, rota, etc.
 
 ### Arquivos afetados
-1. Migration SQL — trigger `auto_remove_tbr_from_ride` em 3 tabelas
-2. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — saveTbr: deletar ride_tbrs antigos ao re-escanear
-3. SQL de dados — limpeza do histórico
-
-### Resultado esperado
-- TBR que vai para insucesso sai **imediatamente** do carregamento do motorista
-- Funciona em **todas as unidades e domínios** sem exceção
-- Histórico corrigido retroativamente
-- Operação, Folha de Pagamento e visão do motorista passam a mostrar os números corretos
+1. `src/pages/dashboard/ConferenciaCarregamentoPage.tsx` — amarelo no 2º bipe
+2. `src/pages/dashboard/RelatoriosPage.tsx` — chunked queries
+3. `src/components/dashboard/QueuePanel.tsx` — busca + toast animado
+4. `src/pages/dashboard/DashboardHome.tsx` — timeline reconstituída
 
