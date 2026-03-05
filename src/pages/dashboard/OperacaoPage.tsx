@@ -99,19 +99,19 @@ const OperacaoPage = () => {
     // Fetch TBRs/retornos with pagination + chunking (bypass 1000 limit and large .in() lists)
     const [tbrsData, pisoRaw, psData, rtoData] = await Promise.all([
       fetchAllRowsWithIn<{ ride_id: string; code: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
-        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-        (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
-        (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
     ]);
@@ -196,8 +196,7 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalOriginal = totalTbrsAtual + totalAllReturns;
-  const taxaConclusao = totalOriginal > 0 ? ((totalTbrsAtual / totalOriginal) * 100).toFixed(1) : "0";
+  const totalLidos = totalTbrsAtual + totalAllReturns;
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -256,18 +255,18 @@ const OperacaoPage = () => {
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalOriginal}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs total <InfoButton text="Total original de pacotes (TBRs) incluindo insucessos removidos." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes (TBRs) escaneados na conferência, incluindo os que foram para insucesso." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
               {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalAllReturns}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Retornos piso <InfoButton text="Total de pacotes retornados (Piso, PS, RTO) incluindo removidos da lista." /></p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de pacotes com insucesso (Piso, PS, RTO)." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{taxaConclusao}%</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Conclusão <InfoButton text="Percentual de TBRs entregues com sucesso em relação ao total escaneado." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos - totalAllReturns}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Entregues <InfoButton text="TBRs entregues com sucesso (lidos menos insucessos)." /></p>
             </div>
           </div>
 
@@ -281,12 +280,12 @@ const OperacaoPage = () => {
           ) : (
             <div className="grid gap-3">
               {filteredCards.map((c) => {
-                  const totalOriginalCard = c.total_tbrs + c.all_returns;
-                  const concluidos = c.total_tbrs;
+                  const totalLidosCard = c.total_tbrs + c.all_returns;
+                  const entregues = c.total_tbrs;
                   const driverTbrValue = customValueMap.get(c.driver_id) ?? tbrValue;
-                  const totalGanho = concluidos * driverTbrValue;
-                  const mediaTbr = totalOriginalCard > 0 ? totalGanho / totalOriginalCard : 0;
-                  const performance = totalOriginalCard > 0 ? (concluidos / totalOriginalCard) * 100 : 0;
+                  const totalGanho = entregues * driverTbrValue;
+                  const mediaTbr = totalLidosCard > 0 ? totalGanho / totalLidosCard : 0;
+                  const performance = totalLidosCard > 0 ? (entregues / totalLidosCard) * 100 : 0;
                   const tempoMin = c.started_at && c.finished_at
                     ? differenceInMinutes(new Date(c.finished_at), new Date(c.started_at))
                     : null;
@@ -354,13 +353,12 @@ const OperacaoPage = () => {
                             setTbrModalLoading(false);
                           }}
                         >
-                          <p className={cn("text-xl font-bold", c.all_returns > 0 ? "text-destructive" : "text-green-600")}>
-                            {concluidos}/{totalOriginalCard}
+                          <p className={cn("text-xl font-bold", c.all_returns > 0 ? "text-amber-600" : "text-green-600")}>
+                            {totalLidosCard} <span className="text-xs font-normal">lidos</span>
                           </p>
-                          <p className="text-[10px] text-muted-foreground">concluídos</p>
                           {c.all_returns > 0 && (
                             <Badge variant="destructive" className="text-[10px] mt-1">
-                              {c.all_returns} retorno{c.all_returns > 1 ? "s" : ""}
+                              {c.all_returns} insucesso{c.all_returns > 1 ? "s" : ""}
                             </Badge>
                           )}
                         </div>

@@ -67,15 +67,15 @@ const DriverHome = () => {
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [piRaw, psData, rtoData, us, un, cv, bn] = await Promise.all([
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).range(from, to),
+          (ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
           rideIds
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
@@ -87,7 +87,7 @@ const DriverHome = () => {
           .lte("period_start", endDate),
       ]);
       const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).range(from, to),
+        (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       );
 
@@ -277,11 +277,11 @@ const DriverHome = () => {
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
-    { label: "TBRs Concluídos", value: metrics.concluidos, icon: Package, color: "text-blue-600" },
+    { label: "TBRs Lidos", value: metrics.totalTbrs, icon: Package, color: "text-blue-600" },
     { label: "Total Ganho", value: `R$${metrics.totalGanho.toFixed(2)}`, icon: DollarSign, color: "text-emerald-600" },
-    { label: "Conclusão", value: `${metrics.taxaConclusao.toFixed(1)}%`, icon: Target, color: "text-amber-600" },
-    { label: "Total Carregados", value: metrics.totalTbrs, icon: CalendarDays, color: "text-purple-600" },
-    { label: "Total Retornos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
+    { label: "Entregues", value: metrics.concluidos, icon: Target, color: "text-emerald-600" },
+    { label: "Insucessos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
+    { label: "Dias Trabalhados", value: metrics.workedDays, icon: CalendarDays, color: "text-purple-600" },
   ];
 
   return (

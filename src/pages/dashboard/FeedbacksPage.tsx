@@ -52,13 +52,13 @@ const FeedbacksPage = () => {
         // Fetch performance: rides count and tbrs count per driver
         const { fetchAllRows } = await import("@/lib/supabase-helpers");
         const rideData = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
-          supabase.from("driver_rides").select("id, driver_id").in("driver_id", driverIds).eq("unit_id", unitId).range(from, to)
+          supabase.from("driver_rides").select("id, driver_id").in("driver_id", driverIds).eq("unit_id", unitId).order("id").range(from, to)
         );
         const rideIdsForTbrs = rideData.map((r: any) => r.id);
         
         const tbrsData = rideIdsForTbrs.length > 0
           ? await fetchAllRows<{ ride_id: string }>((from, to) =>
-              supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIdsForTbrs).range(from, to)
+              supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIdsForTbrs).order("id").range(from, to)
             )
           : [];
 
