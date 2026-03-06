@@ -49,9 +49,9 @@ const capitalize = (v: string) =>
   v.replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase());
 
 const DOC_TYPES = [
-  { value: "cnh", label: "CNH", required: true },
-  { value: "crlv", label: "CRLV", required: true },
-  { value: "comprovante_endereco", label: "Comprovante de Endereço", required: true },
+  { value: "cnh", label: "CNH", required: false },
+  { value: "crlv", label: "CRLV", required: false },
+  { value: "comprovante_endereco", label: "Comprovante de Endereço", required: false },
   { value: "outros_1", label: "Outros 1", required: false },
   { value: "outros_2", label: "Outros 2", required: false },
   { value: "outros_3", label: "Outros 3", required: false },
@@ -108,19 +108,11 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     return () => { cancelled = true; };
   }, [rawCep]);
 
-  const requiredDocsMissing = DOC_TYPES
-    .filter(d => d.required)
-    .some(d => !docFiles[d.value]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawCpf = form.cpf.replace(/\D/g, "");
     if (rawCpf.length !== 11) return;
     if (!form.name || !form.car_plate || !form.car_model || !form.password) return;
-    if (requiredDocsMissing) {
-      toast({ title: "Documentos obrigatórios", description: "Envie CNH, CRLV e Comprovante de Endereço.", variant: "destructive" });
-      return;
-    }
 
     setLoading(true);
 
@@ -142,52 +134,43 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     }).select("id").single();
 
     if (error || !insertedDriver) {
+      toast({ title: "Erro ao cadastrar", description: "Não foi possível cadastrar o motorista. Tente novamente.", variant: "destructive" });
       setLoading(false);
       return;
     }
 
     const driverId = (insertedDriver as any).id;
 
-    // Upload documents
-    for (const [docType, file] of Object.entries(docFiles)) {
-      setUploadingDoc(docType);
-      const ext = file.name.split(".").pop()?.toLowerCase();
-      const path = `${driverId}/${docType}_${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("driver-documents").upload(path, file);
-      if (!uploadError) {
-        await supabase.from("driver_documents").insert({
-          driver_id: driverId,
-          doc_type: docType,
-          file_url: path,
-          file_name: file.name,
-        } as any);
-      }
-    }
-    setUploadingDoc(null);
-
-    // Verify all required docs were uploaded successfully
-    const { count } = await supabase
-      .from("driver_documents")
-      .select("id", { count: "exact", head: true })
-      .eq("driver_id", driverId)
-      .in("doc_type", ["cnh", "crlv", "comprovante_endereco"]);
-
-    if ((count ?? 0) < 3) {
-      await supabase.from("driver_documents").delete().eq("driver_id", driverId);
-      await supabase.from("drivers" as any).delete().eq("id", driverId);
-      toast({ title: "Erro no upload", description: "Falha ao enviar documentos obrigatórios. Tente novamente.", variant: "destructive" });
-      setLoading(false);
-      return;
-    }
-
+    // Success — close modal and reset immediately
+    toast({ title: "Motorista cadastrado!", description: "Cadastro realizado com sucesso." });
     setLoading(false);
     setForm({
       name: "", cpf: "", cep: "", address: "", house_number: "", neighborhood: "",
       city: "", state: "", car_plate: "", car_model: "", car_color: "",
       email: "", whatsapp: "", password: "",
     });
+    const pendingDocs = { ...docFiles };
     setDocFiles({});
     onOpenChange(false);
+
+    // Upload documents in the background (fire-and-forget)
+    if (Object.keys(pendingDocs).length > 0) {
+      (async () => {
+        for (const [docType, file] of Object.entries(pendingDocs)) {
+          const ext = file.name.split(".").pop()?.toLowerCase();
+          const path = `${driverId}/${docType}_${Date.now()}.${ext}`;
+          const { error: uploadError } = await supabase.storage.from("driver-documents").upload(path, file);
+          if (!uploadError) {
+            await supabase.from("driver_documents").insert({
+              driver_id: driverId,
+              doc_type: docType,
+              file_url: path,
+              file_name: file.name,
+            } as any);
+          }
+        }
+      })();
+    }
   };
 
   return (
@@ -359,7 +342,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
             </div>
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading || requiredDocsMissing}>
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Truck className="mr-2 h-4 w-4" />}
             Cadastrar
           </Button>

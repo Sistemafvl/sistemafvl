@@ -89,6 +89,9 @@ const MotoristasParceirosPage = () => {
   const [filterCity, setFilterCity] = useState("");
   const [filterNeighborhood, setFilterNeighborhood] = useState("");
   const [filterCep, setFilterCep] = useState("");
+  const [filterUnit, setFilterUnit] = useState("");
+  const [domainUnits, setDomainUnits] = useState<{ id: string; name: string }[]>([]);
+  const [unitDriverIds, setUnitDriverIds] = useState<Set<string> | null>(null);
   const [viewDriver, setViewDriver] = useState<DriverGlobal | null>(null);
   const [loading, setLoading] = useState(true);
   const [bankData, setBankData] = useState<BankData | null>(null);
@@ -97,8 +100,25 @@ const MotoristasParceirosPage = () => {
   const [page, setPage] = useState(1);
 
   useEffect(() => {
-    if (unitSession) loadDrivers();
+    if (unitSession) {
+      loadDrivers();
+      // Load domain units
+      supabase.from("units_public").select("id, name").eq("domain_id", unitSession.domain_id).eq("active", true).order("name")
+        .then(({ data }) => { if (data) setDomainUnits((data as any[]).filter(u => u.id && u.name)); });
+    }
   }, [unitSession]);
+
+  // When filterUnit changes, fetch driver IDs that operated in that unit
+  useEffect(() => {
+    if (!filterUnit) { setUnitDriverIds(null); return; }
+    (async () => {
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      const rides = await fetchAllRows<{ driver_id: string }>((from, to) =>
+        supabase.from("driver_rides").select("driver_id").eq("unit_id", filterUnit).order("id").range(from, to)
+      );
+      setUnitDriverIds(new Set(rides.map(r => r.driver_id)));
+    })();
+  }, [filterUnit]);
 
   useEffect(() => {
     if (!viewDriver) { setBankData(null); setDriverDocs([]); return; }
@@ -190,14 +210,15 @@ const MotoristasParceirosPage = () => {
 
   const filtered = allDrivers.filter(d => {
     if (search && !(
-      d.name.toLowerCase().includes(search.toLowerCase()) ||
-      d.cpf.includes(search.replace(/\D/g, "")) ||
-      d.car_plate.toLowerCase().includes(search.toLowerCase())
+      (d.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
+      (d.cpf ?? "").includes(search.replace(/\D/g, "")) ||
+      (d.car_plate ?? "").toLowerCase().includes(search.toLowerCase())
     )) return false;
     if (filterState && d.state !== filterState) return false;
     if (filterCity && d.city !== filterCity) return false;
     if (filterNeighborhood && d.neighborhood !== filterNeighborhood) return false;
     if (filterCep && !(d.cep ?? "").includes(filterCep.replace(/\D/g, ""))) return false;
+    if (unitDriverIds && !unitDriverIds.has(d.id)) return false;
     return true;
   });
 
@@ -205,7 +226,7 @@ const MotoristasParceirosPage = () => {
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep]);
+  useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep, filterUnit, unitDriverIds]);
 
   const hasBankData = bankData && (bankData.bank_name || bankData.pix_key);
 
@@ -260,7 +281,14 @@ const MotoristasParceirosPage = () => {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Filters */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <Select value={filterUnit} onValueChange={(v) => setFilterUnit(v === "all" ? "" : v)}>
+              <SelectTrigger><SelectValue placeholder="Unidade" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas Unidades</SelectItem>
+                {domainUnits.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
             <Select value={filterState} onValueChange={(v) => { setFilterState(v === "all" ? "" : v); setFilterCity(""); setFilterNeighborhood(""); }}>
               <SelectTrigger><SelectValue placeholder="Estado" /></SelectTrigger>
               <SelectContent>

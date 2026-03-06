@@ -1869,15 +1869,6 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                          {managerSession && (
-                            <button
-                              onClick={() => handleOpenDeleteModal(ride.id)}
-                              className="h-6 w-6 flex items-center justify-center rounded-full bg-destructive/10 hover:bg-destructive/20 text-destructive transition-colors"
-                              title="Excluir carregamento"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
                           {isCancelled && (
                             <Badge variant="destructive" className="text-[10px] px-2 py-0.5">Cancelado</Badge>
                           )}
@@ -2076,11 +2067,11 @@ const ConferenciaCarregamentoPage = () => {
                                 return reincidencias > 0 ? (
                                   <p className="text-xs font-bold italic flex items-center gap-1 text-yellow-600">
                                     <AlertTriangle className="h-3.5 w-3.5" />
-                                    Reincidências ({reincidencias})
-                                  </p>
-                                ) : null;
-                              })()}
-                              {isMyRide && getSelectedCount(ride.id) > 0 && (
+                    Pend. Coleta ({reincidencias})
+                  </p>
+                ) : null;
+              })()}
+              {isMyRide && getSelectedCount(ride.id) > 0 && (
                                 <Button
                                   size="sm"
                                   variant="outline"
@@ -2265,11 +2256,11 @@ const ConferenciaCarregamentoPage = () => {
                         return reincidencias > 0 ? (
                           <p className="text-xs font-bold italic flex items-center gap-1 text-yellow-600">
                             <AlertTriangle className="h-3.5 w-3.5" />
-                            Reincidências ({reincidencias})
-                          </p>
-                        ) : null;
-                      })()}
-                      {getSelectedCount(ride.id) > 0 && (
+                    Pend. Coleta ({reincidencias})
+                  </p>
+                ) : null;
+              })()}
+              {getSelectedCount(ride.id) > 0 && (
                         <Button
                           size="sm"
                           variant="outline"

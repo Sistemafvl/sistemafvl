@@ -9,7 +9,7 @@ import { Car, Package, DollarSign, Target, CalendarDays, RotateCcw, TrendingUp, 
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr } from "@/lib/utils";
+import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr, getBrazilNow, formatBRL } from "@/lib/utils";
 import SystemUpdates from "@/components/dashboard/SystemUpdates";
 
 const COLORS = ["#f59e0b", "#3b82f6", "#ef4444"];
@@ -278,13 +278,69 @@ const DriverHome = () => {
     return { bestDay, mediaGanhoDia, taxaRetorno, topUnit };
   }, [rides, metrics, units]);
 
+
+  // Compute quinzena (fortnight) earnings
+  const quinzenaValue = useMemo(() => {
+    const br = getBrazilNow();
+    const day = br.getDate();
+    const year = br.getFullYear();
+    const month = br.getMonth();
+    const qStart = day <= 15
+      ? new Date(year, month, 1)
+      : new Date(year, month, 16);
+    const qEnd = day <= 15
+      ? new Date(year, month, 15, 23, 59, 59)
+      : new Date(year, month + 1, 0, 23, 59, 59); // last day of month
+
+    const qStartStr = `${qStart.getFullYear()}-${String(qStart.getMonth() + 1).padStart(2, "0")}-${String(qStart.getDate()).padStart(2, "0")}`;
+    const qEndStr = `${qEnd.getFullYear()}-${String(qEnd.getMonth() + 1).padStart(2, "0")}-${String(qEnd.getDate()).padStart(2, "0")}`;
+
+    // Sum totalGanho for rides within this fortnight
+    const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
+    const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+
+    const ridesByDay = new Map<string, string[]>();
+    rides.forEach((r: any) => {
+      const rDay = toBrazilDateStr(r.completed_at);
+      if (rDay >= qStartStr && rDay <= qEndStr) {
+        if (!ridesByDay.has(rDay)) ridesByDay.set(rDay, []);
+        ridesByDay.get(rDay)!.push(r.id);
+      }
+    });
+
+    let total = 0;
+    ridesByDay.forEach((rideIds) => {
+      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
+      const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
+      const returnCodes = new Set<string>();
+      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
+      });
+      const dayTbrCount = uniqueCodes.size;
+      const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+      const firstRide = rides.find((r: any) => r.id === rideIds[0]);
+      const unitId = firstRide?.unit_id;
+      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+      total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+    });
+
+    // Add bonuses in the period
+    bonuses.forEach((b: any) => {
+      if (b.period_start >= qStartStr && b.period_start <= qEndStr) {
+        total += Number(b.amount);
+      }
+    });
+
+    return total;
+  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses]);
+
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
     { label: "TBRs Lidos", value: metrics.totalLidos, icon: Package, color: "text-blue-600" },
-    { label: "Total Ganho", value: `R$${metrics.totalGanho.toFixed(2)}`, icon: DollarSign, color: "text-emerald-600" },
+    { label: "Total Ganho", value: formatBRL(metrics.totalGanho), icon: DollarSign, color: "text-emerald-600" },
     { label: "Entregues", value: metrics.concluidos, icon: Target, color: "text-emerald-600" },
     { label: "Insucessos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
-    { label: "Dias Trabalhados", value: metrics.workedDays, icon: CalendarDays, color: "text-purple-600" },
+    { label: "Quinzena", value: formatBRL(quinzenaValue), icon: CalendarDays, color: "text-purple-600" },
   ];
 
   return (
@@ -365,7 +421,7 @@ const DriverHome = () => {
                  <div className="min-w-0">
                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">DNRs Abertos</p>
                    <p className="text-lg font-bold text-amber-500">{dnrOpen.count}</p>
-                   <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
+                   <p className="text-xs text-muted-foreground">{formatBRL(dnrOpen.value)}</p>
                  </div>
                </CardContent>
              </Card>
@@ -394,7 +450,7 @@ const DriverHome = () => {
                 </div>
                 <div className="p-2 rounded-md bg-muted/50">
                   <p className="text-muted-foreground">Média ganho/dia</p>
-                  <p className="font-bold text-emerald-600">R${insights.mediaGanhoDia.toFixed(2)}</p>
+                  <p className="font-bold text-emerald-600">{formatBRL(insights.mediaGanhoDia)}</p>
                 </div>
                 <div className="p-2 rounded-md bg-muted/50">
                   <p className="text-muted-foreground">Taxa retorno</p>

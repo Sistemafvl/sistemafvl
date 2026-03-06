@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { DollarSign, TrendingUp, FileWarning, Package, Wallet } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { formatBRL } from "@/lib/utils";
 
 const MatrizFinanceiro = () => {
   const { unitSession } = useAuthStore();
@@ -127,8 +128,8 @@ const MatrizFinanceiro = () => {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <KpiCard icon={Package} label="Total Carregamentos" value={totals.rides} loading={loading} />
         <KpiCard icon={TrendingUp} label="Total TBRs" value={totals.tbrs} loading={loading} />
-        <KpiCard icon={Wallet} label="Total Pago (TBRs)" value={`R$ ${totals.totalPaid.toFixed(2)}`} loading={loading} color="text-emerald-600" />
-        <KpiCard icon={FileWarning} label="DNR Total" value={`R$ ${totals.dnr.toFixed(2)}`} loading={loading} color="text-destructive" />
+        <KpiCard icon={Wallet} label="Total Pago (TBRs)" value={formatBRL(totals.totalPaid)} loading={loading} color="text-emerald-600" />
+        <KpiCard icon={FileWarning} label="DNR Total" value={formatBRL(totals.dnr)} loading={loading} color="text-destructive" />
       </div>
 
       {/* Table */}
@@ -155,9 +156,9 @@ const MatrizFinanceiro = () => {
                     <TableCell className="font-semibold italic">{u.name}</TableCell>
                     <TableCell className="text-center">{u.rides}</TableCell>
                     <TableCell className="text-center">{u.tbrs}</TableCell>
-                    <TableCell className="text-center">R$ {u.tbrValue.toFixed(2)}</TableCell>
-                    <TableCell className="text-right font-semibold text-emerald-600">R$ {u.totalPaid.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-destructive">R$ {u.dnrTotal.toFixed(2)}</TableCell>
+                    <TableCell className="text-center">{formatBRL(u.tbrValue)}</TableCell>
+                    <TableCell className="text-right font-semibold text-emerald-600">{formatBRL(u.totalPaid)}</TableCell>
+                    <TableCell className="text-right text-destructive">{formatBRL(u.dnrTotal)}</TableCell>
                   </TableRow>
                 ))}
                 {unitFinancials.length > 1 && (
@@ -166,8 +167,8 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{totals.rides}</TableCell>
                     <TableCell className="text-center">{totals.tbrs}</TableCell>
                     <TableCell />
-                    <TableCell className="text-right text-emerald-600">R$ {totals.totalPaid.toFixed(2)}</TableCell>
-                    <TableCell className="text-right text-destructive">R$ {totals.dnr.toFixed(2)}</TableCell>
+                    <TableCell className="text-right text-emerald-600">{formatBRL(totals.totalPaid)}</TableCell>
+                    <TableCell className="text-right text-destructive">{formatBRL(totals.dnr)}</TableCell>
                   </TableRow>
                 )}
               </TableBody>

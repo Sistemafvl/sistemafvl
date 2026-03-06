@@ -73,4 +73,4 @@ export const formatDateBR = (dateStr: string) =>
   format(new Date(dateStr + "T12:00:00"), "dd/MM", { locale: undefined });
 
 export const formatCurrency = (val: number) =>
-  `R$ ${val.toFixed(2).replace(".", ",")}`;
+  val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });

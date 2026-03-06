@@ -29,6 +29,7 @@ const UnitLoginForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [domainOpen, setDomainOpen] = useState(false);
   const [unitOpen, setUnitOpen] = useState(false);
+  const [unitSearchValue, setUnitSearchValue] = useState("");
   const setUnitSession = useAuthStore((s) => s.setUnitSession);
 
   const rawDigits = document.replace(/\D/g, "");
@@ -116,17 +117,23 @@ const UnitLoginForm = () => {
           </PopoverTrigger>
           <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
             <Command>
-              <CommandInput placeholder="Buscar unidade..." />
+              <CommandInput placeholder="Buscar unidade..." value={unitSearchValue} onValueChange={setUnitSearchValue} />
               <CommandList>
-                <CommandEmpty>Nenhuma unidade encontrada.</CommandEmpty>
-                <CommandGroup>
-                  {units.map((u) => (
-                    <CommandItem key={u.id} value={u.name} onSelect={() => { setSelectedUnit(u.id); setUnitOpen(false); }}>
-                      <Check className={cn("mr-2 h-4 w-4", selectedUnit === u.id ? "opacity-100" : "opacity-0")} />
-                      {u.name}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
+                {unitSearchValue.length < 3 ? (
+                  <p className="py-3 text-center text-xs text-muted-foreground">Digite pelo menos 3 caracteres...</p>
+                ) : (
+                  <>
+                    <CommandEmpty>Nenhuma unidade encontrada.</CommandEmpty>
+                    <CommandGroup>
+                      {units.map((u) => (
+                        <CommandItem key={u.id} value={u.name} onSelect={() => { setSelectedUnit(u.id); setUnitOpen(false); setUnitSearchValue(""); }}>
+                          <Check className={cn("mr-2 h-4 w-4", selectedUnit === u.id ? "opacity-100" : "opacity-0")} />
+                          {u.name}
+                        </CommandItem>
+                      ))}
+                    </CommandGroup>
+                  </>
+                )}
               </CommandList>
             </Command>
           </PopoverContent>
