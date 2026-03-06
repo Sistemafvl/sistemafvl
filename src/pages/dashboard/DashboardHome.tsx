@@ -314,7 +314,7 @@ const DashboardHome = () => {
           timestamp: dnr.created_at,
           conferente: dnr.conferente_name ?? null,
           action: dnr.status === "open" ? "Status: DNR Aberto" : dnr.status === "analyzing" ? "Status: DNR Em Análise" : "Status: DNR Fechado",
-          detail: `R$${Number(dnr.dnr_value).toFixed(2)}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
+          detail: `${Number(dnr.dnr_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
           type: "dnr",
         });
       });

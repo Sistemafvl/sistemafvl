@@ -102,7 +102,7 @@ const MatrizOcorrencias = () => {
             <TableCell className="text-xs">{e.driver_name || "—"}</TableCell>
             <TableCell className="text-xs font-mono">{e.tbr_code}</TableCell>
             <TableCell className="text-xs max-w-[200px] truncate">
-              {type === "dnr" ? `R$ ${Number(e.dnr_value || 0).toFixed(2)}` : (e.description || e.reason || "—")}
+              {type === "dnr" ? Number(e.dnr_value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : (e.description || e.reason || "—")}
             </TableCell>
             <TableCell className="text-xs">{e.route || "—"}</TableCell>
             <TableCell className="text-center">
@@ -149,7 +149,7 @@ const MatrizOcorrencias = () => {
         <KpiCard icon={ShieldCheck} label="PS" value={psEntries.length} open={psEntries.filter(p => p.status === "open").length} loading={loading} color="text-amber-500" />
         <KpiCard icon={AlertTriangle} label="RTO" value={rtoEntries.length} open={rtoEntries.filter(r => r.status === "open").length} loading={loading} color="text-orange-500" />
         <KpiCard icon={RotateCcw} label="Retorno Piso" value={pisoEntries.length} open={pisoEntries.filter(p => p.status === "open").length} loading={loading} color="text-violet-500" />
-        <KpiCard icon={FileWarning} label="DNR" value={`${dnrEntries.length} (R$ ${dnrEntries.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`} open={dnrEntries.filter(d => d.status === "open").length} loading={loading} color="text-destructive" />
+        <KpiCard icon={FileWarning} label="DNR" value={`${dnrEntries.length} (${dnrEntries.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`} open={dnrEntries.filter(d => d.status === "open").length} loading={loading} color="text-destructive" />
       </div>
 
       {/* Chart */}

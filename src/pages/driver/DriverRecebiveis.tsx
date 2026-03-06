@@ -20,7 +20,7 @@ interface PayrollEntry {
   invoiceFileName?: string;
 }
 
-const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace(".", ",")}`;
+const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const DriverRecebiveis = () => {
   const { unitSession } = useAuthStore();

@@ -142,10 +142,10 @@ const MatrizOverview = () => {
       { label: "PS Abertos / Fechados", value: `${psOpen} / ${psClosed}`, icon: ShieldCheck, color: "text-amber-500" },
       { label: "RTO Abertos / Fechados", value: `${rtoOpen} / ${rtoClosed}`, icon: AlertTriangle, color: "text-orange-500" },
       { label: "Retorno Piso Ab. / Fech.", value: `${pisoOpen} / ${pisoClosed}`, icon: RotateCcw, color: "text-violet-500" },
-      { label: "DNR Abertos", value: `${dnrOpen.length} (R$ ${dnrOpen.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-red-500" },
-      { label: "DNR Em Análise", value: `${dnrAnalysis.length} (R$ ${dnrAnalysis.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toFixed(2)})`, icon: FileWarning, color: "text-yellow-500" },
+      { label: "DNR Abertos", value: `${dnrOpen.length} (${dnrOpen.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`, icon: FileWarning, color: "text-red-500" },
+      { label: "DNR Em Análise", value: `${dnrAnalysis.length} (${dnrAnalysis.reduce((a, d) => a + Number(d.dnr_value || 0), 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })})`, icon: FileWarning, color: "text-yellow-500" },
       { label: "DNR Finalizados", value: dnrClosed.length, icon: DollarSign, color: "text-green-500" },
-      { label: "Total Pago (TBRs)", value: `R$ ${totalPaid.toFixed(2)}`, icon: Wallet, color: "text-emerald-600" },
+      { label: "Total Pago (TBRs)", value: totalPaid.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }), icon: Wallet, color: "text-emerald-600" },
       { label: "Unidades Ativas", value: activeUnits, icon: Building, color: "text-primary" },
       { label: "TBRs / Carregamento", value: rides.length ? (tbrs.length / rides.length).toFixed(1) : "0", icon: TrendingUp, color: "text-emerald-500" },
     ];

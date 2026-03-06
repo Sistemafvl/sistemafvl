@@ -24,7 +24,7 @@ interface PayrollReport {
   created_at: string;
 }
 
-const formatCurrency = (val: number) => `R$ ${val.toFixed(2).replace(".", ",")}`;
+const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
 const FinanceiroPage = () => {
   const { unitSession } = useAuthStore();

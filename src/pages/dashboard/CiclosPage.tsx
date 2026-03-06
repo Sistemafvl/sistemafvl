@@ -65,6 +65,8 @@ const CiclosPage = () => {
   const [record, setRecord] = useState<CycleRecord>(EMPTY_RECORD);
   const [metrics, setMetrics] = useState<DayMetrics | null>(null);
   const [prevMetrics, setPrevMetrics] = useState<DayMetrics | null>(null);
+  const [prevDayInsucessos, setPrevDayInsucessos] = useState(0);
+  const [vehicleCounts, setVehicleCounts] = useState<{ cars: number; motos: number; total: number }>({ cars: 0, motos: 0, total: 0 });
   const [reportOpen, setReportOpen] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const reportRef = useRef<HTMLDivElement>(null);
@@ -200,6 +202,41 @@ const CiclosPage = () => {
       computeMetrics(dateStr, unitSession.id),
       computeMetrics(prevDateStr, unitSession.id),
     ]);
+
+    // Fetch previous day insucessos (piso_entries with operational reasons)
+    const { start: prevStart, end: prevEnd } = getBrazilDayRange(prevDateStr);
+    const { data: prevPiso } = await supabase
+      .from("piso_entries")
+      .select("id, reason")
+      .eq("unit_id", unitSession.id)
+      .gte("created_at", prevStart)
+      .lte("created_at", prevEnd);
+    const opReasons = OPERATIONAL_PISO_REASONS;
+    const insucessoCount = (prevPiso ?? []).filter((p: any) => opReasons.includes(p.reason ?? "")).length;
+    setPrevDayInsucessos(insucessoCount);
+
+    // Fetch vehicle counts for today's drivers
+    const { start: todayStart, end: todayEnd } = getBrazilDayRange(dateStr);
+    const { data: todayRides } = await supabase
+      .from("driver_rides")
+      .select("driver_id")
+      .eq("unit_id", unitSession.id)
+      .gte("completed_at", todayStart)
+      .lte("completed_at", todayEnd);
+    const uniqueDriverIds = [...new Set((todayRides ?? []).map((r: any) => r.driver_id))];
+    if (uniqueDriverIds.length > 0) {
+      const { data: drivers } = await supabase.from("drivers_public").select("id, car_model").in("id", uniqueDriverIds);
+      const motoKeywords = ["moto", "honda", "yamaha", "suzuki", "cg", "biz", "pop", "fan", "titan", "bros", "xre", "cb", "factor", "nmax", "pcx", "fazer"];
+      let cars = 0, motos = 0;
+      (drivers ?? []).forEach((d: any) => {
+        const model = (d.car_model ?? "").toLowerCase();
+        if (motoKeywords.some(k => model.includes(k))) motos++;
+        else cars++;
+      });
+      setVehicleCounts({ cars, motos, total: uniqueDriverIds.length });
+    } else {
+      setVehicleCounts({ cars: 0, motos: 0, total: 0 });
+    }
 
     setMetrics(todayM);
     setPrevMetrics(prevM);
@@ -348,16 +385,16 @@ const CiclosPage = () => {
                 <h3 className="font-bold italic text-sm">Informações Complementares</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Qtd Pacotes</Label>
+                    <Label className="text-xs font-semibold">Qtd Pacotes (TBRs do dia)</Label>
                     <Input
                       type="number"
-                      value={record.qtd_pacotes || ""}
-                      onChange={(e) => setRecord({ ...record, qtd_pacotes: parseInt(e.target.value) || 0 })}
-                      placeholder="0"
+                      value={metrics?.totalTbrs ?? 0}
+                      readOnly
+                      className="bg-muted"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Qtd Pacotes Informado</Label>
+                    <Label className="text-xs font-semibold">VRID</Label>
                     <Input
                       type="number"
                       value={record.qtd_pacotes_informado || ""}
@@ -496,13 +533,15 @@ const CiclosPage = () => {
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <RotateCcw className="h-3 w-3 mx-auto text-destructive" />
-                    <p className="text-base font-bold">{metrics.totalReturns}</p>
-                    <p className="text-[9px] text-muted-foreground">Total Retornos</p>
+                    <p className="text-base font-bold">{prevDayInsucessos}</p>
+                    <p className="text-[9px] text-muted-foreground">Insucessos (Dia Anterior)</p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
-                    <Timer className="h-3 w-3 mx-auto text-primary" />
-                    <p className="text-base font-bold">{formatMin(metrics.avgPerTbr)}</p>
-                    <p className="text-[9px] text-muted-foreground">Tempo Médio/TBR</p>
+                    <Truck className="h-3 w-3 mx-auto text-primary" />
+                    <p className="text-base font-bold">{vehicleCounts.total}</p>
+                    <p className="text-[9px] text-muted-foreground leading-tight">
+                      {vehicleCounts.cars} Carros (R$ 3,35) • {vehicleCounts.motos} Motos (R$ 2,20)
+                    </p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     {prevMetrics && metrics.totalRides >= prevMetrics.totalRides ? (
@@ -526,11 +565,11 @@ const CiclosPage = () => {
                   <h4 className="font-bold italic text-xs">Informações Complementares</h4>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <div>
-                      <p className="text-xs text-muted-foreground">Qtd Pacotes</p>
-                      <p className="font-bold">{record.qtd_pacotes || "—"}</p>
+                      <p className="text-xs text-muted-foreground">Qtd Pacotes (TBRs)</p>
+                      <p className="font-bold">{metrics?.totalTbrs ?? "—"}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-muted-foreground">Qtd Informado</p>
+                      <p className="text-xs text-muted-foreground">VRID</p>
                       <p className="font-bold">{record.qtd_pacotes_informado || "—"}</p>
                     </div>
                     <div>

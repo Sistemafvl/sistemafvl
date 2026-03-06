@@ -38,6 +38,11 @@ export function isValidTbrCode(code: string): boolean {
   return rest.length > 0 && /^\d+$/.test(rest);
 }
 
+/** Format a number as BRL currency (R$ 1.234,56) */
+export function formatBRL(val: number): string {
+  return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 /** Format an ISO date to dd/MM/yyyy in Brazil timezone */
 export function formatDateBR(iso: string): string {
   const d = new Date(iso);

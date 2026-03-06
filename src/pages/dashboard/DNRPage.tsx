@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { FileWarning, Search, Loader2, CheckCircle, Clock, AlertTriangle, DollarSign } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
+import { formatBRL } from "@/lib/utils";
 
 interface DnrEntry {
   id: string;
@@ -220,7 +221,7 @@ const DNRPage = () => {
         <Card>
           <CardContent className="p-4 text-center space-y-1">
             <DollarSign className="h-4 w-4 mx-auto text-primary" />
-            <p className="text-2xl font-bold">R${totalValue.toFixed(2)}</p>
+            <p className="text-2xl font-bold">{formatBRL(totalValue)}</p>
             <p className="text-[10px] text-muted-foreground">Valor Total</p>
           </CardContent>
         </Card>
@@ -240,7 +241,7 @@ const DNRPage = () => {
         <Card>
           <CardContent className="p-4 text-center space-y-1">
             <DollarSign className="h-4 w-4 mx-auto text-destructive" />
-            <p className="text-2xl font-bold text-destructive">R${discountedValue.toFixed(2)}</p>
+            <p className="text-2xl font-bold text-destructive">{formatBRL(discountedValue)}</p>
             <p className="text-[10px] text-muted-foreground">Valor c/ Desconto</p>
           </CardContent>
         </Card>
@@ -342,7 +343,7 @@ const DNRPage = () => {
                       <span className="font-mono font-bold text-sm">{entry.tbr_code}</span>
                       {statusBadge(entry)}
                     </div>
-                    <span className="text-lg font-bold text-destructive">R${Number(entry.dnr_value).toFixed(2)}</span>
+                    <span className="text-lg font-bold text-destructive">{formatBRL(Number(entry.dnr_value))}</span>
                   </div>
                   <div className="grid grid-cols-2 gap-1 text-xs text-muted-foreground">
                     <div><strong>Motorista:</strong> {entry.driver_name || "—"}</div>
