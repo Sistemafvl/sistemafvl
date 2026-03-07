@@ -970,77 +970,42 @@ const ConferenciaCarregamentoPage = () => {
       }
 
       if (totalScans === 1 && count === 0) {
-        const [prevTbrsRes, prevPisoRes] = await Promise.all([
-          supabase
-            .from("ride_tbrs")
-            .select("id, ride_id")
-            .ilike("code", code)
-            .neq("ride_id", rideId),
-          supabase
-            .from("piso_entries")
-            .select("id, status, ride_id")
-            .ilike("tbr_code", code),
-        ]);
-        const previousTbrs = prevTbrsRes.data ?? [];
-        const pisoEntries = prevPisoRes.data ?? [];
+        // Check if TBR already exists in ANY other ride (definitive block)
+        const { data: previousTbrs } = await supabase
+          .from("ride_tbrs")
+          .select("id, ride_id")
+          .ilike("code", code)
+          .neq("ride_id", rideId)
+          .limit(1);
 
-        let tripNumber = 1;
-
-        // Count distinct previous ride_ids from both ride_tbrs and piso_entries
-        const previousRideIds = new Set<string>();
-        previousTbrs.forEach(t => previousRideIds.add(t.ride_id));
-        pisoEntries.forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
-        // Remove current ride from the set
-        previousRideIds.delete(rideId);
-
-        if (previousTbrs.length > 0 || pisoEntries.length > 0) {
-          if (previousTbrs.length > 0) {
-            // Check if any of those TBRs belong to ACTIVE loads
-            const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
-            const { data: prevRides } = await supabase
-              .from("driver_rides")
-              .select("id, loading_status")
-              .in("id", prevRideIds)
-              .in("loading_status", ["pending", "loading"]);
-
-            if (prevRides && prevRides.length > 0) {
-              playErrorBeep();
-              const { toast } = await import("@/hooks/use-toast");
-              toast({
-                title: "TBR em carregamento ativo",
-                description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
-                variant: "destructive",
-              });
-              setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-              setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-              return;
-            }
-          }
-
-          // If no piso entries exist and there are previous ride_tbrs, block — TBR is in transit
-          if (pisoEntries.length === 0 && previousTbrs.length > 0) {
-            playErrorBeep();
-            const { toast } = await import("@/hooks/use-toast");
-            toast({
-              title: "TBR em viagem",
-              description: "Este TBR encontra-se em viagem. Registre-o no Retorno Piso antes de escaneá-lo novamente no carregamento.",
-              variant: "destructive",
-            });
-            setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-            setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-            return;
-          }
-
-          // trip_number = distinct previous rides + 1 (current)
-          tripNumber = previousRideIds.size + 1;
-
-          playReincidenceBeep();
+        if (previousTbrs && previousTbrs.length > 0) {
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
+          toast({
+            title: "TBR já vinculado",
+            description: "Este TBR já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) antes de ser bipado novamente.",
+            variant: "destructive",
+          });
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
+          return;
         }
 
-        // Delete old ride_tbrs from previous rides (prevents ghost entries)
-        if (previousTbrs && previousTbrs.length > 0) {
-          const prevIds = previousTbrs.map(t => t.id);
-          void supabase.from("ride_tbrs").delete().in("id", prevIds);
+        // Check piso_entries for trip_number calculation
+        const { data: pisoEntries } = await supabase
+          .from("piso_entries")
+          .select("id, ride_id")
+          .ilike("tbr_code", code);
+
+        let tripNumber = 1;
+        const previousRideIds = new Set<string>();
+        (pisoEntries ?? []).forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
+        previousRideIds.delete(rideId);
+
+        if (previousRideIds.size > 0) {
+          tripNumber = previousRideIds.size + 1;
+          playReincidenceBeep();
         }
 
         // Close piso and rto entries in background (don't block optimistic UI)
@@ -1102,7 +1067,7 @@ const ConferenciaCarregamentoPage = () => {
           playErrorBeep();
           const { toast } = await import("@/hooks/use-toast");
           if (insertError.message?.includes('TBR already exists in another active loading')) {
-            toast({ title: "TBR duplicado", description: `${code} já está em outro carregamento ativo. Precisa passar pelo insucesso primeiro.`, variant: "destructive" });
+            toast({ title: "TBR já vinculado", description: `${code} já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) primeiro.`, variant: "destructive" });
           } else {
             toast({ title: "Erro ao salvar TBR", description: insertError.message, variant: "destructive" });
           }
