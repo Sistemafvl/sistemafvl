@@ -154,14 +154,31 @@ const DriverRides = () => {
         Corridas
       </h1>
 
-      {/* Login verification alert */}
+      {/* Conferência obrigatória alert */}
       <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex gap-3 items-start">
         <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-        <div className="text-sm space-y-1">
-          <p className="font-semibold text-amber-700 dark:text-amber-400">Atenção: Verifique seu login antes de cada operação</p>
+        <div className="text-sm space-y-2">
+          <p className="font-semibold text-amber-700 dark:text-amber-400">Atenção: Conferência obrigatória antes da saída</p>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            Certifique-se de que o login utilizado no coletor da Amazon corresponde exatamente ao que consta na sua programação no sistema FVL. 
-            Divergências entre os logins podem causar inconsistências operacionais, administrativas e impactar diretamente no cálculo do seu pagamento.
+            Antes de iniciar sua rota, é responsabilidade do motorista parceiro conferir atentamente as seguintes informações no coletor da Amazon:
+          </p>
+          <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5">
+            <li>Login utilizado no coletor</li>
+            <li>Quantidade total de pacotes carregados</li>
+            <li>Dados da rota atribuída</li>
+          </ul>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Essas informações devem corresponder exatamente ao que está registrado no sistema FVL.
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Caso exista qualquer divergência, o motorista deve informar imediatamente o conferente responsável pelo carregamento, <strong>antes de sair para a rota</strong>.
+          </p>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Após a saída da base, eventuais inconsistências identificadas posteriormente terão processo de verificação mais demorado, podendo impactar análises operacionais e administrativas.
+          </p>
+          <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-1">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Ao iniciar a rota, o motorista declara que conferiu e concorda com as informações apresentadas.
           </p>
         </div>
       </div>
