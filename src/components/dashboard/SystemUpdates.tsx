@@ -34,7 +34,7 @@ const SystemUpdates = () => {
       .from("system_updates")
       .select("id, type, module, description, published_at")
       .order("published_at", { ascending: false })
-      .limit(20);
+      .limit(50);
     setUpdates(data ?? []);
     setLoading(false);
   };

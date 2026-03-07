@@ -125,7 +125,7 @@ const ReversaPage = () => {
       .select("*")
       .eq("unit_id", unitSession.id)
       .order("created_at", { ascending: false })
-      .limit(50) as any);
+      .limit(500) as any);
     setBatches((data as ReversaBatch[]) ?? []);
     setLoadingBatches(false);
   }, [unitSession?.id]);
