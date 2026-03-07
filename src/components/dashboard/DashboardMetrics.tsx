@@ -61,21 +61,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     todayTbrCount = Number(rpcCount ?? 0);
 
-    // Count unique TBRs from PS and RTO that are NOT already in ride_tbrs
-    const [psExtra, rtoExtra] = await Promise.all([
-      supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-      supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-    ]);
-
-    const { data: tbrCodes } = await supabase.from("ride_tbrs").select("code")
-      .gte("scanned_at", todayStart).lte("scanned_at", effectiveTodayEnd);
-    const tbrCodesSet = new Set<string>();
-    (tbrCodes ?? []).forEach(t => tbrCodesSet.add(t.code));
-
-    const extraCodes = new Set<string>();
-    (psExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
-    (rtoExtra.data ?? []).forEach(e => { if (!tbrCodesSet.has(e.tbr_code)) extraCodes.add(e.tbr_code); });
-    todayTbrCount += extraCodes.size;
 
     setMetrics({
       todayRides: ridesRes.count ?? 0,
@@ -139,18 +124,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
     });
 
-    const [psChart, rtoChart] = await Promise.all([
-      supabase.from("ps_entries").select("tbr_code, created_at").eq("unit_id", unitId).gte("created_at", rangeStart).lte("created_at", rangeEnd),
-      supabase.from("rto_entries").select("tbr_code, created_at").eq("unit_id", unitId).gte("created_at", rangeStart).lte("created_at", rangeEnd),
-    ]);
-    const countedExtra = new Set<string>();
-    [...(psChart.data ?? []), ...(rtoChart.data ?? [])].forEach(e => {
-      if (!allTbrCodes.has(e.tbr_code) && !countedExtra.has(e.tbr_code)) {
-        countedExtra.add(e.tbr_code);
-        const d = toBrazilDateStr(e.created_at);
-        if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
-      }
-    });
 
     setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
 
