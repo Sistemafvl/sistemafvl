@@ -8,11 +8,13 @@ import QueuePanel from "./QueuePanel";
 import { UserCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 
 const DashboardLayout = () => {
   const { unitSession, managerSession, conferenteSession, setConferenteSession } = useAuthStore();
   const { setTheme } = useTheme();
   const [conferentes, setConferentes] = useState<{ id: string; name: string }[]>([]);
+  const { claimSession } = useConferenteSessionLock();
 
   useEffect(() => {
     const saved = localStorage.getItem("theme_unit") || "light";
@@ -72,7 +74,10 @@ const DashboardLayout = () => {
                     <Select
                       onValueChange={(val) => {
                         const c = conferentes.find(c => c.id === val);
-                        if (c) setConferenteSession({ id: c.id, name: c.name });
+                        if (c) {
+                          setConferenteSession({ id: c.id, name: c.name });
+                          claimSession(c.id);
+                        }
                       }}
                     >
                       <SelectTrigger className="w-full">
