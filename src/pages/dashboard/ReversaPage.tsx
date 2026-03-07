@@ -274,13 +274,13 @@ const ReversaPage = () => {
   const generateBatchPdf = async (batch: ReversaBatch) => {
     setDownloadingBatchId(batch.id);
     try {
-      const { data: batchEntries } = await supabase
+      const { data: batchEntries } = await (supabase
         .from("ps_entries")
         .select("id, tbr_code, driver_name, route, reason, description, photo_url, created_at, is_seller, observations")
         .eq("reversa_batch_id" as any, batch.id)
-        .order("created_at", { ascending: true });
+        .order("created_at", { ascending: true }) as any);
 
-      const items = (batchEntries ?? []).map((e: any) => ({ ...e, _status: "OK" }));
+      const items = ((batchEntries ?? []) as PsReversa[]).map(e => ({ ...e, _status: "OK" as const }));
       const dateStr = new Date(batch.created_at).toLocaleDateString("pt-BR").replace(/\//g, "-");
       await buildReversaPdf(items, batch.total_scanned, batch.total_pending, `reversa_${dateStr}.pdf`, batch);
     } catch { toast({ title: "Erro ao gerar PDF", variant: "destructive" }); }
