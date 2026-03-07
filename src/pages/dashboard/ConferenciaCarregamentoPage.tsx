@@ -1894,7 +1894,7 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm border bg-white" />
                 <span>1ª viagem</span>
@@ -1906,6 +1906,32 @@ const ConferenciaCarregamentoPage = () => {
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-300" />
                 <span>3ª+ viagem</span>
+              </div>
+              <span className="text-muted-foreground/40">|</span>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300" />
+                <span>Finalizado</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300" />
+                <span>Carregando</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-white border border-border" />
+                <span>Aguardando</span>
+              </div>
+              <span className="text-muted-foreground/40">|</span>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-300" />
+                <span>5x bipes</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-black border border-black" />
+                <span className="text-foreground">Socorrido</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" />
+                <span>Duplicado</span>
               </div>
             </div>
           </div>
