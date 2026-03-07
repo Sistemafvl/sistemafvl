@@ -312,12 +312,13 @@ const DashboardHome = () => {
         }
       });
 
+      // PS — always open event + optional close event
       psEntries.forEach((ps: any) => {
         const confName = ps.conferente_id ? confMap.get(ps.conferente_id) ?? null : null;
         timeline.push({
           timestamp: ps.created_at,
           conferente: confName,
-          action: ps.status === "open" ? "Status: PS Aberto" : "Status: PS Fechado",
+          action: "Status: PS Aberto",
           detail: ps.description,
           type: "ps",
           photo_url: ps.photo_url,
@@ -325,26 +326,94 @@ const DashboardHome = () => {
           observations: ps.observations,
           is_seller: ps.is_seller,
         });
+        if (ps.closed_at) {
+          timeline.push({
+            timestamp: ps.closed_at,
+            conferente: confName,
+            action: "Status: PS Fechado",
+            detail: ps.description,
+            type: "ps",
+            photo_url: ps.photo_url,
+            reason: ps.reason,
+            observations: ps.observations,
+            is_seller: ps.is_seller,
+          });
+        }
       });
 
+      // RTO — always open event + optional close event
       rtoEntries.forEach((rto: any) => {
         const confName = rto.conferente_id ? confMap.get(rto.conferente_id) ?? null : null;
         timeline.push({
           timestamp: rto.created_at,
           conferente: confName,
-          action: rto.status === "open" ? "Status: RTO Aberto" : "Status: RTO Fechado",
+          action: "Status: RTO Aberto",
           detail: rto.description,
           type: "rto",
         });
+        if (rto.closed_at) {
+          timeline.push({
+            timestamp: rto.closed_at,
+            conferente: confName,
+            action: "Status: RTO Fechado",
+            detail: rto.description,
+            type: "rto",
+          });
+        }
       });
 
+      // DNR — always open event + optional analysis/close events
       dnrEntries.forEach((dnr: any) => {
+        const dnrValue = Number(dnr.dnr_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         timeline.push({
           timestamp: dnr.created_at,
           conferente: dnr.conferente_name ?? null,
-          action: dnr.status === "open" ? "Status: DNR Aberto" : dnr.status === "analyzing" ? "Status: DNR Em Análise" : "Status: DNR Fechado",
-          detail: `${Number(dnr.dnr_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
+          action: "Status: DNR Aberto",
+          detail: `${dnrValue}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
           type: "dnr",
+        });
+        if (dnr.approved_at) {
+          timeline.push({
+            timestamp: dnr.approved_at,
+            conferente: dnr.conferente_name ?? null,
+            action: "Status: DNR Em Análise",
+            detail: dnrValue,
+            type: "dnr",
+          });
+        }
+        if (dnr.closed_at) {
+          timeline.push({
+            timestamp: dnr.closed_at,
+            conferente: dnr.conferente_name ?? null,
+            action: dnr.discounted ? "Status: DNR Fechado (com desconto)" : "Status: DNR Fechado (sem desconto)",
+            detail: dnrValue,
+            type: "dnr",
+          });
+        }
+      });
+
+      // Rescue entries
+      rescueEntries.forEach((r: any) => {
+        const originalDriver = driverMap.get(r.original_driver_id);
+        const rescuerDriver = driverMap.get(r.rescuer_driver_id);
+        timeline.push({
+          timestamp: r.scanned_at ?? r.created_at,
+          conferente: null,
+          action: "Status: Resgate",
+          detail: `De: ${originalDriver?.name ?? "—"} → Para: ${rescuerDriver?.name ?? "—"}`,
+          type: "rescue",
+        });
+      });
+
+      // Reativo entries
+      reativoEntries.forEach((r: any) => {
+        const value = Number(r.reativo_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        timeline.push({
+          timestamp: r.activated_at ?? r.created_at,
+          conferente: r.conferente_name ?? r.manager_name ?? null,
+          action: "Status: Reativo Ativado",
+          detail: `${value} • ${r.driver_name ?? "—"} • Rota: ${r.route ?? "—"}`,
+          type: "reativo",
         });
       });
 
