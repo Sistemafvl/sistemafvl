@@ -2969,6 +2969,137 @@ const ConferenciaCarregamentoPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Retroactive Loading Modal */}
+      <Dialog open={showRetroModal} onOpenChange={setShowRetroModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" /> Carregamento Retroativo
+            </DialogTitle>
+            <DialogDescription>
+              Crie um carregamento retroativo para um motorista em uma data passada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">Data do Carregamento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start font-normal">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {retroDate ? format(retroDate, "dd/MM/yyyy") : "Selecionar data..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 z-[9999]" align="start">
+                  <Calendar mode="single" selected={retroDate} onSelect={setRetroDate} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar Motorista</Label>
+              <Input
+                placeholder="Digite o nome..."
+                value={retroDriverSearch}
+                onChange={(e) => {
+                  setRetroDriverSearch(e.target.value);
+                  setRetroSelectedDriver(null);
+                  if (retroDebounceRef.current) clearTimeout(retroDebounceRef.current);
+                  if (e.target.value.trim()) {
+                    retroDebounceRef.current = setTimeout(async () => {
+                      setRetroSearchLoading(true);
+                      const { data } = await supabase
+                        .from("drivers_public")
+                        .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+                        .ilike("name", `%${e.target.value.trim()}%`)
+                        .eq("active", true)
+                        .limit(10);
+                      setRetroDriverResults((data ?? []) as SwapDriver[]);
+                      setRetroSearchLoading(false);
+                    }, 400);
+                  } else {
+                    setRetroDriverResults([]);
+                  }
+                }}
+              />
+              {retroSearchLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              {retroDriverResults.length > 0 && !retroSelectedDriver && (
+                <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-1">
+                  {retroDriverResults.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setRetroSelectedDriver(d); setRetroDriverResults([]); }}
+                      className="w-full text-left p-2 rounded hover:bg-muted text-xs space-y-0.5"
+                    >
+                      <p className="font-bold">{d.name}</p>
+                      <p className="text-muted-foreground">{d.car_model} {d.car_color || ""} · {d.car_plate}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {retroSelectedDriver && (
+              <div className="p-3 rounded-lg border border-border bg-card space-y-1">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    {retroSelectedDriver.avatar_url && <AvatarImage src={retroSelectedDriver.avatar_url} />}
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">{retroSelectedDriver.name[0].toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-bold text-sm">{retroSelectedDriver.name}</p>
+                    <p className="text-xs text-muted-foreground">{retroSelectedDriver.car_model} · {retroSelectedDriver.car_plate}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={async () => {
+                if (!retroSelectedDriver || !retroDate || !unitId) return;
+                setRetroLoading(true);
+                const retroDateStr = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 6, 0, 0).toISOString();
+                // Get next sequence number for that date
+                const dayStart = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0).toISOString();
+                const dayEnd = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999).toISOString();
+                const { data: existingRides } = await supabase
+                  .from("driver_rides")
+                  .select("sequence_number")
+                  .eq("unit_id", unitId)
+                  .gte("completed_at", dayStart)
+                  .lte("completed_at", dayEnd)
+                  .order("sequence_number", { ascending: false })
+                  .limit(1);
+                const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
+
+                await supabase.from("driver_rides").insert({
+                  driver_id: retroSelectedDriver.id,
+                  unit_id: unitId,
+                  completed_at: retroDateStr,
+                  sequence_number: nextSeq,
+                  loading_status: "pending",
+                  conferente_id: conferenteSession?.id || null,
+                } as any);
+
+                setRetroLoading(false);
+                setShowRetroModal(false);
+                // Navigate to the retroactive date
+                setStartDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0));
+                setEndDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999));
+                fetchRides();
+                const { toast } = await import("@/hooks/use-toast");
+                toast({ title: "Carregamento retroativo criado!", description: `Motorista ${retroSelectedDriver.name} adicionado em ${format(retroDate, "dd/MM/yyyy")}` });
+              }}
+              disabled={retroLoading || !retroSelectedDriver || !retroDate}
+              className="w-full font-bold italic gap-2"
+            >
+              {retroLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <History className="h-4 w-4" />
+              Criar Carregamento Retroativo
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
