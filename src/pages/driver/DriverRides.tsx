@@ -56,6 +56,7 @@ const DriverRides = () => {
       if (!data) { setRides([]); setLoading(false); return; }
 
       const unitIds = [...new Set(data.map((r) => r.unit_id))];
+      const conferenteIds = [...new Set(data.map((r) => r.conferente_id).filter(Boolean))] as string[];
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
