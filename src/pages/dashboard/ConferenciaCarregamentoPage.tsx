@@ -2888,6 +2888,7 @@ const ConferenciaCarregamentoPage = () => {
           {finalizarConfirmRideId && (() => {
             const ride = rides.find(r => r.id === finalizarConfirmRideId);
             const rideTbrs = tbrs[finalizarConfirmRideId] ?? [];
+            const loginMissing = !ride?.login || !ride.login.trim();
             return (
               <div className="space-y-3 pt-2">
                 <div className="rounded-md border p-3 space-y-2 bg-muted/30">
@@ -2897,9 +2898,15 @@ const ConferenciaCarregamentoPage = () => {
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-muted-foreground">Login do coletor:</span>
-                    <span className="font-bold font-mono">{ride?.login ?? "—"}</span>
+                    <span className={`font-bold font-mono ${loginMissing ? "text-destructive" : ""}`}>{ride?.login || "—"}</span>
                   </div>
                 </div>
+                {loginMissing && (
+                  <div className="rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm text-destructive font-semibold flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4 shrink-0" />
+                    Não é possível finalizar sem preencher o login do coletor. Volte ao card e preencha o campo de login.
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground italic">
                   ⚠ Verifique se o login utilizado no coletor da Amazon é o mesmo que aparece no card de carregamento. Isso é importante pois define o valor de pagamento do motorista.
                 </p>
@@ -2907,7 +2914,7 @@ const ConferenciaCarregamentoPage = () => {
                   <Button variant="outline" className="flex-1" onClick={() => setFinalizarConfirmRideId(null)}>
                     Cancelar
                   </Button>
-                  <Button variant="destructive" className="flex-1 font-bold" onClick={() => {
+                  <Button variant="destructive" className="flex-1 font-bold" disabled={loginMissing} onClick={() => {
                     handleFinalizar(finalizarConfirmRideId);
                     setFinalizarConfirmRideId(null);
                   }}>

@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
 import { UserCheck } from "lucide-react";
+import InsucessoBalloon from "./InsucessoBalloon";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
@@ -95,6 +96,7 @@ const DashboardLayout = () => {
           </div>
         </main>
       </div>
+      <InsucessoBalloon />
       <QueuePanel />
     </SidebarProvider>
   );
