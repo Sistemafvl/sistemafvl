@@ -120,12 +120,12 @@ const ReversaPage = () => {
   const fetchBatches = useCallback(async () => {
     if (!unitSession?.id) return;
     setLoadingBatches(true);
-    const { data } = await supabase
-      .from("reversa_batches")
+    const { data } = await (supabase
+      .from("reversa_batches" as any)
       .select("*")
       .eq("unit_id", unitSession.id)
       .order("created_at", { ascending: false })
-      .limit(50);
+      .limit(50) as any);
     setBatches((data as ReversaBatch[]) ?? []);
     setLoadingBatches(false);
   }, [unitSession?.id]);
