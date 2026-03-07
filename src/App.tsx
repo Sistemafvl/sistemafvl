@@ -25,6 +25,7 @@ import DriverSettings from "./pages/driver/DriverSettings";
 import DriverDocuments from "./pages/driver/DriverDocuments";
 import DNRPage from "./pages/dashboard/DNRPage";
 import ReversaPage from "./pages/dashboard/ReversaPage";
+import ReativoPage from "./pages/dashboard/ReativoPage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import DriverRescue from "./pages/driver/DriverRescue";
@@ -83,6 +84,7 @@ const App = () => (
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="dnr" element={<DNRPage />} />
             <Route path="reversa" element={<ReversaPage />} />
+            <Route path="reativo" element={<ReativoPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
