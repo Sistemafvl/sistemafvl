@@ -255,15 +255,6 @@ const DashboardHome = () => {
         const confName = ride?.conferente_id ? confMap.get(ride.conferente_id) ?? null : null;
         const driverDetail = `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`;
 
-        // Evento: TBR Lido (primeiro) ou TBR Re-carregado (subsequentes)
-        timeline.push({
-          timestamp: evt.timestamp,
-          conferente: confName,
-          action: index === 0 ? "TBR Lido" : "TBR Re-carregado",
-          detail: driverDetail,
-          type: index === 0 ? "origin" : "loaded",
-        });
-
         // Carregamento Iniciado — apenas para o primeiro evento (primeiro motorista)
         if (index === 0) {
           const ts = evt.isReal && ride?.started_at ? ride.started_at : evt.timestamp;
@@ -275,6 +266,15 @@ const DashboardHome = () => {
             type: "started",
           });
         }
+
+        // Evento: TBR Lido (primeiro) ou TBR Re-carregado (subsequentes)
+        timeline.push({
+          timestamp: evt.timestamp,
+          conferente: confName,
+          action: index === 0 ? "TBR Lido" : "TBR Re-carregado",
+          detail: driverDetail,
+          type: index === 0 ? "origin" : "loaded",
+        });
 
         // Carregamento Finalizado — apenas para ride real com finished_at
         if (evt.isReal && ride?.finished_at) {
@@ -405,8 +405,13 @@ const DashboardHome = () => {
         });
       });
 
-      // Sort chronologically
-      timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+      // Sort chronologically with tie-breaker by event priority
+      const typePriority: Record<string, number> = { started: 1, origin: 2, loaded: 3, piso: 4, removal: 5, ps: 6, rto: 7, dnr: 8, rescue: 9, reativo: 10, finished: 11 };
+      timeline.sort((a, b) => {
+        const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
+        if (diff !== 0) return diff;
+        return (typePriority[a.type] ?? 99) - (typePriority[b.type] ?? 99);
+      });
 
       // Build result from most recent ride (last loadEvent) for header
       const realLoadEvents = loadEvents.filter(e => e.isReal);
@@ -655,7 +660,7 @@ const DashboardHome = () => {
                               <div className="text-xs space-y-0.5">
                                 <div className="flex items-center gap-2">
                                   <span className="text-muted-foreground font-mono">
-                                    {evt.timestamp ? format(new Date(evt.timestamp), "dd/MM HH:mm") : "—"}
+                                    {evt.timestamp ? format(new Date(evt.timestamp), "dd/MM HH:mm:ss") : "—"}
                                   </span>
                                   {evt.conferente && (
                                     <span className="text-muted-foreground">[{evt.conferente}]</span>
