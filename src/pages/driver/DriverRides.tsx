@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +14,7 @@ interface Ride {
   id: string;
   driver_id: string;
   unit_id: string;
+  conferente_id: string | null;
   completed_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -26,6 +27,7 @@ interface Ride {
   returnCount?: number;
   tbrValue?: number;
   reativoValue?: number;
+  conferente_name?: string;
 }
 
 const DriverRides = () => {
@@ -54,6 +56,7 @@ const DriverRides = () => {
       if (!data) { setRides([]); setLoading(false); return; }
 
       const unitIds = [...new Set(data.map((r) => r.unit_id))];
+      const conferenteIds = [...new Set(data.map((r) => r.conferente_id).filter(Boolean))] as string[];
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
@@ -81,6 +84,13 @@ const DriverRides = () => {
         (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       );
+
+      // Fetch conferente names
+      const conferenteMap = new Map<string, string>();
+      if (conferenteIds.length > 0) {
+        const { data: confData } = await supabase.from("user_profiles").select("id, name").in("id", conferenteIds);
+        (confData ?? []).forEach((c) => conferenteMap.set(c.id, c.name));
+      }
 
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
@@ -114,6 +124,7 @@ const DriverRides = () => {
         returnCount: returnCountMap.get(r.id) ?? 0,
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
         reativoValue: reativoMap.get(r.id) ?? 0,
+        conferente_name: r.conferente_id ? conferenteMap.get(r.conferente_id) ?? null : null,
       })));
       setLoading(false);
     };
@@ -230,6 +241,12 @@ const DriverRides = () => {
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                           <Route className="h-3 w-3 text-primary" />
                           <strong>Rota:</strong> {ride.route}
+                        </p>
+                      )}
+                      {ride.conferente_name && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <UserCheck className="h-3 w-3 text-primary" />
+                          <strong>Conferente:</strong> {ride.conferente_name}
                         </p>
                       )}
                       {ride.login && (
