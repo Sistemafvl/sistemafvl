@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -2231,6 +2231,29 @@ const ConferenciaCarregamentoPage = () => {
                                   Insucesso ({getSelectedCount(ride.id)})
                                 </Button>
                               )}
+                              {isMyRide && rideTbrs.length > 0 && (
+                                <button
+                                  onClick={() => {
+                                    setSelectedTbrsForDelete(prev => {
+                                      const current = new Set(prev[ride.id] ?? []);
+                                      const allSelected = rideTbrs.every(t => current.has(t.id));
+                                      if (allSelected) {
+                                        return { ...prev, [ride.id]: new Set() };
+                                      } else {
+                                        return { ...prev, [ride.id]: new Set(rideTbrs.map(t => t.id)) };
+                                      }
+                                    });
+                                  }}
+                                  className={cn("ml-auto h-6 w-6 flex items-center justify-center rounded transition-colors", 
+                                    rideTbrs.every(t => (selectedTbrsForDelete[ride.id] ?? new Set()).has(t.id)) 
+                                      ? "bg-primary text-primary-foreground" 
+                                      : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                                  )}
+                                  title="Selecionar todos os TBRs"
+                                >
+                                  <CheckSquare className="h-3.5 w-3.5" />
+                                </button>
+                              )}
                               <button
                                 onClick={() => {
                                   setSearchLocateMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }));
@@ -2493,6 +2516,29 @@ const ConferenciaCarregamentoPage = () => {
                           <AlertTriangle className="h-3 w-3" />
                           Insucesso ({getSelectedCount(ride.id)})
                         </Button>
+                      )}
+                      {focusedTbrs.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setSelectedTbrsForDelete(prev => {
+                              const current = new Set(prev[ride.id] ?? []);
+                              const allSelected = focusedTbrs.every(t => current.has(t.id));
+                              if (allSelected) {
+                                return { ...prev, [ride.id]: new Set() };
+                              } else {
+                                return { ...prev, [ride.id]: new Set(focusedTbrs.map(t => t.id)) };
+                              }
+                            });
+                          }}
+                          className={cn("ml-auto h-6 w-6 flex items-center justify-center rounded transition-colors",
+                            focusedTbrs.every(t => (selectedTbrsForDelete[ride.id] ?? new Set()).has(t.id))
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                          )}
+                          title="Selecionar todos os TBRs"
+                        >
+                          <CheckSquare className="h-3.5 w-3.5" />
+                        </button>
                       )}
                     </div>
                     {focusedTbrs.length > 0 && (
