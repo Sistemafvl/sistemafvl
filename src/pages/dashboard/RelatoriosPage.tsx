@@ -468,7 +468,9 @@ const RelatoriosPage = () => {
         const minPkg = minPkgMap.get(driverId) ?? 0;
         if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
         const completed = tbrCount - returns;
-        return { date, login: info.login, tbrCount, returns, completed, value: completed * tbrVal };
+        const fixedKey = `${driverId}_${date}`;
+        const fixedVal = fixedValueMap.get(fixedKey);
+        return { date, login: info.login, tbrCount, returns, completed, value: fixedVal !== undefined ? fixedVal : completed * tbrVal };
       });
 
       const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
