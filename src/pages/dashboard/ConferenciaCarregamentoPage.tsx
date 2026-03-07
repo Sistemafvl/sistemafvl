@@ -1092,7 +1092,22 @@ const ConferenciaCarregamentoPage = () => {
           return;
         }
 
-        await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
+        const { error: insertError } = await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
+        if (insertError) {
+          // Rollback optimistic state
+          setTbrs((prev) => ({
+            ...prev,
+            [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId),
+          }));
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
+          if (insertError.message?.includes('TBR already exists in another active loading')) {
+            toast({ title: "TBR duplicado", description: `${code} já está em outro carregamento ativo. Precisa passar pelo insucesso primeiro.`, variant: "destructive" });
+          } else {
+            toast({ title: "Erro ao salvar TBR", description: insertError.message, variant: "destructive" });
+          }
+          return;
+        }
         playSuccessBeep();
       } else if (totalScans >= 2 && totalScans < 5) {
         // 2nd-4th beep: temporary red warning, NO yellow — accidental double-scan is common
