@@ -1067,8 +1067,8 @@ const ConferenciaCarregamentoPage = () => {
 
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         playSuccessBeep();
-      } else if (totalScans === 2) {
-        // 2nd beep: temporary red warning, NO yellow — accidental double-scan is common
+      } else if (totalScans >= 2 && totalScans < 5) {
+        // 2nd-4th beep: temporary red warning, NO yellow — accidental double-scan is common
         newTbr._duplicate = true;
 
         realtimeLockUntil.current = Date.now() + 15000;
@@ -1092,8 +1092,8 @@ const ConferenciaCarregamentoPage = () => {
         }, 1000);
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-      } else if (totalScans >= 3) {
-        // 3x beep: don't add the 3rd TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
+      } else if (totalScans >= 5) {
+        // 5x beep: don't add the 5th TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
         playErrorBeep();
 
         // Sort occurrences by scanned_at ascending so the oldest (real DB entry) is first
@@ -1168,7 +1168,7 @@ const ConferenciaCarregamentoPage = () => {
 
     playErrorBeep();
 
-    if (totalScans >= 3) {
+    if (totalScans >= 5) {
       // 3rd+ scan: mark original as yellow permanently
       const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === upper);
       const sorted = [...occurrences].sort((a, b) =>
@@ -2080,7 +2080,7 @@ const ConferenciaCarregamentoPage = () => {
                           </div>
                         )}
 
-                        {/* Cancel & Swap buttons (visible to all, password required for non-managers) */}
+                        {/* Cancel button (visible to all, password required for non-managers) */}
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
                             <Button
@@ -2090,14 +2090,6 @@ const ConferenciaCarregamentoPage = () => {
                               onClick={() => handleOpenCancelModal(ride.id)}
                             >
                               <Ban className="h-3.5 w-3.5" /> Cancelar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 gap-1"
-                              onClick={() => handleOpenSwapModal(ride.id)}
-                            >
-                              <ArrowRightLeft className="h-3.5 w-3.5" /> Trocar
                             </Button>
                           </div>
                         )}
