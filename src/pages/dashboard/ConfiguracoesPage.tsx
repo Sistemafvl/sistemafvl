@@ -184,7 +184,12 @@ const ConfiguracoesPage = () => {
   };
 
   const handleDeleteLogin = async (id: string) => {
-    await supabase.from("unit_logins").delete().eq("id", id);
+    const { error } = await supabase.from("unit_logins").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir login", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Login excluído com sucesso" });
     await fetchLogins();
   };
 
