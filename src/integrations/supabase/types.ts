@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      conferente_sessions: {
+        Row: {
+          conferente_id: string
+          id: string
+          session_token: string
+          started_at: string
+          unit_id: string
+        }
+        Insert: {
+          conferente_id: string
+          id?: string
+          session_token: string
+          started_at?: string
+          unit_id: string
+        }
+        Update: {
+          conferente_id?: string
+          id?: string
+          session_token?: string
+          started_at?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       cycle_records: {
         Row: {
           abertura_galpao: string | null
