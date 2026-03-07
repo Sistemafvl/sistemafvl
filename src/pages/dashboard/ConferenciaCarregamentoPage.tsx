@@ -256,6 +256,9 @@ const ConferenciaCarregamentoPage = () => {
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  // Search/locate mode per ride
+  const [searchLocateMode, setSearchLocateMode] = useState<Record<string, boolean>>({});
+  const [searchLocateInput, setSearchLocateInput] = useState<Record<string, string>>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -2174,7 +2177,7 @@ const ConferenciaCarregamentoPage = () => {
                         {/* TBR Area */}
                         {(isLoadingStatus || isFinished) && (
                           <div className="w-full space-y-2 border-t pt-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-xs font-bold italic flex items-center gap-1">
                                 <ScanBarcode className="h-3.5 w-3.5 text-primary" />
                                 TBRs Lidos ({rideTbrs.length})
@@ -2199,7 +2202,81 @@ const ConferenciaCarregamentoPage = () => {
                                   Insucesso ({getSelectedCount(ride.id)})
                                 </Button>
                               )}
+                              <button
+                                onClick={() => {
+                                  setSearchLocateMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }));
+                                  if (searchLocateMode[ride.id]) {
+                                    setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                  }
+                                }}
+                                className={cn("ml-auto h-6 w-6 flex items-center justify-center rounded transition-colors", searchLocateMode[ride.id] ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground")}
+                                title="Buscar e localizar TBR"
+                              >
+                                <Search className="h-3.5 w-3.5" />
+                              </button>
                             </div>
+                            {searchLocateMode[ride.id] && (
+                              <div className="flex gap-1 items-center">
+                                <Input
+                                  className="h-7 text-xs font-mono flex-1"
+                                  placeholder="Bipe ou digite o TBR para localizar..."
+                                  value={searchLocateInput[ride.id] ?? ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSearchLocateInput(prev => ({ ...prev, [ride.id]: val }));
+                                    // Auto-search with debounce
+                                    if (val.trim().length >= 3) {
+                                      const upper = val.trim().toUpperCase();
+                                      const found = rideTbrs.find(t => t.code.toUpperCase() === upper);
+                                      if (found) {
+                                        // Auto-select the checkbox
+                                        setSelectedTbrsForDelete(prev => {
+                                          const current = new Set(prev[ride.id] ?? []);
+                                          current.add(found.id);
+                                          return { ...prev, [ride.id]: current };
+                                        });
+                                        // Scroll to the element
+                                        const listEl = tbrListRefs.current[ride.id];
+                                        if (listEl) {
+                                          const idx = rideTbrs.findIndex(t => t.id === found.id);
+                                          if (idx >= 0) {
+                                            const itemEl = listEl.children[idx] as HTMLElement;
+                                            itemEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                          }
+                                        }
+                                        // Clear input after short delay
+                                        setTimeout(() => {
+                                          setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                        }, 300);
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const val = (searchLocateInput[ride.id] ?? "").trim().toUpperCase();
+                                      const found = rideTbrs.find(t => t.code.toUpperCase() === val);
+                                      if (found) {
+                                        setSelectedTbrsForDelete(prev => {
+                                          const current = new Set(prev[ride.id] ?? []);
+                                          current.add(found.id);
+                                          return { ...prev, [ride.id]: current };
+                                        });
+                                        const listEl = tbrListRefs.current[ride.id];
+                                        if (listEl) {
+                                          const idx = rideTbrs.findIndex(t => t.id === found.id);
+                                          if (idx >= 0) {
+                                            const itemEl = listEl.children[idx] as HTMLElement;
+                                            itemEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                          }
+                                        }
+                                        setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                      }
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              </div>
+                            )}
                             {rideTbrs.length > 0 && (() => {
                               const visibleTbrs = isSearchActive
                                 ? rideTbrs.filter(t => t.code.toLowerCase().includes(tbrSearchCommitted.toLowerCase()))
