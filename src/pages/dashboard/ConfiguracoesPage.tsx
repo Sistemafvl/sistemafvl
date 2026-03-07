@@ -277,6 +277,34 @@ const ConfiguracoesPage = () => {
     setBonusAmount(formatCurrency(parseInt(raw, 10) / 100));
   };
 
+  const handleFvValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setFvValue(""); return; }
+    setFvValue(formatCurrency(parseInt(raw, 10) / 100));
+  };
+
+  const handleAddFixedValue = async () => {
+    if (!unitId || !fvSelectedDriver || !fvValue || !fvDate) return;
+    setFvSaving(true);
+    const numValue = parseCurrency(fvValue);
+    await supabase.from("driver_fixed_values" as any).upsert({
+      unit_id: unitId,
+      driver_id: fvSelectedDriver.id,
+      driver_name: fvSelectedDriver.name,
+      target_date: fvDate,
+      fixed_value: numValue,
+    } as any, { onConflict: "unit_id,driver_id,target_date" });
+    setFvSelectedDriver(null); setFvDriverSearch(""); setFvValue(""); setFvDate(""); setFvDriverResults([]);
+    await fetchFixedValues();
+    setFvSaving(false);
+    toast({ title: "Valor fixo salvo!" });
+  };
+
+  const handleDeleteFixedValue = async (id: string) => {
+    await supabase.from("driver_fixed_values" as any).delete().eq("id", id);
+    await fetchFixedValues();
+  };
+
   if (!unitId) return null;
 
   return (
