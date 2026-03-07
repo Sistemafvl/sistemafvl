@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch } from "lucide-react";
+import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -78,6 +79,7 @@ interface ConferenteOption {
 const DashboardSidebar = () => {
   const { logout, unitSession, managerSession, setManagerSession, conferenteSession, setConferenteSession } = useAuthStore();
   const { setOpenMobile } = useSidebar();
+  const { claimSession, releaseSession } = useConferenteSessionLock();
   const [loginOpen, setLoginOpen] = useState(false);
   const [cnpj, setCnpj] = useState("");
   const [password, setPassword] = useState("");
@@ -164,7 +166,10 @@ const DashboardSidebar = () => {
                   <p className="text-xs font-bold italic truncate">{conferenteSession.name}</p>
                   <p className="text-[10px] text-muted-foreground">Conferente</p>
                 </div>
-                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setConferenteSession(null)}>
+                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => {
+                  if (conferenteSession?.id) releaseSession(conferenteSession.id);
+                  setConferenteSession(null);
+                }}>
                   Trocar
                 </Button>
               </div>
@@ -174,7 +179,10 @@ const DashboardSidebar = () => {
                 onOpenChange={setConferenteSelectOpen}
                 onValueChange={(val) => {
                   const c = conferentes.find(c => c.id === val);
-                  if (c) setConferenteSession({ id: c.id, name: c.name });
+                  if (c) {
+                    setConferenteSession({ id: c.id, name: c.name });
+                    claimSession(c.id);
+                  }
                 }}
               >
                 <SelectTrigger className="w-full font-semibold italic gap-2 bg-green-500/10 border-green-500/20 text-green-700 hover:bg-green-500/20">
