@@ -1,0 +1,1 @@
+ALTER TABLE public.ps_entries ADD COLUMN IF NOT EXISTS reversa_at timestamptz DEFAULT NULL;
