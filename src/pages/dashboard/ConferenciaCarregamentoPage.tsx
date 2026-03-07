@@ -957,42 +957,55 @@ const ConferenciaCarregamentoPage = () => {
       }
 
       if (totalScans === 1 && count === 0) {
-        const { data: previousTbrs } = await supabase
-          .from("ride_tbrs")
-          .select("id, ride_id")
-          .eq("code", code)
-          .neq("ride_id", rideId);
+        const [prevTbrsRes, prevPisoRes] = await Promise.all([
+          supabase
+            .from("ride_tbrs")
+            .select("id, ride_id")
+            .ilike("code", code)
+            .neq("ride_id", rideId),
+          supabase
+            .from("piso_entries")
+            .select("id, status, ride_id")
+            .ilike("tbr_code", code),
+        ]);
+        const previousTbrs = prevTbrsRes.data ?? [];
+        const pisoEntries = prevPisoRes.data ?? [];
 
         let tripNumber = 1;
 
-        if (previousTbrs && previousTbrs.length > 0) {
-          // Check if any of those TBRs belong to ACTIVE loads
-          const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
-          const { data: prevRides } = await supabase
-            .from("driver_rides")
-            .select("id, loading_status")
-            .in("id", prevRideIds)
-            .in("loading_status", ["pending", "loading"]);
+        // Count distinct previous ride_ids from both ride_tbrs and piso_entries
+        const previousRideIds = new Set<string>();
+        previousTbrs.forEach(t => previousRideIds.add(t.ride_id));
+        pisoEntries.forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
+        // Remove current ride from the set
+        previousRideIds.delete(rideId);
 
-          if (prevRides && prevRides.length > 0) {
-            playErrorBeep();
-            const { toast } = await import("@/hooks/use-toast");
-            toast({
-              title: "TBR em carregamento ativo",
-              description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
-              variant: "destructive",
-            });
-            setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-            setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-            return;
+        if (previousTbrs.length > 0 || pisoEntries.length > 0) {
+          if (previousTbrs.length > 0) {
+            // Check if any of those TBRs belong to ACTIVE loads
+            const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
+            const { data: prevRides } = await supabase
+              .from("driver_rides")
+              .select("id, loading_status")
+              .in("id", prevRideIds)
+              .in("loading_status", ["pending", "loading"]);
+
+            if (prevRides && prevRides.length > 0) {
+              playErrorBeep();
+              const { toast } = await import("@/hooks/use-toast");
+              toast({
+                title: "TBR em carregamento ativo",
+                description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
+                variant: "destructive",
+              });
+              setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+              setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+              return;
+            }
           }
 
-          const { data: pisoEntries } = await supabase
-            .from("piso_entries")
-            .select("id, status")
-            .eq("tbr_code", code);
-
-          if (!pisoEntries || pisoEntries.length === 0) {
+          // If no piso entries exist and there are previous ride_tbrs, block — TBR is in transit
+          if (pisoEntries.length === 0 && previousTbrs.length > 0) {
             playErrorBeep();
             const { toast } = await import("@/hooks/use-toast");
             toast({
@@ -1005,7 +1018,8 @@ const ConferenciaCarregamentoPage = () => {
             return;
           }
 
-          tripNumber = previousTbrs.length + 1;
+          // trip_number = distinct previous rides + 1 (current)
+          tripNumber = previousRideIds.size + 1;
 
           playReincidenceBeep();
         }
