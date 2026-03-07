@@ -67,7 +67,7 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [piRaw, psData, rtoData, us, un, cv, bn] = await Promise.all([
+      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes] = await Promise.all([
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
