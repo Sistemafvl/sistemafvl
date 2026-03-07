@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { DollarSign, TrendingUp, FileWarning, Package, Wallet } from "lucide-react";
+import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { formatBRL } from "@/lib/utils";
 
@@ -152,10 +152,11 @@ const MatrizFinanceiro = () => {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <KpiCard icon={Package} label="Total Carregamentos" value={totals.rides} loading={loading} />
         <KpiCard icon={TrendingUp} label="Total TBRs" value={totals.tbrs} loading={loading} />
         <KpiCard icon={Wallet} label="Total Pago (TBRs)" value={formatBRL(totals.totalPaid)} loading={loading} color="text-emerald-600" />
+        <KpiCard icon={Zap} label="Reativo Total" value={formatBRL(totals.reativo)} loading={loading} color="text-amber-600" />
         <KpiCard icon={FileWarning} label="DNR Total" value={formatBRL(totals.dnr)} loading={loading} color="text-destructive" />
       </div>
 
@@ -174,6 +175,7 @@ const MatrizFinanceiro = () => {
                   <TableHead className="text-center">TBRs</TableHead>
                   <TableHead className="text-center">Valor TBR</TableHead>
                   <TableHead className="text-right">Total Pago TBRs</TableHead>
+                  <TableHead className="text-right">Reativo</TableHead>
                   <TableHead className="text-right">DNR</TableHead>
                 </TableRow>
               </TableHeader>
@@ -185,6 +187,7 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{u.tbrs}</TableCell>
                     <TableCell className="text-center">{formatBRL(u.tbrValue)}</TableCell>
                     <TableCell className="text-right font-semibold text-emerald-600">{formatBRL(u.totalPaid)}</TableCell>
+                    <TableCell className="text-right font-semibold text-amber-600">{formatBRL(u.reativoTotal)}</TableCell>
                     <TableCell className="text-right text-destructive">{formatBRL(u.dnrTotal)}</TableCell>
                   </TableRow>
                 ))}
@@ -195,6 +198,7 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{totals.tbrs}</TableCell>
                     <TableCell />
                     <TableCell className="text-right text-emerald-600">{formatBRL(totals.totalPaid)}</TableCell>
+                    <TableCell className="text-right text-amber-600">{formatBRL(totals.reativo)}</TableCell>
                     <TableCell className="text-right text-destructive">{formatBRL(totals.dnr)}</TableCell>
                   </TableRow>
                 )}
