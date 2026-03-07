@@ -101,7 +101,11 @@ const DriverRides = () => {
       const returnCountMap = new Map<string, number>();
       returnTbrSets.forEach((set, rideId) => returnCountMap.set(rideId, set.size));
 
-  
+      // Reativo values per ride
+      const reativoMap = new Map<string, number>();
+      (reatRes.data ?? []).forEach((re: any) => {
+        if (re.ride_id) reativoMap.set(re.ride_id, (reativoMap.get(re.ride_id) ?? 0) + Number(re.reativo_value));
+      });
 
       setRides(data.map((r) => ({
         ...r,
@@ -109,6 +113,7 @@ const DriverRides = () => {
         tbrCount: tbrCountMap.get(r.id) ?? 0,
         returnCount: returnCountMap.get(r.id) ?? 0,
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
+        reativoValue: reativoMap.get(r.id) ?? 0,
       })));
       setLoading(false);
     };
