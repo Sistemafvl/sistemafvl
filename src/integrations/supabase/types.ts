@@ -731,6 +731,7 @@ export type Database = {
           photo_url: string | null
           reason: string | null
           reversa_at: string | null
+          reversa_batch_id: string | null
           ride_id: string | null
           route: string | null
           status: string
@@ -749,6 +750,7 @@ export type Database = {
           photo_url?: string | null
           reason?: string | null
           reversa_at?: string | null
+          reversa_batch_id?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -767,6 +769,7 @@ export type Database = {
           photo_url?: string | null
           reason?: string | null
           reversa_at?: string | null
+          reversa_batch_id?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -901,6 +904,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      reversa_batches: {
+        Row: {
+          conferente_name: string | null
+          created_at: string
+          id: string
+          total_pending: number
+          total_scanned: number
+          unit_id: string
+        }
+        Insert: {
+          conferente_name?: string | null
+          created_at?: string
+          id?: string
+          total_pending?: number
+          total_scanned?: number
+          unit_id: string
+        }
+        Update: {
+          conferente_name?: string | null
+          created_at?: string
+          id?: string
+          total_pending?: number
+          total_scanned?: number
+          unit_id?: string
+        }
+        Relationships: []
       }
       ride_tbrs: {
         Row: {
