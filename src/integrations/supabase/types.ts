@@ -730,6 +730,7 @@ export type Database = {
           observations: string | null
           photo_url: string | null
           reason: string | null
+          reversa_at: string | null
           ride_id: string | null
           route: string | null
           status: string
@@ -747,6 +748,7 @@ export type Database = {
           observations?: string | null
           photo_url?: string | null
           reason?: string | null
+          reversa_at?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
@@ -764,6 +766,7 @@ export type Database = {
           observations?: string | null
           photo_url?: string | null
           reason?: string | null
+          reversa_at?: string | null
           ride_id?: string | null
           route?: string | null
           status?: string
