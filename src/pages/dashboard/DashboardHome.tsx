@@ -249,43 +249,42 @@ const DashboardHome = () => {
       // Sort all load events chronologically
       loadEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-      let isFirstLoad = true;
-      loadEvents.forEach((evt) => {
+      loadEvents.forEach((evt, index) => {
         const ride = evt.ride;
         const driver = driverMap.get(ride?.driver_id);
         const confName = ride?.conferente_id ? confMap.get(ride.conferente_id) ?? null : null;
+        const driverDetail = `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`;
+
+        // Evento: TBR Lido (primeiro) ou TBR Re-carregado (subsequentes)
         timeline.push({
           timestamp: evt.timestamp,
           conferente: confName,
-          action: isFirstLoad ? "Origem: Conferência Carregamento" : "Re-carregado: Conferência Carregamento",
-          detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-          type: isFirstLoad ? "origin" : "loaded",
+          action: index === 0 ? "TBR Lido" : "TBR Re-carregado",
+          detail: driverDetail,
+          type: index === 0 ? "origin" : "loaded",
         });
 
-        // Only show ride started/finished for real rides (TBR still in this ride)
-        if (evt.isReal) {
-          if (ride?.started_at) {
-            timeline.push({
-              timestamp: ride.started_at,
-              conferente: confName,
-              action: "Carregamento Iniciado",
-              detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-              type: "started",
-            });
-          }
-
-          if (ride?.finished_at) {
-            timeline.push({
-              timestamp: ride.finished_at,
-              conferente: confName,
-              action: "Carregamento Finalizado",
-              detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-              type: "finished",
-            });
-          }
+        // Carregamento Iniciado — apenas para ride real com started_at
+        if (evt.isReal && ride?.started_at) {
+          timeline.push({
+            timestamp: ride.started_at,
+            conferente: confName,
+            action: "Carregamento Iniciado",
+            detail: driverDetail,
+            type: "started",
+          });
         }
 
-        isFirstLoad = false;
+        // Carregamento Finalizado — apenas para ride real com finished_at
+        if (evt.isReal && ride?.finished_at) {
+          timeline.push({
+            timestamp: ride.finished_at,
+            conferente: confName,
+            action: "Carregamento Finalizado",
+            detail: driverDetail,
+            type: "finished",
+          });
+        }
       });
 
       pisoEntries.forEach((p: any) => {
