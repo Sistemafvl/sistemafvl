@@ -48,7 +48,7 @@ const formatCnpj = (v: string) => {
 
 const menuItems = [
   { title: "Visão Geral", url: "/dashboard", icon: LayoutDashboard },
-  { title: "Conferência Carregamento", url: "/dashboard/conferencia", icon: Truck },
+  { title: "Carregamento", url: "/dashboard/conferencia", icon: Truck },
   { title: "Insucessos", url: "/dashboard/retorno-piso", icon: PackageX },
   { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
   { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
