@@ -25,6 +25,7 @@ interface Ride {
   tbrCount?: number;
   returnCount?: number;
   tbrValue?: number;
+  reativoValue?: number;
 }
 
 const DriverRides = () => {
@@ -56,7 +57,7 @@ const DriverRides = () => {
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes] = await Promise.all([
+      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes, reatRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
@@ -72,6 +73,7 @@ const DriverRides = () => {
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
+        supabase.from("reativo_entries").select("ride_id, reativo_value").eq("driver_id", driverId).gte("activated_at", startDate.toISOString()).lte("activated_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString()),
       ]);
 
       // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
