@@ -660,7 +660,7 @@ const DashboardHome = () => {
                               <div className="text-xs space-y-0.5">
                                 <div className="flex items-center gap-2">
                                   <span className="text-muted-foreground font-mono">
-                                    {evt.timestamp ? format(new Date(evt.timestamp), "dd/MM HH:mm") : "—"}
+                                    {evt.timestamp ? format(new Date(evt.timestamp), "dd/MM HH:mm:ss") : "—"}
                                   </span>
                                   {evt.conferente && (
                                     <span className="text-muted-foreground">[{evt.conferente}]</span>
