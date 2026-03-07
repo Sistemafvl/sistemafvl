@@ -115,7 +115,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     );
 
     const filtered = allTbrs.filter(t => unitRideSet.has(t.ride_id));
-    const allTbrCodes = new Set<string>(filtered.map(t => t.code));
     const tbrsByDay: Record<string, number> = {};
     days.forEach(d => tbrsByDay[d] = 0);
     filtered.forEach(t => {
