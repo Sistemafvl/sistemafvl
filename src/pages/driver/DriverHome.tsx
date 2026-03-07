@@ -87,6 +87,8 @@ const DriverHome = () => {
           .eq("driver_id", driverId)
           .gte("period_start", startDate)
           .lte("period_start", endDate),
+        supabase.from("driver_fixed_values" as any).select("unit_id, target_date, fixed_value")
+          .eq("driver_id", driverId),
       ]);
       const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
         (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
@@ -103,6 +105,7 @@ const DriverHome = () => {
       setUnits(un.data ?? []);
       setCustomValues(cv.data ?? []);
       setBonuses(bn.data ?? []);
+      setFixedValues((fv as any).data ?? []);
       setLoading(false);
     };
     fetch();
