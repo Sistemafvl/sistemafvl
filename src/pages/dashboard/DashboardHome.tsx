@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { translateStatus } from "@/lib/status-labels";
-import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye, Zap, LifeBuoy, Play, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ interface TimelineEvent {
   conferente: string | null;
   action: string;
   detail: string;
-  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso";
+  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo";
   photo_url?: string | null;
   reason?: string | null;
   observations?: string | null;
@@ -144,12 +144,14 @@ const DashboardHome = () => {
       setTbrNotFound(false);
 
       // Build timeline by querying ALL tables for this TBR code
-      const [allRideTbrs, allPiso, allPs, allRto, allDnr] = await Promise.all([
+      const [allRideTbrs, allPiso, allPs, allRto, allDnr, allRescue, allReativo] = await Promise.all([
         supabase.from("ride_tbrs").select("*, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").eq("code", code),
         supabase.from("piso_entries").select("*").ilike("tbr_code", code),
         supabase.from("ps_entries").select("*").ilike("tbr_code", code),
         supabase.from("rto_entries").select("*").ilike("tbr_code", code),
         supabase.from("dnr_entries").select("*").ilike("tbr_code", code),
+        supabase.from("rescue_entries").select("*").ilike("tbr_code", code),
+        supabase.from("reativo_entries").select("*").ilike("tbr_code", code),
       ]);
 
       const rideTbrs = allRideTbrs.data ?? [];
@@ -157,8 +159,10 @@ const DashboardHome = () => {
       const psEntries = allPs.data ?? [];
       const rtoEntries = allRto.data ?? [];
       const dnrEntries = allDnr.data ?? [];
+      const rescueEntries = allRescue.data ?? [];
+      const reativoEntries = allReativo.data ?? [];
 
-      if (rideTbrs.length === 0 && pisoEntries.length === 0 && psEntries.length === 0 && rtoEntries.length === 0 && dnrEntries.length === 0) {
+      if (rideTbrs.length === 0 && pisoEntries.length === 0 && psEntries.length === 0 && rtoEntries.length === 0 && dnrEntries.length === 0 && rescueEntries.length === 0 && reativoEntries.length === 0) {
         setTbrNotFound(true);
         setTbrLoading(false);
         return;
@@ -194,6 +198,8 @@ const DashboardHome = () => {
       const driverIds = [...new Set([
         ...rideTbrs.map((rt: any) => rt.driver_rides?.driver_id).filter(Boolean),
         ...missingRidesData.map((r: any) => r.driver_id).filter(Boolean),
+        ...rescueEntries.map((r: any) => r.original_driver_id).filter(Boolean),
+        ...rescueEntries.map((r: any) => r.rescuer_driver_id).filter(Boolean),
       ])];
 
       const firstUnitId = rideTbrs.length > 0
@@ -259,6 +265,29 @@ const DashboardHome = () => {
           detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
           type: isFirstLoad ? "origin" : "loaded",
         });
+
+        // Ride started event
+        if (ride?.started_at) {
+          timeline.push({
+            timestamp: ride.started_at,
+            conferente: confName,
+            action: "Carregamento Iniciado",
+            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+            type: "started",
+          });
+        }
+
+        // Ride finished event
+        if (ride?.finished_at) {
+          timeline.push({
+            timestamp: ride.finished_at,
+            conferente: confName,
+            action: "Carregamento Finalizado",
+            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+            type: "finished",
+          });
+        }
+
         isFirstLoad = false;
       });
 
@@ -283,12 +312,13 @@ const DashboardHome = () => {
         }
       });
 
+      // PS — always open event + optional close event
       psEntries.forEach((ps: any) => {
         const confName = ps.conferente_id ? confMap.get(ps.conferente_id) ?? null : null;
         timeline.push({
           timestamp: ps.created_at,
           conferente: confName,
-          action: ps.status === "open" ? "Status: PS Aberto" : "Status: PS Fechado",
+          action: "Status: PS Aberto",
           detail: ps.description,
           type: "ps",
           photo_url: ps.photo_url,
@@ -296,34 +326,103 @@ const DashboardHome = () => {
           observations: ps.observations,
           is_seller: ps.is_seller,
         });
+        if (ps.closed_at) {
+          timeline.push({
+            timestamp: ps.closed_at,
+            conferente: confName,
+            action: "Status: PS Fechado",
+            detail: ps.description,
+            type: "ps",
+            photo_url: ps.photo_url,
+            reason: ps.reason,
+            observations: ps.observations,
+            is_seller: ps.is_seller,
+          });
+        }
       });
 
+      // RTO — always open event + optional close event
       rtoEntries.forEach((rto: any) => {
         const confName = rto.conferente_id ? confMap.get(rto.conferente_id) ?? null : null;
         timeline.push({
           timestamp: rto.created_at,
           conferente: confName,
-          action: rto.status === "open" ? "Status: RTO Aberto" : "Status: RTO Fechado",
+          action: "Status: RTO Aberto",
           detail: rto.description,
           type: "rto",
         });
+        if (rto.closed_at) {
+          timeline.push({
+            timestamp: rto.closed_at,
+            conferente: confName,
+            action: "Status: RTO Fechado",
+            detail: rto.description,
+            type: "rto",
+          });
+        }
       });
 
+      // DNR — always open event + optional analysis/close events
       dnrEntries.forEach((dnr: any) => {
+        const dnrValue = Number(dnr.dnr_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
         timeline.push({
           timestamp: dnr.created_at,
           conferente: dnr.conferente_name ?? null,
-          action: dnr.status === "open" ? "Status: DNR Aberto" : dnr.status === "analyzing" ? "Status: DNR Em Análise" : "Status: DNR Fechado",
-          detail: `${Number(dnr.dnr_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
+          action: "Status: DNR Aberto",
+          detail: `${dnrValue}${dnr.observations ? ` — ${dnr.observations}` : ""}`,
           type: "dnr",
+        });
+        if (dnr.approved_at) {
+          timeline.push({
+            timestamp: dnr.approved_at,
+            conferente: dnr.conferente_name ?? null,
+            action: "Status: DNR Em Análise",
+            detail: dnrValue,
+            type: "dnr",
+          });
+        }
+        if (dnr.closed_at) {
+          timeline.push({
+            timestamp: dnr.closed_at,
+            conferente: dnr.conferente_name ?? null,
+            action: dnr.discounted ? "Status: DNR Fechado (com desconto)" : "Status: DNR Fechado (sem desconto)",
+            detail: dnrValue,
+            type: "dnr",
+          });
+        }
+      });
+
+      // Rescue entries
+      rescueEntries.forEach((r: any) => {
+        const originalDriver = driverMap.get(r.original_driver_id);
+        const rescuerDriver = driverMap.get(r.rescuer_driver_id);
+        timeline.push({
+          timestamp: r.scanned_at ?? r.created_at,
+          conferente: null,
+          action: "Status: Resgate",
+          detail: `De: ${originalDriver?.name ?? "—"} → Para: ${rescuerDriver?.name ?? "—"}`,
+          type: "rescue",
+        });
+      });
+
+      // Reativo entries
+      reativoEntries.forEach((r: any) => {
+        const value = Number(r.reativo_value).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        timeline.push({
+          timestamp: r.activated_at ?? r.created_at,
+          conferente: r.conferente_name ?? r.manager_name ?? null,
+          action: "Status: Reativo Ativado",
+          detail: `${value} • ${r.driver_name ?? "—"} • Rota: ${r.route ?? "—"}`,
+          type: "reativo",
         });
       });
 
       // Sort chronologically
       timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-      // Build result from first ride or fallback (check real ride_tbrs first, then missing rides)
-      const firstRide = rideTbrs.length > 0 ? (rideTbrs[0] as any).driver_rides : (missingRidesData.length > 0 ? missingRidesData[0] : null);
+      // Build result from most recent ride (last loadEvent) for header
+      const lastLoadEvent = loadEvents.length > 0 ? loadEvents[loadEvents.length - 1] : null;
+      const firstRide = lastLoadEvent?.ride ?? (missingRidesData.length > 0 ? missingRidesData[0] : null);
       const firstDriver = firstRide ? driverMap.get(firstRide.driver_id) : null;
 
       // Compute composite status
@@ -552,8 +651,10 @@ const DashboardHome = () => {
                       <h4 className="font-bold italic text-xs mb-3 text-muted-foreground uppercase tracking-wide">Linha do Tempo</h4>
                       <div className="relative pl-4 space-y-0">
                         {tbrResult.timeline.map((evt, i) => {
-                          const color = evt.type === "origin" ? "text-primary" : evt.type === "removal" ? "text-destructive" : evt.type === "loaded" ? "text-primary" : evt.type === "ps" ? "text-destructive" : evt.type === "rto" ? "text-amber-600" : evt.type === "dnr" ? "text-destructive" : "text-muted-foreground";
-                          const dotColor = evt.type === "origin" ? "bg-primary" : evt.type === "removal" ? "bg-destructive" : evt.type === "ps" ? "bg-destructive" : evt.type === "rto" ? "bg-amber-600" : evt.type === "dnr" ? "bg-destructive" : "bg-muted-foreground";
+                          const colorMap: Record<string, string> = { origin: "text-primary", loaded: "text-primary", removal: "text-destructive", ps: "text-destructive", rto: "text-amber-600", dnr: "text-destructive", piso: "text-muted-foreground", started: "text-emerald-600", finished: "text-emerald-700", rescue: "text-blue-600", reativo: "text-purple-600" };
+                          const dotMap: Record<string, string> = { origin: "bg-primary", loaded: "bg-primary", removal: "bg-destructive", ps: "bg-destructive", rto: "bg-amber-600", dnr: "bg-destructive", piso: "bg-muted-foreground", started: "bg-emerald-600", finished: "bg-emerald-700", rescue: "bg-blue-600", reativo: "bg-purple-600" };
+                          const color = colorMap[evt.type] ?? "text-muted-foreground";
+                          const dotColor = dotMap[evt.type] ?? "bg-muted-foreground";
                           return (
                             <div key={i} className="relative pb-4">
                               {/* Vertical line */}
