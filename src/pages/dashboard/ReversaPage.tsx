@@ -233,16 +233,16 @@ const ReversaPage = () => {
     if (scannedEntries.length === 0) return;
 
     // Create batch record
-    const { data: batch } = await supabase
-      .from("reversa_batches")
+    const { data: batch } = await (supabase
+      .from("reversa_batches" as any)
       .insert({
         unit_id: unitSession!.id,
         conferente_name: conferenteSession?.name ?? null,
         total_scanned: scannedEntries.length,
         total_pending: pendingEntries.length,
-      } as any)
+      })
       .select("id")
-      .single();
+      .single() as any);
 
     const batchId = batch?.id;
     const now = new Date().toISOString();
