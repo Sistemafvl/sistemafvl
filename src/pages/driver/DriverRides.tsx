@@ -85,6 +85,13 @@ const DriverRides = () => {
         rideIds
       );
 
+      // Fetch conferente names
+      const conferenteMap = new Map<string, string>();
+      if (conferenteIds.length > 0) {
+        const { data: confData } = await supabase.from("user_profiles").select("id, name").in("id", conferenteIds);
+        (confData ?? []).forEach((c) => conferenteMap.set(c.id, c.name));
+      }
+
       const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       const settingsMap = new Map((settingsRes.data ?? []).map((s) => [s.unit_id, Number(s.tbr_value)]));
