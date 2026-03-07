@@ -929,6 +929,60 @@ export type Database = {
           },
         ]
       }
+      reativo_entries: {
+        Row: {
+          activated_at: string
+          conferente_name: string | null
+          created_at: string
+          driver_id: string | null
+          driver_name: string | null
+          id: string
+          login: string | null
+          manager_name: string | null
+          observations: string | null
+          reativo_value: number
+          ride_id: string | null
+          route: string | null
+          status: string
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          activated_at?: string
+          conferente_name?: string | null
+          created_at?: string
+          driver_id?: string | null
+          driver_name?: string | null
+          id?: string
+          login?: string | null
+          manager_name?: string | null
+          observations?: string | null
+          reativo_value?: number
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          activated_at?: string
+          conferente_name?: string | null
+          created_at?: string
+          driver_id?: string | null
+          driver_name?: string | null
+          id?: string
+          login?: string | null
+          manager_name?: string | null
+          observations?: string | null
+          reativo_value?: number
+          ride_id?: string | null
+          route?: string | null
+          status?: string
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       rescue_entries: {
         Row: {
           created_at: string
