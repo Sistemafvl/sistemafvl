@@ -905,6 +905,42 @@ export type Database = {
           },
         ]
       }
+      rescue_entries: {
+        Row: {
+          created_at: string
+          id: string
+          original_driver_id: string
+          original_ride_id: string | null
+          rescuer_driver_id: string
+          rescuer_ride_id: string | null
+          scanned_at: string | null
+          tbr_code: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          original_driver_id: string
+          original_ride_id?: string | null
+          rescuer_driver_id: string
+          rescuer_ride_id?: string | null
+          scanned_at?: string | null
+          tbr_code: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          original_driver_id?: string
+          original_ride_id?: string | null
+          rescuer_driver_id?: string
+          rescuer_ride_id?: string | null
+          scanned_at?: string | null
+          tbr_code?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       reversa_batches: {
         Row: {
           conferente_name: string | null
@@ -937,6 +973,7 @@ export type Database = {
           code: string
           highlight: string | null
           id: string
+          is_rescue: boolean | null
           ride_id: string
           scanned_at: string | null
           trip_number: number
@@ -945,6 +982,7 @@ export type Database = {
           code: string
           highlight?: string | null
           id?: string
+          is_rescue?: boolean | null
           ride_id: string
           scanned_at?: string | null
           trip_number?: number
@@ -953,6 +991,7 @@ export type Database = {
           code?: string
           highlight?: string | null
           id?: string
+          is_rescue?: boolean | null
           ride_id?: string
           scanned_at?: string | null
           trip_number?: number

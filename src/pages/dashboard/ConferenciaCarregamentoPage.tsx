@@ -55,6 +55,7 @@ interface Tbr {
   code: string;
   scanned_at: string;
   trip_number?: number;
+  is_rescue?: boolean;
   _duplicate?: boolean;
   _triplicate?: boolean;
   _yellowHighlight?: boolean;
@@ -1719,6 +1720,7 @@ const ConferenciaCarregamentoPage = () => {
   }, [unitId]);
 
   const getTbrItemClass = (tbr: Tbr, isInActiveRide?: boolean) => {
+    if (tbr.is_rescue) return "bg-black text-white border-black";
     if (tbr._duplicate || tbr._triplicate) return "bg-red-100 text-red-700 border-red-300";
     if (tbr._yellowHighlight) return "bg-yellow-100 text-yellow-700 border-yellow-300";
     if (tbrSearchCommitted.trim() && tbr.code.toLowerCase().includes(tbrSearchCommitted.trim().toLowerCase())) {
