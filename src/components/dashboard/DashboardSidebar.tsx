@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap } from "lucide-react";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
@@ -54,6 +54,7 @@ const menuItems = [
   { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
   { title: "DNR", url: "/dashboard/dnr", icon: FileWarning },
   { title: "Relatório Reversa", url: "/dashboard/reversa", icon: PackageSearch },
+  { title: "Reativo", url: "/dashboard/reativo", icon: Zap },
 ];
 
 const managerMenuItems = [
