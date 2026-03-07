@@ -6,13 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
 interface Ride {
   id: string;
   driver_id: string;
+  unit_id: string;
+  conferente_id: string | null;
   unit_id: string;
   completed_at: string;
   started_at: string | null;
@@ -26,6 +28,7 @@ interface Ride {
   returnCount?: number;
   tbrValue?: number;
   reativoValue?: number;
+  conferente_name?: string;
 }
 
 const DriverRides = () => {
