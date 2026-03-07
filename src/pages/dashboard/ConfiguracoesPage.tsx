@@ -31,7 +31,19 @@ interface MinPackage {
   min_packages: number;
 }
 
+interface FixedValue {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  target_date: string;
+  fixed_value: number;
+}
+
 interface DriverOption {
+  id: string;
+  name: string;
+  cpf: string;
+}
   id: string;
   name: string;
   cpf: string;
