@@ -46,12 +46,14 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
-      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData]) => {
+        fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
+      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData]) => {
         setRides(ridesData);
         setDnrEntries(dnrData);
         setSettings(settingsData);
         setCustomValues(customData);
         setMinPackages(minPkgData);
+        setFixedValues(fixedData);
         setLoading(false);
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
