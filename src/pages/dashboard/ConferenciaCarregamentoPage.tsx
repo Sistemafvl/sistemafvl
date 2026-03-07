@@ -1743,7 +1743,7 @@ const ConferenciaCarregamentoPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
+        <h1 className="text-2xl font-bold italic">Carregamento</h1>
         {managerSession && (
           <Button
             variant="outline"
