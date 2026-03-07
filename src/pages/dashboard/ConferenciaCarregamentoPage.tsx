@@ -1148,6 +1148,79 @@ const ConferenciaCarregamentoPage = () => {
   const fetchOpenRtosRef = useRef(fetchOpenRtos);
   fetchOpenRtosRef.current = fetchOpenRtos;
 
+  // Instant duplicate detection BEFORE queue — synchronous, no DB calls
+  const handleDuplicateInstant = useCallback((rideId: string, code: string): boolean => {
+    const upper = code.toUpperCase();
+    if (!upper.startsWith("TBR")) return false;
+
+    const alreadyTracked = processedCodesRef.current[rideId]?.has(upper);
+    const currentTbrs = tbrs[rideId] ?? [];
+    const existsInList = currentTbrs.some(t => t.code.toUpperCase() === upper && !t._duplicate);
+
+    if (!alreadyTracked && !existsInList) return false; // new code — not a duplicate
+
+    // It's a duplicate — handle instantly
+    if (!scanCountsRef.current[rideId]) scanCountsRef.current[rideId] = {};
+    const prevCount = scanCountsRef.current[rideId][upper] || 1; // at least 1 since it exists
+    const totalScans = prevCount + 1;
+    scanCountsRef.current[rideId][upper] = totalScans;
+
+    playErrorBeep();
+
+    if (totalScans >= 3) {
+      // 3rd+ scan: mark original as yellow permanently
+      const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === upper);
+      const sorted = [...occurrences].sort((a, b) =>
+        new Date(a.scanned_at || 0).getTime() - new Date(b.scanned_at || 0).getTime()
+      );
+      const realEntry = sorted[0];
+      const duplicateIds = sorted.slice(1).map(t => t.id);
+
+      if (realEntry?.id) {
+        supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", realEntry.id).then(() => {});
+      }
+      for (const dupId of duplicateIds) {
+        if (dupId) supabase.from("ride_tbrs").delete().eq("id", dupId).then(() => {});
+      }
+
+      realtimeLockUntil.current = Date.now() + 15000;
+
+      const idsToRemove = new Set(duplicateIds.filter(Boolean));
+      setTbrs((prev) => {
+        const list = prev[rideId] ?? [];
+        const filtered = list
+          .filter(t => !idsToRemove.has(t.id))
+          .map(t => t.id === realEntry?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
+        return { ...prev, [rideId]: filtered };
+      });
+    } else {
+      // 2nd scan: temporary red flash
+      const tempId = crypto.randomUUID();
+      const tempTbr: Tbr = { id: tempId, code, scanned_at: new Date().toISOString(), _duplicate: true };
+
+      realtimeLockUntil.current = Date.now() + 15000;
+
+      setTbrs((prev) => {
+        const updated = (prev[rideId] ?? []).map(t =>
+          t.code.toUpperCase() === upper ? { ...t, _duplicate: true } : t
+        );
+        return { ...prev, [rideId]: [tempTbr, ...updated] };
+      });
+
+      setTimeout(() => {
+        setTbrs((prev) => {
+          const list = prev[rideId] ?? [];
+          const filtered = list
+            .filter(t => t.id !== tempId)
+            .map(t => t.code.toUpperCase() === upper ? { ...t, _duplicate: false } : t);
+          return { ...prev, [rideId]: filtered };
+        });
+      }, 1000);
+    }
+
+    return true; // was a duplicate — don't enqueue
+  }, [tbrs]);
+
   const processQueue = useCallback(async (rideId: string) => {
     if (processingQueueRef.current[rideId]) return;
     processingQueueRef.current[rideId] = true;
@@ -1190,6 +1263,10 @@ const ConferenciaCarregamentoPage = () => {
       requestAnimationFrame(() => {
         inputRefs.current[rideId]?.focus();
       });
+
+      // Check for duplicate INSTANTLY before enqueuing
+      if (handleDuplicateInstant(rideId, code)) return;
+
       // Enqueue the code for background processing
       if (!queueRef.current[rideId]) queueRef.current[rideId] = [];
       queueRef.current[rideId].push(code);
@@ -1202,6 +1279,12 @@ const ConferenciaCarregamentoPage = () => {
       e.preventDefault();
       const value = tbrInputs[rideId]?.trim();
       if (value) {
+        // Check for duplicate INSTANTLY before saving
+        if (handleDuplicateInstant(rideId, value)) {
+          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+          return;
+        }
         saveTbr(rideId, value);
       }
     }
