@@ -2517,6 +2517,29 @@ const ConferenciaCarregamentoPage = () => {
                           Insucesso ({getSelectedCount(ride.id)})
                         </Button>
                       )}
+                      {focusedTbrs.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setSelectedTbrsForDelete(prev => {
+                              const current = new Set(prev[ride.id] ?? []);
+                              const allSelected = focusedTbrs.every(t => current.has(t.id));
+                              if (allSelected) {
+                                return { ...prev, [ride.id]: new Set() };
+                              } else {
+                                return { ...prev, [ride.id]: new Set(focusedTbrs.map(t => t.id)) };
+                              }
+                            });
+                          }}
+                          className={cn("ml-auto h-6 w-6 flex items-center justify-center rounded transition-colors",
+                            focusedTbrs.every(t => (selectedTbrsForDelete[ride.id] ?? new Set()).has(t.id))
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                          )}
+                          title="Selecionar todos os TBRs"
+                        >
+                          <CheckSquare className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                     {focusedTbrs.length > 0 && (
                       <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
