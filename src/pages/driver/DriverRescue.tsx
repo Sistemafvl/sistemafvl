@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { LifeBuoy, Camera, X, Package, ArrowRight, User } from "lucide-react";
+import { LifeBuoy, Camera, X, Package, ArrowRight, User, CalendarDays } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,10 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
-import { format } from "date-fns";
+import { format, startOfDay, endOfDay, subDays } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 
 interface RescuedTbr {
   id: string;
@@ -30,6 +33,12 @@ const DriverRescue = () => {
   const [showCamera, setShowCamera] = useState(false);
   const [lastScannedCode, setLastScannedCode] = useState("");
 
+  // Date filter - default to today
+  const [dateFrom, setDateFrom] = useState<Date>(startOfDay(new Date()));
+  const [dateTo, setDateTo] = useState<Date>(endOfDay(new Date()));
+  const [showFromCal, setShowFromCal] = useState(false);
+  const [showToCal, setShowToCal] = useState(false);
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -37,39 +46,44 @@ const DriverRescue = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const processTbrRef = useRef<(code: string) => Promise<void>>();
 
-  // Load existing rescue entries for today
-  useEffect(() => {
+  // Load rescue entries filtered by date
+  const fetchRescueEntries = useCallback(async () => {
     if (!unitId || !rescuerDriverId) return;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
-    supabase
+    const { data } = await supabase
       .from("rescue_entries")
       .select("*")
       .eq("unit_id", unitId)
       .eq("rescuer_driver_id", rescuerDriverId)
-      .gte("created_at", today.toISOString())
-      .order("created_at", { ascending: false })
-      .then(async ({ data }) => {
-        if (!data || data.length === 0) return;
-        // Get original driver names
-        const driverIds = [...new Set(data.map((r: any) => r.original_driver_id))];
-        const { data: drivers } = await supabase
-          .from("drivers_public")
-          .select("id, name")
-          .in("id", driverIds);
-        const driverMap = new Map((drivers ?? []).map((d: any) => [d.id, d.name ?? "Desconhecido"]));
+      .gte("created_at", dateFrom.toISOString())
+      .lte("created_at", dateTo.toISOString())
+      .order("created_at", { ascending: false });
 
-        setRescuedTbrs(
-          data.map((r: any) => ({
-            id: r.id,
-            tbrCode: r.tbr_code,
-            originalDriverName: driverMap.get(r.original_driver_id) ?? "Desconhecido",
-            scannedAt: r.scanned_at ?? r.created_at,
-          }))
-        );
-      });
-  }, [unitId, rescuerDriverId]);
+    if (!data || data.length === 0) {
+      setRescuedTbrs([]);
+      return;
+    }
+
+    const driverIds = [...new Set(data.map((r: any) => r.original_driver_id))];
+    const { data: drivers } = await supabase
+      .from("drivers_public")
+      .select("id, name")
+      .in("id", driverIds);
+    const driverMap = new Map((drivers ?? []).map((d: any) => [d.id, d.name ?? "Desconhecido"]));
+
+    setRescuedTbrs(
+      data.map((r: any) => ({
+        id: r.id,
+        tbrCode: r.tbr_code,
+        originalDriverName: driverMap.get(r.original_driver_id) ?? "Desconhecido",
+        scannedAt: r.scanned_at ?? r.created_at,
+      }))
+    );
+  }, [unitId, rescuerDriverId, dateFrom, dateTo]);
+
+  useEffect(() => {
+    fetchRescueEntries();
+  }, [fetchRescueEntries]);
 
   const playSuccessBeep = () => {
     try {
@@ -311,6 +325,50 @@ const DriverRescue = () => {
           <p className="text-xs text-muted-foreground">
             Bipe os TBRs do motorista que precisa de socorro
           </p>
+        </div>
+      </div>
+
+      {/* Date Filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Popover open={showFromCal} onOpenChange={setShowFromCal}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {format(dateFrom, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFrom}
+              onSelect={(d) => { if (d) { setDateFrom(startOfDay(d)); setShowFromCal(false); } }}
+              locale={ptBR}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <span className="text-xs text-muted-foreground">até</span>
+        <Popover open={showToCal} onOpenChange={setShowToCal}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {format(dateTo, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateTo}
+              onSelect={(d) => { if (d) { setDateTo(endOfDay(d)); setShowToCal(false); } }}
+              locale={ptBR}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <div className="flex gap-1 ml-auto">
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(new Date())); setDateTo(endOfDay(new Date())); }}>Hoje</Button>
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(subDays(new Date(), 7))); setDateTo(endOfDay(new Date())); }}>7d</Button>
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(subDays(new Date(), 30))); setDateTo(endOfDay(new Date())); }}>30d</Button>
         </div>
       </div>
 
