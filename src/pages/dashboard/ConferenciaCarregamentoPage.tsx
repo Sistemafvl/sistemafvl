@@ -230,6 +230,16 @@ const ConferenciaCarregamentoPage = () => {
   // Call driver
   const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
 
+  // Retroactive loading
+  const [showRetroModal, setShowRetroModal] = useState(false);
+  const [retroDate, setRetroDate] = useState<Date | undefined>(undefined);
+  const [retroDriverSearch, setRetroDriverSearch] = useState("");
+  const [retroDriverResults, setRetroDriverResults] = useState<SwapDriver[]>([]);
+  const [retroSelectedDriver, setRetroSelectedDriver] = useState<SwapDriver | null>(null);
+  const [retroLoading, setRetroLoading] = useState(false);
+  const [retroSearchLoading, setRetroSearchLoading] = useState(false);
+  const retroDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
 
@@ -1752,7 +1762,26 @@ const ConferenciaCarregamentoPage = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
+        {managerSession && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => {
+              setShowRetroModal(true);
+              setRetroDate(undefined);
+              setRetroDriverSearch("");
+              setRetroDriverResults([]);
+              setRetroSelectedDriver(null);
+            }}
+          >
+            <History className="h-3.5 w-3.5" />
+            Retroativo
+          </Button>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
