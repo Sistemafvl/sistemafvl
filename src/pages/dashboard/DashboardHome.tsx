@@ -420,8 +420,9 @@ const DashboardHome = () => {
       // Sort chronologically
       timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
-      // Build result from first ride or fallback (check real ride_tbrs first, then missing rides)
-      const firstRide = rideTbrs.length > 0 ? (rideTbrs[0] as any).driver_rides : (missingRidesData.length > 0 ? missingRidesData[0] : null);
+      // Build result from most recent ride (last loadEvent) for header
+      const lastLoadEvent = loadEvents.length > 0 ? loadEvents[loadEvents.length - 1] : null;
+      const firstRide = lastLoadEvent?.ride ?? (missingRidesData.length > 0 ? missingRidesData[0] : null);
       const firstDriver = firstRide ? driverMap.get(firstRide.driver_id) : null;
 
       // Compute composite status
