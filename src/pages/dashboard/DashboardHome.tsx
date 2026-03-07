@@ -297,15 +297,6 @@ const DashboardHome = () => {
           detail: `${p.reason}${p.driver_name ? ` • ${p.driver_name}` : ""}`,
           type: isRemoval ? "removal" : "piso",
         });
-        if (p.closed_at) {
-          timeline.push({
-            timestamp: p.closed_at,
-            conferente: confName,
-            action: "Status: Piso Fechado",
-            detail: p.reason,
-            type: "piso",
-          });
-        }
       });
 
       // PS — always open event + optional close event
