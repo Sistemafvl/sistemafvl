@@ -98,6 +98,7 @@ const ConfiguracoesPage = () => {
   const [fvValue, setFvValue] = useState("");
   const [fvSaving, setFvSaving] = useState(false);
 
+  const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
     setLogins(data ?? []);
