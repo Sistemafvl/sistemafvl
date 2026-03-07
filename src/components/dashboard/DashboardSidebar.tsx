@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -52,6 +52,7 @@ const menuItems = [
   { title: "PS", url: "/dashboard/ps", icon: AlertTriangle },
   { title: "RTO", url: "/dashboard/rto", icon: RotateCcw },
   { title: "DNR", url: "/dashboard/dnr", icon: FileWarning },
+  { title: "Relatório Reversa", url: "/dashboard/reversa", icon: PackageSearch },
 ];
 
 const managerMenuItems = [

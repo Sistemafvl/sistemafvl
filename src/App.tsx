@@ -24,6 +24,7 @@ import DriverReviews from "./pages/driver/DriverReviews";
 import DriverSettings from "./pages/driver/DriverSettings";
 import DriverDocuments from "./pages/driver/DriverDocuments";
 import DNRPage from "./pages/dashboard/DNRPage";
+import ReversaPage from "./pages/dashboard/ReversaPage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import AdminLayout from "./components/admin/AdminLayout";
@@ -80,6 +81,7 @@ const App = () => (
             <Route path="financeiro" element={<FinanceiroPage />} />
             <Route path="configuracoes" element={<ConfiguracoesPage />} />
             <Route path="dnr" element={<DNRPage />} />
+            <Route path="reversa" element={<ReversaPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
