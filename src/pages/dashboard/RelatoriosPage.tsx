@@ -413,6 +413,20 @@ const RelatoriosPage = () => {
       }
     });
 
+    // Fetch reativo entries for the period
+    const { data: reativoData } = await supabase.from("reativo_entries")
+      .select("driver_id, reativo_value")
+      .eq("unit_id", unitId!)
+      .eq("status", "active")
+      .gte("activated_at", startDate.toISOString())
+      .lte("activated_at", endDate.toISOString());
+    const reativoByDriver = new Map<string, number>();
+    (reativoData ?? []).forEach((r: any) => {
+      if (r.driver_id) {
+        reativoByDriver.set(r.driver_id, (reativoByDriver.get(r.driver_id) ?? 0) + Number(r.reativo_value));
+      }
+    });
+
     const pixByDriver = new Map<string, string>();
     await Promise.all(driverIds.map(async (did) => {
       try {
