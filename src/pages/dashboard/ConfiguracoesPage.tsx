@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package, CalendarCheck } from "lucide-react";
+import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package, CalendarCheck, Pencil, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomValue {
@@ -57,6 +57,9 @@ const ConfiguracoesPage = () => {
   const [loginsLoading, setLoginsLoading] = useState(false);
   const [loginsPage, setLoginsPage] = useState(1);
   const loginsPerPage = 10;
+  const [editingLoginId, setEditingLoginId] = useState<string | null>(null);
+  const [editLoginValue, setEditLoginValue] = useState("");
+  const [editPasswordValue, setEditPasswordValue] = useState("");
 
   // TBR Value
   const [tbrValue, setTbrValue] = useState("");
@@ -183,6 +186,20 @@ const ConfiguracoesPage = () => {
   const handleDeleteLogin = async (id: string) => {
     await supabase.from("unit_logins").delete().eq("id", id);
     await fetchLogins();
+  };
+
+  const handleEditLogin = (l: { id: string; login: string; password: string }) => {
+    setEditingLoginId(l.id);
+    setEditLoginValue(l.login);
+    setEditPasswordValue(l.password);
+  };
+
+  const handleSaveEditLogin = async () => {
+    if (!editingLoginId || !editLoginValue.trim() || !editPasswordValue.trim()) return;
+    await supabase.from("unit_logins").update({ login: editLoginValue.trim(), password: editPasswordValue.trim() } as any).eq("id", editingLoginId);
+    setEditingLoginId(null);
+    await fetchLogins();
+    toast({ title: "Login atualizado!" });
   };
 
   const formatCurrency = (value: number) => value.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -333,11 +350,29 @@ const ConfiguracoesPage = () => {
             <div className="space-y-2">
               {logins.slice((loginsPage - 1) * loginsPerPage, loginsPage * loginsPerPage).map((l) => (
                 <div key={l.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
-                  <span className="font-semibold flex-1">{l.login}</span>
-                  <span className="text-muted-foreground flex-1">{l.password}</span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteLogin(l.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {editingLoginId === l.id ? (
+                    <>
+                      <Input value={editLoginValue} onChange={(e) => setEditLoginValue(e.target.value)} className="flex-1 h-8" placeholder="Login" />
+                      <Input value={editPasswordValue} onChange={(e) => setEditPasswordValue(e.target.value)} className="flex-1 h-8" placeholder="Senha" />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={handleSaveEditLogin}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" onClick={() => setEditingLoginId(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold flex-1">{l.login}</span>
+                      <span className="text-muted-foreground flex-1">{l.password}</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-primary" onClick={() => handleEditLogin(l)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteLogin(l.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               ))}
               {logins.length > loginsPerPage && (

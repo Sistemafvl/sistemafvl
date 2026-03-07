@@ -433,50 +433,7 @@ const CiclosPage = () => {
                 </Button>
               </div>
 
-              {/* Cycle cards */}
-              {metrics && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="rounded-lg border bg-card p-4 text-center space-y-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="h-4 w-4 text-primary" />
-                      <h4 className="font-bold italic text-sm">Ciclo 1</h4>
-                    </div>
-                    <p className="text-3xl font-bold text-primary">{metrics.cycle1}</p>
-                    <p className="text-xs text-muted-foreground">Até 08:30</p>
-                    <Badge variant="outline" className="text-xs">{metrics.cycle1} carregamentos</Badge>
-                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-                      <Package className="h-3 w-3" />
-                      <span className="font-semibold text-foreground">{metrics.cycle1Tbrs}</span> TBRs lidos
-                    </div>
-                  </div>
-                  <div className="rounded-lg border bg-card p-4 text-center space-y-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="h-4 w-4 text-primary" />
-                      <h4 className="font-bold italic text-sm">Ciclo 2</h4>
-                    </div>
-                    <p className="text-3xl font-bold text-primary">{metrics.cycle2}</p>
-                    <p className="text-xs text-muted-foreground">Até 09:30 (acumulado)</p>
-                    <Badge variant="outline" className="text-xs">+{metrics.cycle2 - metrics.cycle1} no ciclo</Badge>
-                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-                      <Package className="h-3 w-3" />
-                      <span className="font-semibold text-foreground">{metrics.cycle2Tbrs}</span> TBRs lidos
-                    </div>
-                  </div>
-                  <div className="rounded-lg border bg-card p-4 text-center space-y-2">
-                    <div className="flex items-center justify-center gap-2">
-                      <RefreshCw className="h-4 w-4 text-primary" />
-                      <h4 className="font-bold italic text-sm">Ciclo 3</h4>
-                    </div>
-                    <p className="text-3xl font-bold text-primary">{metrics.cycle3}</p>
-                    <p className="text-xs text-muted-foreground">Total do dia</p>
-                    <Badge variant="outline" className="text-xs">+{metrics.cycle3 - metrics.cycle2} no ciclo</Badge>
-                    <div className="flex items-center justify-center gap-1 text-xs text-muted-foreground">
-                      <Package className="h-3 w-3" />
-                      <span className="font-semibold text-foreground">{metrics.cycle3Tbrs}</span> TBRs lidos
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* Cycle cards removed — data available in report modal */}
             </>
           )}
         </CardContent>
