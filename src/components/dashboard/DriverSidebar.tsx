@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { LayoutDashboard, Users, Car, User, Star, Settings, LogOut, FileText, FileWarning, DollarSign, AlertCircle } from "lucide-react";
+import { LayoutDashboard, Users, Car, User, Star, Settings, LogOut, FileText, FileWarning, DollarSign, AlertCircle, LifeBuoy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
@@ -27,6 +27,7 @@ const driverMenuItems = [
   { title: "Perfil", url: "/motorista/perfil", icon: User },
   { title: "Documentos", url: "/motorista/documentos", icon: FileText },
   { title: "DNR", url: "/motorista/dnr", icon: FileWarning },
+  { title: "Socorrendo", url: "/motorista/socorrendo", icon: LifeBuoy },
   { title: "Avaliar Unidades", url: "/motorista/avaliacoes", icon: Star },
   { title: "Configurações", url: "/motorista/configuracoes", icon: Settings },
 ];
