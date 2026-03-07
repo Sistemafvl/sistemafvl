@@ -89,7 +89,15 @@ const ConfiguracoesPage = () => {
   const [mpValue, setMpValue] = useState("");
   const [mpSaving, setMpSaving] = useState(false);
 
-  const fetchLogins = useCallback(async () => {
+  // Fixed values
+  const [fixedValues, setFixedValues] = useState<FixedValue[]>([]);
+  const [fvDriverSearch, setFvDriverSearch] = useState("");
+  const [fvDriverResults, setFvDriverResults] = useState<DriverOption[]>([]);
+  const [fvSelectedDriver, setFvSelectedDriver] = useState<DriverOption | null>(null);
+  const [fvDate, setFvDate] = useState("");
+  const [fvValue, setFvValue] = useState("");
+  const [fvSaving, setFvSaving] = useState(false);
+
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
     setLogins(data ?? []);
