@@ -114,6 +114,8 @@ const MatrizFinanceiro = () => {
         }
       });
 
+      const reativoTotal = reativoByUnit.get(u.id) ?? 0;
+
       return {
         id: u.id,
         name: u.name,
@@ -122,9 +124,10 @@ const MatrizFinanceiro = () => {
         tbrValue: Number(settings.find(s => s.unit_id === u.id)?.tbr_value || 0),
         totalPaid,
         dnrTotal,
+        reativoTotal,
       };
     }).sort((a, b) => b.totalPaid - a.totalPaid);
-  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues]);
+  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
   
 
   const totals = useMemo(() => ({
@@ -132,6 +135,7 @@ const MatrizFinanceiro = () => {
     tbrs: unitFinancials.reduce((a, u) => a + u.tbrs, 0),
     totalPaid: unitFinancials.reduce((a, u) => a + u.totalPaid, 0),
     dnr: unitFinancials.reduce((a, u) => a + u.dnrTotal, 0),
+    reativo: unitFinancials.reduce((a, u) => a + u.reativoTotal, 0),
   }), [unitFinancials]);
 
   return (
