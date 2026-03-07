@@ -490,7 +490,7 @@ const RelatoriosPage = () => {
         },
         days, totalTbrs, totalReturns, totalCompleted,
         tbrValueUsed: tbrVal, bonus: bonusAmount,
-        totalValue: (totalCompleted * tbrVal) - dnrDiscount + bonusAmount,
+        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount,
         dnrDiscount, daysWorked: days.length, loginsUsed,
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
