@@ -495,6 +495,7 @@ const RelatoriosPage = () => {
       const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
       const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
       const bonusAmount = bonusByDriver.get(driverId) ?? 0;
+      const reativoTotal = reativoByDriver.get(driverId) ?? 0;
 
       return {
         driver: {
@@ -503,8 +504,8 @@ const RelatoriosPage = () => {
           pixKey: pixByDriver.get(driverId) ?? null,
         },
         days, totalTbrs, totalReturns, totalCompleted,
-        tbrValueUsed: tbrVal, bonus: bonusAmount,
-        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount,
+        tbrValueUsed: tbrVal, bonus: bonusAmount, reativoTotal,
+        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount + reativoTotal,
         dnrDiscount, daysWorked: days.length, loginsUsed,
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
