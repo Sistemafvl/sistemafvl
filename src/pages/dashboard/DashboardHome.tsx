@@ -1,6 +1,6 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { translateStatus } from "@/lib/status-labels";
-import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye } from "lucide-react";
+import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye, Zap, LifeBuoy, Play, Flag } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -47,7 +47,7 @@ interface TimelineEvent {
   conferente: string | null;
   action: string;
   detail: string;
-  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso";
+  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo";
   photo_url?: string | null;
   reason?: string | null;
   observations?: string | null;
@@ -144,12 +144,14 @@ const DashboardHome = () => {
       setTbrNotFound(false);
 
       // Build timeline by querying ALL tables for this TBR code
-      const [allRideTbrs, allPiso, allPs, allRto, allDnr] = await Promise.all([
+      const [allRideTbrs, allPiso, allPs, allRto, allDnr, allRescue, allReativo] = await Promise.all([
         supabase.from("ride_tbrs").select("*, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").eq("code", code),
         supabase.from("piso_entries").select("*").ilike("tbr_code", code),
         supabase.from("ps_entries").select("*").ilike("tbr_code", code),
         supabase.from("rto_entries").select("*").ilike("tbr_code", code),
         supabase.from("dnr_entries").select("*").ilike("tbr_code", code),
+        supabase.from("rescue_entries").select("*").ilike("tbr_code", code),
+        supabase.from("reativo_entries").select("*").ilike("tbr_code", code),
       ]);
 
       const rideTbrs = allRideTbrs.data ?? [];
@@ -157,8 +159,10 @@ const DashboardHome = () => {
       const psEntries = allPs.data ?? [];
       const rtoEntries = allRto.data ?? [];
       const dnrEntries = allDnr.data ?? [];
+      const rescueEntries = allRescue.data ?? [];
+      const reativoEntries = allReativo.data ?? [];
 
-      if (rideTbrs.length === 0 && pisoEntries.length === 0 && psEntries.length === 0 && rtoEntries.length === 0 && dnrEntries.length === 0) {
+      if (rideTbrs.length === 0 && pisoEntries.length === 0 && psEntries.length === 0 && rtoEntries.length === 0 && dnrEntries.length === 0 && rescueEntries.length === 0 && reativoEntries.length === 0) {
         setTbrNotFound(true);
         setTbrLoading(false);
         return;
@@ -194,6 +198,8 @@ const DashboardHome = () => {
       const driverIds = [...new Set([
         ...rideTbrs.map((rt: any) => rt.driver_rides?.driver_id).filter(Boolean),
         ...missingRidesData.map((r: any) => r.driver_id).filter(Boolean),
+        ...rescueEntries.map((r: any) => r.original_driver_id).filter(Boolean),
+        ...rescueEntries.map((r: any) => r.rescuer_driver_id).filter(Boolean),
       ])];
 
       const firstUnitId = rideTbrs.length > 0
