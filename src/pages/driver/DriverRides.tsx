@@ -124,6 +124,7 @@ const DriverRides = () => {
         returnCount: returnCountMap.get(r.id) ?? 0,
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
         reativoValue: reativoMap.get(r.id) ?? 0,
+        conferente_name: r.conferente_id ? conferenteMap.get(r.conferente_id) ?? null : null,
       })));
       setLoading(false);
     };
@@ -240,6 +241,12 @@ const DriverRides = () => {
                         <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                           <Route className="h-3 w-3 text-primary" />
                           <strong>Rota:</strong> {ride.route}
+                        </p>
+                      )}
+                      {ride.conferente_name && (
+                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <UserCheck className="h-3 w-3 text-primary" />
+                          <strong>Conferente:</strong> {ride.conferente_name}
                         </p>
                       )}
                       {ride.login && (
