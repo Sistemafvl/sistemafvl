@@ -24,6 +24,7 @@ const MatrizFinanceiro = () => {
   const [fixedValues, setFixedValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minPackages, setMinPackages] = useState<any[]>([]);
+  const [reativoByUnit, setReativoByUnit] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!domainId) return;
