@@ -266,26 +266,27 @@ const DashboardHome = () => {
           type: isFirstLoad ? "origin" : "loaded",
         });
 
-        // Ride started event
-        if (ride?.started_at) {
-          timeline.push({
-            timestamp: ride.started_at,
-            conferente: confName,
-            action: "Carregamento Iniciado",
-            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-            type: "started",
-          });
-        }
+        // Only show ride started/finished for real rides (TBR still in this ride)
+        if (evt.isReal) {
+          if (ride?.started_at) {
+            timeline.push({
+              timestamp: ride.started_at,
+              conferente: confName,
+              action: "Carregamento Iniciado",
+              detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+              type: "started",
+            });
+          }
 
-        // Ride finished event
-        if (ride?.finished_at) {
-          timeline.push({
-            timestamp: ride.finished_at,
-            conferente: confName,
-            action: "Carregamento Finalizado",
-            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
-            type: "finished",
-          });
+          if (ride?.finished_at) {
+            timeline.push({
+              timestamp: ride.finished_at,
+              conferente: confName,
+              action: "Carregamento Finalizado",
+              detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+              type: "finished",
+            });
+          }
         }
 
         isFirstLoad = false;
@@ -421,7 +422,8 @@ const DashboardHome = () => {
       timeline.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
 
       // Build result from most recent ride (last loadEvent) for header
-      const lastLoadEvent = loadEvents.length > 0 ? loadEvents[loadEvents.length - 1] : null;
+      const realLoadEvents = loadEvents.filter(e => e.isReal);
+      const lastLoadEvent = realLoadEvents.length > 0 ? realLoadEvents[realLoadEvents.length - 1] : (loadEvents.length > 0 ? loadEvents[loadEvents.length - 1] : null);
       const firstRide = lastLoadEvent?.ride ?? (missingRidesData.length > 0 ? missingRidesData[0] : null);
       const firstDriver = firstRide ? driverMap.get(firstRide.driver_id) : null;
 
