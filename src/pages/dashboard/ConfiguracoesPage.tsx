@@ -141,7 +141,18 @@ const ConfiguracoesPage = () => {
     setMinPackages(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages]);
+  const fetchFixedValues = useCallback(async () => {
+    if (!unitId) return;
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("*").eq("unit_id", unitId).order("target_date", { ascending: false }).range(from, to));
+    if (!data.length) { setFixedValues([]); return; }
+    const driverIds = [...new Set(data.map((d: any) => d.driver_id))];
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setFixedValues(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? d.driver_name ?? "—", target_date: d.target_date, fixed_value: Number(d.fixed_value) })));
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
@@ -158,6 +169,7 @@ const ConfiguracoesPage = () => {
   useEffect(() => { const t = setTimeout(() => searchDrivers(cvDriverSearch, setCvDriverResults), 300); return () => clearTimeout(t); }, [cvDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(bonusDriverSearch, setBonusDriverResults), 300); return () => clearTimeout(t); }, [bonusDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(mpDriverSearch, setMpDriverResults), 300); return () => clearTimeout(t); }, [mpDriverSearch]);
+  useEffect(() => { const t = setTimeout(() => searchDrivers(fvDriverSearch, setFvDriverResults), 300); return () => clearTimeout(t); }, [fvDriverSearch]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
