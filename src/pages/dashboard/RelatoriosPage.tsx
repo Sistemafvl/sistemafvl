@@ -381,6 +381,8 @@ const RelatoriosPage = () => {
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
       supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
+      supabase.from("driver_fixed_values" as any).select("driver_id, target_date, fixed_value").eq("unit_id", unitId!)
+        .gte("target_date", format(startDate, "yyyy-MM-dd")).lte("target_date", format(endDate, "yyyy-MM-dd")),
     ]);
     const tbrsData = await fetchAllRowsWithIn<{ ride_id: string; code: string }>(
       (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
@@ -397,6 +399,8 @@ const RelatoriosPage = () => {
     (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
     const minPkgMap = new Map<string, number>();
     ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => { minPkgMap.set(mp.driver_id, Number(mp.min_packages)); });
+    const fixedValueMap = new Map<string, number>();
+    ((fixedValuesRes as any)?.data ?? []).forEach((fv: any) => { fixedValueMap.set(`${fv.driver_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     const { data: dnrData } = await supabase.from("dnr_entries").select("id, driver_id, dnr_value")
       .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
