@@ -264,10 +264,11 @@ const DashboardHome = () => {
           type: index === 0 ? "origin" : "loaded",
         });
 
-        // Carregamento Iniciado — apenas para ride real com started_at
-        if (evt.isReal && ride?.started_at) {
+        // Carregamento Iniciado — apenas para o primeiro evento (primeiro motorista)
+        if (index === 0) {
+          const ts = evt.isReal && ride?.started_at ? ride.started_at : evt.timestamp;
           timeline.push({
-            timestamp: ride.started_at,
+            timestamp: ts,
             conferente: confName,
             action: "Carregamento Iniciado",
             detail: driverDetail,
