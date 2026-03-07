@@ -584,6 +584,78 @@ const ConfiguracoesPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Valor Fixo de Saída */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <CalendarCheck className="h-5 w-5 text-primary" />
+            Valor Fixo de Saída
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Defina um valor fixo de pagamento para um motorista em uma data específica. Naquele dia, ele receberá esse valor independente da quantidade de pacotes.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={fvSelectedDriver ? fvSelectedDriver.name : fvDriverSearch}
+                onChange={(e) => { setFvDriverSearch(e.target.value); setFvSelectedDriver(null); }}
+                placeholder="Buscar motorista por nome ou CPF..."
+                className="pl-9"
+              />
+              {fvSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setFvSelectedDriver(null); setFvDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {fvDriverResults.length > 0 && !fvSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {fvDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setFvSelectedDriver(d); setFvDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {fvSelectedDriver && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Data</label>
+                  <Input type="date" value={fvDate} onChange={(e) => setFvDate(e.target.value)} />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm font-semibold text-muted-foreground">R$</span>
+                  <Input value={fvValue} onChange={handleFvValueChange} placeholder="0,00" className="max-w-[140px] text-right font-mono" />
+                  <Button onClick={handleAddFixedValue} disabled={fvSaving || !fvValue || !fvDate} size="sm">
+                    {fvSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          {fixedValues.length > 0 && (
+            <div className="space-y-2">
+              {fixedValues.map(fv => (
+                <div key={fv.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <div className="flex-1">
+                    <span className="font-semibold">{fv.driver_name}</span>
+                    <p className="text-xs text-muted-foreground">Data: {fv.target_date}</p>
+                  </div>
+                  <span className="text-primary font-mono font-bold">R$ {formatCurrency(fv.fixed_value)}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteFixedValue(fv.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
