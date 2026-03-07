@@ -198,7 +198,7 @@ const DriverRides = () => {
             rides.map((ride, idx) => {
               const totalLidos = ride.tbrCount ?? 0;
               const entregues = ride.tbrCount ?? 0;
-              const totalGanho = entregues * (ride.tbrValue ?? 0);
+              const totalGanho = entregues * (ride.tbrValue ?? 0) + (ride.reativoValue ?? 0);
               const reativoVal = ride.reativoValue ?? 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);
 
