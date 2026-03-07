@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
-import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Badge } from "@/components/ui/badge";
 import { AlertTriangle, X } from "lucide-react";
@@ -36,7 +35,6 @@ const InsucessoBalloon = () => {
       .select("id, tbr_code, route, driver_name, created_at, reason")
       .eq("unit_id", unitId)
       .eq("status", "open")
-      .in("reason", OPERATIONAL_PISO_REASONS)
       .lt("created_at", yesterdayEnd)
       .order("created_at", { ascending: false });
 

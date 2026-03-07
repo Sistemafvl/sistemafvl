@@ -1,0 +1,1 @@
+CREATE POLICY "Anon can delete unit_logins" ON public.unit_logins FOR DELETE USING (true);
