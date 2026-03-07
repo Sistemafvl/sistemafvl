@@ -291,68 +291,96 @@ const DriverHome = () => {
   }, [rides, metrics, units]);
 
 
-  // Compute quinzena (fortnight) earnings
-  const quinzenaValue = useMemo(() => {
-    const br = getBrazilNow();
-    const day = br.getDate();
-    const year = br.getFullYear();
-    const month = br.getMonth();
-    const qStart = day <= 15
-      ? new Date(year, month, 1)
-      : new Date(year, month, 16);
-    const qEnd = day <= 15
-      ? new Date(year, month, 15, 23, 59, 59)
-      : new Date(year, month + 1, 0, 23, 59, 59); // last day of month
+  // Compute quinzena (fortnight) earnings — independent fetch
+  const [quinzenaValue, setQuinzenaValue] = useState(0);
+  useEffect(() => {
+    if (!driverId) return;
+    const unitId = unitSession?.id;
+    if (!unitId) return;
 
-    const qStartStr = `${qStart.getFullYear()}-${String(qStart.getMonth() + 1).padStart(2, "0")}-${String(qStart.getDate()).padStart(2, "0")}`;
-    const qEndStr = `${qEnd.getFullYear()}-${String(qEnd.getMonth() + 1).padStart(2, "0")}-${String(qEnd.getDate()).padStart(2, "0")}`;
+    const fetchQuinzena = async () => {
+      const br = getBrazilNow();
+      const day = br.getDate();
+      const year = br.getFullYear();
+      const month = br.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const qStartDay = day <= 15 ? 1 : 16;
+      const qEndDay = day <= 15 ? 15 : lastDay;
+      const qStartStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(qStartDay).padStart(2, "0")}`;
+      const qEndStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(qEndDay).padStart(2, "0")}`;
+      const { start } = getBrazilDayRange(qStartStr);
+      const { end } = getBrazilDayRange(qEndStr);
 
-    // Sum totalGanho for rides within this fortnight
-    const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
-    const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
-    const fvMap = new Map<string, number>();
-    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
+      const { data: qRides } = await supabase
+        .from("driver_rides")
+        .select("*")
+        .eq("driver_id", driverId)
+        .eq("unit_id", unitId)
+        .gte("completed_at", start)
+        .lte("completed_at", end)
+        .order("completed_at", { ascending: true });
 
-    const ridesByDay = new Map<string, string[]>();
-    rides.forEach((r: any) => {
-      const rDay = toBrazilDateStr(r.completed_at);
-      if (rDay >= qStartStr && rDay <= qEndStr) {
+      const r = qRides ?? [];
+      if (r.length === 0) { setQuinzenaValue(0); return; }
+
+      const rideIds = r.map((x: any) => x.id);
+      const unitIds = [...new Set(r.map((x: any) => x.unit_id))];
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
+
+      const [piRaw, psData, rtoData, usRes, cvRes, bnRes, fvRes, tbrData, reatRes] = await Promise.all([
+        fetchAllRowsWithIn<any>((ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to), rideIds),
+        fetchAllRowsWithIn<any>((ids) => (from, to) => supabase.from("ps_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to), rideIds),
+        fetchAllRowsWithIn<any>((ids) => (from, to) => supabase.from("rto_entries").select("id, ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to), rideIds),
+        supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
+        supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
+        supabase.from("driver_bonus").select("amount, period_start").eq("driver_id", driverId).gte("period_start", qStartStr).lte("period_start", qEndStr),
+        supabase.from("driver_fixed_values" as any).select("unit_id, target_date, fixed_value").eq("driver_id", driverId),
+        fetchAllRowsWithIn<any>((ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to), rideIds),
+        supabase.from("reativo_entries").select("reativo_value").eq("driver_id", driverId).eq("unit_id", unitId).gte("activated_at", start).lte("activated_at", end),
+      ]);
+
+      const piData = piRaw.filter((p: any) => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
+      const settingsMap = new Map((usRes.data ?? []).map((s: any) => [s.unit_id, Number(s.tbr_value)]));
+      const customMap = new Map((cvRes.data ?? []).map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+      const fvMap = new Map<string, number>();
+      ((fvRes as any).data ?? []).forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
+
+      const ridesByDay = new Map<string, string[]>();
+      r.forEach((ride: any) => {
+        const rDay = toBrazilDateStr(ride.completed_at);
         if (!ridesByDay.has(rDay)) ridesByDay.set(rDay, []);
-        ridesByDay.get(rDay)!.push(r.id);
-      }
-    });
+        ridesByDay.get(rDay)!.push(ride.id);
+      });
 
-    let total = 0;
-    ridesByDay.forEach((rideIds, rDay) => {
-      const firstRide = rides.find((r: any) => r.id === rideIds[0]);
-      const unitId = firstRide?.unit_id;
-      const fixedKey = unitId ? `${unitId}_${rDay}` : "";
-      const fixedVal = fvMap.get(fixedKey);
-      if (fixedVal !== undefined) {
-        total += fixedVal;
-      } else {
-        const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
-        const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
-        const returnCodes = new Set<string>();
-        [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
-          if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
-        });
-        const dayTbrCount = uniqueCodes.size;
-        const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
-        const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-        total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
-      }
-    });
+      let total = 0;
+      ridesByDay.forEach((dayRideIds, rDay) => {
+        const firstRide = r.find((ride: any) => ride.id === dayRideIds[0]);
+        const uid = firstRide?.unit_id;
+        const fixedKey = uid ? `${uid}_${rDay}` : "";
+        const fixedVal = fvMap.get(fixedKey);
+        if (fixedVal !== undefined) {
+          total += fixedVal;
+        } else {
+          const dayTbrs = tbrData.filter((t: any) => dayRideIds.includes(t.ride_id));
+          const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
+          const returnCodes = new Set<string>();
+          [...piData, ...psData, ...rtoData].forEach((p: any) => {
+            if (p.ride_id && dayRideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
+          });
+          const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+          const tbrVal = (uid && customMap.get(uid)) ?? (uid && settingsMap.get(uid)) ?? 0;
+          total += Math.max(0, uniqueCodes.size - dayReturnCount) * tbrVal;
+        }
+      });
 
-    // Add bonuses in the period
-    bonuses.forEach((b: any) => {
-      if (b.period_start >= qStartStr && b.period_start <= qEndStr) {
-        total += Number(b.amount);
-      }
-    });
+      // Add bonuses + reativos
+      (bnRes.data ?? []).forEach((b: any) => { total += Number(b.amount); });
+      (reatRes.data ?? []).forEach((re: any) => { total += Number(re.reativo_value); });
 
-    return total;
-  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues]);
+      setQuinzenaValue(total);
+    };
+    fetchQuinzena();
+  }, [driverId]);
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },

@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Target, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +25,7 @@ interface Ride {
   tbrCount?: number;
   returnCount?: number;
   tbrValue?: number;
+  reativoValue?: number;
 }
 
 const DriverRides = () => {
@@ -56,7 +57,7 @@ const DriverRides = () => {
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes] = await Promise.all([
+      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes, reatRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
@@ -72,6 +73,7 @@ const DriverRides = () => {
         ),
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
+        supabase.from("reativo_entries").select("ride_id, reativo_value").eq("driver_id", driverId).gte("activated_at", startDate.toISOString()).lte("activated_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString()),
       ]);
 
       // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
@@ -99,7 +101,11 @@ const DriverRides = () => {
       const returnCountMap = new Map<string, number>();
       returnTbrSets.forEach((set, rideId) => returnCountMap.set(rideId, set.size));
 
-  
+      // Reativo values per ride
+      const reativoMap = new Map<string, number>();
+      (reatRes.data ?? []).forEach((re: any) => {
+        if (re.ride_id) reativoMap.set(re.ride_id, (reativoMap.get(re.ride_id) ?? 0) + Number(re.reativo_value));
+      });
 
       setRides(data.map((r) => ({
         ...r,
@@ -107,6 +113,7 @@ const DriverRides = () => {
         tbrCount: tbrCountMap.get(r.id) ?? 0,
         returnCount: returnCountMap.get(r.id) ?? 0,
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
+        reativoValue: reativoMap.get(r.id) ?? 0,
       })));
       setLoading(false);
     };
@@ -192,7 +199,7 @@ const DriverRides = () => {
               const totalLidos = ride.tbrCount ?? 0;
               const entregues = ride.tbrCount ?? 0;
               const totalGanho = entregues * (ride.tbrValue ?? 0);
-              const performance = totalLidos > 0 ? (entregues / totalLidos) * 100 : 0;
+              const reativoVal = ride.reativoValue ?? 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);
 
               return (
@@ -265,10 +272,10 @@ const DriverRides = () => {
                        <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
                        <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
                      </div>
-                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
-                       <Target className="h-3 w-3 text-purple-600 mb-0.5" />
-                       <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
-                       <span className="text-xs font-bold text-purple-600">{performance.toFixed(0)}%</span>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                       <Zap className="h-3 w-3 text-amber-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Reat.</span>
+                       <span className="text-xs font-bold text-amber-600">R${reativoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                      </div>
                    </div>
                 </div>
