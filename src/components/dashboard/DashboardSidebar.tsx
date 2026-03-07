@@ -267,7 +267,10 @@ const DashboardSidebar = () => {
           <Button
             variant="ghost"
             className="w-full justify-start font-semibold italic text-muted-foreground"
-            onClick={logout}
+            onClick={() => {
+              if (conferenteSession?.id) releaseSession(conferenteSession.id);
+              logout();
+            }}
           >
             <LogOut className="h-4 w-4 mr-2" />
             Sair
