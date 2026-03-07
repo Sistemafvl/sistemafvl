@@ -15,7 +15,6 @@ interface Ride {
   driver_id: string;
   unit_id: string;
   conferente_id: string | null;
-  unit_id: string;
   completed_at: string;
   started_at: string | null;
   finished_at: string | null;
