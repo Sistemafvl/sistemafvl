@@ -13,7 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  PackageSearch, Send, CheckCircle2, Clock, Camera, X, Printer, FileText, Image as ImageIcon, Keyboard, Search,
+  PackageSearch, Send, CheckCircle2, Clock, Camera, X, Printer, Image as ImageIcon, Keyboard, Search, History, Download, CalendarDays, User, Package,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { cn, formatDateBR, isValidTbrCode } from "@/lib/utils";
@@ -34,6 +34,14 @@ interface PsReversa {
   observations: string | null;
 }
 
+interface ReversaBatch {
+  id: string;
+  conferente_name: string | null;
+  total_scanned: number;
+  total_pending: number;
+  created_at: string;
+}
+
 type ModalStep = "scan" | "summary";
 
 const playSuccessBeep = () => {
@@ -41,12 +49,9 @@ const playSuccessBeep = () => {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 880;
-    gain.gain.value = 0.15;
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 880; gain.gain.value = 0.15;
+    osc.start(); osc.stop(ctx.currentTime + 0.1);
   } catch {}
 };
 
@@ -55,23 +60,24 @@ const playErrorBeep = () => {
     const ctx = new AudioContext();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.frequency.value = 300;
-    osc.type = "square";
-    gain.gain.value = 0.2;
-    osc.start();
-    osc.stop(ctx.currentTime + 0.25);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = 300; osc.type = "square"; gain.gain.value = 0.2;
+    osc.start(); osc.stop(ctx.currentTime + 0.25);
   } catch {}
 };
 
+const formatDateTime = (iso: string) => {
+  const d = new Date(iso);
+  return d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+};
+
 const ReversaPage = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, conferenteSession } = useAuthStore();
   const [entries, setEntries] = useState<PsReversa[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
 
-  // Modal state
+  // Scan modal
   const [modalOpen, setModalOpen] = useState(false);
   const [modalStep, setModalStep] = useState<ModalStep>("scan");
   const [scannedCodes, setScannedCodes] = useState<Set<string>>(new Set());
@@ -79,7 +85,7 @@ const ReversaPage = () => {
   const scanInputRef = useRef<HTMLInputElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
-  // Camera scanner
+  // Camera
   const [cameraOpen, setCameraOpen] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -87,6 +93,12 @@ const ReversaPage = () => {
 
   // PDF
   const [generatingPdf, setGeneratingPdf] = useState(false);
+
+  // History modal
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [batches, setBatches] = useState<ReversaBatch[]>([]);
+  const [loadingBatches, setLoadingBatches] = useState(false);
+  const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
 
   const fetchEntries = useCallback(async () => {
     if (!unitSession?.id) return;
@@ -104,31 +116,23 @@ const ReversaPage = () => {
 
   useEffect(() => { fetchEntries(); }, [fetchEntries]);
 
-  // Scanner input handler (barcode gun / fast typing)
-  const handleScanInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setScanInput(val);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      const code = val.trim().toUpperCase();
-      if (code.length >= 6 && isValidTbrCode(code)) {
-        processScan(code);
-        setScanInput("");
-      }
-    }, 20);
-  }, [entries, scannedCodes]);
+  // Fetch history batches
+  const fetchBatches = useCallback(async () => {
+    if (!unitSession?.id) return;
+    setLoadingBatches(true);
+    const { data } = await supabase
+      .from("reversa_batches")
+      .select("*")
+      .eq("unit_id", unitSession.id)
+      .order("created_at", { ascending: false })
+      .limit(50);
+    setBatches((data as ReversaBatch[]) ?? []);
+    setLoadingBatches(false);
+  }, [unitSession?.id]);
 
-  const handleScanKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      const code = scanInput.trim().toUpperCase();
-      if (code && isValidTbrCode(code)) {
-        processScan(code);
-        setScanInput("");
-      }
-    }
-  }, [scanInput, entries, scannedCodes]);
+  useEffect(() => { if (historyOpen) fetchBatches(); }, [historyOpen, fetchBatches]);
 
+  // Scanner
   const processScan = useCallback((code: string) => {
     if (scannedCodes.has(code)) {
       playErrorBeep();
@@ -146,21 +150,40 @@ const ReversaPage = () => {
     toast({ title: "✅ Conferido", description: code });
   }, [entries, scannedCodes]);
 
-  // Camera scanning
+  const handleScanInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setScanInput(val);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      const code = val.trim().toUpperCase();
+      if (code.length >= 6 && isValidTbrCode(code)) {
+        processScan(code);
+        setScanInput("");
+      }
+    }, 20);
+  }, [processScan]);
+
+  const handleScanKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const code = scanInput.trim().toUpperCase();
+      if (code && isValidTbrCode(code)) {
+        processScan(code);
+        setScanInput("");
+      }
+    }
+  }, [scanInput, processScan]);
+
+  // Camera
   const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      if (videoRef.current) { videoRef.current.srcObject = stream; videoRef.current.play(); }
       setCameraOpen(true);
-    } catch {
-      toast({ title: "Erro ao acessar câmera", variant: "destructive" });
-    }
+    } catch { toast({ title: "Erro ao acessar câmera", variant: "destructive" }); }
   }, []);
 
   const stopCamera = useCallback(() => {
@@ -196,7 +219,6 @@ const ReversaPage = () => {
     if (!modalOpen) { stopCamera(); setScannedCodes(new Set()); setModalStep("scan"); }
   }, [modalOpen, stopCamera]);
 
-  // Filtered entries
   const filtered = entries.filter(e => {
     if (!searchTerm) return true;
     const s = searchTerm.toUpperCase();
@@ -206,158 +228,196 @@ const ReversaPage = () => {
   const scannedEntries = entries.filter(e => scannedCodes.has(e.tbr_code.toUpperCase()));
   const pendingEntries = entries.filter(e => !scannedCodes.has(e.tbr_code.toUpperCase()));
 
-  // Finalize reversa
+  // Finalize reversa — create batch + update ps_entries
   const handleFinalize = async () => {
     if (scannedEntries.length === 0) return;
-    const ids = scannedEntries.map(e => e.id);
+
+    // Create batch record
+    const { data: batch } = await supabase
+      .from("reversa_batches")
+      .insert({
+        unit_id: unitSession!.id,
+        conferente_name: conferenteSession?.name ?? null,
+        total_scanned: scannedEntries.length,
+        total_pending: pendingEntries.length,
+      } as any)
+      .select("id")
+      .single();
+
+    const batchId = batch?.id;
     const now = new Date().toISOString();
-    // Update in batches of 50
+    const ids = scannedEntries.map(e => e.id);
+
     for (let i = 0; i < ids.length; i += 50) {
-      const batch = ids.slice(i, i + 50);
-      await supabase.from("ps_entries").update({ reversa_at: now } as any).in("id", batch);
+      const chunk = ids.slice(i, i + 50);
+      await supabase.from("ps_entries").update({
+        reversa_at: now,
+        ...(batchId ? { reversa_batch_id: batchId } : {}),
+      } as any).in("id", chunk);
     }
+
     toast({ title: "Reversa finalizada", description: `${scannedEntries.length} TBRs conferidos e removidos.` });
     setModalOpen(false);
     fetchEntries();
   };
 
-  // PDF generation
+  // Generate PDF for current pending list
   const generatePdf = async () => {
     setGeneratingPdf(true);
     try {
-      const logo = await loadLogoBase64();
-      const pdf = new jsPDF("p", "mm", "a4");
-      const pageW = 210;
-      const margin = 10;
-      const contentW = pageW - margin * 2;
-      let y = margin;
+      await buildReversaPdf(entries.map(e => ({ ...e, _status: "Pendente" })), 0, entries.length, `reversa_pendentes_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch { toast({ title: "Erro ao gerar PDF", variant: "destructive" }); }
+    setGeneratingPdf(false);
+  };
 
-      // Header
-      if (logo) pdf.addImage(logo, "PNG", margin, y, 20, 20);
-      pdf.setFontSize(14);
-      pdf.setFont("helvetica", "bold");
-      pdf.text("Relatório de Reversa", margin + 24, y + 8);
-      pdf.setFontSize(9);
-      pdf.setFont("helvetica", "normal");
-      pdf.text(`Unidade: ${unitSession?.name ?? ""}`, margin + 24, y + 14);
+  // Generate PDF for a specific batch
+  const generateBatchPdf = async (batch: ReversaBatch) => {
+    setDownloadingBatchId(batch.id);
+    try {
+      const { data: batchEntries } = await supabase
+        .from("ps_entries")
+        .select("id, tbr_code, driver_name, route, reason, description, photo_url, created_at, is_seller, observations")
+        .eq("reversa_batch_id" as any, batch.id)
+        .order("created_at", { ascending: true });
+
+      const items = (batchEntries ?? []).map((e: any) => ({ ...e, _status: "OK" }));
+      const dateStr = new Date(batch.created_at).toLocaleDateString("pt-BR").replace(/\//g, "-");
+      await buildReversaPdf(items, batch.total_scanned, batch.total_pending, `reversa_${dateStr}.pdf`, batch);
+    } catch { toast({ title: "Erro ao gerar PDF", variant: "destructive" }); }
+    setDownloadingBatchId(null);
+  };
+
+  // Shared PDF builder
+  const buildReversaPdf = async (
+    items: (PsReversa & { _status: string })[],
+    scanned: number,
+    pending: number,
+    fileName: string,
+    batch?: ReversaBatch,
+  ) => {
+    const logo = await loadLogoBase64();
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageW = 210;
+    const margin = 10;
+    const contentW = pageW - margin * 2;
+    let y = margin;
+
+    // Header
+    if (logo) pdf.addImage(logo, "PNG", margin, y, 20, 20);
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Relatório de Reversa", margin + 24, y + 8);
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`Unidade: ${unitSession?.name ?? ""}`, margin + 24, y + 14);
+    if (batch) {
+      pdf.text(`Data: ${formatDateTime(batch.created_at)}`, margin + 24, y + 19);
+      if (batch.conferente_name) {
+        pdf.text(`Conferente: ${batch.conferente_name}`, margin + 100, y + 19);
+      }
+    } else {
       pdf.text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, margin + 24, y + 19);
-      y += 28;
+    }
+    y += 28;
 
-      // Summary badges
-      pdf.setFillColor(220, 252, 231);
-      pdf.roundedRect(margin, y, contentW / 2 - 2, 12, 2, 2, "F");
-      pdf.setFillColor(254, 243, 199);
-      pdf.roundedRect(margin + contentW / 2 + 2, y, contentW / 2 - 2, 12, 2, 2, "F");
-      pdf.setFontSize(10);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(22, 101, 52);
-      pdf.text(`Conferidos: ${scannedEntries.length}`, margin + 4, y + 8);
-      pdf.setTextColor(146, 64, 14);
-      pdf.text(`Pendentes: ${pendingEntries.length}`, margin + contentW / 2 + 6, y + 8);
-      pdf.setTextColor(0, 0, 0);
-      y += 18;
+    // Summary
+    pdf.setFillColor(220, 252, 231);
+    pdf.roundedRect(margin, y, contentW / 2 - 2, 12, 2, 2, "F");
+    pdf.setFillColor(254, 243, 199);
+    pdf.roundedRect(margin + contentW / 2 + 2, y, contentW / 2 - 2, 12, 2, 2, "F");
+    pdf.setFontSize(10);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(22, 101, 52);
+    pdf.text(`Conferidos: ${scanned}`, margin + 4, y + 8);
+    pdf.setTextColor(146, 64, 14);
+    pdf.text(`Pendentes: ${pending}`, margin + contentW / 2 + 6, y + 8);
+    pdf.setTextColor(0, 0, 0);
+    y += 18;
 
-      // Table header
-      const cols = [15, 35, 25, 35, 20, 22, 20, 18];
-      const headers = ["#", "TBR", "Motorista", "Motivo", "Rota", "Data PS", "Status", "Foto"];
-      pdf.setFillColor(13, 148, 136);
-      pdf.rect(margin, y, contentW, 7, "F");
+    // Table header
+    const cols = [12, 38, 28, 35, 22, 22, 18, 15];
+    const headers = ["#", "TBR", "Motorista", "Motivo", "Rota", "Data PS", "Status", "Foto"];
+    pdf.setFillColor(13, 148, 136);
+    pdf.rect(margin, y, contentW, 7, "F");
+    pdf.setFontSize(7);
+    pdf.setFont("helvetica", "bold");
+    pdf.setTextColor(255, 255, 255);
+    let cx = margin;
+    headers.forEach((h, i) => { pdf.text(h, cx + 1, y + 5); cx += cols[i]; });
+    y += 7;
+    pdf.setTextColor(0, 0, 0);
+    pdf.setFont("helvetica", "normal");
+
+    for (let idx = 0; idx < items.length; idx++) {
+      if (y > 270) { pdf.addPage(); y = margin; }
+      const e = items[idx];
+      const rowH = 6;
+      if (idx % 2 === 0) { pdf.setFillColor(249, 250, 251); pdf.rect(margin, y, contentW, rowH, "F"); }
       pdf.setFontSize(7);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(255, 255, 255);
-      let cx = margin;
-      headers.forEach((h, i) => {
-        pdf.text(h, cx + 1, y + 5);
+      cx = margin;
+      const vals = [
+        String(idx + 1), e.tbr_code, (e.driver_name ?? "-").slice(0, 18),
+        (e.reason ?? e.description).slice(0, 22), (e.route ?? "-").slice(0, 10),
+        formatDateBR(e.created_at), e._status, e.photo_url ? "Sim" : "-",
+      ];
+      vals.forEach((v, i) => {
+        if (i === 6) {
+          if (e._status === "OK") pdf.setTextColor(22, 101, 52);
+          else pdf.setTextColor(146, 64, 14);
+        } else { pdf.setTextColor(0, 0, 0); }
+        pdf.text(v, cx + 1, y + 4);
         cx += cols[i];
       });
-      y += 7;
       pdf.setTextColor(0, 0, 0);
-      pdf.setFont("helvetica", "normal");
+      y += rowH;
+    }
 
-      const allForReport = [...scannedEntries.map(e => ({ ...e, _status: "OK" })), ...pendingEntries.map(e => ({ ...e, _status: "Pendente" }))];
+    // Photos
+    const withPhotos = items.filter(e => e.photo_url);
+    if (withPhotos.length > 0) {
+      pdf.addPage();
+      y = margin;
+      pdf.setFontSize(12);
+      pdf.setFont("helvetica", "bold");
+      pdf.text("Fotos dos PS", margin, y + 6);
+      y += 12;
 
-      for (let idx = 0; idx < allForReport.length; idx++) {
-        if (y > 270) { pdf.addPage(); y = margin; }
-        const e = allForReport[idx];
-        const rowH = 6;
-        if (idx % 2 === 0) {
-          pdf.setFillColor(249, 250, 251);
-          pdf.rect(margin, y, contentW, rowH, "F");
-        }
-        pdf.setFontSize(7);
-        cx = margin;
-        const vals = [
-          String(idx + 1),
-          e.tbr_code,
-          (e.driver_name ?? "-").slice(0, 18),
-          (e.reason ?? e.description).slice(0, 22),
-          (e.route ?? "-").slice(0, 10),
-          formatDateBR(e.created_at),
-          e._status,
-          e.photo_url ? "Sim" : "-",
-        ];
-        if (e._status === "OK") { pdf.setTextColor(22, 101, 52); } else { pdf.setTextColor(146, 64, 14); }
-        vals.forEach((v, i) => {
-          if (i !== 6) pdf.setTextColor(0, 0, 0);
-          pdf.text(v, cx + 1, y + 4);
-          cx += cols[i];
-        });
-        pdf.setTextColor(0, 0, 0);
-        y += rowH;
-      }
-
-      // Photos section
-      const withPhotos = allForReport.filter(e => e.photo_url);
-      if (withPhotos.length > 0) {
-        pdf.addPage();
-        y = margin;
-        pdf.setFontSize(12);
+      for (const e of withPhotos) {
+        if (y > 230) { pdf.addPage(); y = margin; }
+        pdf.setFontSize(8);
         pdf.setFont("helvetica", "bold");
-        pdf.text("Fotos dos PS", margin, y + 6);
-        y += 12;
-
-        for (const e of withPhotos) {
-          if (y > 230) { pdf.addPage(); y = margin; }
-          pdf.setFontSize(8);
-          pdf.setFont("helvetica", "bold");
-          pdf.text(`${e.tbr_code} — ${e.driver_name ?? "Sem motorista"} — ${e.reason ?? e.description}`, margin, y + 4);
-          y += 6;
-          try {
-            const img = new Image();
-            img.crossOrigin = "anonymous";
-            await new Promise<void>((resolve) => {
-              img.onload = () => {
-                const maxW = 80;
-                const maxH = 60;
-                const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
-                const w = img.naturalWidth * ratio;
-                const h = img.naturalHeight * ratio;
-                pdf.addImage(img, "JPEG", margin, y, w, h);
-                y += h + 4;
-                resolve();
-              };
-              img.onerror = () => resolve();
-              img.src = e.photo_url!;
-            });
-          } catch {
-            y += 4;
-          }
-        }
+        pdf.text(`${e.tbr_code} — ${e.driver_name ?? "Sem motorista"} — ${e.reason ?? e.description}`, margin, y + 4);
+        y += 6;
+        try {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          await new Promise<void>((resolve) => {
+            img.onload = () => {
+              const maxW = 80, maxH = 60;
+              const ratio = Math.min(maxW / img.naturalWidth, maxH / img.naturalHeight);
+              pdf.addImage(img, "JPEG", margin, y, img.naturalWidth * ratio, img.naturalHeight * ratio);
+              y += img.naturalHeight * ratio + 4;
+              resolve();
+            };
+            img.onerror = () => resolve();
+            img.src = e.photo_url!;
+          });
+        } catch { y += 4; }
       }
+    }
 
-      // Footer
-      y = 280;
+    // Footer on every page
+    const totalPages = pdf.getNumberOfPages();
+    for (let p = 1; p <= totalPages; p++) {
+      pdf.setPage(p);
       pdf.setFontSize(7);
       pdf.setFont("helvetica", "italic");
       pdf.setTextColor(120, 120, 120);
-      pdf.text("Sistema FVL — Relatório gerado automaticamente", margin, y);
-      pdf.text(`Página 1 de ${pdf.getNumberOfPages()}`, pageW - margin - 30, y);
-
-      pdf.save(`reversa_${unitSession?.name ?? "unit"}_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch (err) {
-      toast({ title: "Erro ao gerar PDF", variant: "destructive" });
+      pdf.text("Sistema FVL — Relatório gerado automaticamente", margin, 287);
+      pdf.text(`Página ${p} de ${totalPages}`, pageW - margin - 25, 287);
     }
-    setGeneratingPdf(false);
+
+    pdf.save(fileName);
   };
 
   return (
@@ -388,15 +448,21 @@ const ReversaPage = () => {
         </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar TBR, motorista ou rota..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="pl-9 h-9"
-        />
+      {/* Search + History button */}
+      <div className="flex gap-2 items-center">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar TBR, motorista ou rota..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="pl-9 h-9"
+          />
+        </div>
+        <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)} className="gap-1.5 whitespace-nowrap">
+          <History className="h-4 w-4" />
+          Últimas Reversas
+        </Button>
       </div>
 
       {/* Table */}
@@ -440,9 +506,7 @@ const ReversaPage = () => {
                           <a href={e.photo_url} target="_blank" rel="noopener noreferrer">
                             <ImageIcon className="h-4 w-4 text-primary mx-auto" />
                           </a>
-                        ) : (
-                          <span className="text-muted-foreground">-</span>
-                        )}
+                        ) : <span className="text-muted-foreground">-</span>}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -453,7 +517,7 @@ const ReversaPage = () => {
         </CardContent>
       </Card>
 
-      {/* Scan Modal */}
+      {/* ========= SCAN MODAL ========= */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -470,7 +534,6 @@ const ReversaPage = () => {
 
           {modalStep === "scan" && (
             <div className="space-y-4">
-              {/* Counters */}
               <div className="flex gap-3">
                 <div className="flex-1 rounded-lg bg-green-500/10 border border-green-500/20 p-3 text-center">
                   <p className="text-2xl font-bold text-green-600">{scannedCodes.size}</p>
@@ -486,7 +549,6 @@ const ReversaPage = () => {
                 </div>
               </div>
 
-              {/* Input + Camera */}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Keyboard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -502,15 +564,13 @@ const ReversaPage = () => {
                 </div>
                 <Button
                   variant={cameraOpen ? "destructive" : "outline"}
-                  size="icon"
-                  className="h-11 w-11"
+                  size="icon" className="h-11 w-11"
                   onClick={() => cameraOpen ? stopCamera() : startCamera()}
                 >
                   {cameraOpen ? <X className="h-4 w-4" /> : <Camera className="h-4 w-4" />}
                 </Button>
               </div>
 
-              {/* Camera viewport */}
               {cameraOpen && (
                 <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
                   <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
@@ -518,7 +578,6 @@ const ReversaPage = () => {
                 </div>
               )}
 
-              {/* TBR list with check status */}
               <div className="max-h-[300px] overflow-y-auto rounded-lg border">
                 <Table>
                   <TableHeader>
@@ -533,16 +592,11 @@ const ReversaPage = () => {
                     {entries.map(e => {
                       const checked = scannedCodes.has(e.tbr_code.toUpperCase());
                       return (
-                        <TableRow
-                          key={e.id}
-                          className={cn("text-xs transition-colors", checked && "bg-green-50 dark:bg-green-900/20")}
-                        >
+                        <TableRow key={e.id} className={cn("text-xs transition-colors", checked && "bg-green-50 dark:bg-green-900/20")}>
                           <TableCell className="text-center">
-                            {checked ? (
-                              <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto animate-in zoom-in-50" />
-                            ) : (
-                              <Clock className="h-4 w-4 text-muted-foreground mx-auto" />
-                            )}
+                            {checked
+                              ? <CheckCircle2 className="h-5 w-5 text-green-500 mx-auto animate-in zoom-in-50" />
+                              : <Clock className="h-4 w-4 text-muted-foreground mx-auto" />}
                           </TableCell>
                           <TableCell className={cn("font-bold font-mono", checked && "text-green-700 dark:text-green-400")}>{e.tbr_code}</TableCell>
                           <TableCell className="truncate max-w-[100px]">{e.driver_name ?? "-"}</TableCell>
@@ -554,19 +608,15 @@ const ReversaPage = () => {
                 </Table>
               </div>
 
-              {/* Actions */}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setModalOpen(false)}>Cancelar</Button>
-                <Button onClick={() => setModalStep("summary")} disabled={scannedCodes.size === 0}>
-                  Finalizar Conferência
-                </Button>
+                <Button onClick={() => setModalStep("summary")} disabled={scannedCodes.size === 0}>Finalizar Conferência</Button>
               </div>
             </div>
           )}
 
           {modalStep === "summary" && (
             <div className="space-y-4">
-              {/* Summary cards */}
               <div className="grid grid-cols-2 gap-3">
                 <Card className="border-green-200 bg-green-50 dark:bg-green-900/20">
                   <CardHeader className="pb-2 pt-3 px-4">
@@ -590,55 +640,117 @@ const ReversaPage = () => {
                 </Card>
               </div>
 
-              {/* Conferidos list */}
               {scannedEntries.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-green-700 mb-1.5 uppercase">Conferidos — serão removidos</p>
                   <div className="max-h-[150px] overflow-y-auto rounded-lg border border-green-200">
-                    <Table>
-                      <TableBody>
-                        {scannedEntries.map(e => (
-                          <TableRow key={e.id} className="text-xs bg-green-50/50">
-                            <TableCell><CheckCircle2 className="h-4 w-4 text-green-500" /></TableCell>
-                            <TableCell className="font-bold font-mono">{e.tbr_code}</TableCell>
-                            <TableCell>{e.driver_name ?? "-"}</TableCell>
-                            <TableCell>{e.reason ?? e.description}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <Table><TableBody>
+                      {scannedEntries.map(e => (
+                        <TableRow key={e.id} className="text-xs bg-green-50/50">
+                          <TableCell><CheckCircle2 className="h-4 w-4 text-green-500" /></TableCell>
+                          <TableCell className="font-bold font-mono">{e.tbr_code}</TableCell>
+                          <TableCell>{e.driver_name ?? "-"}</TableCell>
+                          <TableCell>{e.reason ?? e.description}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody></Table>
                   </div>
                 </div>
               )}
 
-              {/* Pendentes list */}
               {pendingEntries.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-amber-700 mb-1.5 uppercase">Pendentes — permanecerão na lista</p>
                   <div className="max-h-[150px] overflow-y-auto rounded-lg border border-amber-200">
-                    <Table>
-                      <TableBody>
-                        {pendingEntries.map(e => (
-                          <TableRow key={e.id} className="text-xs bg-amber-50/50">
-                            <TableCell><Clock className="h-4 w-4 text-amber-500" /></TableCell>
-                            <TableCell className="font-bold font-mono">{e.tbr_code}</TableCell>
-                            <TableCell>{e.driver_name ?? "-"}</TableCell>
-                            <TableCell>{e.reason ?? e.description}</TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+                    <Table><TableBody>
+                      {pendingEntries.map(e => (
+                        <TableRow key={e.id} className="text-xs bg-amber-50/50">
+                          <TableCell><Clock className="h-4 w-4 text-amber-500" /></TableCell>
+                          <TableCell className="font-bold font-mono">{e.tbr_code}</TableCell>
+                          <TableCell>{e.driver_name ?? "-"}</TableCell>
+                          <TableCell>{e.reason ?? e.description}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody></Table>
                   </div>
                 </div>
               )}
 
-              {/* Actions */}
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setModalStep("scan")}>Voltar</Button>
-                <Button variant="destructive" onClick={handleFinalize}>
-                  Finalizar Reversa
-                </Button>
+                <Button variant="destructive" onClick={handleFinalize}>Finalizar Reversa</Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ========= HISTORY MODAL ========= */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-bold italic">
+              <History className="h-5 w-5 text-primary" />
+              Últimas Reversas Enviadas
+            </DialogTitle>
+            <DialogDescription>Clique em uma reversa para baixar o relatório em PDF.</DialogDescription>
+          </DialogHeader>
+
+          {loadingBatches ? (
+            <div className="space-y-3 py-4">
+              {[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+            </div>
+          ) : batches.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              <History className="h-10 w-10 mx-auto mb-3 opacity-40" />
+              <p className="font-semibold text-sm">Nenhuma reversa enviada ainda</p>
+            </div>
+          ) : (
+            <div className="space-y-2 py-2">
+              {batches.map(b => (
+                <button
+                  key={b.id}
+                  onClick={() => generateBatchPdf(b)}
+                  disabled={downloadingBatchId === b.id}
+                  className={cn(
+                    "w-full text-left rounded-lg border p-4 transition-all hover:shadow-md hover:border-primary/40 hover:bg-primary/5 group",
+                    downloadingBatchId === b.id && "opacity-60 pointer-events-none"
+                  )}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-bold">{formatDateTime(b.created_at)}</span>
+                      </div>
+                      {b.conferente_name && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <User className="h-3.5 w-3.5" />
+                          <span>{b.conferente_name}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1 text-green-600 font-semibold">
+                          <CheckCircle2 className="h-3.5 w-3.5" /> {b.total_scanned} conferidos
+                        </span>
+                        <span className="flex items-center gap-1 text-amber-600 font-semibold">
+                          <Clock className="h-3.5 w-3.5" /> {b.total_pending} pendentes
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground group-hover:text-primary transition-colors">
+                      {downloadingBatchId === b.id ? (
+                        <span className="text-primary font-semibold">Gerando...</span>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4" />
+                          <span className="font-semibold">PDF</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </DialogContent>
