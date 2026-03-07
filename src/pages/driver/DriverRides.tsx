@@ -199,7 +199,7 @@ const DriverRides = () => {
               const totalLidos = ride.tbrCount ?? 0;
               const entregues = ride.tbrCount ?? 0;
               const totalGanho = entregues * (ride.tbrValue ?? 0);
-              const performance = totalLidos > 0 ? (entregues / totalLidos) * 100 : 0;
+              const reativoVal = ride.reativoValue ?? 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);
 
               return (
@@ -272,10 +272,10 @@ const DriverRides = () => {
                        <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
                        <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
                      </div>
-                     <div className="flex flex-col items-center p-1.5 rounded-md bg-purple-500/10 border border-purple-500/20">
-                       <Target className="h-3 w-3 text-purple-600 mb-0.5" />
-                       <span className="text-[10px] text-muted-foreground leading-none">Perf.</span>
-                       <span className="text-xs font-bold text-purple-600">{performance.toFixed(0)}%</span>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
+                       <Zap className="h-3 w-3 text-amber-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Reat.</span>
+                       <span className="text-xs font-bold text-amber-600">R${reativoVal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                      </div>
                    </div>
                 </div>
