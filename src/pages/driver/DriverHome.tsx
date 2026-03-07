@@ -148,6 +148,8 @@ const DriverHome = () => {
 
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+    const fvMap = new Map<string, number>();
+    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     ridesByDay.forEach((rideIds, day) => {
       const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
@@ -191,11 +193,17 @@ const DriverHome = () => {
       totalTbrs += dayTbrCount;
       totalReturns += dayReturnCount;
 
-      // Valor do dia
+      // Valor do dia — verificar valor fixo primeiro
       const firstRide = rides.find((r: any) => r.id === rideIds[0]);
       const unitId = firstRide?.unit_id;
-      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-      totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      const fixedKey = unitId ? `${unitId}_${day}` : "";
+      const fixedVal = fvMap.get(fixedKey);
+      if (fixedVal !== undefined) {
+        totalGanho += fixedVal;
+      } else {
+        const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+        totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      }
     });
 
     // Add bonuses
