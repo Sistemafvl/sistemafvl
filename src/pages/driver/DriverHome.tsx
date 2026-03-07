@@ -105,7 +105,7 @@ const DriverHome = () => {
       setUnits(un.data ?? []);
       setCustomValues(cv.data ?? []);
       setBonuses(bn.data ?? []);
-      setFixedValues((fv as any).data ?? []);
+      setFixedValues((fvRes as any).data ?? []);
       setLoading(false);
     };
     fetch();
