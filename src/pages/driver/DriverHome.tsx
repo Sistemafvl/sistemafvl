@@ -310,6 +310,8 @@ const DriverHome = () => {
     // Sum totalGanho for rides within this fortnight
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+    const fvMap = new Map<string, number>();
+    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     const ridesByDay = new Map<string, string[]>();
     rides.forEach((r: any) => {
@@ -321,19 +323,25 @@ const DriverHome = () => {
     });
 
     let total = 0;
-    ridesByDay.forEach((rideIds) => {
-      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
-      const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
-      const returnCodes = new Set<string>();
-      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
-        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
-      });
-      const dayTbrCount = uniqueCodes.size;
-      const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+    ridesByDay.forEach((rideIds, rDay) => {
       const firstRide = rides.find((r: any) => r.id === rideIds[0]);
       const unitId = firstRide?.unit_id;
-      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-      total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      const fixedKey = unitId ? `${unitId}_${rDay}` : "";
+      const fixedVal = fvMap.get(fixedKey);
+      if (fixedVal !== undefined) {
+        total += fixedVal;
+      } else {
+        const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
+        const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
+        const returnCodes = new Set<string>();
+        [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+          if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
+        });
+        const dayTbrCount = uniqueCodes.size;
+        const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+        const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+        total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      }
     });
 
     // Add bonuses in the period
