@@ -328,6 +328,50 @@ const DriverRescue = () => {
         </div>
       </div>
 
+      {/* Date Filter */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <Popover open={showFromCal} onOpenChange={setShowFromCal}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {format(dateFrom, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateFrom}
+              onSelect={(d) => { if (d) { setDateFrom(startOfDay(d)); setShowFromCal(false); } }}
+              locale={ptBR}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <span className="text-xs text-muted-foreground">até</span>
+        <Popover open={showToCal} onOpenChange={setShowToCal}>
+          <PopoverTrigger asChild>
+            <Button variant="outline" size="sm" className="text-xs gap-1.5">
+              <CalendarDays className="h-3.5 w-3.5" />
+              {format(dateTo, "dd/MM/yyyy")}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-auto p-0" align="start">
+            <Calendar
+              mode="single"
+              selected={dateTo}
+              onSelect={(d) => { if (d) { setDateTo(endOfDay(d)); setShowToCal(false); } }}
+              locale={ptBR}
+              initialFocus
+            />
+          </PopoverContent>
+        </Popover>
+        <div className="flex gap-1 ml-auto">
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(new Date())); setDateTo(endOfDay(new Date())); }}>Hoje</Button>
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(subDays(new Date(), 7))); setDateTo(endOfDay(new Date())); }}>7d</Button>
+          <Button variant="ghost" size="sm" className="text-xs h-7 px-2" onClick={() => { setDateFrom(startOfDay(subDays(new Date(), 30))); setDateTo(endOfDay(new Date())); }}>30d</Button>
+        </div>
+      </div>
+
       {/* Input + Camera */}
       <Card>
         <CardContent className="p-4 space-y-3">
