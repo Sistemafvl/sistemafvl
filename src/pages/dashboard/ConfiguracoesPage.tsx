@@ -44,10 +44,6 @@ interface DriverOption {
   name: string;
   cpf: string;
 }
-  id: string;
-  name: string;
-  cpf: string;
-}
 
 const ConfiguracoesPage = () => {
   const { unitSession } = useAuthStore();
