@@ -352,7 +352,7 @@ const DriverHome = () => {
     });
 
     return total;
-  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses]);
+  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues]);
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },

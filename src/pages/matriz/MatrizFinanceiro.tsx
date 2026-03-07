@@ -21,6 +21,7 @@ const MatrizFinanceiro = () => {
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<any[]>([]);
+  const [fixedValues, setFixedValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minPackages, setMinPackages] = useState<any[]>([]);
 
