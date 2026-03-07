@@ -199,7 +199,8 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalLidos = totalTbrsAtual;
+  const totalLidos = totalTbrsAtual + totalAllReturns;
+  const performanceRate = totalLidos > 0 ? ((totalTbrsAtual / totalLidos) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -267,9 +268,9 @@ const OperacaoPage = () => {
               <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de pacotes com insucesso (Piso, PS, RTO)." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
-              <Activity className="h-5 w-5 mx-auto text-green-600 mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalTbrsAtual}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Entregues <InfoButton text="TBRs que o motorista possui para entregar (ride_tbrs atual)." /></p>
+              <BarChart3 className="h-5 w-5 mx-auto text-primary mb-1" />
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{performanceRate}%</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Performance <InfoButton text="Taxa de sucesso: percentual de TBRs entregues em relação ao total escaneado (Lidos / (Lidos + Insucessos))." /></p>
             </div>
           </div>
 
