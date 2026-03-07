@@ -21,6 +21,7 @@ const MatrizFinanceiro = () => {
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [settings, setSettings] = useState<any[]>([]);
   const [customValues, setCustomValues] = useState<any[]>([]);
+  const [fixedValues, setFixedValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minPackages, setMinPackages] = useState<any[]>([]);
 
@@ -45,12 +46,14 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
-      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData]) => {
+        fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
+      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData]) => {
         setRides(ridesData);
         setDnrEntries(dnrData);
         setSettings(settingsData);
         setCustomValues(customData);
         setMinPackages(minPkgData);
+        setFixedValues(fixedData);
         setLoading(false);
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
@@ -63,6 +66,10 @@ const MatrizFinanceiro = () => {
   }, [units, dateStart, dateEnd]);
 
   const unitFinancials = useMemo(() => {
+    // Build fixed values map: "unitId_driverId_date" -> fixed_value
+    const fvMap = new Map<string, number>();
+    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.driver_id}_${fv.target_date}`, Number(fv.fixed_value)); });
+
     return units.map(u => {
       const uRides = rides.filter(r => r.unit_id === u.id);
       const uRideIds = uRides.map(r => r.id);
@@ -70,10 +77,10 @@ const MatrizFinanceiro = () => {
       const uDnr = dnrEntries.filter(d => d.unit_id === u.id);
       const dnrTotal = uDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
 
-      // Calculate total paid considering custom values and minimum packages
+      // Calculate total paid considering custom values, minimum packages, and fixed values
       let totalPaid = 0;
-      // Group by driver+day for min packages
-      const dayGroups = new Map<string, { driverId: string; tbrCount: number; tbrVal: number }>();
+      // Group by driver+day
+      const dayGroups = new Map<string, { driverId: string; day: string; tbrCount: number; tbrVal: number }>();
       uRides.forEach(ride => {
         const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
         const key = `${ride.driver_id}_${day}`;
@@ -83,12 +90,18 @@ const MatrizFinanceiro = () => {
         const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
         const existing = dayGroups.get(key);
         if (existing) { existing.tbrCount += rideTbrCount; }
-        else dayGroups.set(key, { driverId: ride.driver_id, tbrCount: rideTbrCount, tbrVal });
+        else dayGroups.set(key, { driverId: ride.driver_id, day, tbrCount: rideTbrCount, tbrVal });
       });
       dayGroups.forEach(g => {
-        const minPkg = minPackages.find(mp => mp.driver_id === g.driverId && mp.unit_id === u.id);
-        const effectiveTbrs = minPkg && g.tbrCount < Number(minPkg.min_packages) ? Number(minPkg.min_packages) : g.tbrCount;
-        totalPaid += effectiveTbrs * g.tbrVal;
+        const fixedKey = `${u.id}_${g.driverId}_${g.day}`;
+        const fixedVal = fvMap.get(fixedKey);
+        if (fixedVal !== undefined) {
+          totalPaid += fixedVal;
+        } else {
+          const minPkg = minPackages.find(mp => mp.driver_id === g.driverId && mp.unit_id === u.id);
+          const effectiveTbrs = minPkg && g.tbrCount < Number(minPkg.min_packages) ? Number(minPkg.min_packages) : g.tbrCount;
+          totalPaid += effectiveTbrs * g.tbrVal;
+        }
       });
 
       return {
@@ -101,7 +114,7 @@ const MatrizFinanceiro = () => {
         dnrTotal,
       };
     }).sort((a, b) => b.totalPaid - a.totalPaid);
-  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages]);
+  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues]);
   
 
   const totals = useMemo(() => ({

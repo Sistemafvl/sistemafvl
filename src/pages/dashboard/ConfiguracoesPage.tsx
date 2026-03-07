@@ -4,7 +4,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package } from "lucide-react";
+import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package, CalendarCheck } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface CustomValue {
@@ -29,6 +29,14 @@ interface MinPackage {
   driver_id: string;
   driver_name: string;
   min_packages: number;
+}
+
+interface FixedValue {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  target_date: string;
+  fixed_value: number;
 }
 
 interface DriverOption {
@@ -81,6 +89,15 @@ const ConfiguracoesPage = () => {
   const [mpValue, setMpValue] = useState("");
   const [mpSaving, setMpSaving] = useState(false);
 
+  // Fixed values
+  const [fixedValues, setFixedValues] = useState<FixedValue[]>([]);
+  const [fvDriverSearch, setFvDriverSearch] = useState("");
+  const [fvDriverResults, setFvDriverResults] = useState<DriverOption[]>([]);
+  const [fvSelectedDriver, setFvSelectedDriver] = useState<DriverOption | null>(null);
+  const [fvDate, setFvDate] = useState("");
+  const [fvValue, setFvValue] = useState("");
+  const [fvSaving, setFvSaving] = useState(false);
+
   const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -124,7 +141,18 @@ const ConfiguracoesPage = () => {
     setMinPackages(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages]);
+  const fetchFixedValues = useCallback(async () => {
+    if (!unitId) return;
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("*").eq("unit_id", unitId).order("target_date", { ascending: false }).range(from, to));
+    if (!data.length) { setFixedValues([]); return; }
+    const driverIds = [...new Set(data.map((d: any) => d.driver_id))];
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setFixedValues(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? d.driver_name ?? "—", target_date: d.target_date, fixed_value: Number(d.fixed_value) })));
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
@@ -141,6 +169,7 @@ const ConfiguracoesPage = () => {
   useEffect(() => { const t = setTimeout(() => searchDrivers(cvDriverSearch, setCvDriverResults), 300); return () => clearTimeout(t); }, [cvDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(bonusDriverSearch, setBonusDriverResults), 300); return () => clearTimeout(t); }, [bonusDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(mpDriverSearch, setMpDriverResults), 300); return () => clearTimeout(t); }, [mpDriverSearch]);
+  useEffect(() => { const t = setTimeout(() => searchDrivers(fvDriverSearch, setFvDriverResults), 300); return () => clearTimeout(t); }, [fvDriverSearch]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -246,6 +275,34 @@ const ConfiguracoesPage = () => {
     let raw = e.target.value.replace(/[^\d]/g, "");
     if (!raw) { setBonusAmount(""); return; }
     setBonusAmount(formatCurrency(parseInt(raw, 10) / 100));
+  };
+
+  const handleFvValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let raw = e.target.value.replace(/[^\d]/g, "");
+    if (!raw) { setFvValue(""); return; }
+    setFvValue(formatCurrency(parseInt(raw, 10) / 100));
+  };
+
+  const handleAddFixedValue = async () => {
+    if (!unitId || !fvSelectedDriver || !fvValue || !fvDate) return;
+    setFvSaving(true);
+    const numValue = parseCurrency(fvValue);
+    await supabase.from("driver_fixed_values" as any).upsert({
+      unit_id: unitId,
+      driver_id: fvSelectedDriver.id,
+      driver_name: fvSelectedDriver.name,
+      target_date: fvDate,
+      fixed_value: numValue,
+    } as any, { onConflict: "unit_id,driver_id,target_date" });
+    setFvSelectedDriver(null); setFvDriverSearch(""); setFvValue(""); setFvDate(""); setFvDriverResults([]);
+    await fetchFixedValues();
+    setFvSaving(false);
+    toast({ title: "Valor fixo salvo!" });
+  };
+
+  const handleDeleteFixedValue = async (id: string) => {
+    await supabase.from("driver_fixed_values" as any).delete().eq("id", id);
+    await fetchFixedValues();
   };
 
   if (!unitId) return null;
@@ -519,6 +576,78 @@ const ConfiguracoesPage = () => {
                   <span className="font-semibold flex-1">{mp.driver_name}</span>
                   <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Valor Fixo de Saída */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <CalendarCheck className="h-5 w-5 text-primary" />
+            Valor Fixo de Saída
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Defina um valor fixo de pagamento para um motorista em uma data específica. Naquele dia, ele receberá esse valor independente da quantidade de pacotes.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={fvSelectedDriver ? fvSelectedDriver.name : fvDriverSearch}
+                onChange={(e) => { setFvDriverSearch(e.target.value); setFvSelectedDriver(null); }}
+                placeholder="Buscar motorista por nome ou CPF..."
+                className="pl-9"
+              />
+              {fvSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setFvSelectedDriver(null); setFvDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {fvDriverResults.length > 0 && !fvSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {fvDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setFvSelectedDriver(d); setFvDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {fvSelectedDriver && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Data</label>
+                  <Input type="date" value={fvDate} onChange={(e) => setFvDate(e.target.value)} />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <span className="text-sm font-semibold text-muted-foreground">R$</span>
+                  <Input value={fvValue} onChange={handleFvValueChange} placeholder="0,00" className="max-w-[140px] text-right font-mono" />
+                  <Button onClick={handleAddFixedValue} disabled={fvSaving || !fvValue || !fvDate} size="sm">
+                    {fvSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                    Salvar
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          {fixedValues.length > 0 && (
+            <div className="space-y-2">
+              {fixedValues.map(fv => (
+                <div key={fv.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <div className="flex-1">
+                    <span className="font-semibold">{fv.driver_name}</span>
+                    <p className="text-xs text-muted-foreground">Data: {fv.target_date}</p>
+                  </div>
+                  <span className="text-primary font-mono font-bold">R$ {formatCurrency(fv.fixed_value)}</span>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteFixedValue(fv.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>

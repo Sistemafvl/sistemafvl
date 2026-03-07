@@ -363,7 +363,7 @@ const RelatoriosPage = () => {
     const rideIds = rides.map(r => r.id);
 
     const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes] = await Promise.all([
+    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
         (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
@@ -381,6 +381,8 @@ const RelatoriosPage = () => {
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
       supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
+      supabase.from("driver_fixed_values" as any).select("driver_id, target_date, fixed_value").eq("unit_id", unitId!)
+        .gte("target_date", format(startDate, "yyyy-MM-dd")).lte("target_date", format(endDate, "yyyy-MM-dd")),
     ]);
     const tbrsData = await fetchAllRowsWithIn<{ ride_id: string; code: string }>(
       (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
@@ -397,6 +399,8 @@ const RelatoriosPage = () => {
     (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
     const minPkgMap = new Map<string, number>();
     ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => { minPkgMap.set(mp.driver_id, Number(mp.min_packages)); });
+    const fixedValueMap = new Map<string, number>();
+    ((fixedValuesRes as any)?.data ?? []).forEach((fv: any) => { fixedValueMap.set(`${fv.driver_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     const { data: dnrData } = await supabase.from("dnr_entries").select("id, driver_id, dnr_value")
       .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
@@ -464,7 +468,9 @@ const RelatoriosPage = () => {
         const minPkg = minPkgMap.get(driverId) ?? 0;
         if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
         const completed = tbrCount - returns;
-        return { date, login: info.login, tbrCount, returns, completed, value: completed * tbrVal };
+        const fixedKey = `${driverId}_${date}`;
+        const fixedVal = fixedValueMap.get(fixedKey);
+        return { date, login: info.login, tbrCount, returns, completed, value: fixedVal !== undefined ? fixedVal : completed * tbrVal };
       });
 
       const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
@@ -484,7 +490,7 @@ const RelatoriosPage = () => {
         },
         days, totalTbrs, totalReturns, totalCompleted,
         tbrValueUsed: tbrVal, bonus: bonusAmount,
-        totalValue: (totalCompleted * tbrVal) - dnrDiscount + bonusAmount,
+        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount,
         dnrDiscount, daysWorked: days.length, loginsUsed,
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,

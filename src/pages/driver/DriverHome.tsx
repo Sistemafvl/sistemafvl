@@ -31,6 +31,7 @@ const DriverHome = () => {
   const [customValues, setCustomValues] = useState<any[]>([]);
   const [bonuses, setBonuses] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
+  const [fixedValues, setFixedValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // DNR stats
@@ -66,7 +67,7 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [piRaw, psData, rtoData, us, un, cv, bn] = await Promise.all([
+      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes] = await Promise.all([
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
@@ -86,6 +87,8 @@ const DriverHome = () => {
           .eq("driver_id", driverId)
           .gte("period_start", startDate)
           .lte("period_start", endDate),
+        supabase.from("driver_fixed_values" as any).select("unit_id, target_date, fixed_value")
+          .eq("driver_id", driverId),
       ]);
       const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
         (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
@@ -102,6 +105,7 @@ const DriverHome = () => {
       setUnits(un.data ?? []);
       setCustomValues(cv.data ?? []);
       setBonuses(bn.data ?? []);
+      setFixedValues((fvRes as any).data ?? []);
       setLoading(false);
     };
     fetch();
@@ -144,6 +148,8 @@ const DriverHome = () => {
 
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+    const fvMap = new Map<string, number>();
+    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     ridesByDay.forEach((rideIds, day) => {
       const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
@@ -187,11 +193,17 @@ const DriverHome = () => {
       totalTbrs += dayTbrCount;
       totalReturns += dayReturnCount;
 
-      // Valor do dia
+      // Valor do dia — verificar valor fixo primeiro
       const firstRide = rides.find((r: any) => r.id === rideIds[0]);
       const unitId = firstRide?.unit_id;
-      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-      totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      const fixedKey = unitId ? `${unitId}_${day}` : "";
+      const fixedVal = fvMap.get(fixedKey);
+      if (fixedVal !== undefined) {
+        totalGanho += fixedVal;
+      } else {
+        const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+        totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      }
     });
 
     // Add bonuses
@@ -206,7 +218,7 @@ const DriverHome = () => {
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
     return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
-  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, startDate, endDate]);
+  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, startDate, endDate]);
 
   const chartData = useMemo(() => {
     const ridesByDay = new Map<string, number>();
@@ -298,6 +310,8 @@ const DriverHome = () => {
     // Sum totalGanho for rides within this fortnight
     const settingsMap = new Map(unitSettings.map((s: any) => [s.unit_id, Number(s.tbr_value)]));
     const customMap = new Map(customValues.map((cv: any) => [cv.unit_id, Number(cv.custom_tbr_value)]));
+    const fvMap = new Map<string, number>();
+    fixedValues.forEach((fv: any) => { fvMap.set(`${fv.unit_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
     const ridesByDay = new Map<string, string[]>();
     rides.forEach((r: any) => {
@@ -309,19 +323,25 @@ const DriverHome = () => {
     });
 
     let total = 0;
-    ridesByDay.forEach((rideIds) => {
-      const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
-      const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
-      const returnCodes = new Set<string>();
-      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
-        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
-      });
-      const dayTbrCount = uniqueCodes.size;
-      const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+    ridesByDay.forEach((rideIds, rDay) => {
       const firstRide = rides.find((r: any) => r.id === rideIds[0]);
       const unitId = firstRide?.unit_id;
-      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-      total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      const fixedKey = unitId ? `${unitId}_${rDay}` : "";
+      const fixedVal = fvMap.get(fixedKey);
+      if (fixedVal !== undefined) {
+        total += fixedVal;
+      } else {
+        const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
+        const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
+        const returnCodes = new Set<string>();
+        [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+          if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
+        });
+        const dayTbrCount = uniqueCodes.size;
+        const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+        const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+        total += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+      }
     });
 
     // Add bonuses in the period
@@ -332,7 +352,7 @@ const DriverHome = () => {
     });
 
     return total;
-  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses]);
+  }, [rides, tbrs, pisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues]);
 
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },

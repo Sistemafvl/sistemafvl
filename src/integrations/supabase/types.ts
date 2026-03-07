@@ -304,6 +304,36 @@ export type Database = {
           },
         ]
       }
+      driver_fixed_values: {
+        Row: {
+          created_at: string
+          driver_id: string
+          driver_name: string | null
+          fixed_value: number
+          id: string
+          target_date: string
+          unit_id: string
+        }
+        Insert: {
+          created_at?: string
+          driver_id: string
+          driver_name?: string | null
+          fixed_value?: number
+          id?: string
+          target_date: string
+          unit_id: string
+        }
+        Update: {
+          created_at?: string
+          driver_id?: string
+          driver_name?: string | null
+          fixed_value?: number
+          id?: string
+          target_date?: string
+          unit_id?: string
+        }
+        Relationships: []
+      }
       driver_invoices: {
         Row: {
           created_at: string
