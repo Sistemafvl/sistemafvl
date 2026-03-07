@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { DollarSign, TrendingUp, FileWarning, Package, Wallet } from "lucide-react";
+import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { formatBRL } from "@/lib/utils";
 
@@ -24,6 +24,7 @@ const MatrizFinanceiro = () => {
   const [fixedValues, setFixedValues] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [minPackages, setMinPackages] = useState<any[]>([]);
+  const [reativoByUnit, setReativoByUnit] = useState<Map<string, number>>(new Map());
 
   useEffect(() => {
     if (!domainId) return;
@@ -47,7 +48,8 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
-      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData]) => {
+        fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
+      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData, reativoData]) => {
         setRides(ridesData);
         setDnrEntries(dnrData);
         setSettings(settingsData);
@@ -55,6 +57,14 @@ const MatrizFinanceiro = () => {
         setMinPackages(minPkgData);
         setFixedValues(fixedData);
         setLoading(false);
+
+        // Build reativo map by unit
+        const reativoByUnit = new Map<string, number>();
+        reativoData.forEach((r: any) => {
+          reativoByUnit.set(r.unit_id, (reativoByUnit.get(r.unit_id) ?? 0) + Number(r.reativo_value));
+        });
+        setReativoByUnit(reativoByUnit);
+
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
           fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
@@ -104,6 +114,8 @@ const MatrizFinanceiro = () => {
         }
       });
 
+      const reativoTotal = reativoByUnit.get(u.id) ?? 0;
+
       return {
         id: u.id,
         name: u.name,
@@ -112,9 +124,10 @@ const MatrizFinanceiro = () => {
         tbrValue: Number(settings.find(s => s.unit_id === u.id)?.tbr_value || 0),
         totalPaid,
         dnrTotal,
+        reativoTotal,
       };
     }).sort((a, b) => b.totalPaid - a.totalPaid);
-  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues]);
+  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
   
 
   const totals = useMemo(() => ({
@@ -122,6 +135,7 @@ const MatrizFinanceiro = () => {
     tbrs: unitFinancials.reduce((a, u) => a + u.tbrs, 0),
     totalPaid: unitFinancials.reduce((a, u) => a + u.totalPaid, 0),
     dnr: unitFinancials.reduce((a, u) => a + u.dnrTotal, 0),
+    reativo: unitFinancials.reduce((a, u) => a + u.reativoTotal, 0),
   }), [unitFinancials]);
 
   return (
@@ -138,10 +152,11 @@ const MatrizFinanceiro = () => {
       </div>
 
       {/* Totals */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <KpiCard icon={Package} label="Total Carregamentos" value={totals.rides} loading={loading} />
         <KpiCard icon={TrendingUp} label="Total TBRs" value={totals.tbrs} loading={loading} />
         <KpiCard icon={Wallet} label="Total Pago (TBRs)" value={formatBRL(totals.totalPaid)} loading={loading} color="text-emerald-600" />
+        <KpiCard icon={Zap} label="Reativo Total" value={formatBRL(totals.reativo)} loading={loading} color="text-amber-600" />
         <KpiCard icon={FileWarning} label="DNR Total" value={formatBRL(totals.dnr)} loading={loading} color="text-destructive" />
       </div>
 
@@ -160,6 +175,7 @@ const MatrizFinanceiro = () => {
                   <TableHead className="text-center">TBRs</TableHead>
                   <TableHead className="text-center">Valor TBR</TableHead>
                   <TableHead className="text-right">Total Pago TBRs</TableHead>
+                  <TableHead className="text-right">Reativo</TableHead>
                   <TableHead className="text-right">DNR</TableHead>
                 </TableRow>
               </TableHeader>
@@ -171,6 +187,7 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{u.tbrs}</TableCell>
                     <TableCell className="text-center">{formatBRL(u.tbrValue)}</TableCell>
                     <TableCell className="text-right font-semibold text-emerald-600">{formatBRL(u.totalPaid)}</TableCell>
+                    <TableCell className="text-right font-semibold text-amber-600">{formatBRL(u.reativoTotal)}</TableCell>
                     <TableCell className="text-right text-destructive">{formatBRL(u.dnrTotal)}</TableCell>
                   </TableRow>
                 ))}
@@ -181,6 +198,7 @@ const MatrizFinanceiro = () => {
                     <TableCell className="text-center">{totals.tbrs}</TableCell>
                     <TableCell />
                     <TableCell className="text-right text-emerald-600">{formatBRL(totals.totalPaid)}</TableCell>
+                    <TableCell className="text-right text-amber-600">{formatBRL(totals.reativo)}</TableCell>
                     <TableCell className="text-right text-destructive">{formatBRL(totals.dnr)}</TableCell>
                   </TableRow>
                 )}

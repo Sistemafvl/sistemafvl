@@ -189,6 +189,7 @@ const DriverRecebiveis = () => {
                     <div>Valor/TBR: <strong>{formatCurrency(d.tbrValueUsed ?? 0)}</strong></div>
                     {d.dnrDiscount > 0 && <div className="text-destructive">DNR: <strong>-{formatCurrency(d.dnrDiscount)}</strong></div>}
                     {d.bonus > 0 && <div className="text-primary">Bônus: <strong>+{formatCurrency(d.bonus)}</strong></div>}
+                    {(d.reativoTotal ?? 0) > 0 && <div className="text-amber-600">Reativo: <strong>+{formatCurrency(d.reativoTotal)}</strong></div>}
                   </div>
 
                   <div className="flex items-center gap-2 pt-2 border-t">

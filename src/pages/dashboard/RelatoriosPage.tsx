@@ -413,6 +413,20 @@ const RelatoriosPage = () => {
       }
     });
 
+    // Fetch reativo entries for the period
+    const { data: reativoData } = await supabase.from("reativo_entries")
+      .select("driver_id, reativo_value")
+      .eq("unit_id", unitId!)
+      .eq("status", "active")
+      .gte("activated_at", startDate.toISOString())
+      .lte("activated_at", endDate.toISOString());
+    const reativoByDriver = new Map<string, number>();
+    (reativoData ?? []).forEach((r: any) => {
+      if (r.driver_id) {
+        reativoByDriver.set(r.driver_id, (reativoByDriver.get(r.driver_id) ?? 0) + Number(r.reativo_value));
+      }
+    });
+
     const pixByDriver = new Map<string, string>();
     await Promise.all(driverIds.map(async (did) => {
       try {
@@ -481,6 +495,7 @@ const RelatoriosPage = () => {
       const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
       const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
       const bonusAmount = bonusByDriver.get(driverId) ?? 0;
+      const reativoTotal = reativoByDriver.get(driverId) ?? 0;
 
       return {
         driver: {
@@ -489,8 +504,8 @@ const RelatoriosPage = () => {
           pixKey: pixByDriver.get(driverId) ?? null,
         },
         days, totalTbrs, totalReturns, totalCompleted,
-        tbrValueUsed: tbrVal, bonus: bonusAmount,
-        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount,
+        tbrValueUsed: tbrVal, bonus: bonusAmount, reativoTotal,
+        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount + reativoTotal,
         dnrDiscount, daysWorked: days.length, loginsUsed,
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
@@ -709,8 +724,9 @@ const RelatoriosPage = () => {
                       <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns}</strong></div>
                       <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked}</strong></div>
                       <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed)}</strong></div>
-                      {d.dnrDiscount > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount)}</strong></div>}
-                      {d.bonus > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus)}</strong></div>}
+                      {(d.dnrDiscount ?? 0) > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount!)}</strong></div>}
+                      {(d.bonus ?? 0) > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus!)}</strong></div>}
+                      {(d.reativoTotal ?? 0) > 0 && <div><span className="text-amber-600">Reativo:</span> <strong className="text-amber-600">+{formatCurrency(d.reativoTotal!)}</strong></div>}
                     </div>
 
                     {/* Expandable daily detail table */}

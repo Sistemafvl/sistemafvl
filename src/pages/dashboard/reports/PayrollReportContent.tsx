@@ -30,6 +30,7 @@ export interface DriverPayrollData {
   tbrValueUsed?: number;
   bonus?: number;
   dnrDiscount?: number;
+  reativoTotal?: number;
   daysWorked: number;
   loginsUsed: string[];
   bestDay: { date: string; tbrs: number } | null;
@@ -57,6 +58,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     const grandTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
     const grandTotalDnr = data.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
     const grandTotalBonus = data.reduce((s, d) => s + (d.bonus ?? 0), 0);
+    const grandTotalReativo = data.reduce((s, d) => s + (d.reativoTotal ?? 0), 0);
 
     const metricBox = (value: string | number, label: string, bg: string, textColor?: string) => (
       <div
@@ -141,6 +143,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 {metricBox(d.avgDaily, "Média/Dia", COLORS.silver)}
                 {dnrDiscount > 0 && metricBox(`-${formatCurrency(dnrDiscount)}`, "DNR", "#fee2e2", "#dc2626")}
                 {(d.bonus ?? 0) > 0 && metricBox(`+${formatCurrency(d.bonus!)}`, "Adicional", COLORS.green)}
+                {(d.reativoTotal ?? 0) > 0 && metricBox(`+${formatCurrency(d.reativoTotal!)}`, "Reativo", "#fef3c7", "#d97706")}
                 {metricBox(formatCurrency(d.totalValue), "Valor Total", COLORS.tealLight)}
               </div>
 
@@ -218,6 +221,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <th style={headerCellStyle()}>Conc.</th>
                 <th style={headerCellStyle()}>DNR</th>
                 <th style={headerCellStyle()}>Adic.</th>
+                <th style={headerCellStyle()}>Reat.</th>
                 <th style={headerCellStyle()}>Valor</th>
               </tr>
             </thead>
@@ -242,6 +246,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   <td style={cellStyle({ background: altRowBg(idx), color: (d.bonus ?? 0) > 0 ? "#16a34a" : undefined, fontWeight: (d.bonus ?? 0) > 0 ? 700 : undefined })}>
                     {(d.bonus ?? 0) > 0 ? `+${formatCurrency(d.bonus!)}` : "—"}
                   </td>
+                  <td style={cellStyle({ background: altRowBg(idx), color: (d.reativoTotal ?? 0) > 0 ? "#d97706" : undefined, fontWeight: (d.reativoTotal ?? 0) > 0 ? 700 : undefined })}>
+                    {(d.reativoTotal ?? 0) > 0 ? `+${formatCurrency(d.reativoTotal!)}` : "—"}
+                  </td>
                   <td style={cellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(d.totalValue)}</td>
                 </tr>
               ))}
@@ -262,6 +269,9 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 </td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.green, color: "#16a34a" })}>
                   {grandTotalBonus > 0 ? `+${formatCurrency(grandTotalBonus)}` : "—"}
+                </td>
+                <td style={cellStyle({ fontWeight: 800, background: "#fef3c7", color: "#d97706" })}>
+                  {grandTotalReativo > 0 ? `+${formatCurrency(grandTotalReativo)}` : "—"}
                 </td>
                 <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{formatCurrency(grandTotalValue)}</td>
               </tr>
