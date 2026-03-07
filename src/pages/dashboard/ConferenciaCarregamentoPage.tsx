@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle } from "lucide-react";
+import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -230,6 +230,16 @@ const ConferenciaCarregamentoPage = () => {
   // Call driver
   const [callingDriverId, setCallingDriverId] = useState<string | null>(null);
 
+  // Retroactive loading
+  const [showRetroModal, setShowRetroModal] = useState(false);
+  const [retroDate, setRetroDate] = useState<Date | undefined>(undefined);
+  const [retroDriverSearch, setRetroDriverSearch] = useState("");
+  const [retroDriverResults, setRetroDriverResults] = useState<SwapDriver[]>([]);
+  const [retroSelectedDriver, setRetroSelectedDriver] = useState<SwapDriver | null>(null);
+  const [retroLoading, setRetroLoading] = useState(false);
+  const [retroSearchLoading, setRetroSearchLoading] = useState(false);
+  const retroDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
 
@@ -256,6 +266,9 @@ const ConferenciaCarregamentoPage = () => {
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  // Search/locate mode per ride
+  const [searchLocateMode, setSearchLocateMode] = useState<Record<string, boolean>>({});
+  const [searchLocateInput, setSearchLocateInput] = useState<Record<string, string>>({});
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -957,42 +970,55 @@ const ConferenciaCarregamentoPage = () => {
       }
 
       if (totalScans === 1 && count === 0) {
-        const { data: previousTbrs } = await supabase
-          .from("ride_tbrs")
-          .select("id, ride_id")
-          .eq("code", code)
-          .neq("ride_id", rideId);
+        const [prevTbrsRes, prevPisoRes] = await Promise.all([
+          supabase
+            .from("ride_tbrs")
+            .select("id, ride_id")
+            .ilike("code", code)
+            .neq("ride_id", rideId),
+          supabase
+            .from("piso_entries")
+            .select("id, status, ride_id")
+            .ilike("tbr_code", code),
+        ]);
+        const previousTbrs = prevTbrsRes.data ?? [];
+        const pisoEntries = prevPisoRes.data ?? [];
 
         let tripNumber = 1;
 
-        if (previousTbrs && previousTbrs.length > 0) {
-          // Check if any of those TBRs belong to ACTIVE loads
-          const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
-          const { data: prevRides } = await supabase
-            .from("driver_rides")
-            .select("id, loading_status")
-            .in("id", prevRideIds)
-            .in("loading_status", ["pending", "loading"]);
+        // Count distinct previous ride_ids from both ride_tbrs and piso_entries
+        const previousRideIds = new Set<string>();
+        previousTbrs.forEach(t => previousRideIds.add(t.ride_id));
+        pisoEntries.forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
+        // Remove current ride from the set
+        previousRideIds.delete(rideId);
 
-          if (prevRides && prevRides.length > 0) {
-            playErrorBeep();
-            const { toast } = await import("@/hooks/use-toast");
-            toast({
-              title: "TBR em carregamento ativo",
-              description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
-              variant: "destructive",
-            });
-            setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-            setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-            return;
+        if (previousTbrs.length > 0 || pisoEntries.length > 0) {
+          if (previousTbrs.length > 0) {
+            // Check if any of those TBRs belong to ACTIVE loads
+            const prevRideIds = [...new Set(previousTbrs.map(t => t.ride_id))];
+            const { data: prevRides } = await supabase
+              .from("driver_rides")
+              .select("id, loading_status")
+              .in("id", prevRideIds)
+              .in("loading_status", ["pending", "loading"]);
+
+            if (prevRides && prevRides.length > 0) {
+              playErrorBeep();
+              const { toast } = await import("@/hooks/use-toast");
+              toast({
+                title: "TBR em carregamento ativo",
+                description: "Este TBR já está em outro carregamento ativo. Remova-o do carregamento anterior antes de escaneá-lo aqui.",
+                variant: "destructive",
+              });
+              setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
+              setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
+              return;
+            }
           }
 
-          const { data: pisoEntries } = await supabase
-            .from("piso_entries")
-            .select("id, status")
-            .eq("tbr_code", code);
-
-          if (!pisoEntries || pisoEntries.length === 0) {
+          // If no piso entries exist and there are previous ride_tbrs, block — TBR is in transit
+          if (pisoEntries.length === 0 && previousTbrs.length > 0) {
             playErrorBeep();
             const { toast } = await import("@/hooks/use-toast");
             toast({
@@ -1005,7 +1031,8 @@ const ConferenciaCarregamentoPage = () => {
             return;
           }
 
-          tripNumber = previousTbrs.length + 1;
+          // trip_number = distinct previous rides + 1 (current)
+          tripNumber = previousRideIds.size + 1;
 
           playReincidenceBeep();
         }
@@ -1067,8 +1094,8 @@ const ConferenciaCarregamentoPage = () => {
 
         await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         playSuccessBeep();
-      } else if (totalScans === 2) {
-        // 2nd beep: temporary red warning, NO yellow — accidental double-scan is common
+      } else if (totalScans >= 2 && totalScans < 5) {
+        // 2nd-4th beep: temporary red warning, NO yellow — accidental double-scan is common
         newTbr._duplicate = true;
 
         realtimeLockUntil.current = Date.now() + 15000;
@@ -1092,8 +1119,8 @@ const ConferenciaCarregamentoPage = () => {
         }, 1000);
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-      } else if (totalScans >= 3) {
-        // 3x beep: don't add the 3rd TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
+      } else if (totalScans >= 5) {
+        // 5x beep: don't add the 5th TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
         playErrorBeep();
 
         // Sort occurrences by scanned_at ascending so the oldest (real DB entry) is first
@@ -1168,7 +1195,7 @@ const ConferenciaCarregamentoPage = () => {
 
     playErrorBeep();
 
-    if (totalScans >= 3) {
+    if (totalScans >= 5) {
       // 3rd+ scan: mark original as yellow permanently
       const occurrences = currentTbrs.filter(t => t.code.toUpperCase() === upper);
       const sorted = [...occurrences].sort((a, b) =>
@@ -1735,7 +1762,26 @@ const ConferenciaCarregamentoPage = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold italic">Conferência Carregamento</h1>
+        {managerSession && (
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 shrink-0"
+            onClick={() => {
+              setShowRetroModal(true);
+              setRetroDate(undefined);
+              setRetroDriverSearch("");
+              setRetroDriverResults([]);
+              setRetroSelectedDriver(null);
+            }}
+          >
+            <History className="h-3.5 w-3.5" />
+            Retroativo
+          </Button>
+        )}
+      </div>
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
@@ -1894,7 +1940,7 @@ const ConferenciaCarregamentoPage = () => {
       ) : (
         <div>
           <div className="flex items-center justify-start gap-2 mb-3 flex-wrap">
-            <div className="flex items-center gap-3 text-[10px] text-muted-foreground">
+            <div className="flex items-center gap-3 text-[10px] text-muted-foreground flex-wrap">
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm border bg-white" />
                 <span>1ª viagem</span>
@@ -1906,6 +1952,32 @@ const ConferenciaCarregamentoPage = () => {
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm bg-orange-200 border border-orange-300" />
                 <span>3ª+ viagem</span>
+              </div>
+              <span className="text-muted-foreground/40">|</span>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-green-100 border border-green-300" />
+                <span>Finalizado</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-blue-100 border border-blue-300" />
+                <span>Carregando</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-white border border-border" />
+                <span>Aguardando</span>
+              </div>
+              <span className="text-muted-foreground/40">|</span>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-yellow-200 border border-yellow-300" />
+                <span>5x bipes</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-black border border-black" />
+                <span className="text-foreground">Socorrido</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" />
+                <span>Duplicado</span>
               </div>
             </div>
           </div>
@@ -2080,7 +2152,7 @@ const ConferenciaCarregamentoPage = () => {
                           </div>
                         )}
 
-                        {/* Cancel & Swap buttons (visible to all, password required for non-managers) */}
+                        {/* Cancel button (visible to all, password required for non-managers) */}
                         {!isCancelled && (
                           <div className="w-full flex gap-2">
                             <Button
@@ -2090,14 +2162,6 @@ const ConferenciaCarregamentoPage = () => {
                               onClick={() => handleOpenCancelModal(ride.id)}
                             >
                               <Ban className="h-3.5 w-3.5" /> Cancelar
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 gap-1"
-                              onClick={() => handleOpenSwapModal(ride.id)}
-                            >
-                              <ArrowRightLeft className="h-3.5 w-3.5" /> Trocar
                             </Button>
                           </div>
                         )}
@@ -2142,7 +2206,7 @@ const ConferenciaCarregamentoPage = () => {
                         {/* TBR Area */}
                         {(isLoadingStatus || isFinished) && (
                           <div className="w-full space-y-2 border-t pt-3">
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 flex-wrap">
                               <p className="text-xs font-bold italic flex items-center gap-1">
                                 <ScanBarcode className="h-3.5 w-3.5 text-primary" />
                                 TBRs Lidos ({rideTbrs.length})
@@ -2167,7 +2231,81 @@ const ConferenciaCarregamentoPage = () => {
                                   Insucesso ({getSelectedCount(ride.id)})
                                 </Button>
                               )}
+                              <button
+                                onClick={() => {
+                                  setSearchLocateMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }));
+                                  if (searchLocateMode[ride.id]) {
+                                    setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                  }
+                                }}
+                                className={cn("ml-auto h-6 w-6 flex items-center justify-center rounded transition-colors", searchLocateMode[ride.id] ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground")}
+                                title="Buscar e localizar TBR"
+                              >
+                                <Search className="h-3.5 w-3.5" />
+                              </button>
                             </div>
+                            {searchLocateMode[ride.id] && (
+                              <div className="flex gap-1 items-center">
+                                <Input
+                                  className="h-7 text-xs font-mono flex-1"
+                                  placeholder="Bipe ou digite o TBR para localizar..."
+                                  value={searchLocateInput[ride.id] ?? ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSearchLocateInput(prev => ({ ...prev, [ride.id]: val }));
+                                    // Auto-search with debounce
+                                    if (val.trim().length >= 3) {
+                                      const upper = val.trim().toUpperCase();
+                                      const found = rideTbrs.find(t => t.code.toUpperCase() === upper);
+                                      if (found) {
+                                        // Auto-select the checkbox
+                                        setSelectedTbrsForDelete(prev => {
+                                          const current = new Set(prev[ride.id] ?? []);
+                                          current.add(found.id);
+                                          return { ...prev, [ride.id]: current };
+                                        });
+                                        // Scroll to the element
+                                        const listEl = tbrListRefs.current[ride.id];
+                                        if (listEl) {
+                                          const idx = rideTbrs.findIndex(t => t.id === found.id);
+                                          if (idx >= 0) {
+                                            const itemEl = listEl.children[idx] as HTMLElement;
+                                            itemEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                          }
+                                        }
+                                        // Clear input after short delay
+                                        setTimeout(() => {
+                                          setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                        }, 300);
+                                      }
+                                    }
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const val = (searchLocateInput[ride.id] ?? "").trim().toUpperCase();
+                                      const found = rideTbrs.find(t => t.code.toUpperCase() === val);
+                                      if (found) {
+                                        setSelectedTbrsForDelete(prev => {
+                                          const current = new Set(prev[ride.id] ?? []);
+                                          current.add(found.id);
+                                          return { ...prev, [ride.id]: current };
+                                        });
+                                        const listEl = tbrListRefs.current[ride.id];
+                                        if (listEl) {
+                                          const idx = rideTbrs.findIndex(t => t.id === found.id);
+                                          if (idx >= 0) {
+                                            const itemEl = listEl.children[idx] as HTMLElement;
+                                            itemEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                          }
+                                        }
+                                        setSearchLocateInput(prev => ({ ...prev, [ride.id]: "" }));
+                                      }
+                                    }
+                                  }}
+                                  autoFocus
+                                />
+                              </div>
+                            )}
                             {rideTbrs.length > 0 && (() => {
                               const visibleTbrs = isSearchActive
                                 ? rideTbrs.filter(t => t.code.toLowerCase().includes(tbrSearchCommitted.toLowerCase()))
@@ -2827,6 +2965,137 @@ const ConferenciaCarregamentoPage = () => {
             >
               {batchInsucessoLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" />}
               Confirmar Insucesso em Lote
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Retroactive Loading Modal */}
+      <Dialog open={showRetroModal} onOpenChange={setShowRetroModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" /> Carregamento Retroativo
+            </DialogTitle>
+            <DialogDescription>
+              Crie um carregamento retroativo para um motorista em uma data passada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label className="font-semibold">Data do Carregamento</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start font-normal">
+                    <CalendarIcon className="h-4 w-4 mr-2" />
+                    {retroDate ? format(retroDate, "dd/MM/yyyy") : "Selecionar data..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 z-[9999]" align="start">
+                  <Calendar mode="single" selected={retroDate} onSelect={setRetroDate} initialFocus className="p-3 pointer-events-auto" />
+                </PopoverContent>
+              </Popover>
+            </div>
+            <div className="space-y-2">
+              <Label className="font-semibold">Buscar Motorista</Label>
+              <Input
+                placeholder="Digite o nome..."
+                value={retroDriverSearch}
+                onChange={(e) => {
+                  setRetroDriverSearch(e.target.value);
+                  setRetroSelectedDriver(null);
+                  if (retroDebounceRef.current) clearTimeout(retroDebounceRef.current);
+                  if (e.target.value.trim()) {
+                    retroDebounceRef.current = setTimeout(async () => {
+                      setRetroSearchLoading(true);
+                      const { data } = await supabase
+                        .from("drivers_public")
+                        .select("id, name, cpf, avatar_url, car_model, car_plate, car_color")
+                        .ilike("name", `%${e.target.value.trim()}%`)
+                        .eq("active", true)
+                        .limit(10);
+                      setRetroDriverResults((data ?? []) as SwapDriver[]);
+                      setRetroSearchLoading(false);
+                    }, 400);
+                  } else {
+                    setRetroDriverResults([]);
+                  }
+                }}
+              />
+              {retroSearchLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+              {retroDriverResults.length > 0 && !retroSelectedDriver && (
+                <div className="max-h-40 overflow-y-auto space-y-1 border rounded-md p-1">
+                  {retroDriverResults.map(d => (
+                    <button
+                      key={d.id}
+                      onClick={() => { setRetroSelectedDriver(d); setRetroDriverResults([]); }}
+                      className="w-full text-left p-2 rounded hover:bg-muted text-xs space-y-0.5"
+                    >
+                      <p className="font-bold">{d.name}</p>
+                      <p className="text-muted-foreground">{d.car_model} {d.car_color || ""} · {d.car_plate}</p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {retroSelectedDriver && (
+              <div className="p-3 rounded-lg border border-border bg-card space-y-1">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-10 w-10">
+                    {retroSelectedDriver.avatar_url && <AvatarImage src={retroSelectedDriver.avatar_url} />}
+                    <AvatarFallback className="bg-primary/10 text-primary font-bold">{retroSelectedDriver.name[0].toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <p className="font-bold text-sm">{retroSelectedDriver.name}</p>
+                    <p className="text-xs text-muted-foreground">{retroSelectedDriver.car_model} · {retroSelectedDriver.car_plate}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <Button
+              onClick={async () => {
+                if (!retroSelectedDriver || !retroDate || !unitId) return;
+                setRetroLoading(true);
+                const retroDateStr = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 6, 0, 0).toISOString();
+                // Get next sequence number for that date
+                const dayStart = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0).toISOString();
+                const dayEnd = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999).toISOString();
+                const { data: existingRides } = await supabase
+                  .from("driver_rides")
+                  .select("sequence_number")
+                  .eq("unit_id", unitId)
+                  .gte("completed_at", dayStart)
+                  .lte("completed_at", dayEnd)
+                  .order("sequence_number", { ascending: false })
+                  .limit(1);
+                const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
+
+                await supabase.from("driver_rides").insert({
+                  driver_id: retroSelectedDriver.id,
+                  unit_id: unitId,
+                  completed_at: retroDateStr,
+                  sequence_number: nextSeq,
+                  loading_status: "pending",
+                  conferente_id: conferenteSession?.id || null,
+                } as any);
+
+                setRetroLoading(false);
+                setShowRetroModal(false);
+                // Navigate to the retroactive date
+                setStartDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0));
+                setEndDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999));
+                fetchRides();
+                const { toast } = await import("@/hooks/use-toast");
+                toast({ title: "Carregamento retroativo criado!", description: `Motorista ${retroSelectedDriver.name} adicionado em ${format(retroDate, "dd/MM/yyyy")}` });
+              }}
+              disabled={retroLoading || !retroSelectedDriver || !retroDate}
+              className="w-full font-bold italic gap-2"
+            >
+              {retroLoading && <Loader2 className="h-4 w-4 animate-spin" />}
+              <History className="h-4 w-4" />
+              Criar Carregamento Retroativo
             </Button>
           </div>
         </DialogContent>
