@@ -145,7 +145,7 @@ const DashboardHome = () => {
 
       // Build timeline by querying ALL tables for this TBR code
       const [allRideTbrs, allPiso, allPs, allRto, allDnr, allRescue, allReativo] = await Promise.all([
-        supabase.from("ride_tbrs").select("*, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").eq("code", code),
+        supabase.from("ride_tbrs").select("*, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").ilike("code", code),
         supabase.from("piso_entries").select("*").ilike("tbr_code", code),
         supabase.from("ps_entries").select("*").ilike("tbr_code", code),
         supabase.from("rto_entries").select("*").ilike("tbr_code", code),
@@ -237,12 +237,8 @@ const DashboardHome = () => {
         const ride = missingRidesMap.get(rideId);
         if (!ride) return;
         // Find the earliest return entry for this ride to place loading event before it
-        const returnTimestamps = [...pisoEntries, ...psEntries, ...rtoEntries]
-          .filter((e: any) => e.ride_id === rideId)
-          .map((e: any) => new Date(e.created_at).getTime());
-        const earliestReturn = returnTimestamps.length > 0 ? Math.min(...returnTimestamps) : new Date(ride.completed_at).getTime();
-        // Place loading event 1 second before the return
-        const syntheticTimestamp = new Date(earliestReturn - 1000).toISOString();
+        // Use ride.completed_at as the loading timestamp (when the ride was created/assigned)
+        const syntheticTimestamp = ride.completed_at;
         loadEvents.push({
           timestamp: syntheticTimestamp,
           ride,
