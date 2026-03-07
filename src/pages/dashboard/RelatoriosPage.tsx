@@ -724,8 +724,9 @@ const RelatoriosPage = () => {
                       <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns}</strong></div>
                       <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked}</strong></div>
                       <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed)}</strong></div>
-                      {d.dnrDiscount > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount)}</strong></div>}
-                      {d.bonus > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus)}</strong></div>}
+                      {(d.dnrDiscount ?? 0) > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount!)}</strong></div>}
+                      {(d.bonus ?? 0) > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus!)}</strong></div>}
+                      {(d.reativoTotal ?? 0) > 0 && <div><span className="text-amber-600">Reativo:</span> <strong className="text-amber-600">+{formatCurrency(d.reativoTotal!)}</strong></div>}
                     </div>
 
                     {/* Expandable daily detail table */}
