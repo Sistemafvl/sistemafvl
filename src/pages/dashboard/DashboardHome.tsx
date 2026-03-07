@@ -265,6 +265,29 @@ const DashboardHome = () => {
           detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
           type: isFirstLoad ? "origin" : "loaded",
         });
+
+        // Ride started event
+        if (ride?.started_at) {
+          timeline.push({
+            timestamp: ride.started_at,
+            conferente: confName,
+            action: "Carregamento Iniciado",
+            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+            type: "started",
+          });
+        }
+
+        // Ride finished event
+        if (ride?.finished_at) {
+          timeline.push({
+            timestamp: ride.finished_at,
+            conferente: confName,
+            action: "Carregamento Finalizado",
+            detail: `Motorista: ${driver?.name ?? "—"} • Rota: ${ride?.route ?? "—"}`,
+            type: "finished",
+          });
+        }
+
         isFirstLoad = false;
       });
 
