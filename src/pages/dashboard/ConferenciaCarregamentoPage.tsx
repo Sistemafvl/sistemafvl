@@ -1099,11 +1099,11 @@ const ConferenciaCarregamentoPage = () => {
             ...prev,
             [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId),
           }));
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
           if (insertError.message?.includes('TBR already exists in another active loading')) {
-            playErrorBeep();
             toast({ title: "TBR duplicado", description: `${code} já está em outro carregamento ativo. Precisa passar pelo insucesso primeiro.`, variant: "destructive" });
           } else {
-            playErrorBeep();
             toast({ title: "Erro ao salvar TBR", description: insertError.message, variant: "destructive" });
           }
           return;
