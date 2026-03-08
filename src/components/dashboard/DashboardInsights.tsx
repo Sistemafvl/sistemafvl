@@ -226,7 +226,11 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {data.length === 0 ? (
+        {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : data.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">Sem dados</p>
           ) : (
             <>
