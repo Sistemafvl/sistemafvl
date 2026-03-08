@@ -596,8 +596,14 @@ const DashboardHome = () => {
             <FileWarning className="h-5 w-5 text-destructive shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Abertos <InfoButton text="Total de DNRs (Did Not Receive) abertos na unidade. Representam pacotes que o cliente declarou não ter recebido e estão pendentes de análise." /></p>
-              <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
-              <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
+              {dnrLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
+              ) : (
+                <>
+                  <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
+                  <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
