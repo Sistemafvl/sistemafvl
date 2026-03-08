@@ -61,10 +61,9 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     const since = getSince();
     const until = getUntil();
 
-    let ridesQuery = supabase
+    let ridesQuery = applyFilter(supabase
       .from("driver_rides")
-      .select("driver_id, id, started_at, finished_at")
-      .eq("unit_id", unitId)
+      .select("driver_id, id, started_at, finished_at"))
       .gte("completed_at", since);
     if (until) ridesQuery = ridesQuery.lte("completed_at", until);
 
