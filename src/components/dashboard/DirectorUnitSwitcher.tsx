@@ -56,8 +56,12 @@ const DirectorUnitSwitcher = () => {
         <Select
           value={unitSession.id}
           onValueChange={(val) => {
-            const u = domainUnits.find((u) => u.id === val);
-            if (u) setActiveUnit(u.id, u.name);
+            if (val === ALL_UNITS_ID) {
+              setActiveUnit(ALL_UNITS_ID, "Todas as Unidades");
+            } else {
+              const u = domainUnits.find((u) => u.id === val);
+              if (u) setActiveUnit(u.id, u.name);
+            }
           }}
         >
           <SelectTrigger className="w-full text-xs gap-2 bg-muted/50 border-border">
@@ -66,6 +70,9 @@ const DirectorUnitSwitcher = () => {
             <ArrowLeftRight className="h-3 w-3 text-muted-foreground ml-auto shrink-0" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={ALL_UNITS_ID}>
+              🏢 Todas as Unidades
+            </SelectItem>
             {domainUnits.map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.name}
