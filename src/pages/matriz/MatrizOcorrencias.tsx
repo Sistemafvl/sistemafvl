@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
