@@ -9,11 +9,13 @@ import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
 import { fetchAllRows } from "@/lib/supabase-helpers";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 interface Props {
   unitId: string;
   startDate?: Date;
   endDate?: Date;
+  allUnitIds?: string[];
 }
 
 const PAGE_SIZE = 5;
