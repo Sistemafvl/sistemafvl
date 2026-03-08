@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye, Download } from "lucide-react";
+import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye, Download, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
