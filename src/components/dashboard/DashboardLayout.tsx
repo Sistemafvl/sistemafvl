@@ -52,7 +52,13 @@ const DashboardLayout = () => {
               <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
                 Dashboard
               </span>
-              {conferenteSession && (
+              {isDirector && (
+                <span className="ml-auto text-xs text-amber-600 flex items-center gap-1 font-semibold">
+                  <Crown className="h-3.5 w-3.5" />
+                  {unitSession.name}
+                </span>
+              )}
+              {!isDirector && conferenteSession && (
                 <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
                   <UserCheck className="h-3.5 w-3.5" />
                   {conferenteSession.name}
