@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import {
   Package, Truck, Users, ShieldCheck, AlertTriangle, FileWarning, RotateCcw,
-  DollarSign, Star, Building, TrendingUp, ClipboardList, Wallet,
+  DollarSign, Star, Building, TrendingUp, ClipboardList, Wallet, Loader2,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
