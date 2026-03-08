@@ -223,13 +223,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchChartData(); }, [fetchChartData]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   const periodLabel = startDate && endDate
     ? `${format(startDate, "dd/MM")} a ${format(endDate, "dd/MM")}`
@@ -265,7 +258,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
           <Card key={c.label}>
             <CardContent className="p-4 flex flex-col items-center text-center gap-1">
               <c.icon className={`h-5 w-5 ${c.color}`} />
-              <span className="text-2xl font-bold italic">{c.value}</span>
+              {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{c.value}</span>}
               <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">{c.label} <InfoButton text={INFO_TEXTS[c.infoKey]} /></span>
             </CardContent>
           </Card>

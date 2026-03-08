@@ -226,7 +226,11 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {data.length === 0 ? (
+        {loading ? (
+            <div className="flex items-center justify-center py-6">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : data.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">Sem dados</p>
           ) : (
             <>
@@ -262,13 +266,6 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     );
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
@@ -282,28 +279,28 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <BarChart3 className="h-5 w-5 text-blue-500" />
-            <span className="text-2xl font-bold italic">{avgTbrs}</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{avgTbrs}</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Média TBRs / Carregamento <InfoButton text="Média de TBRs por carregamento no período." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Percent className="h-5 w-5 text-orange-500" />
-            <span className="text-2xl font-bold italic">{returnRate}%</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{returnRate}%</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Taxa de Retorno <InfoButton text="Percentual de TBRs que retornaram em relação ao total escaneado." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Clock className="h-5 w-5 text-green-500" />
-            <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Tempo Médio Carregamento <InfoButton text="Tempo médio entre início e fim do carregamento." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <CalendarDays className="h-5 w-5 text-purple-500" />
-            <span className="text-2xl font-bold italic">{bestDay || "—"}</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{bestDay || "—"}</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Dia Mais Movimentado <InfoButton text="Dia da semana com maior volume de carregamentos no período." /></span>
           </CardContent>
         </Card>
