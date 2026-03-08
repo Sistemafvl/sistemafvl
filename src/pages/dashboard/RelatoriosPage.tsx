@@ -661,13 +661,13 @@ const RelatoriosPage = () => {
                 </p>
               </div>
               {payrollMode === "espelho" && (
-                <Button size="sm" className="gap-2 shrink-0" onClick={handleDownloadPDF} disabled={savingPayroll}>
+                <Button size="sm" className="gap-2 shrink-0" onClick={() => { setFormatChoiceAction("espelho"); setFormatChoiceOpen(true); }} disabled={savingPayroll}>
                   {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  Baixar PDF
+                  Baixar Relatório
                 </Button>
               )}
               {payrollMode === "gerar" && (
-                <Button size="sm" className="gap-2 shrink-0" onClick={handleConfirmAndGenerate} disabled={savingPayroll}>
+                <Button size="sm" className="gap-2 shrink-0" onClick={() => { setFormatChoiceAction("gerar"); setFormatChoiceOpen(true); }} disabled={savingPayroll}>
                   {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Confirmar e Gerar
                 </Button>
