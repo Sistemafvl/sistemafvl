@@ -181,14 +181,17 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
       // Fetch returns (piso, ps, rto) to discount from totals
       const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ps_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("rto_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
       ]);
 
