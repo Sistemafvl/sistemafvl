@@ -35,6 +35,11 @@ import MatrizUnidades from "./pages/matriz/MatrizUnidades";
 import MatrizMotoristas from "./pages/matriz/MatrizMotoristas";
 import MatrizFinanceiro from "./pages/matriz/MatrizFinanceiro";
 import MatrizOcorrencias from "./pages/matriz/MatrizOcorrencias";
+import AdminLayout from "./components/admin/AdminLayout";
+import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
+import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
+import ManagersPage from "./pages/admin/ManagersPage";
+import DirectorsPage from "./pages/admin/DirectorsPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
@@ -101,6 +106,12 @@ const App = () => (
             <Route path="motoristas" element={<MatrizMotoristas />} />
             <Route path="financeiro" element={<MatrizFinanceiro />} />
             <Route path="ocorrencias" element={<MatrizOcorrencias />} />
+          </Route>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverviewPage />} />
+            <Route path="dominios" element={<DomainsUnitsPage />} />
+            <Route path="gerentes" element={<ManagersPage />} />
+            <Route path="diretores" element={<DirectorsPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
