@@ -104,7 +104,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
     const { end: rangeEnd } = getBrazilDayRange(days[days.length - 1]);
 
     // Bar chart - rides per day
-    const { data: rides7 } = await supabase.from("driver_rides").select("completed_at").eq("unit_id", unitId).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
+    const { data: rides7 } = await applyFilter(supabase.from("driver_rides").select("completed_at")).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
     const ridesByDay: Record<string, number> = {};
     days.forEach(d => ridesByDay[d] = 0);
     (rides7 ?? []).forEach(r => {
