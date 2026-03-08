@@ -274,12 +274,12 @@ const OperacaoPage = () => {
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
               {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes atualmente na carga (concluídos). Não inclui retornos (insucesso, PS, RTO)." /></p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes bipados na conferência do dia (cada TBR contado uma única vez)." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalAllReturns}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de pacotes com insucesso (Piso, PS, RTO)." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalPisoReturns}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de insucessos (Retorno Piso) registrados nos carregamentos do dia. Não inclui PS e RTO." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <BarChart3 className="h-5 w-5 mx-auto text-primary mb-1" />
