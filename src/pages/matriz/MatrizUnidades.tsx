@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Building, Package, Users, AlertTriangle, Star, TrendingUp } from "lucide-react";
+import { Building, Package, Users, AlertTriangle, Star, TrendingUp, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 const MatrizUnidades = () => {
