@@ -40,6 +40,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
   const [returnRate, setReturnRate] = useState(0);
   const [avgLoadTime, setAvgLoadTime] = useState("");
   const [bestDay, setBestDay] = useState("");
+  const [loading, setLoading] = useState(true);
 
   // Pagination
   const [driverPage, setDriverPage] = useState(0);
