@@ -45,6 +45,10 @@ interface AuthState {
   setDomainUnits: (units: DomainUnit[]) => void;
   setActiveUnit: (unitId: string, unitName: string) => void;
 
+  // Master Admin
+  isMasterAdmin: boolean;
+  setMasterAdmin: (v: boolean) => void;
+
   logout: () => void;
 }
 
@@ -66,7 +70,9 @@ export const useAuthStore = create<AuthState>()(
           name: unitName,
         } : null,
       })),
-      logout: () => set({ unitSession: null, managerSession: null, conferenteSession: null, domainUnits: [] }),
+      isMasterAdmin: false,
+      setMasterAdmin: (v) => set({ isMasterAdmin: v }),
+      logout: () => set({ unitSession: null, managerSession: null, conferenteSession: null, domainUnits: [], isMasterAdmin: false }),
     }),
     {
       name: "fvl-auth",
@@ -74,6 +80,7 @@ export const useAuthStore = create<AuthState>()(
         unitSession: state.unitSession,
         conferenteSession: state.conferenteSession,
         domainUnits: state.domainUnits,
+        isMasterAdmin: state.isMasterAdmin,
       }),
     }
   )

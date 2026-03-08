@@ -2,6 +2,7 @@ import logo from "@/assets/logo.png";
 
 interface LogoHeaderProps {
   size?: "sm" | "md" | "lg" | "xl";
+  onTripleClick?: () => void;
 }
 
 const sizeClasses = {
@@ -11,9 +12,12 @@ const sizeClasses = {
   xl: "h-20 sm:h-32",
 };
 
-const LogoHeader = ({ size = "md" }: LogoHeaderProps) => {
+const LogoHeader = ({ size = "md", onTripleClick }: LogoHeaderProps) => {
   return (
-    <div className="flex items-center justify-center select-none">
+    <div
+      className="flex items-center justify-center select-none"
+      onClick={onTripleClick}
+    >
       <img
         src={logo}
         alt="Sistema FVL"
