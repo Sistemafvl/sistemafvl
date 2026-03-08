@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import XLSX from "xlsx-js-style";
 import { format } from "date-fns";
 import type { DriverPayrollData } from "./PayrollReportContent";
 
@@ -21,6 +21,42 @@ export interface MinPackageDriver {
   pixKey?: string | null;
 }
 
+// ── Style constants ──
+const borderThin = {
+  top: { style: "thin", color: { rgb: "000000" } },
+  bottom: { style: "thin", color: { rgb: "000000" } },
+  left: { style: "thin", color: { rgb: "000000" } },
+  right: { style: "thin", color: { rgb: "000000" } },
+};
+
+const yellowFill = { fgColor: { rgb: "FFD700" } };
+const greenFill = { fgColor: { rgb: "92D050" } };
+const grayFill = { fgColor: { rgb: "D9D9D9" } };
+const boldFont = { bold: true, sz: 11 };
+const boldFontLg = { bold: true, sz: 13 };
+const centerAlign = { horizontal: "center", vertical: "center" };
+const leftAlign = { horizontal: "left", vertical: "center" };
+
+// ── Helper: apply style to a range of cells ──
+function applyStyleToRow(
+  ws: XLSX.WorkSheet,
+  row: number,
+  colStart: number,
+  colEnd: number,
+  style: Record<string, unknown>,
+) {
+  for (let c = colStart; c <= colEnd; c++) {
+    const addr = XLSX.utils.encode_cell({ r: row, c });
+    if (!ws[addr]) ws[addr] = { v: "", t: "s" };
+    ws[addr].s = { ...(ws[addr].s || {}), ...style };
+  }
+}
+
+function mergeRow(ws: XLSX.WorkSheet, row: number, colStart: number, colEnd: number) {
+  if (!ws["!merges"]) ws["!merges"] = [];
+  ws["!merges"].push({ s: { r: row, c: colStart }, e: { r: row, c: colEnd } });
+}
+
 export function generatePayrollExcel(
   data: DriverPayrollData[],
   unitName: string,
@@ -33,10 +69,8 @@ export function generatePayrollExcel(
     ...new Set(data.flatMap((d) => d.days.map((day) => day.date))),
   ].sort();
 
-  // Also gather dates from minPackageDrivers if they have payroll data
   const minDrivers = minPackageDrivers ?? [];
 
-  // Fixed headers
   const fixedHeaders = [
     "NOME COMPLETO",
     "Veículo",
@@ -52,6 +86,8 @@ export function generatePayrollExcel(
     format(new Date(d + "T12:00:00"), "dd/MM"),
   );
   const headers = [...fixedHeaders, ...dateHeaders, "TOTAL"];
+  const totalCols = headers.length;
+  const lastCol = totalCols - 1;
 
   // ── Helper: build driver row ──
   const buildDriverRow = (d: DriverPayrollData) => {
@@ -87,7 +123,6 @@ export function generatePayrollExcel(
     ];
   };
 
-  // ── Helper: build totals row for a dataset ──
   const buildTotalsRow = (dataset: DriverPayrollData[], label = "TOTAL") => {
     const grandTotalCompleted = dataset.reduce((s, d) => s + d.totalCompleted, 0);
     const grandDescontos = dataset.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
@@ -118,7 +153,6 @@ export function generatePayrollExcel(
     ];
   };
 
-  // ── Helper: daily totals array for consolidated block ──
   const getDailyTotals = (dataset: DriverPayrollData[]) =>
     allDates.map((date) =>
       dataset.reduce((s, d) => {
@@ -127,12 +161,10 @@ export function generatePayrollExcel(
       }, 0),
     );
 
-  // ── Build minPackage DriverPayrollData entries (empty if no rides) ──
+  // ── Build minPackage DriverPayrollData entries ──
   const minPkgPayrollData: DriverPayrollData[] = minDrivers.map((mp) => {
-    // Check if this driver already exists in main data
     const existing = data.find((d) => d.driver.id === mp.driverId);
     if (existing) return existing;
-    // Empty driver entry
     return {
       driver: {
         id: mp.driverId,
@@ -160,13 +192,37 @@ export function generatePayrollExcel(
     };
   });
 
-  // ══════════════ BUILD WORKSHEET ══════════════
+  // ══════════════ BUILD WORKSHEET DATA ══════════════
   const wsData: (string | number)[][] = [];
 
+  // Track row indices for styling
+  const rowTracker = {
+    titleRow: 0,
+    dataFinanceiraRow: 2,
+    metaRow: 3,
+    headerRow: 4,
+    dataStartRow: 5,
+    dataEndRow: 0, // computed later
+    totalRow: 0,
+    // Section 2
+    minTitleRow: -1,
+    minDataFinRow: -1,
+    minHeaderRow: -1,
+    minDataStartRow: -1,
+    minDataEndRow: -1,
+    minTotalRow: -1,
+    // Section 3
+    consolidadoHeaderRow: -1,
+    consolidadoRows: [] as number[],
+    // Section 4
+    resumoHeaderRow: -1,
+    resumoRows: [] as number[],
+  };
+
   // ── SECTION 1: HEADER ──
-  wsData.push(["MOTORISTAS FIXOS POR PACOTES"]);
-  wsData.push([]);
-  wsData.push(["DADOS FINANCEIROS"]);
+  wsData.push(["MOTORISTAS FIXOS POR PACOTES"]); // row 0
+  wsData.push([]); // row 1
+  wsData.push(["DADOS FINANCEIROS"]); // row 2
   wsData.push([
     `Unidade: ${unitName}`,
     "",
@@ -175,14 +231,16 @@ export function generatePayrollExcel(
     "",
     "",
     `Gerado por: ${generatedBy ?? "Sistema"}`,
-  ]);
-  wsData.push(headers);
+  ]); // row 3
+  wsData.push(headers); // row 4
 
   // ── SECTION 1: MAIN DRIVER ROWS ──
   data.forEach((d) => wsData.push(buildDriverRow(d)));
+  rowTracker.dataEndRow = wsData.length - 1;
 
   // ── SECTION 1: TOTALS ──
   wsData.push(buildTotalsRow(data, "TOTAL"));
+  rowTracker.totalRow = wsData.length - 1;
 
   // ── SPACE ──
   wsData.push([]);
@@ -190,12 +248,21 @@ export function generatePayrollExcel(
 
   // ── SECTION 2: MINIMUM PACKAGES DRIVERS ──
   if (minPkgPayrollData.length > 0) {
+    rowTracker.minTitleRow = wsData.length;
     wsData.push(["MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES"]);
+
+    rowTracker.minDataFinRow = wsData.length;
     wsData.push(["DADOS FINANCEIROS"]);
+
+    rowTracker.minHeaderRow = wsData.length;
     wsData.push(headers);
 
+    rowTracker.minDataStartRow = wsData.length;
     minPkgPayrollData.forEach((d) => wsData.push(buildDriverRow(d)));
+    rowTracker.minDataEndRow = wsData.length - 1;
+
     wsData.push(buildTotalsRow(minPkgPayrollData, "TOTAL"));
+    rowTracker.minTotalRow = wsData.length - 1;
 
     wsData.push([]);
     wsData.push([]);
@@ -207,9 +274,10 @@ export function generatePayrollExcel(
   const mainTotal = data.reduce((s, d) => s + d.totalCompleted, 0);
   const minTotal = minPkgPayrollData.reduce((s, d) => s + d.totalCompleted, 0);
 
-  // Header for consolidated
+  rowTracker.consolidadoHeaderRow = wsData.length;
   wsData.push(["CONSOLIDADO", "", "", "", "", "", "", "", "", ...dateHeaders, "TOTAL"]);
 
+  rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
     "MOTORISTAS POR PACOTES",
     "", "", "", "", "", "", "", "",
@@ -218,6 +286,7 @@ export function generatePayrollExcel(
   ]);
 
   if (minPkgPayrollData.length > 0) {
+    rowTracker.consolidadoRows.push(wsData.length);
     wsData.push([
       "MOTORISTAS - MÍNIMO DE 60 PACOTES",
       "", "", "", "", "", "", "", "",
@@ -229,6 +298,7 @@ export function generatePayrollExcel(
   const combinedDailyTotals = allDates.map((_, i) => mainDailyTotals[i] + minDailyTotals[i]);
   const combinedTotal = mainTotal + minTotal;
 
+  rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
     "Total Pacotes",
     "", "", "", "", "", "", "", "",
@@ -249,14 +319,19 @@ export function generatePayrollExcel(
   const mainAvg = mainTotal > 0 ? mainTotalValue / mainTotal : 0;
   const minAvg = minTotal > 0 ? minTotalValue / minTotal : 0;
 
+  rowTracker.resumoHeaderRow = wsData.length;
   wsData.push(["RESUMO", "Qtd. Pacotes Entregues", "Valor Total", "Média Pacote"]);
+
+  rowTracker.resumoRows.push(wsData.length);
   wsData.push([
     "MOTORISTAS POR PACOTES",
     mainTotal,
     formatCurrencyBR(mainTotalValue),
     formatCurrencyBR(mainAvg),
   ]);
+
   if (minPkgPayrollData.length > 0) {
+    rowTracker.resumoRows.push(wsData.length);
     wsData.push([
       "MOTORISTAS - MÍNIMO DE 60 PACOTES",
       minTotal,
@@ -264,6 +339,8 @@ export function generatePayrollExcel(
       formatCurrencyBR(minAvg),
     ]);
   }
+
+  rowTracker.resumoRows.push(wsData.length);
   wsData.push([
     "CUSTO POR PACOTE",
     grandTotalCompleted,
@@ -271,25 +348,187 @@ export function generatePayrollExcel(
     formatCurrencyBR(avgPerPackage),
   ]);
 
-  // ══════════════ CREATE WORKBOOK ══════════════
+  // ══════════════ CREATE WORKSHEET ══════════════
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Set column widths
   const colWidths = [
-    { wch: 35 }, // NOME COMPLETO
-    { wch: 10 }, // Veículo
-    { wch: 18 }, // VALOR POR PACOTE
-    { wch: 28 }, // TOTAL DE PACOTES
-    { wch: 15 }, // DESCONTOS
-    { wch: 15 }, // ADICIONAL
-    { wch: 18 }, // TOTAL GERAL
-    { wch: 16 }, // CPF
-    { wch: 25 }, // CHAVE PIX
+    { wch: 35 },
+    { wch: 10 },
+    { wch: 18 },
+    { wch: 28 },
+    { wch: 15 },
+    { wch: 15 },
+    { wch: 18 },
+    { wch: 16 },
+    { wch: 25 },
     ...allDates.map(() => ({ wch: 8 })),
-    { wch: 8 }, // TOTAL
+    { wch: 8 },
   ];
   ws["!cols"] = colWidths;
 
+  // ══════════════ APPLY STYLES ══════════════
+
+  // ── Section 1 title: yellow bg, bold, merge ──
+  applyStyleToRow(ws, rowTracker.titleRow, 0, lastCol, {
+    font: boldFontLg,
+    fill: yellowFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+  mergeRow(ws, rowTracker.titleRow, 0, lastCol);
+
+  // ── "DADOS FINANCEIROS" row ──
+  applyStyleToRow(ws, rowTracker.dataFinanceiraRow, 0, lastCol, {
+    font: boldFont,
+    alignment: leftAlign,
+  });
+  mergeRow(ws, rowTracker.dataFinanceiraRow, 0, lastCol);
+
+  // ── Meta row (Unidade/Período/Gerado) ──
+  applyStyleToRow(ws, rowTracker.metaRow, 0, lastCol, {
+    font: { bold: true, sz: 10 },
+    alignment: leftAlign,
+  });
+
+  // ── Headers row: yellow bg, bold, centered, borders ──
+  applyStyleToRow(ws, rowTracker.headerRow, 0, lastCol, {
+    font: boldFont,
+    fill: yellowFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+
+  // ── Data rows: borders, centered for numeric cols ──
+  for (let r = rowTracker.dataStartRow; r <= rowTracker.dataEndRow; r++) {
+    applyStyleToRow(ws, r, 0, 0, { font: { sz: 11 }, alignment: leftAlign, border: borderThin });
+    for (let c = 1; c <= lastCol; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      if (!ws[addr]) ws[addr] = { v: "", t: "s" };
+      ws[addr].s = { font: { sz: 11 }, alignment: centerAlign, border: borderThin };
+    }
+  }
+
+  // ── TOTAL row: green bg, bold, borders ──
+  applyStyleToRow(ws, rowTracker.totalRow, 0, lastCol, {
+    font: boldFont,
+    fill: greenFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+
+  // ── Section 2 styles (if exists) ──
+  if (rowTracker.minTitleRow >= 0) {
+    // Title
+    applyStyleToRow(ws, rowTracker.minTitleRow, 0, lastCol, {
+      font: boldFontLg,
+      fill: greenFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+    mergeRow(ws, rowTracker.minTitleRow, 0, lastCol);
+
+    // DADOS FINANCEIROS
+    applyStyleToRow(ws, rowTracker.minDataFinRow, 0, lastCol, {
+      font: boldFont,
+      alignment: leftAlign,
+    });
+    mergeRow(ws, rowTracker.minDataFinRow, 0, lastCol);
+
+    // Headers
+    applyStyleToRow(ws, rowTracker.minHeaderRow, 0, lastCol, {
+      font: boldFont,
+      fill: yellowFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+
+    // Data rows
+    for (let r = rowTracker.minDataStartRow; r <= rowTracker.minDataEndRow; r++) {
+      applyStyleToRow(ws, r, 0, 0, { font: { sz: 11 }, alignment: leftAlign, border: borderThin });
+      for (let c = 1; c <= lastCol; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (!ws[addr]) ws[addr] = { v: "", t: "s" };
+        ws[addr].s = { font: { sz: 11 }, alignment: centerAlign, border: borderThin };
+      }
+    }
+
+    // Total
+    applyStyleToRow(ws, rowTracker.minTotalRow, 0, lastCol, {
+      font: boldFont,
+      fill: greenFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+  }
+
+  // ── Section 3: Consolidated ──
+  if (rowTracker.consolidadoHeaderRow >= 0) {
+    applyStyleToRow(ws, rowTracker.consolidadoHeaderRow, 0, lastCol, {
+      font: boldFont,
+      fill: grayFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+    // Merge "CONSOLIDADO" label across fixed columns
+    mergeRow(ws, rowTracker.consolidadoHeaderRow, 0, 8);
+
+    for (const r of rowTracker.consolidadoRows) {
+      applyStyleToRow(ws, r, 0, lastCol, {
+        font: { sz: 11 },
+        alignment: centerAlign,
+        border: borderThin,
+      });
+      // Bold the label column
+      const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
+      if (ws[labelAddr]) {
+        ws[labelAddr].s = { ...ws[labelAddr].s, font: boldFont, alignment: leftAlign };
+      }
+    }
+
+    // Last consolidated row (Total Pacotes) gets green
+    const lastConsRow = rowTracker.consolidadoRows[rowTracker.consolidadoRows.length - 1];
+    applyStyleToRow(ws, lastConsRow, 0, lastCol, {
+      font: boldFont,
+      fill: greenFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+  }
+
+  // ── Section 4: Resumo ──
+  if (rowTracker.resumoHeaderRow >= 0) {
+    applyStyleToRow(ws, rowTracker.resumoHeaderRow, 0, 3, {
+      font: boldFont,
+      fill: grayFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+
+    for (const r of rowTracker.resumoRows) {
+      applyStyleToRow(ws, r, 0, 3, {
+        font: { sz: 11 },
+        alignment: centerAlign,
+        border: borderThin,
+      });
+      // Bold label
+      const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
+      if (ws[labelAddr]) {
+        ws[labelAddr].s = { ...ws[labelAddr].s, font: boldFont, alignment: leftAlign };
+      }
+    }
+
+    // Last resumo row (CUSTO POR PACOTE) gets green
+    const lastResRow = rowTracker.resumoRows[rowTracker.resumoRows.length - 1];
+    applyStyleToRow(ws, lastResRow, 0, 3, {
+      font: boldFont,
+      fill: greenFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+  }
+
+  // ══════════════ CREATE WORKBOOK & SAVE ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Folha de Pagamento");
 
