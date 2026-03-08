@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -176,9 +175,7 @@ const MatrizMotoristas = () => {
         </CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-6 w-6 animate-spin text-primary" />
-            </div>
+            <p className="text-sm text-muted-foreground italic text-center py-8">Carregando...</p>
           ) : (
             <Table>
               <TableHeader>

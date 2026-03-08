@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import {
   Package, Truck, Users, ShieldCheck, AlertTriangle, FileWarning, RotateCcw,
-  DollarSign, Star, Building, TrendingUp, ClipboardList, Wallet, Loader2,
+  DollarSign, Star, Building, TrendingUp, ClipboardList, Wallet,
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
@@ -304,11 +304,7 @@ const MatrizOverview = () => {
               <kpi.icon className={`h-8 w-8 ${kpi.color} shrink-0`} />
               <div className="min-w-0">
                 <p className="text-xs text-muted-foreground font-semibold italic truncate">{kpi.label}</p>
-                {loading ? (
-                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
-                ) : (
-                  <p className="text-lg font-bold">{kpi.value}</p>
-                )}
+                <p className="text-lg font-bold">{loading ? "..." : kpi.value}</p>
               </div>
             </CardContent>
           </Card>

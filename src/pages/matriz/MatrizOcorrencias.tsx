@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo } from "react";
-import { Loader2 } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -196,14 +195,8 @@ const KpiCard = ({ icon: Icon, label, value, open, loading, color }: any) => (
       <Icon className={`h-8 w-8 ${color} shrink-0`} />
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground font-semibold italic truncate">{label}</p>
-        {loading ? (
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
-        ) : (
-          <>
-            <p className="text-lg font-bold">{value}</p>
-            <p className="text-[10px] text-muted-foreground">{open} aberto(s)</p>
-          </>
-        )}
+        <p className="text-lg font-bold">{loading ? "..." : value}</p>
+        {!loading && <p className="text-[10px] text-muted-foreground">{open} aberto(s)</p>}
       </div>
     </CardContent>
   </Card>

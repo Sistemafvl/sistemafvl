@@ -1,7 +1,7 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { translateStatus } from "@/lib/status-labels";
 import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye, Zap, LifeBuoy, Play, Flag } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 import SystemUpdates from "@/components/dashboard/SystemUpdates";
 import InfoButton from "@/components/dashboard/InfoButton";
-import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -56,7 +55,7 @@ interface TimelineEvent {
 }
 
 const DashboardHome = () => {
-  const { unitSession, domainUnits } = useAuthStore();
+  const { unitSession } = useAuthStore();
   const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
   const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
@@ -81,42 +80,27 @@ const DashboardHome = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const allUnitIds = useMemo(() => domainUnits.map(u => u.id), [domainUnits]);
-  const isAllUnits = unitSession?.id === ALL_UNITS_ID;
-
   // Fetch feedback summary
   useEffect(() => {
     if (!unitSession?.id) return;
     const fetchFeedback = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      let q = supabase.from("unit_reviews").select("rating").order("id");
-      if (isAllUnits && allUnitIds.length > 0) {
-        q = q.in("unit_id", allUnitIds);
-      } else {
-        q = q.eq("unit_id", unitSession.id);
-      }
       const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-        q.range(from, to)
+        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id).order("id").range(from, to)
       );
       setFeedbackTotal(revs.length);
       setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
     };
     fetchFeedback();
-  }, [unitSession?.id, isAllUnits, allUnitIds]);
+  }, [unitSession?.id]);
 
   // Fetch DNR stats
   useEffect(() => {
     if (!unitSession?.id) return;
     const fetchDnr = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
-      if (isAllUnits && allUnitIds.length > 0) {
-        q = q.in("unit_id", allUnitIds);
-      } else {
-        q = q.eq("unit_id", unitSession.id);
-      }
       const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-        q.range(from, to)
+        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id).order("id").range(from, to)
       );
       const open = all.filter(e => e.status === "open");
       const analyzing = all.filter(e => e.status === "analyzing");
@@ -126,7 +110,7 @@ const DashboardHome = () => {
       setDnrClosed(closed.length);
     };
     fetchDnr();
-  }, [unitSession?.id, isAllUnits, allUnitIds]);
+  }, [unitSession?.id]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tbrSearch.trim()) {
@@ -615,8 +599,8 @@ const DashboardHome = () => {
       </div>
 
       {/* Métricas e Gráficos BI */}
-      <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} allUnitIds={allUnitIds} />
-      <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} allUnitIds={allUnitIds} />
+      <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
+      <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
 
       <SystemUpdates />
 
