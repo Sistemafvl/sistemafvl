@@ -96,141 +96,184 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
     }
   }, [unitId, startDate, endDate, applyFilter, effectiveIds]);
 
-  // Fetch chart data using global dates only
   const fetchChartData = useCallback(async () => {
+    const requestId = ++chartRequestRef.current;
     setChartLoading(true);
-    const todayStr = getBrazilTodayStr();
-    const todayDate = new Date(todayStr);
 
-    const effectiveEnd = endDate ? endDate : todayDate;
-    const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 6));
+    try {
+      const todayStr = getBrazilTodayStr();
+      const todayDate = new Date(todayStr);
 
-    const days: string[] = [];
-    const cursor = new Date(effectiveStart);
-    const endD = new Date(effectiveEnd);
-    while (cursor <= endD) {
-      days.push(cursor.toISOString().slice(0, 10));
-      cursor.setDate(cursor.getDate() + 1);
-    }
-    if (days.length === 0) days.push(todayStr);
+      const effectiveEnd = endDate ? endDate : todayDate;
+      const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 6));
 
-    const { start: rangeStart } = getBrazilDayRange(days[0]);
-    const { end: rangeEnd } = getBrazilDayRange(days[days.length - 1]);
+      const days: string[] = [];
+      const cursor = new Date(effectiveStart);
+      const endD = new Date(effectiveEnd);
+      while (cursor <= endD) {
+        days.push(cursor.toISOString().slice(0, 10));
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      if (days.length === 0) days.push(todayStr);
 
-    // Bar chart - rides per day
-    const { data: rides7 } = await applyFilter(supabase.from("driver_rides").select("completed_at")).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
-    const ridesByDay: Record<string, number> = {};
-    days.forEach(d => ridesByDay[d] = 0);
-    (rides7 ?? []).forEach(r => {
-      const d = toBrazilDateStr(r.completed_at);
-      if (ridesByDay[d] !== undefined) ridesByDay[d]++;
-    });
-    setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
+      const { start: rangeStart } = getBrazilDayRange(days[0]);
+      const { end: rangeEnd } = getBrazilDayRange(days[days.length - 1]);
 
-    // Line chart - TBRs per day
-    const { data: unitRides7 } = await applyFilter(supabase.from("driver_rides").select("id"));
-    const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
+      // Bar chart - rides per day
+      const { data: rides7 } = await applyFilter(supabase.from("driver_rides").select("completed_at")).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
+      const ridesByDay: Record<string, number> = {};
+      days.forEach(d => ridesByDay[d] = 0);
+      (rides7 ?? []).forEach(r => {
+        const d = toBrazilDateStr(r.completed_at);
+        if (ridesByDay[d] !== undefined) ridesByDay[d]++;
+      });
 
-    const allTbrs = await fetchAllRows<{ scanned_at: string | null; ride_id: string; code: string }>((from, to) =>
-      supabase.from("ride_tbrs").select("scanned_at, ride_id, code")
-        .gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd)
-        .range(from, to)
-    );
+      if (requestId !== chartRequestRef.current) return;
+      setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
-    const filtered = allTbrs.filter(t => unitRideSet.has(t.ride_id));
-    const tbrsByDay: Record<string, number> = {};
-    days.forEach(d => tbrsByDay[d] = 0);
-    filtered.forEach(t => {
-      if (!t.scanned_at) return;
-      const d = toBrazilDateStr(t.scanned_at);
-      if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
-    });
+      // Line chart - TBRs per day
+      const { data: unitRides7 } = await applyFilter(supabase.from("driver_rides").select("id"));
+      const unitRideIds = (unitRides7 ?? []).map(r => r.id);
 
+      const tbrsByDay: Record<string, number> = {};
+      days.forEach(d => tbrsByDay[d] = 0);
 
-    setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
+      if (unitRideIds.length > 0) {
+        const allTbrs = await fetchAllRowsWithIn<{ scanned_at: string | null; ride_id: string; code: string }>(
+          (rideIds) => (from, to) =>
+            supabase
+              .from("ride_tbrs")
+              .select("scanned_at, ride_id, code")
+              .in("ride_id", rideIds)
+              .gte("scanned_at", rangeStart)
+              .lte("scanned_at", rangeEnd)
+              .order("id")
+              .range(from, to),
+          unitRideIds,
+          { deduplicateById: false }
+        );
 
-    // Driver daily average
-    const finishedRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
-      applyFilter(supabase.from("driver_rides").select("driver_id, completed_at"))
-        .eq("loading_status", "finished")
-        .gte("completed_at", rangeStart)
-        .lte("completed_at", rangeEnd)
-        .range(from, to)
-    );
+        allTbrs.forEach(t => {
+          if (!t.scanned_at) return;
+          const d = toBrazilDateStr(t.scanned_at);
+          if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
+        });
+      }
 
-    if (finishedRides.length > 0) {
-      const rideIds = finishedRides.map(r => r.driver_id + "_placeholder");
-      // Get TBR counts per ride
-      const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
-        applyFilter(supabase.from("driver_rides").select("id, driver_id"))
+      if (requestId !== chartRequestRef.current) return;
+      setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
+
+      // Driver daily average
+      const finishedRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
+        applyFilter(supabase.from("driver_rides").select("driver_id, completed_at"))
           .eq("loading_status", "finished")
           .gte("completed_at", rangeStart)
           .lte("completed_at", rangeEnd)
-          .lte("completed_at", rangeEnd)
+          .order("id")
           .range(from, to)
       );
-      
-      const driverRideIds: Record<string, string[]> = {};
-      rideIdsList.forEach(r => {
-        if (!driverRideIds[r.driver_id]) driverRideIds[r.driver_id] = [];
-        driverRideIds[r.driver_id].push(r.id);
-      });
 
-      const allRideIds = rideIdsList.map(r => r.id);
-      // Count TBRs per ride using batch
-      const tbrCounts = await fetchAllRows<{ ride_id: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("ride_id").in("ride_id", allRideIds).range(from, to)
-      );
+      if (finishedRides.length > 0) {
+        const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
+          applyFilter(supabase.from("driver_rides").select("id, driver_id"))
+            .eq("loading_status", "finished")
+            .gte("completed_at", rangeStart)
+            .lte("completed_at", rangeEnd)
+            .order("id")
+            .range(from, to)
+        );
 
-      const tbrCountByRide: Record<string, number> = {};
-      tbrCounts.forEach(t => {
-        tbrCountByRide[t.ride_id] = (tbrCountByRide[t.ride_id] || 0) + 1;
-      });
+        const driverRideIds: Record<string, string[]> = {};
+        rideIdsList.forEach(r => {
+          if (!driverRideIds[r.driver_id]) driverRideIds[r.driver_id] = [];
+          driverRideIds[r.driver_id].push(r.id);
+        });
 
-      // Fetch returns (piso, ps, rto) to discount from totals
-      const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
-        ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ps_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
-        ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("rto_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
-        ),
-      ]);
+        const allRideIds = rideIdsList.map(r => r.id);
+        if (allRideIds.length === 0) {
+          if (requestId !== chartRequestRef.current) return;
+          setDriverAvgs([]);
+          setDriverAvgPage(0);
+          return;
+        }
 
-      const returnsByRide: Record<string, number> = {};
-      [...pisoReturns, ...psReturns, ...rtoReturns].forEach(r => {
-        if (r.ride_id) returnsByRide[r.ride_id] = (returnsByRide[r.ride_id] || 0) + 1;
-      });
+        const tbrCounts = await fetchAllRowsWithIn<{ ride_id: string }>(
+          (rideIds) => (from, to) =>
+            supabase
+              .from("ride_tbrs")
+              .select("ride_id")
+              .in("ride_id", rideIds)
+              .order("id")
+              .range(from, to),
+          allRideIds,
+          { deduplicateById: false }
+        );
 
-      // Calc per driver (completed = tbrs - returns)
-      const driverTotals: Record<string, number> = {};
-      Object.entries(driverRideIds).forEach(([driverId, rIds]) => {
-        driverTotals[driverId] = rIds.reduce((sum, rid) => {
-          const tbrs = tbrCountByRide[rid] || 0;
-          const returns = returnsByRide[rid] || 0;
-          return sum + Math.max(tbrs - returns, 0);
-        }, 0);
-      });
+        const tbrCountByRide: Record<string, number> = {};
+        tbrCounts.forEach(t => {
+          tbrCountByRide[t.ride_id] = (tbrCountByRide[t.ride_id] || 0) + 1;
+        });
 
-      const driverIds = Object.keys(driverTotals);
-      const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
-      const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name ?? "Desconhecido"]));
+        const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
+          fetchAllRowsWithIn<{ ride_id: string }>(
+            (rideIds) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", rideIds).order("id").range(from, to),
+            allRideIds,
+            { deduplicateById: false }
+          ),
+          fetchAllRowsWithIn<{ ride_id: string }>(
+            (rideIds) => (from, to) => supabase.from("ps_entries").select("ride_id").in("ride_id", rideIds).order("id").range(from, to),
+            allRideIds,
+            { deduplicateById: false }
+          ),
+          fetchAllRowsWithIn<{ ride_id: string }>(
+            (rideIds) => (from, to) => supabase.from("rto_entries").select("ride_id").in("ride_id", rideIds).order("id").range(from, to),
+            allRideIds,
+            { deduplicateById: false }
+          ),
+        ]);
 
-      const numDays = Math.max(days.length, 1);
-      const avgs: DriverAvg[] = driverIds.map(id => ({
-        name: driverMap.get(id) ?? "Desconhecido",
-        avg: Math.round((driverTotals[id] / numDays) * 10) / 10,
-      })).sort((a, b) => b.avg - a.avg);
+        const returnsByRide: Record<string, number> = {};
+        [...pisoReturns, ...psReturns, ...rtoReturns].forEach(r => {
+          if (r.ride_id) returnsByRide[r.ride_id] = (returnsByRide[r.ride_id] || 0) + 1;
+        });
 
-      setDriverAvgs(avgs);
-      setDriverAvgPage(0);
-    } else {
+        const driverTotals: Record<string, number> = {};
+        Object.entries(driverRideIds).forEach(([driverId, rIds]) => {
+          driverTotals[driverId] = rIds.reduce((sum, rid) => {
+            const tbrs = tbrCountByRide[rid] || 0;
+            const returns = returnsByRide[rid] || 0;
+            return sum + Math.max(tbrs - returns, 0);
+          }, 0);
+        });
+
+        const driverIds = Object.keys(driverTotals);
+        const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+        const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name ?? "Desconhecido"]));
+
+        const numDays = Math.max(days.length, 1);
+        const avgs: DriverAvg[] = driverIds.map(id => ({
+          name: driverMap.get(id) ?? "Desconhecido",
+          avg: Math.round((driverTotals[id] / numDays) * 10) / 10,
+        })).sort((a, b) => b.avg - a.avg);
+
+        if (requestId !== chartRequestRef.current) return;
+        setDriverAvgs(avgs);
+        setDriverAvgPage(0);
+      } else {
+        if (requestId !== chartRequestRef.current) return;
+        setDriverAvgs([]);
+      }
+    } catch (error) {
+      console.warn("[DashboardMetrics] erro ao carregar gráficos", error);
+      if (requestId !== chartRequestRef.current) return;
+      setBarData([]);
+      setLineData([]);
       setDriverAvgs([]);
+    } finally {
+      if (requestId === chartRequestRef.current) {
+        setChartLoading(false);
+      }
     }
-    setChartLoading(false);
   }, [unitId, startDate, endDate, applyFilter]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);

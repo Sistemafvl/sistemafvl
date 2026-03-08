@@ -126,27 +126,45 @@ const DashboardHome = () => {
   // Fetch DNR stats
   useEffect(() => {
     if (!unitSession?.id) return;
+
+    let cancelled = false;
     setDnrLoading(true);
+
     const fetchDnr = async () => {
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
-      if (isAllUnits && allUnitIds.length > 0) {
-        q = q.in("unit_id", allUnitIds);
-      } else {
-        q = q.eq("unit_id", unitSession.id);
+      try {
+        const { fetchAllRows } = await import("@/lib/supabase-helpers");
+        let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
+        if (isAllUnits && allUnitIds.length > 0) {
+          q = q.in("unit_id", allUnitIds);
+        } else {
+          q = q.eq("unit_id", unitSession.id);
+        }
+
+        const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
+          q.range(from, to)
+        );
+
+        if (cancelled) return;
+
+        const open = all.filter(e => e.status === "open");
+        const analyzing = all.filter(e => e.status === "analyzing");
+        const closed = all.filter(e => e.status === "closed");
+        setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+        setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+        setDnrClosed(closed.length);
+      } catch (error) {
+        console.warn("[DashboardHome] erro ao carregar DNR", error);
+        if (cancelled) return;
+        setDnrOpen({ count: 0, value: 0 });
+        setDnrAnalyzing({ count: 0, value: 0 });
+        setDnrClosed(0);
+      } finally {
+        if (!cancelled) setDnrLoading(false);
       }
-      const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-        q.range(from, to)
-      );
-      const open = all.filter(e => e.status === "open");
-      const analyzing = all.filter(e => e.status === "analyzing");
-      const closed = all.filter(e => e.status === "closed");
-      setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-      setDnrClosed(closed.length);
-      setDnrLoading(false);
     };
+
     fetchDnr();
+    return () => { cancelled = true; };
   }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
