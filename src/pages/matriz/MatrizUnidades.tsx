@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Building, Package, Users, AlertTriangle, Star, TrendingUp } from "lucide-react";
+import { Building, Package, Users, AlertTriangle, Star, TrendingUp, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 
 const MatrizUnidades = () => {
@@ -44,20 +44,21 @@ const MatrizUnidades = () => {
         fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, status, dnr_value").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("piso_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
-      ]).then(([ridesData, psData, rtoData, dnrData, pisoData, reviewsData]) => {
+      ]).then(async ([ridesData, psData, rtoData, dnrData, pisoData, reviewsData]) => {
         setRides(ridesData);
         setPsEntries(psData);
         setRtoEntries(rtoData);
         setDnrEntries(dnrData);
         setPisoEntries(pisoData);
         setReviews(reviewsData);
-        setLoading(false);
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
+          const tbrData = await fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
             supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
+          );
+          setTbrs(tbrData);
         } else setTbrs([]);
+        setLoading(false);
       });
     });
   }, [units, dateStart, dateEnd]);
@@ -107,7 +108,9 @@ const MatrizUnidades = () => {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground italic text-center py-8">Carregando dados...</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {unitStats.map((u, idx) => (
