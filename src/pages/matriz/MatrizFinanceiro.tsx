@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap } from "lucide-react";
+import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { formatBRL } from "@/lib/utils";
 
