@@ -165,7 +165,9 @@ const MatrizFinanceiro = () => {
         <CardHeader><CardTitle className="text-sm font-bold italic">Detalhamento por Unidade</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <p className="text-sm text-muted-foreground italic text-center py-8">Carregando...</p>
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
           ) : (
             <Table>
               <TableHeader>
