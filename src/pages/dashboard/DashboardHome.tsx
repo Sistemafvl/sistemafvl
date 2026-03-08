@@ -111,6 +111,7 @@ const DashboardHome = () => {
   // Fetch DNR stats
   useEffect(() => {
     if (!unitSession?.id) return;
+    setDnrLoading(true);
     const fetchDnr = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
@@ -128,6 +129,7 @@ const DashboardHome = () => {
       setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
       setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
       setDnrClosed(closed.length);
+      setDnrLoading(false);
     };
     fetchDnr();
   }, [unitSession?.id, isAllUnits, allUnitIds]);

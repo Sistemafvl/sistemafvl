@@ -44,6 +44,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
   }, [isAll, effectiveIds, unitId]);
 
   const fetchAll = useCallback(async () => {
+    setLoading(true);
     const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
     const globalEnd = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
