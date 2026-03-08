@@ -78,6 +78,13 @@ const CiclosPage = () => {
   const computeMetrics = useCallback(async (date: string, unitId: string): Promise<DayMetrics> => {
     const { start: dayStart, end: dayEnd } = getBrazilDayRange(date);
 
+    // Fetch canonical scanned count via RPC (same logic as Dashboard)
+    const rpcPromise = supabase.rpc("get_unit_tbr_count", {
+      p_unit_id: unitId,
+      p_start: dayStart,
+      p_end: dayEnd,
+    });
+
     const { data: rides } = await supabase
       .from("driver_rides")
       .select("id, completed_at, started_at, finished_at, loading_status")
@@ -117,7 +124,6 @@ const CiclosPage = () => {
       totalTbrs = tbrsData.length;
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
 
-      // Count ALL unique return TBR codes per ride (regardless of whether still in ride_tbrs)
       const returnSet = new Set<string>();
       [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
         if (e.ride_id && e.tbr_code) {
@@ -126,6 +132,10 @@ const CiclosPage = () => {
       });
       totalReturns = returnSet.size;
     }
+
+    // Wait for canonical RPC result
+    const { data: rpcCount } = await rpcPromise;
+    const totalScanned = typeof rpcCount === "number" ? rpcCount : totalTbrs + totalReturns;
 
     // Avg loading time
     const loadingTimes = rideList
@@ -162,6 +172,7 @@ const CiclosPage = () => {
       totalRides: rideList.length,
       totalTbrs,
       totalReturns,
+      totalScanned,
       finishedRides,
       avgLoadingMinutes,
       avgPerTbr,
