@@ -148,15 +148,14 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     );
 
     if (finishedRides.length > 0) {
-      const rideIds = finishedRides.map(r => r.driver_id + "_placeholder");
-      // Get TBR counts per ride
+      // Get ride IDs with driver mapping
       const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
         supabase.from("driver_rides").select("id, driver_id")
           .eq("unit_id", unitId)
           .eq("loading_status", "finished")
           .gte("completed_at", rangeStart)
           .lte("completed_at", rangeEnd)
-          .range(from, to)
+          .order("id").range(from, to)
       );
       
       const driverRideIds: Record<string, string[]> = {};
@@ -166,9 +165,13 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       });
 
       const allRideIds = rideIdsList.map(r => r.id);
-      // Count TBRs per ride using batch
-      const tbrCounts = await fetchAllRows<{ ride_id: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("ride_id").in("ride_id", allRideIds).range(from, to)
+      
+      // Count TBRs per ride using chunked queries
+      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
+      const tbrCounts = await fetchAllRowsWithIn<{ ride_id: string }>(
+        (ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+        allRideIds
       );
 
       const tbrCountByRide: Record<string, number> = {};
