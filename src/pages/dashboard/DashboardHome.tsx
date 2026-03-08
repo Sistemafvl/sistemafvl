@@ -612,8 +612,14 @@ const DashboardHome = () => {
             <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Analisando <InfoButton text="DNRs em processo de análise pela equipe. Esses pacotes estão sendo investigados para confirmar ou negar a entrega." /></p>
-              <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
-              <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
+              {dnrLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
+              ) : (
+                <>
+                  <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
+                  <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
