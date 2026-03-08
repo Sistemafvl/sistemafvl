@@ -179,10 +179,10 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     setConfPage(0);
   }, [unitId, getSince, getUntil]);
 
-  useEffect(() => { fetchInsights(); }, [fetchInsights]);
-  useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
-  useEffect(() => { fetchTopReturns(); }, [fetchTopReturns]);
-  useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
+  // Consolidated: fetch all insights in a single effect
+  useEffect(() => {
+    Promise.all([fetchInsights(), fetchTopDrivers(), fetchTopReturns(), fetchTopConferentes()]);
+  }, [fetchInsights, fetchTopDrivers, fetchTopReturns, fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
     title, icon: Icon, data, color, page, setPage, infoText,

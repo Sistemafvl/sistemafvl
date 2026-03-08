@@ -621,7 +621,7 @@ const ConferenciaCarregamentoPage = () => {
         if (currentRideIdsRef.current.length > 0 && !currentRideIdsRef.current.includes(eventRideId)) return;
       }
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { fetchRides(); }, 400);
+      debounceTimer = setTimeout(() => { fetchRides(); }, 2000);
     };
     const channel = supabase
       .channel("conferencia-" + unitId)
