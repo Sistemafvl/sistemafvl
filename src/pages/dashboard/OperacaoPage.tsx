@@ -199,8 +199,9 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalLidos = totalTbrsAtual + totalAllReturns;
-  const performanceRate = totalLidos > 0 ? ((totalTbrsAtual / totalLidos) * 100).toFixed(1) : "100";
+  const totalLidos = totalTbrsAtual; // Apenas concluídos (ride_tbrs ativos)
+  const totalOriginal = totalTbrsAtual + totalAllReturns; // Para cálculo de performance
+  const performanceRate = totalOriginal > 0 ? ((totalTbrsAtual / totalOriginal) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -260,7 +261,7 @@ const OperacaoPage = () => {
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
               {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes (TBRs) escaneados na conferência, incluindo os que foram para insucesso." /></p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes atualmente na carga (concluídos). Não inclui retornos (insucesso, PS, RTO)." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
