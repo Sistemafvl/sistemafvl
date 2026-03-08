@@ -40,6 +40,9 @@ import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
 import ManagersPage from "./pages/admin/ManagersPage";
 import DirectorsPage from "./pages/admin/DirectorsPage";
+import AdminDriversPage from "./pages/admin/AdminDriversPage";
+import DatabasePage from "./pages/admin/DatabasePage";
+import SecurityPage from "./pages/admin/SecurityPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
@@ -112,6 +115,9 @@ const App = () => (
             <Route path="dominios" element={<DomainsUnitsPage />} />
             <Route path="gerentes" element={<ManagersPage />} />
             <Route path="diretores" element={<DirectorsPage />} />
+            <Route path="motoristas" element={<AdminDriversPage />} />
+            <Route path="banco" element={<DatabasePage />} />
+            <Route path="seguranca" element={<SecurityPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -1,4 +1,4 @@
-import { ShieldCheck, LayoutDashboard, Globe, Users, Building2, LogOut } from "lucide-react";
+import { ShieldCheck, LayoutDashboard, Globe, Users, Building2, LogOut, Truck, Database, Shield } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
@@ -21,6 +21,9 @@ const menuItems = [
   { title: "Domínios & Unidades", url: "/admin/dominios", icon: Globe },
   { title: "Gerentes", url: "/admin/gerentes", icon: Users },
   { title: "Diretores", url: "/admin/diretores", icon: Building2 },
+  { title: "Motoristas", url: "/admin/motoristas", icon: Truck },
+  { title: "Banco de Dados", url: "/admin/banco", icon: Database },
+  { title: "Segurança", url: "/admin/seguranca", icon: Shield },
 ];
 
 const AdminSidebar = () => {
