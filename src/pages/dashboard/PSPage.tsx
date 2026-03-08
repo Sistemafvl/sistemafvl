@@ -7,13 +7,17 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard } from "lucide-react";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard, Trash2 } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import { toast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -106,6 +110,7 @@ const PSPage = () => {
   const [observations, setObservations] = useState("");
   const [editingEntry, setEditingEntry] = useState<PsEntry | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [deletingEntry, setDeletingEntry] = useState<PsEntry | null>(null);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -511,6 +516,31 @@ const PSPage = () => {
     
     setEntries(prev => prev.map(e => e.id === id ? { ...e, status: "closed" } : e));
     toast({ title: "PS finalizado" });
+  };
+
+  const handleDeletePs = async (entry: PsEntry) => {
+    if (!unitSession) return;
+    // Check if there's a closed piso_entry with same tbr_code
+    const { data: pisoMatch } = await supabase
+      .from("piso_entries")
+      .select("id")
+      .ilike("tbr_code", entry.tbr_code)
+      .eq("unit_id", unitSession.id)
+      .eq("status", "closed")
+      .limit(1);
+
+    // If piso exists, reopen it
+    if (pisoMatch?.length) {
+      await supabase.from("piso_entries")
+        .update({ status: "open", closed_at: null })
+        .eq("id", pisoMatch[0].id);
+    }
+
+    // Delete the PS entry
+    await supabase.from("ps_entries").delete().eq("id", entry.id);
+    setEntries(prev => prev.filter(e => e.id !== entry.id));
+    setDeletingEntry(null);
+    toast({ title: pisoMatch?.length ? "PS excluído e insucesso reaberto" : "PS excluído com sucesso" });
   };
 
   const closeModal = () => {
@@ -1059,6 +1089,9 @@ const PSPage = () => {
                                 <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
                               </Button>
                             )}
+                            <Button variant="ghost" size="sm" onClick={() => setDeletingEntry(e)} title="Excluir PS">
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -1196,6 +1229,28 @@ const PSPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deletingEntry} onOpenChange={(open) => !open && setDeletingEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir PS</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o PS do TBR <span className="font-mono font-bold">{deletingEntry?.tbr_code}</span>?
+              {" "}Se este PS veio de um insucesso, o insucesso será reaberto automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingEntry && handleDeletePs(deletingEntry)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
