@@ -39,6 +39,7 @@ interface DayMetrics {
   totalRides: number;
   totalTbrs: number;
   totalReturns: number;
+  totalScanned: number;
   finishedRides: number;
   avgLoadingMinutes: number | null;
   avgPerTbr: number | null;
