@@ -536,7 +536,7 @@ const CiclosPage = () => {
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes (TBRs)</p>
-                      <p className="font-bold">{metrics ? metrics.totalTbrs + metrics.totalReturns : "—"}</p>
+                      <p className="font-bold">{metrics ? metrics.totalScanned : "—"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">VRID</p>
