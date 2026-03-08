@@ -36,6 +36,7 @@ interface DriverCard {
   total_tbrs: number;
   piso_returns: number;
   all_returns: number;
+  piso_only_returns: number;
 }
 
 interface TbrDetail {
@@ -166,6 +167,18 @@ const OperacaoPage = () => {
     const allReturnCounts: Record<string, number> = {};
     Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
+    // Count PISO-ONLY returns per ride (for Insucessos card)
+    const pisoOnlyTbrSets: Record<string, Set<string>> = {};
+    pisoData.forEach((p: any) => {
+      const upperCode = p.tbr_code?.toUpperCase();
+      if (p.ride_id && upperCode) {
+        if (!pisoOnlyTbrSets[p.ride_id]) pisoOnlyTbrSets[p.ride_id] = new Set();
+        pisoOnlyTbrSets[p.ride_id].add(upperCode);
+      }
+    });
+    const pisoOnlyCounts: Record<string, number> = {};
+    Object.entries(pisoOnlyTbrSets).forEach(([rideId, set]) => { pisoOnlyCounts[rideId] = set.size; });
+
   
 
     const result: DriverCard[] = rides.map((r) => {
@@ -188,7 +201,7 @@ const OperacaoPage = () => {
         total_tbrs: tbrCounts[r.id] ?? 0,
         piso_returns: issueCounts[r.id] ?? 0,
         all_returns: allReturnCounts[r.id] ?? 0,
-        
+        piso_only_returns: pisoOnlyCounts[r.id] ?? 0,
       };
     });
 
@@ -199,9 +212,9 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalLidos = totalTbrsAtual; // Apenas concluídos (ride_tbrs ativos)
-  const totalOriginal = totalTbrsAtual + totalAllReturns; // Para cálculo de performance
-  const performanceRate = totalOriginal > 0 ? ((totalTbrsAtual / totalOriginal) * 100).toFixed(1) : "100";
+  const totalPisoReturns = cards.reduce((s, c) => s + c.piso_only_returns, 0);
+  const totalLidos = totalTbrsAtual + totalAllReturns; // Total original bipado (ride_tbrs + retornos removidos)
+  const performanceRate = totalLidos > 0 ? ((totalTbrsAtual / totalLidos) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
@@ -261,12 +274,12 @@ const OperacaoPage = () => {
             <div className="rounded-lg border bg-card p-3 text-center">
               <Package className="h-5 w-5 mx-auto text-primary mb-1" />
               {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalLidos}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes atualmente na carga (concluídos). Não inclui retornos (insucesso, PS, RTO)." /></p>
+              <p className="text-xs text-muted-foreground flex items-center justify-center">TBRs Lidos <InfoButton text="Total de pacotes bipados na conferência do dia (cada TBR contado uma única vez)." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <TrendingUp className="h-5 w-5 mx-auto text-destructive mb-1" />
-              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalAllReturns}</p>}
-              <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de pacotes com insucesso (Piso, PS, RTO)." /></p>
+              {loading ? <Loader2 className="h-5 w-5 mx-auto animate-spin text-primary" /> : <p className="text-2xl font-bold">{totalPisoReturns}</p>}
+              <p className="text-xs text-muted-foreground flex items-center justify-center">Insucessos <InfoButton text="Total de insucessos (Retorno Piso) registrados nos carregamentos do dia. Não inclui PS e RTO." /></p>
             </div>
             <div className="rounded-lg border bg-card p-3 text-center">
               <BarChart3 className="h-5 w-5 mx-auto text-primary mb-1" />
