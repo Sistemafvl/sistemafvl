@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
-import { fetchAllRows } from "@/lib/supabase-helpers";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 interface Props {

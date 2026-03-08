@@ -86,26 +86,41 @@ const DashboardHome = () => {
   const allUnitIds = useMemo(() => domainUnits.map(u => u.id), [domainUnits]);
   const isAllUnits = unitSession?.id === ALL_UNITS_ID;
 
-  // Fetch feedback summary
   useEffect(() => {
     if (!unitSession?.id) return;
+
+    let cancelled = false;
     setFeedbackLoading(true);
+
     const fetchFeedback = async () => {
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      let q = supabase.from("unit_reviews").select("rating").order("id");
-      if (isAllUnits && allUnitIds.length > 0) {
-        q = q.in("unit_id", allUnitIds);
-      } else {
-        q = q.eq("unit_id", unitSession.id);
+      try {
+        const { fetchAllRows } = await import("@/lib/supabase-helpers");
+        let q = supabase.from("unit_reviews").select("rating").order("id");
+        if (isAllUnits && allUnitIds.length > 0) {
+          q = q.in("unit_id", allUnitIds);
+        } else {
+          q = q.eq("unit_id", unitSession.id);
+        }
+
+        const revs = await fetchAllRows<{ rating: number }>((from, to) =>
+          q.range(from, to)
+        );
+
+        if (cancelled) return;
+        setFeedbackTotal(revs.length);
+        setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
+      } catch (error) {
+        console.warn("[DashboardHome] erro ao carregar avaliações", error);
+        if (cancelled) return;
+        setFeedbackTotal(0);
+        setFeedbackAvg(0);
+      } finally {
+        if (!cancelled) setFeedbackLoading(false);
       }
-      const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-        q.range(from, to)
-      );
-      setFeedbackTotal(revs.length);
-      setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
-      setFeedbackLoading(false);
     };
+
     fetchFeedback();
+    return () => { cancelled = true; };
   }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   // Fetch DNR stats
