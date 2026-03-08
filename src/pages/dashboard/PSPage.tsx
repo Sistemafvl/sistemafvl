@@ -110,6 +110,7 @@ const PSPage = () => {
   const [observations, setObservations] = useState("");
   const [editingEntry, setEditingEntry] = useState<PsEntry | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [deletingEntry, setDeletingEntry] = useState<PsEntry | null>(null);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
