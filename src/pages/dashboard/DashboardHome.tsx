@@ -55,7 +55,7 @@ interface TimelineEvent {
 }
 
 const DashboardHome = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, domainUnits } = useAuthStore();
   const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
   const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
