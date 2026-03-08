@@ -39,7 +39,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [chartLoading, setChartLoading] = useState(true);
 
-  const applyFilter = useCallback(<T extends { eq: (col: string, val: string) => T; in: (col: string, vals: string[]) => T }>(q: T): T => {
+  const applyFilter = useCallback((q: any): any => {
     return isAll ? q.in("unit_id", effectiveIds) : q.eq("unit_id", unitId);
   }, [isAll, effectiveIds, unitId]);
 

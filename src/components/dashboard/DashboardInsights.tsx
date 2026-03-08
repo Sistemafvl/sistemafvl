@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { getBrazilDayRange } from "@/lib/utils";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 interface Props {
   unitId: string;
   startDate?: Date;
   endDate?: Date;
+  allUnitIds?: string[];
 }
 
 interface DriverRank {
