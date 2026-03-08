@@ -21,7 +21,7 @@ import DailySummaryReportContent, { type DailySummaryRow } from "./reports/Daily
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
 import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
 import FormatChoiceModal from "@/components/dashboard/FormatChoiceModal";
-import { generatePayrollExcel } from "./reports/generatePayrollExcel";
+import { generatePayrollExcel, type MinPackageDriver } from "./reports/generatePayrollExcel";
 import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
 } from "@/components/ui/table";
@@ -48,6 +48,7 @@ const RelatoriosPage = () => {
   const [unitName, setUnitName] = useState("");
   const [tbrValue, setTbrValue] = useState(0);
   const [logoBase64, setLogoBase64] = useState("");
+  const [minPackageDrivers, setMinPackageDrivers] = useState<MinPackageDriver[]>([]);
   const payrollRef = useRef<HTMLDivElement>(null);
 
   // Daily summary state
@@ -547,6 +548,46 @@ const RelatoriosPage = () => {
       };
     }).sort((a, b) => b.totalTbrs - a.totalTbrs);
 
+    // Build minPackageDrivers list: drivers with min_packages configured
+    // Include all drivers from minPkgMap (they may or may not have rides)
+    const minPkgDriverIds = [...minPkgMap.keys()];
+    // Fetch names for drivers not already in driverMap
+    const missingMinPkgIds = minPkgDriverIds.filter((id) => !driverMap.has(id));
+    let extraDrivers: any[] = [];
+    if (missingMinPkgIds.length > 0) {
+      const { data: extraD } = await supabase
+        .from("drivers_public")
+        .select("id, name, cpf")
+        .in("id", missingMinPkgIds);
+      extraDrivers = extraD ?? [];
+    }
+    // Also fetch pix keys for missing drivers
+    await Promise.all(
+      missingMinPkgIds.map(async (did) => {
+        try {
+          const { data: dd } = await supabase.functions.invoke("get-driver-details", {
+            body: { driver_id: did, self_access: true },
+          });
+          if (dd?.pix_key) pixByDriver.set(did, dd.pix_key);
+        } catch {}
+      }),
+    );
+
+    const minPkgDriversList: MinPackageDriver[] = minPkgDriverIds.map((did) => {
+      const existingDriver = driverMap.get(did);
+      const extraDriver = extraDrivers.find((d) => d.id === did);
+      const driverInfo = existingDriver || extraDriver;
+      return {
+        driverId: did,
+        driverName: driverInfo?.name ?? "",
+        minPackages: minPkgMap.get(did) ?? 0,
+        tbrValueUsed: customValueMap.get(did) ?? common.tVal,
+        cpf: driverInfo?.cpf ?? "",
+        pixKey: pixByDriver.get(did) ?? null,
+      };
+    });
+    setMinPackageDrivers(minPkgDriversList);
+
     setPayrollData(result);
     return result;
   };
@@ -814,7 +855,7 @@ const RelatoriosPage = () => {
         onChoose={async (fmt) => {
           setFormatChoiceOpen(false);
           if (fmt === "excel" && payrollData) {
-            generatePayrollExcel(payrollData, unitName, startDate, endDate);
+            generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
             toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
             if (formatChoiceAction === "gerar") {
               // Still save to DB + mark DNRs for "gerar" mode
