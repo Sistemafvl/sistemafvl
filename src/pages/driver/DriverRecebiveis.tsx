@@ -22,16 +22,37 @@ interface PayrollEntry {
 
 const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const formatCnpj = (cnpj: string) => {
+  const d = cnpj.replace(/\D/g, "");
+  if (d.length === 14)
+    return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+  return cnpj;
+};
+
 const DriverRecebiveis = () => {
   const { unitSession } = useAuthStore();
   const driverId = unitSession?.user_profile_id;
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [managerCnpj, setManagerCnpj] = useState<string | null>(null);
 
   useEffect(() => {
     if (driverId) loadEntries();
+    if (unitSession?.id) loadManagerCnpj();
   }, [driverId]);
+
+  const loadManagerCnpj = async () => {
+    if (!unitSession?.id) return;
+    const { data } = await supabase
+      .from("managers")
+      .select("cnpj")
+      .eq("unit_id", unitSession.id)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle();
+    if (data) setManagerCnpj((data as any).cnpj);
+  };
 
   const loadEntries = async () => {
     if (!driverId) return;
@@ -143,7 +164,7 @@ const DriverRecebiveis = () => {
             Emita sua NF dentro do prazo estipulado e confira atentamente as seguintes informações antes do envio:
           </p>
           <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-1">
-            <li><strong>CNPJ Favela Llog:</strong> 45.957.516/0014-81</li>
+            <li><strong>CNPJ:</strong> {managerCnpj ? formatCnpj(managerCnpj) : <span className="text-muted-foreground italic">Carregando...</span>}</li>
             <li><strong>Código de Prestação de Serviço:</strong> 16.02.01</li>
             <li><strong>Valor dos Serviços:</strong> deve corresponder ao valor do relatório</li>
           </ul>
