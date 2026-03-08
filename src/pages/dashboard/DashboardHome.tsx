@@ -89,6 +89,7 @@ const DashboardHome = () => {
   // Fetch feedback summary
   useEffect(() => {
     if (!unitSession?.id) return;
+    setFeedbackLoading(true);
     const fetchFeedback = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       let q = supabase.from("unit_reviews").select("rating").order("id");
@@ -102,6 +103,7 @@ const DashboardHome = () => {
       );
       setFeedbackTotal(revs.length);
       setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
+      setFeedbackLoading(false);
     };
     fetchFeedback();
   }, [unitSession?.id, isAllUnits, allUnitIds]);
