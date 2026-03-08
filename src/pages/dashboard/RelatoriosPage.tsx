@@ -21,7 +21,7 @@ import DailySummaryReportContent, { type DailySummaryRow } from "./reports/Daily
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
 import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
 import FormatChoiceModal from "@/components/dashboard/FormatChoiceModal";
-import { generatePayrollExcel } from "./reports/generatePayrollExcel";
+import { generatePayrollExcel, type MinPackageDriver } from "./reports/generatePayrollExcel";
 import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
 } from "@/components/ui/table";
