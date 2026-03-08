@@ -76,6 +76,8 @@ const DashboardHome = () => {
   const [dnrOpen, setDnrOpen] = useState({ count: 0, value: 0 });
   const [dnrAnalyzing, setDnrAnalyzing] = useState({ count: 0, value: 0 });
   const [dnrClosed, setDnrClosed] = useState(0);
+  const [dnrLoading, setDnrLoading] = useState(true);
+  const [feedbackLoading, setFeedbackLoading] = useState(true);
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
