@@ -1229,6 +1229,28 @@ const PSPage = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deletingEntry} onOpenChange={(open) => !open && setDeletingEntry(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir PS</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o PS do TBR <span className="font-mono font-bold">{deletingEntry?.tbr_code}</span>?
+              {" "}Se este PS veio de um insucesso, o insucesso será reaberto automaticamente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => deletingEntry && handleDeletePs(deletingEntry)}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
