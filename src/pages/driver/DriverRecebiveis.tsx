@@ -22,6 +22,13 @@ interface PayrollEntry {
 
 const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+const formatCnpj = (cnpj: string) => {
+  const d = cnpj.replace(/\D/g, "");
+  if (d.length === 14)
+    return `${d.slice(0,2)}.${d.slice(2,5)}.${d.slice(5,8)}/${d.slice(8,12)}-${d.slice(12)}`;
+  return cnpj;
+};
+
 const DriverRecebiveis = () => {
   const { unitSession } = useAuthStore();
   const driverId = unitSession?.user_profile_id;
