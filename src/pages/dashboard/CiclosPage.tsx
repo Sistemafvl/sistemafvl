@@ -545,7 +545,7 @@ const CiclosPage = () => {
                     <div>
                       <p className="text-xs text-muted-foreground">Diferença</p>
                       {(() => {
-                        const diff = (record.qtd_pacotes_informado || 0) - (record.qtd_pacotes || 0);
+                        const diff = (record.qtd_pacotes_informado || 0) - (metrics?.totalScanned ?? record.qtd_pacotes ?? 0);
                         return (
                           <p className={cn("font-bold", diff > 0 ? "text-green-600" : diff < 0 ? "text-destructive" : "")}>
                             {diff > 0 ? `+${diff}` : diff === 0 ? "0" : String(diff)}
