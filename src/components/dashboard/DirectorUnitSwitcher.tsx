@@ -30,9 +30,9 @@ const DirectorUnitSwitcher = () => {
             .sort((a, b) => a.name.localeCompare(b.name));
           setDomainUnits(filtered);
 
-          // If current unit is the MATRIZ unit, auto-select first real unit
+          // Auto-select "Todas as Unidades" by default when coming from MATRIZ
           if (filtered.length > 0 && unitSession.name.includes("MATRIZ")) {
-            setActiveUnit(filtered[0].id, filtered[0].name);
+            setActiveUnit(ALL_UNITS_ID, "Todas as Unidades");
           }
         }
       });
