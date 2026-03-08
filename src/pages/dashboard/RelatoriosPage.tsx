@@ -49,6 +49,7 @@ const RelatoriosPage = () => {
   const [tbrValue, setTbrValue] = useState(0);
   const [logoBase64, setLogoBase64] = useState("");
   const [minPackageDrivers, setMinPackageDrivers] = useState<MinPackageDriver[]>([]);
+  const payrollRef = useRef<HTMLDivElement>(null);
 
   // Daily summary state
   const [dailyData, setDailyData] = useState<DailySummaryRow[] | null>(null);
