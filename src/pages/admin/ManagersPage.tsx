@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, UserCog } from "lucide-react";
+import { Plus, Trash2, UserCog, Eye, Pencil, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 
 const formatCnpj = (v: string) => {
@@ -27,6 +27,13 @@ const ManagersPage = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
 
+  // Detail/edit modal
+  const [detailManager, setDetailManager] = useState<any | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showManagerPassword, setShowManagerPassword] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [editForm, setEditForm] = useState({ name: "", cnpj: "", password: "", manager_password: "" });
+
   useEffect(() => {
     supabase.from("domains").select("id, name").eq("active", true).order("name").then(({ data }) => { if (data) setDomains(data); });
   }, []);
@@ -36,10 +43,12 @@ const ManagersPage = () => {
     supabase.from("units").select("id, name").eq("domain_id", selectedDomain).eq("is_matriz", false).eq("active", true).order("name").then(({ data }) => { if (data) setUnits(data); });
   }, [selectedDomain]);
 
-  useEffect(() => {
+  const fetchManagers = () => {
     if (!selectedUnit) { setManagers([]); return; }
     supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
-  }, [selectedUnit]);
+  };
+
+  useEffect(() => { fetchManagers(); }, [selectedUnit]);
 
   const handleCreate = async () => {
     if (!form.name || !form.cnpj || !form.password || !selectedUnit) return;
@@ -54,7 +63,7 @@ const ManagersPage = () => {
     toast.success("Gerente criado");
     setForm({ name: "", cnpj: "", password: "", manager_password: "" });
     setModalOpen(false);
-    supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
+    fetchManagers();
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -62,6 +71,29 @@ const ManagersPage = () => {
     await supabase.from("managers").delete().eq("id", id);
     toast.success("Gerente removido");
     setManagers((prev) => prev.filter((m) => m.id !== id));
+  };
+
+  const openDetail = (m: any) => {
+    setDetailManager(m);
+    setEditForm({ name: m.name, cnpj: formatCnpj(m.cnpj), password: m.password, manager_password: m.manager_password || "" });
+    setShowPassword(false);
+    setShowManagerPassword(false);
+    setEditMode(false);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!detailManager) return;
+    const { error } = await supabase.from("managers").update({
+      name: editForm.name.trim(),
+      cnpj: editForm.cnpj.replace(/\D/g, ""),
+      password: editForm.password,
+      manager_password: editForm.manager_password || editForm.password,
+    }).eq("id", detailManager.id);
+    if (error) { toast.error("Erro ao salvar"); return; }
+    toast.success("Gerente atualizado");
+    setEditMode(false);
+    setDetailManager(null);
+    fetchManagers();
   };
 
   return (
@@ -99,14 +131,20 @@ const ManagersPage = () => {
                   <p className="text-[10px] text-muted-foreground">{m.cnpj}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id, m.name)}>
-                <Trash2 className="h-3.5 w-3.5 text-destructive" />
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="sm" onClick={() => openDetail(m)}>
+                  <Eye className="h-3.5 w-3.5 text-primary" />
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => handleDelete(m.id, m.name)}>
+                  <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                </Button>
+              </div>
             </CardContent>
           </Card>
         ))}
       </div>
 
+      {/* Create modal */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -131,6 +169,91 @@ const ManagersPage = () => {
             </div>
             <Button className="w-full" type="submit">Criar</Button>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Detail/Edit modal */}
+      <Dialog open={!!detailManager} onOpenChange={(open) => { if (!open) setDetailManager(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2">
+              <UserCog className="h-5 w-5 text-primary" />
+              {editMode ? "Editar Gerente" : "Detalhes do Gerente"}
+            </DialogTitle>
+          </DialogHeader>
+          {detailManager && (
+            <div className="space-y-4">
+              {editMode ? (
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Nome</Label>
+                    <Input value={editForm.name} onChange={(e) => setEditForm({ ...editForm, name: e.target.value })} className="h-11" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">CNPJ</Label>
+                    <Input value={editForm.cnpj} onChange={(e) => setEditForm({ ...editForm, cnpj: formatCnpj(e.target.value) })} className="h-11" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Senha Login</Label>
+                    <Input value={editForm.password} onChange={(e) => setEditForm({ ...editForm, password: e.target.value })} className="h-11" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold">Senha Gerente</Label>
+                    <Input value={editForm.manager_password} onChange={(e) => setEditForm({ ...editForm, manager_password: e.target.value })} className="h-11" />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button className="flex-1" onClick={handleSaveEdit}>Salvar</Button>
+                    <Button variant="outline" className="flex-1" onClick={() => setEditMode(false)}>Cancelar</Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Nome</p>
+                      <p className="font-semibold italic">{detailManager.name}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">CNPJ</p>
+                      <p className="font-mono text-xs">{formatCnpj(detailManager.cnpj)}</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Senha Login</p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{showPassword ? detailManager.password : "••••••••"}</span>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowPassword(!showPassword)}>
+                          {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-muted-foreground uppercase font-semibold">Senha Gerente</p>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm">{showManagerPassword ? (detailManager.manager_password || "—") : "••••••••"}</span>
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setShowManagerPassword(!showManagerPassword)}>
+                          {showManagerPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] text-muted-foreground uppercase font-semibold">Status</p>
+                    <span className={`text-xs font-semibold ${detailManager.active ? "text-green-600" : "text-destructive"}`}>
+                      {detailManager.active ? "Ativo" : "Inativo"}
+                    </span>
+                  </div>
+
+                  <Button variant="outline" className="w-full" onClick={() => setEditMode(true)}>
+                    <Pencil className="h-3.5 w-3.5 mr-2" /> Editar
+                  </Button>
+                </>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
