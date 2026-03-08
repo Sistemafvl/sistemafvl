@@ -12,6 +12,7 @@ import {
   Truck, Package, Clock, TrendingUp, TrendingDown, ArrowUp, ArrowDown,
   Timer, CheckCircle, RotateCcw, BarChart3
 } from "lucide-react";
+import InfoButton from "@/components/dashboard/InfoButton";
 import { format, subDays, differenceInMinutes } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilDayRange, getBrazilNow } from "@/lib/utils";
@@ -385,16 +386,16 @@ const CiclosPage = () => {
                 <h3 className="font-bold italic text-sm">Informações Complementares</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">Qtd Pacotes (TBRs do dia)</Label>
+                    <Label className="text-xs font-semibold flex items-center gap-1">Qtd Pacotes (TBRs do dia) <InfoButton text="Total de pacotes bipados no dia, incluindo os que retornaram (insucesso, PS, RTO). Preenchido automaticamente." /></Label>
                     <Input
                       type="number"
-                      value={metrics?.totalTbrs ?? 0}
+                      value={metrics ? metrics.totalTbrs + metrics.totalReturns : 0}
                       readOnly
                       className="bg-muted"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold">VRID</Label>
+                    <Label className="text-xs font-semibold flex items-center gap-1">VRID <InfoButton text="Quantidade informada pelo VRID (preenchimento manual)." /></Label>
                     <Input
                       type="number"
                       value={record.qtd_pacotes_informado || ""}
@@ -464,40 +465,40 @@ const CiclosPage = () => {
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Clock className="h-3 w-3 mx-auto text-primary" />
                     <p className="text-base font-bold">{formatMin(metrics.avgLoadingMinutes)}</p>
-                    <p className="text-[9px] text-muted-foreground">Tempo Médio Carreg.</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Tempo Médio Carreg. <InfoButton text="Média de tempo entre início e finalização de todos os carregamentos do dia." /></p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Package className="h-3 w-3 mx-auto text-primary" />
-                    <p className="text-base font-bold">{metrics.totalTbrs}</p>
-                    <p className="text-[9px] text-muted-foreground">Total TBRs Lidos</p>
-                    {prevMetrics && <DeltaBadge value={delta(metrics.totalTbrs, prevMetrics.totalTbrs)} />}
+                    <p className="text-base font-bold">{metrics.totalTbrs + metrics.totalReturns}</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total TBRs Lidos <InfoButton text="Total de pacotes bipados na conferência, incluindo os que retornaram como insucesso, PS ou RTO." /></p>
+                    {prevMetrics && <DeltaBadge value={delta(metrics.totalTbrs + metrics.totalReturns, prevMetrics.totalTbrs + prevMetrics.totalReturns)} />}
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Truck className="h-3 w-3 mx-auto text-primary" />
                     <p className="text-base font-bold">{metrics.totalRides}</p>
-                    <p className="text-[9px] text-muted-foreground">Total Carregamentos</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total Carregamentos <InfoButton text="Número de carregamentos realizados no dia." /></p>
                     {prevMetrics && <DeltaBadge value={delta(metrics.totalRides, prevMetrics.totalRides)} />}
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <CheckCircle className="h-3 w-3 mx-auto text-green-600" />
                     <p className="text-base font-bold">{metrics.finishedRides}</p>
-                    <p className="text-[9px] text-muted-foreground">Liberação Motorista</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Liberação Motorista <InfoButton text="Carregamentos finalizados (motorista liberado para rota)." /></p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <TrendingUp className="h-3 w-3 mx-auto text-green-600" />
                     <p className="text-base font-bold">{taxaConclusao}%</p>
-                    <p className="text-[9px] text-muted-foreground">Taxa de Conclusão</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Taxa de Conclusão <InfoButton text="Percentual de TBRs entregues com sucesso em relação ao total bipado." /></p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <RotateCcw className="h-3 w-3 mx-auto text-destructive" />
                     <p className="text-base font-bold">{prevDayInsucessos}</p>
-                    <p className="text-[9px] text-muted-foreground">Insucessos (Dia Anterior)</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Insucessos (Dia Anterior) <InfoButton text="Quantidade de insucessos operacionais registrados no dia anterior." /></p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Truck className="h-3 w-3 mx-auto text-primary" />
                     <p className="text-base font-bold">{vehicleCounts.total}</p>
-                    <p className="text-[9px] text-muted-foreground leading-tight">
-                      {vehicleCounts.cars} Carros (R$ 3,35) • {vehicleCounts.motos} Motos (R$ 2,20)
+                    <p className="text-[9px] text-muted-foreground leading-tight flex items-center justify-center gap-0.5">
+                      {vehicleCounts.cars} Carros • {vehicleCounts.motos} Motos <InfoButton text="Quantidade e tipo de veículos utilizados no dia. Classificação baseada no modelo cadastrado." />
                     </p>
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
@@ -513,7 +514,7 @@ const CiclosPage = () => {
                           : `${delta(metrics.totalRides, prevMetrics.totalRides) >= 0 ? "+" : ""}${delta(metrics.totalRides, prevMetrics.totalRides).toFixed(1)}%`
                       ) : "—"}
                     </p>
-                    <p className="text-[9px] text-muted-foreground">Carreg. Dia Anterior</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Carreg. Dia Anterior <InfoButton text="Variação percentual de carregamentos em relação ao dia anterior." /></p>
                   </div>
                 </div>
 
@@ -523,7 +524,7 @@ const CiclosPage = () => {
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes (TBRs)</p>
-                      <p className="font-bold">{metrics?.totalTbrs ?? "—"}</p>
+                      <p className="font-bold">{metrics ? metrics.totalTbrs + metrics.totalReturns : "—"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">VRID</p>
