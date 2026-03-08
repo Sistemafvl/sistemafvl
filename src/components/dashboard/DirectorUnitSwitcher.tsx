@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Crown, Building2, ArrowLeftRight } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 import {
   Select,
   SelectContent,
