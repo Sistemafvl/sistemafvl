@@ -267,7 +267,7 @@ const CiclosPage = () => {
     const payload = {
       unit_id: unitSession.id,
       record_date: dateStr,
-      qtd_pacotes: record.qtd_pacotes,
+      qtd_pacotes: metrics?.totalScanned ?? record.qtd_pacotes,
       qtd_pacotes_informado: record.qtd_pacotes_informado,
       abertura_galpao: record.abertura_galpao || null,
       hora_inicio_descarregamento: record.hora_inicio_descarregamento || null,
