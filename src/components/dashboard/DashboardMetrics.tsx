@@ -217,7 +217,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
       setDriverAvgs([]);
     }
     setChartLoading(false);
-  }, [unitId, startDate, endDate]);
+  }, [unitId, startDate, endDate, applyFilter]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchChartData(); }, [fetchChartData]);
