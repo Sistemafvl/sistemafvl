@@ -481,9 +481,9 @@ const CiclosPage = () => {
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Package className="h-3 w-3 mx-auto text-primary" />
-                    <p className="text-base font-bold">{metrics.totalTbrs + metrics.totalReturns}</p>
-                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total TBRs Lidos <InfoButton text="Total de pacotes bipados na conferência, incluindo os que retornaram como insucesso, PS ou RTO." /></p>
-                    {prevMetrics && <DeltaBadge value={delta(metrics.totalTbrs + metrics.totalReturns, prevMetrics.totalTbrs + prevMetrics.totalReturns)} />}
+                    <p className="text-base font-bold">{metrics.totalScanned}</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total TBRs Lidos <InfoButton text="Total único de pacotes processados no dia (mesma regra da Visão Geral)." /></p>
+                    {prevMetrics && <DeltaBadge value={delta(metrics.totalScanned, prevMetrics.totalScanned)} />}
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Truck className="h-3 w-3 mx-auto text-primary" />
