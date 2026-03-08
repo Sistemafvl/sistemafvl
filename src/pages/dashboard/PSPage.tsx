@@ -518,6 +518,31 @@ const PSPage = () => {
     toast({ title: "PS finalizado" });
   };
 
+  const handleDeletePs = async (entry: PsEntry) => {
+    if (!unitSession) return;
+    // Check if there's a closed piso_entry with same tbr_code
+    const { data: pisoMatch } = await supabase
+      .from("piso_entries")
+      .select("id")
+      .ilike("tbr_code", entry.tbr_code)
+      .eq("unit_id", unitSession.id)
+      .eq("status", "closed")
+      .limit(1);
+
+    // If piso exists, reopen it
+    if (pisoMatch?.length) {
+      await supabase.from("piso_entries")
+        .update({ status: "open", closed_at: null })
+        .eq("id", pisoMatch[0].id);
+    }
+
+    // Delete the PS entry
+    await supabase.from("ps_entries").delete().eq("id", entry.id);
+    setEntries(prev => prev.filter(e => e.id !== entry.id));
+    setDeletingEntry(null);
+    toast({ title: pisoMatch?.length ? "PS excluído e insucesso reaberto" : "PS excluído com sucesso" });
+  };
+
   const closeModal = () => {
     setHistoryModalOpen(false);
     setIncludeMode(false);
