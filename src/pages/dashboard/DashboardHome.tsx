@@ -80,36 +80,40 @@ const DashboardHome = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch feedback summary
+  // Fetch feedback + DNR stats in a single effect with count queries
   useEffect(() => {
     if (!unitSession?.id) return;
-    const fetchFeedback = async () => {
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id).order("id").range(from, to)
-      );
-      setFeedbackTotal(revs.length);
-      setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
+    const fetchStats = async () => {
+      const [
+        feedbackCountRes,
+        feedbackSumRes,
+        dnrOpenCountRes,
+        dnrOpenSumRes,
+        dnrAnalyzingCountRes,
+        dnrAnalyzingSumRes,
+        dnrClosedCountRes,
+      ] = await Promise.all([
+        supabase.from("unit_reviews").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id),
+        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id),
+        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "open"),
+        supabase.from("dnr_entries").select("dnr_value").eq("unit_id", unitSession.id).eq("status", "open"),
+        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "analyzing"),
+        supabase.from("dnr_entries").select("dnr_value").eq("unit_id", unitSession.id).eq("status", "analyzing"),
+        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "closed"),
+      ]);
+      
+      const totalFeedback = feedbackCountRes.count ?? 0;
+      const ratings = feedbackSumRes.data ?? [];
+      setFeedbackTotal(totalFeedback);
+      setFeedbackAvg(totalFeedback > 0 ? ratings.reduce((s, r) => s + r.rating, 0) / totalFeedback : 0);
+      
+      const openValues = dnrOpenSumRes.data ?? [];
+      const analyzingValues = dnrAnalyzingSumRes.data ?? [];
+      setDnrOpen({ count: dnrOpenCountRes.count ?? 0, value: openValues.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrAnalyzing({ count: dnrAnalyzingCountRes.count ?? 0, value: analyzingValues.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(dnrClosedCountRes.count ?? 0);
     };
-    fetchFeedback();
-  }, [unitSession?.id]);
-
-  // Fetch DNR stats
-  useEffect(() => {
-    if (!unitSession?.id) return;
-    const fetchDnr = async () => {
-      const { fetchAllRows } = await import("@/lib/supabase-helpers");
-      const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id).order("id").range(from, to)
-      );
-      const open = all.filter(e => e.status === "open");
-      const analyzing = all.filter(e => e.status === "analyzing");
-      const closed = all.filter(e => e.status === "closed");
-      setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-      setDnrClosed(closed.length);
-    };
-    fetchDnr();
+    fetchStats();
   }, [unitSession?.id]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {

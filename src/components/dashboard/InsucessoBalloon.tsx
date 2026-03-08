@@ -59,16 +59,17 @@ const InsucessoBalloon = () => {
 
   useEffect(() => {
     fetchInsucessos();
-    const interval = setInterval(fetchInsucessos, 60000);
-    return () => clearInterval(interval);
   }, [fetchInsucessos]);
 
-  // Realtime: when a ride_tbr is inserted, refetch
+  // Realtime: when a ride_tbr is inserted or piso_entries change, refetch
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
       .channel("insucesso-balloon")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => {
+        fetchInsucessos();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "piso_entries", filter: `unit_id=eq.${unitId}` }, () => {
         fetchInsucessos();
       })
       .subscribe();

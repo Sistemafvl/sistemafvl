@@ -52,7 +52,7 @@ import { Toaster as RadixToaster } from "./components/ui/toaster";
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 30_000,
+      staleTime: 300_000,
       refetchOnWindowFocus: false,
     },
   },
