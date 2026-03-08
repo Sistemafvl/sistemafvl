@@ -103,8 +103,8 @@ const OperacaoPage = () => {
         (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
-      fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
-        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
+      fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null; status: string }>(
+        (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason, status").in("ride_id", ids).order("id").range(from, to),
         rideIds
       ),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string }>(
@@ -155,11 +155,11 @@ const OperacaoPage = () => {
     const issueCounts: Record<string, number> = {};
     Object.entries(returnTbrSets).forEach(([rideId, set]) => { issueCounts[rideId] = set.size; });
 
-    // Count ALL returns per ride (including removed TBRs) — for performance calculation
+    // Count returns whose codes are NO LONGER in ride_tbrs (removed) — for TBRs Lidos total
     const allReturnTbrSets: Record<string, Set<string>> = {};
     [...pisoData, ...psData, ...rtoData].forEach((p: any) => {
       const upperCode = p.tbr_code?.toUpperCase();
-      if (p.ride_id && upperCode) {
+      if (p.ride_id && upperCode && !tbrCodesByRide[p.ride_id]?.has(upperCode)) {
         if (!allReturnTbrSets[p.ride_id]) allReturnTbrSets[p.ride_id] = new Set();
         allReturnTbrSets[p.ride_id].add(upperCode);
       }
@@ -167,9 +167,9 @@ const OperacaoPage = () => {
     const allReturnCounts: Record<string, number> = {};
     Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
-    // Count PISO-ONLY returns per ride (for Insucessos card)
+    // Count PISO-ONLY returns per ride with status=open (for Insucessos card)
     const pisoOnlyTbrSets: Record<string, Set<string>> = {};
-    pisoData.forEach((p: any) => {
+    pisoData.filter((p: any) => p.status === 'open').forEach((p: any) => {
       const upperCode = p.tbr_code?.toUpperCase();
       if (p.ride_id && upperCode) {
         if (!pisoOnlyTbrSets[p.ride_id]) pisoOnlyTbrSets[p.ride_id] = new Set();
