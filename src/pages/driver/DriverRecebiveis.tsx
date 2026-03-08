@@ -157,7 +157,7 @@ const DriverRecebiveis = () => {
             Emita sua NF dentro do prazo estipulado e confira atentamente as seguintes informações antes do envio:
           </p>
           <ul className="text-xs text-muted-foreground list-disc list-inside space-y-0.5 mt-1">
-            <li><strong>CNPJ Favela Llog:</strong> 45.957.516/0014-81</li>
+            <li><strong>CNPJ:</strong> {managerCnpj ? formatCnpj(managerCnpj) : <span className="text-muted-foreground italic">Carregando...</span>}</li>
             <li><strong>Código de Prestação de Serviço:</strong> 16.02.01</li>
             <li><strong>Valor dos Serviços:</strong> deve corresponder ao valor do relatório</li>
           </ul>
