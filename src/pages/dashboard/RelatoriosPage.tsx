@@ -855,7 +855,7 @@ const RelatoriosPage = () => {
         onChoose={async (fmt) => {
           setFormatChoiceOpen(false);
           if (fmt === "excel" && payrollData) {
-            generatePayrollExcel(payrollData, unitName, startDate, endDate);
+            generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
             toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
             if (formatChoiceAction === "gerar") {
               // Still save to DB + mark DNRs for "gerar" mode
