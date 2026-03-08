@@ -97,16 +97,6 @@ const App = () => (
             <Route path="financeiro" element={<MatrizFinanceiro />} />
             <Route path="ocorrencias" element={<MatrizOcorrencias />} />
           </Route>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminOverviewPage />} />
-            <Route path="overview" element={<AdminOverviewPage />} />
-            <Route path="domains" element={<DomainsUnitsPage />} />
-            <Route path="managers" element={<ManagersPage />} />
-            <Route path="drivers" element={<AdminDriversPage />} />
-            <Route path="database" element={<DatabasePage />} />
-            <Route path="security" element={<SecurityPage />} />
-            <Route path="updates" element={<AdminUpdatesPage />} />
-          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

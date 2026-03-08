@@ -26,10 +26,6 @@ interface ConferenteSession {
 }
 
 interface AuthState {
-  // Master admin
-  isMasterAdmin: boolean;
-  setMasterAdmin: (value: boolean) => void;
-
   // Unit session
   unitSession: UnitSession | null;
   setUnitSession: (session: UnitSession | null) => void;
@@ -49,20 +45,17 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      isMasterAdmin: false,
-      setMasterAdmin: (value) => set({ isMasterAdmin: value }),
       unitSession: null,
       setUnitSession: (session) => set({ unitSession: session }),
       managerSession: null,
       setManagerSession: (session) => set({ managerSession: session }),
       conferenteSession: null,
       setConferenteSession: (session) => set({ conferenteSession: session }),
-      logout: () => set({ isMasterAdmin: false, unitSession: null, managerSession: null, conferenteSession: null }),
+      logout: () => set({ unitSession: null, managerSession: null, conferenteSession: null }),
     }),
     {
       name: "fvl-auth",
       partialize: (state) => ({
-        isMasterAdmin: state.isMasterAdmin,
         unitSession: state.unitSession,
         conferenteSession: state.conferenteSession,
       }),
