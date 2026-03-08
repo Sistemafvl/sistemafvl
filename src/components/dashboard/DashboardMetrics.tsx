@@ -25,7 +25,9 @@ interface DriverAvg {
   avg: number;
 }
 
-const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
+const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props) => {
+  const isAll = unitId === ALL_UNITS_ID && allUnitIds.length > 0;
+  const effectiveIds = isAll ? allUnitIds : [unitId];
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
     todayRides: 0, todayTbrs: 0, openPs: 0, openRto: 0, openPiso: 0, activeLoading: 0,
