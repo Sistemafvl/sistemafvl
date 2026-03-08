@@ -223,13 +223,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchChartData(); }, [fetchChartData]);
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-primary" />
-      </div>
-    );
-  }
 
   const periodLabel = startDate && endDate
     ? `${format(startDate, "dd/MM")} a ${format(endDate, "dd/MM")}`
