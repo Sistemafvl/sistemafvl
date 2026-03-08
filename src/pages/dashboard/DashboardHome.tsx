@@ -76,8 +76,6 @@ const DashboardHome = () => {
   const [dnrOpen, setDnrOpen] = useState({ count: 0, value: 0 });
   const [dnrAnalyzing, setDnrAnalyzing] = useState({ count: 0, value: 0 });
   const [dnrClosed, setDnrClosed] = useState(0);
-  const [dnrLoading, setDnrLoading] = useState(true);
-  const [feedbackLoading, setFeedbackLoading] = useState(true);
   useEffect(() => {
     const interval = setInterval(() => setDateTime(new Date()), 1000);
     return () => clearInterval(interval);
@@ -86,85 +84,48 @@ const DashboardHome = () => {
   const allUnitIds = useMemo(() => domainUnits.map(u => u.id), [domainUnits]);
   const isAllUnits = unitSession?.id === ALL_UNITS_ID;
 
+  // Fetch feedback summary
   useEffect(() => {
     if (!unitSession?.id) return;
-
-    let cancelled = false;
-    setFeedbackLoading(true);
-
     const fetchFeedback = async () => {
-      try {
-        const { fetchAllRows } = await import("@/lib/supabase-helpers");
-        let q = supabase.from("unit_reviews").select("rating").order("id");
-        if (isAllUnits && allUnitIds.length > 0) {
-          q = q.in("unit_id", allUnitIds);
-        } else {
-          q = q.eq("unit_id", unitSession.id);
-        }
-
-        const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-          q.range(from, to)
-        );
-
-        if (cancelled) return;
-        setFeedbackTotal(revs.length);
-        setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
-      } catch (error) {
-        console.warn("[DashboardHome] erro ao carregar avaliações", error);
-        if (cancelled) return;
-        setFeedbackTotal(0);
-        setFeedbackAvg(0);
-      } finally {
-        if (!cancelled) setFeedbackLoading(false);
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      let q = supabase.from("unit_reviews").select("rating").order("id");
+      if (isAllUnits && allUnitIds.length > 0) {
+        q = q.in("unit_id", allUnitIds);
+      } else {
+        q = q.eq("unit_id", unitSession.id);
       }
+      const revs = await fetchAllRows<{ rating: number }>((from, to) =>
+        q.range(from, to)
+      );
+      setFeedbackTotal(revs.length);
+      setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
     };
-
     fetchFeedback();
-    return () => { cancelled = true; };
   }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   // Fetch DNR stats
   useEffect(() => {
     if (!unitSession?.id) return;
-
-    let cancelled = false;
-    setDnrLoading(true);
-
     const fetchDnr = async () => {
-      try {
-        const { fetchAllRows } = await import("@/lib/supabase-helpers");
-        let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
-        if (isAllUnits && allUnitIds.length > 0) {
-          q = q.in("unit_id", allUnitIds);
-        } else {
-          q = q.eq("unit_id", unitSession.id);
-        }
-
-        const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-          q.range(from, to)
-        );
-
-        if (cancelled) return;
-
-        const open = all.filter(e => e.status === "open");
-        const analyzing = all.filter(e => e.status === "analyzing");
-        const closed = all.filter(e => e.status === "closed");
-        setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-        setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
-        setDnrClosed(closed.length);
-      } catch (error) {
-        console.warn("[DashboardHome] erro ao carregar DNR", error);
-        if (cancelled) return;
-        setDnrOpen({ count: 0, value: 0 });
-        setDnrAnalyzing({ count: 0, value: 0 });
-        setDnrClosed(0);
-      } finally {
-        if (!cancelled) setDnrLoading(false);
+      const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
+      if (isAllUnits && allUnitIds.length > 0) {
+        q = q.in("unit_id", allUnitIds);
+      } else {
+        q = q.eq("unit_id", unitSession.id);
       }
+      const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
+        q.range(from, to)
+      );
+      const open = all.filter(e => e.status === "open");
+      const analyzing = all.filter(e => e.status === "analyzing");
+      const closed = all.filter(e => e.status === "closed");
+      setDnrOpen({ count: open.length, value: open.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s: number, e: any) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(closed.length);
     };
-
     fetchDnr();
-    return () => { cancelled = true; };
   }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -568,9 +529,7 @@ const DashboardHome = () => {
           <div className="flex-1">
             <p className="text-sm font-semibold text-muted-foreground">Avaliação da Unidade</p>
             <div className="flex items-center gap-3 mt-0.5">
-              {feedbackLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : feedbackAvg === null ? (
+              {feedbackAvg === null ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <>
@@ -629,14 +588,8 @@ const DashboardHome = () => {
             <FileWarning className="h-5 w-5 text-destructive shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Abertos <InfoButton text="Total de DNRs (Did Not Receive) abertos na unidade. Representam pacotes que o cliente declarou não ter recebido e estão pendentes de análise." /></p>
-              {dnrLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
-              ) : (
-                <>
-                  <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
-                  <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
-                </>
-              )}
+              <p className="text-lg font-bold text-destructive">{dnrOpen.count}</p>
+              <p className="text-xs text-muted-foreground">R${dnrOpen.value.toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -645,14 +598,8 @@ const DashboardHome = () => {
             <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Analisando <InfoButton text="DNRs em processo de análise pela equipe. Esses pacotes estão sendo investigados para confirmar ou negar a entrega." /></p>
-              {dnrLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
-              ) : (
-                <>
-                  <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
-                  <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
-                </>
-              )}
+              <p className="text-lg font-bold text-amber-500">{dnrAnalyzing.count}</p>
+              <p className="text-xs text-muted-foreground">R${dnrAnalyzing.value.toFixed(2)}</p>
             </div>
           </CardContent>
         </Card>
@@ -661,11 +608,7 @@ const DashboardHome = () => {
             <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Finalizados <InfoButton text="DNRs finalizados no período. Inclui casos confirmados e descartados." /></p>
-              {dnrLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
-              ) : (
-                <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
-              )}
+              <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
             </div>
           </CardContent>
         </Card>

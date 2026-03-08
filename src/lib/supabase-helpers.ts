@@ -23,17 +23,7 @@ export async function fetchAllRows<T = any>(
   let retries = 0;
 
   while (true) {
-    let data: T[] | null = null;
-    let error: any = null;
-
-    try {
-      const result = await queryFn(offset, offset + PAGE - 1);
-      data = result.data;
-      error = result.error;
-    } catch (thrownError) {
-      error = thrownError;
-    }
-
+    const { data, error } = await queryFn(offset, offset + PAGE - 1);
     if (error) {
       if (retries < maxRetries) { retries++; continue; }
       console.warn("[fetchAllRows] giving up after retries, error:", error);

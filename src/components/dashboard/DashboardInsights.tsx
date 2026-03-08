@@ -4,7 +4,7 @@ import { fetchAllRows } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { getBrazilDayRange } from "@/lib/utils";
 import { ALL_UNITS_ID } from "@/lib/unit-filter";
@@ -40,7 +40,6 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
   const [returnRate, setReturnRate] = useState(0);
   const [avgLoadTime, setAvgLoadTime] = useState("");
   const [bestDay, setBestDay] = useState("");
-  const [loading, setLoading] = useState(true);
 
   // Pagination
   const [driverPage, setDriverPage] = useState(0);
@@ -200,11 +199,10 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     setConfPage(0);
   }, [unitId, getSince, getUntil, applyFilter]);
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([fetchInsights(), fetchTopDrivers(), fetchTopReturns(), fetchTopConferentes()])
-      .finally(() => setLoading(false));
-  }, [fetchInsights, fetchTopDrivers, fetchTopReturns, fetchTopConferentes]);
+  useEffect(() => { fetchInsights(); }, [fetchInsights]);
+  useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
+  useEffect(() => { fetchTopReturns(); }, [fetchTopReturns]);
+  useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
     title, icon: Icon, data, color, page, setPage, infoText,
@@ -226,11 +224,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
           </CardTitle>
         </CardHeader>
         <CardContent>
-        {loading ? (
-            <div className="flex items-center justify-center py-6">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : data.length === 0 ? (
+          {data.length === 0 ? (
             <p className="text-xs text-muted-foreground italic">Sem dados</p>
           ) : (
             <>
@@ -266,7 +260,6 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     );
   };
 
-
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -279,28 +272,28 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <BarChart3 className="h-5 w-5 text-blue-500" />
-            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{avgTbrs}</span>}
+            <span className="text-2xl font-bold italic">{avgTbrs}</span>
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Média TBRs / Carregamento <InfoButton text="Média de TBRs por carregamento no período." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Percent className="h-5 w-5 text-orange-500" />
-            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{returnRate}%</span>}
+            <span className="text-2xl font-bold italic">{returnRate}%</span>
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Taxa de Retorno <InfoButton text="Percentual de TBRs que retornaram em relação ao total escaneado." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Clock className="h-5 w-5 text-green-500" />
-            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>}
+            <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Tempo Médio Carregamento <InfoButton text="Tempo médio entre início e fim do carregamento." /></span>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <CalendarDays className="h-5 w-5 text-purple-500" />
-            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{bestDay || "—"}</span>}
+            <span className="text-2xl font-bold italic">{bestDay || "—"}</span>
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Dia Mais Movimentado <InfoButton text="Dia da semana com maior volume de carregamentos no período." /></span>
           </CardContent>
         </Card>

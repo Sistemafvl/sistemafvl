@@ -49,29 +49,28 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
-      ]).then(async ([ridesData, dnrData, settingsData, customData, minPkgData, fixedData, reativoData]) => {
+      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData, reativoData]) => {
         setRides(ridesData);
         setDnrEntries(dnrData);
         setSettings(settingsData);
         setCustomValues(customData);
         setMinPackages(minPkgData);
         setFixedValues(fixedData);
+        setLoading(false);
 
         // Build reativo map by unit
-        const reativoMap = new Map<string, number>();
+        const reativoByUnit = new Map<string, number>();
         reativoData.forEach((r: any) => {
-          reativoMap.set(r.unit_id, (reativoMap.get(r.unit_id) ?? 0) + Number(r.reativo_value));
+          reativoByUnit.set(r.unit_id, (reativoByUnit.get(r.unit_id) ?? 0) + Number(r.reativo_value));
         });
-        setReativoByUnit(reativoMap);
+        setReativoByUnit(reativoByUnit);
 
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          const tbrData = await fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
+          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
             supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          );
-          setTbrs(tbrData);
+          ).then(data => setTbrs(data));
         } else setTbrs([]);
-        setLoading(false);
       });
     });
   }, [units, dateStart, dateEnd]);
