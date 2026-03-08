@@ -115,6 +115,9 @@ const App = () => (
             <Route path="dominios" element={<DomainsUnitsPage />} />
             <Route path="gerentes" element={<ManagersPage />} />
             <Route path="diretores" element={<DirectorsPage />} />
+            <Route path="motoristas" element={<AdminDriversPage />} />
+            <Route path="banco" element={<DatabasePage />} />
+            <Route path="seguranca" element={<SecurityPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
