@@ -219,7 +219,11 @@ const KpiCard = ({ icon: Icon, label, value, loading, color = "text-primary" }: 
       <Icon className={`h-8 w-8 ${color} shrink-0`} />
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground font-semibold italic truncate">{label}</p>
-        <p className="text-lg font-bold">{loading ? "..." : value}</p>
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
+        ) : (
+          <p className="text-lg font-bold">{value}</p>
+        )}
       </div>
     </CardContent>
   </Card>
