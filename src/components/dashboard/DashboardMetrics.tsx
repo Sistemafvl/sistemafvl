@@ -9,11 +9,13 @@ import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
 import { fetchAllRows } from "@/lib/supabase-helpers";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 interface Props {
   unitId: string;
   startDate?: Date;
   endDate?: Date;
+  allUnitIds?: string[];
 }
 
 const PAGE_SIZE = 5;
@@ -23,7 +25,9 @@ interface DriverAvg {
   avg: number;
 }
 
-const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
+const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props) => {
+  const isAll = unitId === ALL_UNITS_ID && allUnitIds.length > 0;
+  const effectiveIds = isAll ? allUnitIds : [unitId];
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
     todayRides: 0, todayTbrs: 0, openPs: 0, openRto: 0, openPiso: 0, activeLoading: 0,
@@ -35,6 +39,10 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [showDriverModal, setShowDriverModal] = useState(false);
   const [chartLoading, setChartLoading] = useState(true);
 
+  const applyFilter = useCallback((q: any): any => {
+    return isAll ? q.in("unit_id", effectiveIds) : q.eq("unit_id", unitId);
+  }, [isAll, effectiveIds, unitId]);
+
   const fetchAll = useCallback(async () => {
     const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
     const globalEnd = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
@@ -45,23 +53,23 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
 
     const [ridesRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
-      supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
-      supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
-      supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
-      supabase.from("piso_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
-      supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("loading_status", "loading"),
+      applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
+      applyFilter(supabase.from("ps_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+      applyFilter(supabase.from("rto_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+      applyFilter(supabase.from("piso_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+      applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).eq("loading_status", "loading"),
     ]);
 
-    // Use RPC for accurate TBR count (no 1000 limit)
+    // Use RPC for accurate TBR count (no 1000 limit) - sum across units if "all"
     let todayTbrCount = 0;
-    const { data: rpcCount } = await supabase.rpc("get_unit_tbr_count", {
-      p_unit_id: unitId,
-      p_start: todayStart,
-      p_end: effectiveTodayEnd,
-    });
-    todayTbrCount = Number(rpcCount ?? 0);
-
-    // RPC already includes returns (piso+ps+rto) linked to same rides
+    for (const uid of effectiveIds) {
+      const { data: rpcCount } = await supabase.rpc("get_unit_tbr_count", {
+        p_unit_id: uid,
+        p_start: todayStart,
+        p_end: effectiveTodayEnd,
+      });
+      todayTbrCount += Number(rpcCount ?? 0);
+    }
 
     setMetrics({
       todayRides: ridesRes.count ?? 0,
@@ -72,7 +80,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       activeLoading: loadingRes.count ?? 0,
     });
     setLoading(false);
-  }, [unitId, startDate, endDate]);
+  }, [unitId, startDate, endDate, applyFilter, effectiveIds]);
 
   // Fetch chart data using global dates only
   const fetchChartData = useCallback(async () => {
@@ -96,7 +104,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const { end: rangeEnd } = getBrazilDayRange(days[days.length - 1]);
 
     // Bar chart - rides per day
-    const { data: rides7 } = await supabase.from("driver_rides").select("completed_at").eq("unit_id", unitId).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
+    const { data: rides7 } = await applyFilter(supabase.from("driver_rides").select("completed_at")).gte("completed_at", rangeStart).lte("completed_at", rangeEnd);
     const ridesByDay: Record<string, number> = {};
     days.forEach(d => ridesByDay[d] = 0);
     (rides7 ?? []).forEach(r => {
@@ -106,7 +114,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
     // Line chart - TBRs per day
-    const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
+    const { data: unitRides7 } = await applyFilter(supabase.from("driver_rides").select("id"));
     const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
 
     const allTbrs = await fetchAllRows<{ scanned_at: string | null; ride_id: string; code: string }>((from, to) =>
@@ -129,8 +137,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
     // Driver daily average
     const finishedRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
-      supabase.from("driver_rides").select("driver_id, completed_at")
-        .eq("unit_id", unitId)
+      applyFilter(supabase.from("driver_rides").select("driver_id, completed_at"))
         .eq("loading_status", "finished")
         .gte("completed_at", rangeStart)
         .lte("completed_at", rangeEnd)
@@ -141,10 +148,10 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       const rideIds = finishedRides.map(r => r.driver_id + "_placeholder");
       // Get TBR counts per ride
       const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
-        supabase.from("driver_rides").select("id, driver_id")
-          .eq("unit_id", unitId)
+        applyFilter(supabase.from("driver_rides").select("id, driver_id"))
           .eq("loading_status", "finished")
           .gte("completed_at", rangeStart)
+          .lte("completed_at", rangeEnd)
           .lte("completed_at", rangeEnd)
           .range(from, to)
       );
@@ -210,7 +217,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       setDriverAvgs([]);
     }
     setChartLoading(false);
-  }, [unitId, startDate, endDate]);
+  }, [unitId, startDate, endDate, applyFilter]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
   useEffect(() => { fetchChartData(); }, [fetchChartData]);

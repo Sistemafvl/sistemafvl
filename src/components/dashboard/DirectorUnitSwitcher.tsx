@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Crown, Building2, ArrowLeftRight } from "lucide-react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 import {
   Select,
   SelectContent,
@@ -29,9 +30,9 @@ const DirectorUnitSwitcher = () => {
             .sort((a, b) => a.name.localeCompare(b.name));
           setDomainUnits(filtered);
 
-          // If current unit is the MATRIZ unit, auto-select first real unit
+          // Auto-select "Todas as Unidades" by default when coming from MATRIZ
           if (filtered.length > 0 && unitSession.name.includes("MATRIZ")) {
-            setActiveUnit(filtered[0].id, filtered[0].name);
+            setActiveUnit(ALL_UNITS_ID, "Todas as Unidades");
           }
         }
       });
@@ -55,8 +56,12 @@ const DirectorUnitSwitcher = () => {
         <Select
           value={unitSession.id}
           onValueChange={(val) => {
-            const u = domainUnits.find((u) => u.id === val);
-            if (u) setActiveUnit(u.id, u.name);
+            if (val === ALL_UNITS_ID) {
+              setActiveUnit(ALL_UNITS_ID, "Todas as Unidades");
+            } else {
+              const u = domainUnits.find((u) => u.id === val);
+              if (u) setActiveUnit(u.id, u.name);
+            }
           }}
         >
           <SelectTrigger className="w-full text-xs gap-2 bg-muted/50 border-border">
@@ -65,6 +70,9 @@ const DirectorUnitSwitcher = () => {
             <ArrowLeftRight className="h-3 w-3 text-muted-foreground ml-auto shrink-0" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value={ALL_UNITS_ID}>
+              🏢 Todas as Unidades
+            </SelectItem>
             {domainUnits.map((u) => (
               <SelectItem key={u.id} value={u.id}>
                 {u.name}

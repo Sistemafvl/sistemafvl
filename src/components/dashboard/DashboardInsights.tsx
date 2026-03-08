@@ -7,11 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { getBrazilDayRange } from "@/lib/utils";
+import { ALL_UNITS_ID } from "@/lib/unit-filter";
 
 interface Props {
   unitId: string;
   startDate?: Date;
   endDate?: Date;
+  allUnitIds?: string[];
 }
 
 interface DriverRank {
@@ -26,7 +28,11 @@ interface ConferenteRank {
 
 const PAGE_SIZE = 5;
 
-const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
+const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Props) => {
+  const isAll = unitId === ALL_UNITS_ID && allUnitIds.length > 0;
+  const applyFilter = useCallback((q: any): any => {
+    return isAll ? q.in("unit_id", allUnitIds) : q.eq("unit_id", unitId);
+  }, [isAll, allUnitIds, unitId]);
   const [topDrivers, setTopDrivers] = useState<DriverRank[]>([]);
   const [topReturns, setTopReturns] = useState<DriverRank[]>([]);
   const [topConferentes, setTopConferentes] = useState<ConferenteRank[]>([]);
@@ -55,10 +61,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const since = getSince();
     const until = getUntil();
 
-    let ridesQuery = supabase
+    let ridesQuery = applyFilter(supabase
       .from("driver_rides")
-      .select("driver_id, id, started_at, finished_at")
-      .eq("unit_id", unitId)
+      .select("driver_id, id, started_at, finished_at"))
       .gte("completed_at", since);
     if (until) ridesQuery = ridesQuery.lte("completed_at", until);
 
@@ -89,13 +94,13 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     // Return rate
     const [pisoAll, rtoAll, psAll] = await Promise.all([
       fetchAllRows<{ tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("piso_entries").select("tbr_code, reason")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("rto_entries").select("tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("ps_entries").select("tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
     ]);
     const filteredPisoAll = pisoAll.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
@@ -113,36 +118,51 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     if (totalOriginal > 0) {
       setReturnRate(Math.round((allReturnTbrs.size / totalOriginal) * 1000) / 10);
     }
-  }, [unitId, startDate, endDate, getSince, getUntil]);
+  }, [unitId, startDate, endDate, getSince, getUntil, applyFilter]);
 
   const fetchTopDrivers = useCallback(async () => {
     const since = getSince();
     const until = getUntil();
 
-    const { data: rpcData } = await supabase.rpc("get_top_drivers_by_tbrs", {
-      p_unit_id: unitId,
-      p_since: since,
-      p_until: until || undefined,
-    });
-
-    if (!rpcData || rpcData.length === 0) { setTopDrivers([]); return; }
-    setTopDrivers(rpcData.map((r: any) => ({ name: r.driver_name ?? "Desconhecido", count: Number(r.tbr_count) })));
+    if (isAll) {
+      // RPC only supports single unit, so aggregate across all
+      const allResults: any[] = [];
+      for (const uid of (allUnitIds.length > 0 ? allUnitIds : [unitId])) {
+        const { data } = await supabase.rpc("get_top_drivers_by_tbrs", {
+          p_unit_id: uid, p_since: since, p_until: until || undefined,
+        });
+        if (data) allResults.push(...data);
+      }
+      // Merge by driver_id
+      const merged: Record<string, { name: string; count: number }> = {};
+      allResults.forEach((r: any) => {
+        const key = r.driver_id;
+        if (!merged[key]) merged[key] = { name: r.driver_name ?? "Desconhecido", count: 0 };
+        merged[key].count += Number(r.tbr_count);
+      });
+      setTopDrivers(Object.values(merged).sort((a, b) => b.count - a.count));
+    } else {
+      const { data: rpcData } = await supabase.rpc("get_top_drivers_by_tbrs", {
+        p_unit_id: unitId, p_since: since, p_until: until || undefined,
+      });
+      if (!rpcData || rpcData.length === 0) { setTopDrivers([]); return; }
+      setTopDrivers(rpcData.map((r: any) => ({ name: r.driver_name ?? "Desconhecido", count: Number(r.tbr_count) })));
+    }
     setDriverPage(0);
-  }, [unitId, getSince, getUntil]);
+  }, [unitId, getSince, getUntil, isAll, allUnitIds]);
 
   const fetchTopReturns = useCallback(async () => {
     const since = getSince();
-    const until = getUntil();
 
     const [pisoData, rtoData, psData] = await Promise.all([
       fetchAllRows<{ driver_name: string | null; tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("driver_name, tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("piso_entries").select("driver_name, tbr_code, reason")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("rto_entries").select("driver_name, tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ driver_name: string | null; tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("driver_name, tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("ps_entries").select("driver_name, tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
     ]);
 
@@ -156,14 +176,14 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     });
     setTopReturns(Object.entries(driverTbrSets).map(([name, set]) => ({ name, count: set.size })).sort((a, b) => b.count - a.count));
     setReturnPage(0);
-  }, [unitId, getSince, getUntil]);
+  }, [unitId, getSince, getUntil, applyFilter]);
 
   const fetchTopConferentes = useCallback(async () => {
     const since = getSince();
     const until = getUntil();
 
     const confRides = await fetchAllRows<{ conferente_id: string | null }>((from, to) => {
-      let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
+      let q = applyFilter(supabase.from("driver_rides").select("conferente_id")).gte("completed_at", since).not("conferente_id", "is", null);
       if (until) q = q.lte("completed_at", until);
       return q.order("id").range(from, to);
     });
@@ -177,7 +197,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const confMap = new Map((confs ?? []).map(c => [c.id, c.name]));
     setTopConferentes(sorted.map(([id, count]) => ({ name: confMap.get(id) ?? "Desconhecido", count })));
     setConfPage(0);
-  }, [unitId, getSince, getUntil]);
+  }, [unitId, getSince, getUntil, applyFilter]);
 
   useEffect(() => { fetchInsights(); }, [fetchInsights]);
   useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
