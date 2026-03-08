@@ -59,7 +59,6 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
   }, [endDate]);
 
   const fetchInsights = useCallback(async () => {
-    setLoading(true);
     const since = getSince();
     const until = getUntil();
 
