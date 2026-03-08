@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap } from "lucide-react";
+import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { formatBRL } from "@/lib/utils";
 
@@ -165,7 +165,9 @@ const MatrizFinanceiro = () => {
         <CardHeader><CardTitle className="text-sm font-bold italic">Detalhamento por Unidade</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto">
           {loading ? (
-            <p className="text-sm text-muted-foreground italic text-center py-8">Carregando...</p>
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -217,7 +219,11 @@ const KpiCard = ({ icon: Icon, label, value, loading, color = "text-primary" }: 
       <Icon className={`h-8 w-8 ${color} shrink-0`} />
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground font-semibold italic truncate">{label}</p>
-        <p className="text-lg font-bold">{loading ? "..." : value}</p>
+        {loading ? (
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
+        ) : (
+          <p className="text-lg font-bold">{value}</p>
+        )}
       </div>
     </CardContent>
   </Card>
