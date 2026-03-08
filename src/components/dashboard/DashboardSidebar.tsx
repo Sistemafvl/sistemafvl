@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap, Crown, PieChart, Building2, Users2, Receipt, ShieldAlert } from "lucide-react";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
 import { supabase } from "@/integrations/supabase/client";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
+import DirectorUnitSwitcher from "./DirectorUnitSwitcher";
 import {
   Sidebar,
   SidebarContent,
@@ -68,6 +69,14 @@ const managerMenuItems = [
   { title: "Conferentes", url: "/dashboard/conferentes", icon: ClipboardCheck },
 ];
 
+const biMenuItems = [
+  { title: "Visão Consolidada", url: "/dashboard/bi", icon: PieChart },
+  { title: "Unidades", url: "/dashboard/bi/unidades", icon: Building2 },
+  { title: "Motoristas", url: "/dashboard/bi/motoristas", icon: Users2 },
+  { title: "Financeiro", url: "/dashboard/bi/financeiro", icon: Receipt },
+  { title: "Ocorrências", url: "/dashboard/bi/ocorrencias", icon: ShieldAlert },
+];
+
 const managerModalItems = [
   { title: "Cadastro de Motorista", key: "driver" as const, icon: Truck },
 ];
@@ -90,16 +99,19 @@ const DashboardSidebar = () => {
   const [conferentes, setConferentes] = useState<ConferenteOption[]>([]);
   const [conferenteSelectOpen, setConferenteSelectOpen] = useState(false);
 
+  const isDirector = unitSession?.sessionType === "matriz";
+  const showManagerMenu = isDirector || !!managerSession;
+
   // Fetch conferentes for the unit
   useEffect(() => {
-    if (!unitSession?.id) return;
+    if (!unitSession?.id || isDirector) return;
     supabase
       .from("user_profiles")
       .select("id, name")
       .eq("unit_id", unitSession.id)
       .eq("active", true)
       .then(({ data }) => { if (data) setConferentes(data); });
-  }, [unitSession?.id]);
+  }, [unitSession?.id, isDirector]);
 
   const handleManagerLogin = async () => {
     const cleanCnpj = cnpj.replace(/\D/g, "");
@@ -129,75 +141,83 @@ const DashboardSidebar = () => {
             <LogoHeader size="lg" />
           </div>
 
-          <div className="px-3 pb-2">
-            {managerSession ? (
-              <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
-                <UserCog className="h-4 w-4 text-primary shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-bold italic truncate">{managerSession.name}</p>
-                  <p className="text-[10px] text-muted-foreground">Gerente</p>
-                  {unitSession && (
-                    <p className="text-[10px] text-muted-foreground truncate">
-                      {unitSession.name} • {unitSession.domain_name}
-                    </p>
-                  )}
-                </div>
-                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setManagerSession(null)}>
-                  Sair
-                </Button>
+          {/* Director section: unit switcher + crown card */}
+          {isDirector ? (
+            <DirectorUnitSwitcher />
+          ) : (
+            <>
+              {/* Manager login/card */}
+              <div className="px-3 pb-2">
+                {managerSession ? (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-primary/10 border border-primary/20">
+                    <UserCog className="h-4 w-4 text-primary shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold italic truncate">{managerSession.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Gerente</p>
+                      {unitSession && (
+                        <p className="text-[10px] text-muted-foreground truncate">
+                          {unitSession.name} • {unitSession.domain_name}
+                        </p>
+                      )}
+                    </div>
+                    <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => setManagerSession(null)}>
+                      Sair
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start font-semibold italic gap-2 bg-accent text-accent-foreground hover:bg-background hover:text-foreground"
+                    onClick={() => setLoginOpen(true)}
+                  >
+                    <UserCog className="h-4 w-4" />
+                    Gerente
+                  </Button>
+                )}
               </div>
-            ) : (
-              <Button
-                variant="outline"
-                className="w-full justify-start font-semibold italic gap-2 bg-accent text-accent-foreground hover:bg-background hover:text-foreground"
-                onClick={() => setLoginOpen(true)}
-              >
-                <UserCog className="h-4 w-4" />
-                Gerente
-              </Button>
-            )}
-          </div>
 
-          {/* Conferente Selector */}
-          <div className="px-3 pb-2">
-            {conferenteSession ? (
-              <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 border border-green-500/20">
-                <UserCheck className="h-4 w-4 text-green-600 shrink-0" />
-                <div className="min-w-0">
-                  <p className="text-xs font-bold italic truncate">{conferenteSession.name}</p>
-                  <p className="text-[10px] text-muted-foreground">Conferente</p>
-                </div>
-                <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => {
-                  if (conferenteSession?.id) releaseSession(conferenteSession.id);
-                  setConferenteSession(null);
-                }}>
-                  Trocar
-                </Button>
+              {/* Conferente Selector */}
+              <div className="px-3 pb-2">
+                {conferenteSession ? (
+                  <div className="flex items-center gap-2 p-2 rounded-md bg-green-500/10 border border-green-500/20">
+                    <UserCheck className="h-4 w-4 text-green-600 shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold italic truncate">{conferenteSession.name}</p>
+                      <p className="text-[10px] text-muted-foreground">Conferente</p>
+                    </div>
+                    <Button variant="ghost" size="sm" className="ml-auto h-6 text-xs px-2" onClick={() => {
+                      if (conferenteSession?.id) releaseSession(conferenteSession.id);
+                      setConferenteSession(null);
+                    }}>
+                      Trocar
+                    </Button>
+                  </div>
+                ) : (
+                  <Select
+                    open={conferenteSelectOpen}
+                    onOpenChange={setConferenteSelectOpen}
+                    onValueChange={(val) => {
+                      const c = conferentes.find(c => c.id === val);
+                      if (c) {
+                        setConferenteSession({ id: c.id, name: c.name });
+                        claimSession(c.id);
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-full font-semibold italic gap-2 bg-green-500/10 border-green-500/20 text-green-700 hover:bg-green-500/20">
+                      <UserCheck className="h-4 w-4" />
+                      <SelectValue placeholder="Selecionar Conferente" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {conferentes.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
-            ) : (
-              <Select
-                open={conferenteSelectOpen}
-                onOpenChange={setConferenteSelectOpen}
-                onValueChange={(val) => {
-                  const c = conferentes.find(c => c.id === val);
-                  if (c) {
-                    setConferenteSession({ id: c.id, name: c.name });
-                    claimSession(c.id);
-                  }
-                }}
-              >
-                <SelectTrigger className="w-full font-semibold italic gap-2 bg-green-500/10 border-green-500/20 text-green-700 hover:bg-green-500/20">
-                  <UserCheck className="h-4 w-4" />
-                  <SelectValue placeholder="Selecionar Conferente" />
-                </SelectTrigger>
-                <SelectContent>
-                  {conferentes.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          </div>
+            </>
+          )}
 
           <SidebarGroup>
             <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
@@ -225,10 +245,10 @@ const DashboardSidebar = () => {
             </SidebarGroupContent>
           </SidebarGroup>
 
-          {managerSession && (
+          {showManagerMenu && (
             <SidebarGroup>
               <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
-                Gerente
+                {isDirector ? "Gestão" : "Gerente"}
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
@@ -256,6 +276,35 @@ const DashboardSidebar = () => {
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
                         <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          )}
+
+          {/* BI Consolidado — only for directors */}
+          {isDirector && (
+            <SidebarGroup>
+              <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
+                BI Consolidado
+              </SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {biMenuItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton asChild>
+                        <NavLink
+                          to={item.url}
+                          end
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
+                          activeClassName="bg-primary/10 text-primary"
+                          onClick={() => setOpenMobile(false)}
+                        >
+                          <item.icon className="h-4 w-4 shrink-0" />
+                          <span>{item.title}</span>
+                        </NavLink>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
