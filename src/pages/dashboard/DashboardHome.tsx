@@ -615,8 +615,8 @@ const DashboardHome = () => {
       </div>
 
       {/* Métricas e Gráficos BI */}
-      <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
-      <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
+      <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} allUnitIds={allUnitIds} />
+      <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} allUnitIds={allUnitIds} />
 
       <SystemUpdates />
 
