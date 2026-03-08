@@ -61,14 +61,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     todayTbrCount = Number(rpcCount ?? 0);
 
-    // Add returns (piso+ps+rto) to reflect total originally scanned
-    const [pisoCountRes, psCountRes, rtoCountRes] = await Promise.all([
-      supabase.from("piso_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-      supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-      supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-    ]);
-    const totalReturns = (pisoCountRes.count ?? 0) + (psCountRes.count ?? 0) + (rtoCountRes.count ?? 0);
-    todayTbrCount += totalReturns;
+    // RPC already includes returns (piso+ps+rto) linked to same rides
 
     setMetrics({
       todayRides: ridesRes.count ?? 0,
