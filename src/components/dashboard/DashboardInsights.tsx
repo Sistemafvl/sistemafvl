@@ -293,7 +293,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Clock className="h-5 w-5 text-green-500" />
-            <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{avgLoadTime || "—"}</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Tempo Médio Carregamento <InfoButton text="Tempo médio entre início e fim do carregamento." /></span>
           </CardContent>
         </Card>
