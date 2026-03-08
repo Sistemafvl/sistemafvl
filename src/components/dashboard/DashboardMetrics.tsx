@@ -61,14 +61,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     todayTbrCount = Number(rpcCount ?? 0);
 
-    // Add returns (piso+ps+rto) to reflect total originally scanned
-    const [pisoCountRes, psCountRes, rtoCountRes] = await Promise.all([
-      supabase.from("piso_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-      supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-      supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("created_at", todayStart).lte("created_at", effectiveTodayEnd),
-    ]);
-    const totalReturns = (pisoCountRes.count ?? 0) + (psCountRes.count ?? 0) + (rtoCountRes.count ?? 0);
-    todayTbrCount += totalReturns;
+    // RPC already includes returns (piso+ps+rto) linked to same rides
 
     setMetrics({
       todayRides: ridesRes.count ?? 0,
@@ -238,7 +231,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
   const INFO_TEXTS: Record<string, string> = {
     "Carregamentos": "Total de carregamentos realizados no período. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
-    "TBRs escaneados": "Total de pacotes (TBRs) bipados no período, incluindo os que retornaram como insucesso, PS ou RTO. Representa tudo que foi conferido.",
+    "TBRs escaneados": "Total de pacotes originalmente bipados na conferência. Cada TBR é contado apenas uma vez, mesmo que tenha retornado como insucesso, PS ou RTO.",
     "PS abertos": "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolução manual.",
     "RTO abertos": "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuição.",
     "Insucessos abertos": "Pacotes que retornaram ao piso da unidade sem serem entregues.",
