@@ -118,7 +118,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
     let filteredTbrs: { scanned_at: string | null; ride_id: string }[] = [];
     if (unitRideIds.length > 0) {
-      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       filteredTbrs = await fetchAllRowsWithIn<{ scanned_at: string | null; ride_id: string }>(
         (ids) => (from, to) =>
           supabase.from("ride_tbrs").select("scanned_at, ride_id").in("ride_id", ids).order("id").range(from, to),
