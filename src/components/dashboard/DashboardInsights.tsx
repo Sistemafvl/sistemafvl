@@ -4,7 +4,7 @@ import { fetchAllRows } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { getBrazilDayRange } from "@/lib/utils";
 import { ALL_UNITS_ID } from "@/lib/unit-filter";
