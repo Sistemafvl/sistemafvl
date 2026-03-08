@@ -8,7 +8,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
-import { fetchAllRows } from "@/lib/supabase-helpers";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 
 interface Props {
   unitId: string;
@@ -105,20 +105,29 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
-    // Line chart - TBRs per day
-    const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
-    const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
-
-    const allTbrs = await fetchAllRows<{ scanned_at: string | null; ride_id: string; code: string }>((from, to) =>
-      supabase.from("ride_tbrs").select("scanned_at, ride_id, code")
-        .gte("scanned_at", rangeStart).lte("scanned_at", rangeEnd)
-        .range(from, to)
+    // Line chart - TBRs per day (filter rides by unit+date first, then get their TBRs)
+    const unitRidesInRange = await fetchAllRows<{ id: string; completed_at: string }>((from, to) =>
+      supabase.from("driver_rides").select("id, completed_at")
+        .eq("unit_id", unitId)
+        .gte("completed_at", rangeStart)
+        .lte("completed_at", rangeEnd)
+        .neq("loading_status", "cancelled")
+        .order("id").range(from, to)
     );
+    const unitRideIds = unitRidesInRange.map(r => r.id);
 
-    const filtered = allTbrs.filter(t => unitRideSet.has(t.ride_id));
+    let filteredTbrs: { scanned_at: string | null; ride_id: string }[] = [];
+    if (unitRideIds.length > 0) {
+      filteredTbrs = await fetchAllRowsWithIn<{ scanned_at: string | null; ride_id: string }>(
+        (ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("scanned_at, ride_id").in("ride_id", ids).order("id").range(from, to),
+        unitRideIds
+      );
+    }
+
     const tbrsByDay: Record<string, number> = {};
     days.forEach(d => tbrsByDay[d] = 0);
-    filtered.forEach(t => {
+    filteredTbrs.forEach(t => {
       if (!t.scanned_at) return;
       const d = toBrazilDateStr(t.scanned_at);
       if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
@@ -138,15 +147,14 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     );
 
     if (finishedRides.length > 0) {
-      const rideIds = finishedRides.map(r => r.driver_id + "_placeholder");
-      // Get TBR counts per ride
+      // Get ride IDs with driver mapping
       const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
         supabase.from("driver_rides").select("id, driver_id")
           .eq("unit_id", unitId)
           .eq("loading_status", "finished")
           .gte("completed_at", rangeStart)
           .lte("completed_at", rangeEnd)
-          .range(from, to)
+          .order("id").range(from, to)
       );
       
       const driverRideIds: Record<string, string[]> = {};
@@ -156,9 +164,12 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       });
 
       const allRideIds = rideIdsList.map(r => r.id);
-      // Count TBRs per ride using batch
-      const tbrCounts = await fetchAllRows<{ ride_id: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("ride_id").in("ride_id", allRideIds).range(from, to)
+      
+      // Count TBRs per ride using chunked queries
+      const tbrCounts = await fetchAllRowsWithIn<{ ride_id: string }>(
+        (ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+        allRideIds
       );
 
       const tbrCountByRide: Record<string, number> = {};
@@ -168,14 +179,17 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
       // Fetch returns (piso, ps, rto) to discount from totals
       const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("piso_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ps_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
-        fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("rto_entries").select("ride_id").in("ride_id", allRideIds).range(from, to)
+        fetchAllRowsWithIn<{ ride_id: string }>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          allRideIds
         ),
       ]);
 
