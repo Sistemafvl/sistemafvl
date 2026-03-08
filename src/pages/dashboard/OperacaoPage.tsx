@@ -36,6 +36,7 @@ interface DriverCard {
   total_tbrs: number;
   piso_returns: number;
   all_returns: number;
+  piso_only_returns: number;
 }
 
 interface TbrDetail {
