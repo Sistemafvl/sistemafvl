@@ -109,8 +109,14 @@ const DashboardHome = () => {
     if (!unitSession?.id) return;
     const fetchDnr = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      let q = supabase.from("dnr_entries").select("status, dnr_value").order("id");
+      if (isAllUnits && allUnitIds.length > 0) {
+        q = q.in("unit_id", allUnitIds);
+      } else {
+        q = q.eq("unit_id", unitSession.id);
+      }
       const all = await fetchAllRows<{ status: string; dnr_value: number }>((from, to) =>
-        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id).order("id").range(from, to)
+        q.range(from, to)
       );
       const open = all.filter(e => e.status === "open");
       const analyzing = all.filter(e => e.status === "analyzing");
@@ -120,7 +126,7 @@ const DashboardHome = () => {
       setDnrClosed(closed.length);
     };
     fetchDnr();
-  }, [unitSession?.id]);
+  }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   const handleTbrKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && tbrSearch.trim()) {
