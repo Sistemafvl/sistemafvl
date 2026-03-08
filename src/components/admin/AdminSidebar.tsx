@@ -1,4 +1,4 @@
-import { ShieldCheck, LayoutDashboard, Globe, Users, Building2, LogOut } from "lucide-react";
+import { ShieldCheck, LayoutDashboard, Globe, Users, Building2, LogOut, Truck, Database, Shield } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
