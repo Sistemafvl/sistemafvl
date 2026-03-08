@@ -59,8 +59,6 @@ const InsucessoBalloon = () => {
 
   useEffect(() => {
     fetchInsucessos();
-    const interval = setInterval(fetchInsucessos, 60000);
-    return () => clearInterval(interval);
   }, [fetchInsucessos]);
 
   // Realtime: when a ride_tbr is inserted, refetch
