@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye, Download } from "lucide-react";
+import { CalendarIcon, FileText, BarChart3, RotateCcw, Trophy, Loader2, Search, X, Eye, Download, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -20,6 +20,8 @@ import PayrollReportContent, { type DriverPayrollData } from "./reports/PayrollR
 import DailySummaryReportContent, { type DailySummaryRow } from "./reports/DailySummaryReportContent";
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
 import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
+import FormatChoiceModal from "@/components/dashboard/FormatChoiceModal";
+import { generatePayrollExcel } from "./reports/generatePayrollExcel";
 import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
 } from "@/components/ui/table";
@@ -38,6 +40,8 @@ const RelatoriosPage = () => {
   // Modal state
   const [payrollMode, setPayrollMode] = useState<"consult" | "espelho" | "gerar" | null>(null);
   const [savingPayroll, setSavingPayroll] = useState(false);
+  const [formatChoiceOpen, setFormatChoiceOpen] = useState(false);
+  const [formatChoiceAction, setFormatChoiceAction] = useState<"espelho" | "gerar" | null>(null);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -91,6 +95,36 @@ const RelatoriosPage = () => {
       toast({ title: "Erro", description: "Erro ao buscar dados.", variant: "destructive" });
     }
     setLoading(null);
+  };
+
+  // Save to DB + mark DNRs only (no PDF)
+  const handleConfirmAndGenerateDB = async () => {
+    if (!unitId || !payrollData) return;
+    setSavingPayroll(true);
+    try {
+      const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
+        unit_id: unitId, generated_by: generatedBy,
+        period_start: format(startDate, "yyyy-MM-dd"), period_end: format(endDate, "yyyy-MM-dd"),
+        report_data: payrollData,
+      } as any).select("id").single();
+      if (savedReport && (savedReport as any).id) {
+        const reportId = (savedReport as any).id;
+        const { data: usedDnrs } = await supabase.from("dnr_entries").select("id")
+          .eq("unit_id", unitId).eq("status", "closed").eq("discounted", true)
+          .is("reported_in_payroll_id" as any, null)
+          .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
+        if (usedDnrs?.length) {
+          for (const dnr of usedDnrs) {
+            await supabase.from("dnr_entries").update({ reported_in_payroll_id: reportId } as any).eq("id", dnr.id);
+          }
+        }
+      }
+      toast({ title: "Relatório salvo!", description: "Folha de pagamento registrada com sucesso." });
+      setPayrollMode(null);
+    } catch {
+      toast({ title: "Erro", description: "Erro ao salvar relatório.", variant: "destructive" });
+    }
+    setSavingPayroll(false);
   };
 
   // Save to DB + mark DNRs + generate PDF
@@ -657,13 +691,13 @@ const RelatoriosPage = () => {
                 </p>
               </div>
               {payrollMode === "espelho" && (
-                <Button size="sm" className="gap-2 shrink-0" onClick={handleDownloadPDF} disabled={savingPayroll}>
+                <Button size="sm" className="gap-2 shrink-0" onClick={() => { setFormatChoiceAction("espelho"); setFormatChoiceOpen(true); }} disabled={savingPayroll}>
                   {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-                  Baixar PDF
+                  Baixar Relatório
                 </Button>
               )}
               {payrollMode === "gerar" && (
-                <Button size="sm" className="gap-2 shrink-0" onClick={handleConfirmAndGenerate} disabled={savingPayroll}>
+                <Button size="sm" className="gap-2 shrink-0" onClick={() => { setFormatChoiceAction("gerar"); setFormatChoiceOpen(true); }} disabled={savingPayroll}>
                   {savingPayroll ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
                   Confirmar e Gerar
                 </Button>
@@ -773,6 +807,30 @@ const RelatoriosPage = () => {
           </div>
         </div>
       )}
+      {/* Format Choice Modal */}
+      <FormatChoiceModal
+        open={formatChoiceOpen}
+        onClose={() => { setFormatChoiceOpen(false); setFormatChoiceAction(null); }}
+        onChoose={async (fmt) => {
+          setFormatChoiceOpen(false);
+          if (fmt === "excel" && payrollData) {
+            generatePayrollExcel(payrollData, unitName, startDate, endDate);
+            toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
+            if (formatChoiceAction === "gerar") {
+              // Still save to DB + mark DNRs for "gerar" mode
+              await handleConfirmAndGenerateDB();
+            }
+          } else {
+            if (formatChoiceAction === "espelho") {
+              await handleDownloadPDF();
+            } else if (formatChoiceAction === "gerar") {
+              await handleConfirmAndGenerate();
+            }
+          }
+          setFormatChoiceAction(null);
+        }}
+        title={formatChoiceAction === "gerar" ? "Formato da Folha" : "Formato do Espelho"}
+      />
     </>
   );
 };
