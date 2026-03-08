@@ -231,7 +231,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
   const INFO_TEXTS: Record<string, string> = {
     "Carregamentos": "Total de carregamentos realizados no período. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
-    "TBRs escaneados": "Total de pacotes (TBRs) bipados no período, incluindo os que retornaram como insucesso, PS ou RTO. Representa tudo que foi conferido.",
+    "TBRs escaneados": "Total de pacotes originalmente bipados na conferência. Cada TBR é contado apenas uma vez, mesmo que tenha retornado como insucesso, PS ou RTO.",
     "PS abertos": "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolução manual.",
     "RTO abertos": "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuição.",
     "Insucessos abertos": "Pacotes que retornaram ao piso da unidade sem serem entregues.",
