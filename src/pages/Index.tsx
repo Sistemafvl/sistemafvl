@@ -2,12 +2,14 @@ import { useState, useEffect } from "react";
 import LogoHeader from "@/components/LogoHeader";
 import UnitLoginForm from "@/components/UnitLoginForm";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
+import AdminLoginModal from "@/components/AdminLoginModal";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Truck, Download, X } from "lucide-react";
 import { useTheme } from "next-themes";
 import { usePwaInstall } from "@/hooks/use-pwa-install";
+import { useTripleClick } from "@/hooks/use-triple-click";
 
 const Index = () => {
   const { setTheme } = useTheme();
@@ -19,8 +21,12 @@ const Index = () => {
     setTheme("light");
   }, [setTheme]);
   const [showDriverModal, setShowDriverModal] = useState(false);
-  const { unitSession } = useAuthStore();
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const { unitSession, isMasterAdmin } = useAuthStore();
 
+  const handleTripleClick = useTripleClick(() => setShowAdminModal(true));
+
+  if (isMasterAdmin) return <Navigate to="/admin" replace />;
   if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
   if (unitSession?.sessionType === "matriz") return <Navigate to="/dashboard" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
@@ -30,7 +36,7 @@ const Index = () => {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
       <div className="w-full max-w-sm space-y-6 sm:space-y-8">
-        <LogoHeader size="xl" />
+        <LogoHeader size="xl" onTripleClick={handleTripleClick} />
 
         <div className="text-center">
           <h1 className="text-xl font-bold italic text-foreground tracking-tight">
@@ -81,6 +87,7 @@ const Index = () => {
       </div>
 
       <DriverRegistrationModal open={showDriverModal} onOpenChange={setShowDriverModal} />
+      <AdminLoginModal open={showAdminModal} onOpenChange={setShowAdminModal} />
     </div>
   );
 };

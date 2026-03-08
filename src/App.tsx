@@ -107,6 +107,12 @@ const App = () => (
             <Route path="financeiro" element={<MatrizFinanceiro />} />
             <Route path="ocorrencias" element={<MatrizOcorrencias />} />
           </Route>
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminOverviewPage />} />
+            <Route path="dominios" element={<DomainsUnitsPage />} />
+            <Route path="gerentes" element={<ManagersPage />} />
+            <Route path="diretores" element={<DirectorsPage />} />
+          </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
