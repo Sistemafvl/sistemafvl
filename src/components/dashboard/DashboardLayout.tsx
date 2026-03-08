@@ -38,11 +38,9 @@ const DashboardLayout = () => {
   if (unitSession.sessionType === "driver") {
     return <Navigate to="/motorista" replace />;
   }
-  if (unitSession.sessionType === "matriz") {
-    return <Navigate to="/matriz" replace />;
-  }
 
-  const hasAccess = !!managerSession || !!conferenteSession;
+  const isDirector = unitSession.sessionType === "matriz";
+  const hasAccess = isDirector || !!managerSession || !!conferenteSession;
 
   return (
     <SidebarProvider>

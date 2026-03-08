@@ -25,20 +25,26 @@ interface ConferenteSession {
   name: string;
 }
 
+interface DomainUnit {
+  id: string;
+  name: string;
+}
+
 interface AuthState {
-  // Unit session
   unitSession: UnitSession | null;
   setUnitSession: (session: UnitSession | null) => void;
 
-  // Manager session
   managerSession: ManagerSession | null;
   setManagerSession: (session: ManagerSession | null) => void;
 
-  // Conferente session
   conferenteSession: ConferenteSession | null;
   setConferenteSession: (session: ConferenteSession | null) => void;
 
-  // Logout
+  // Director: domain units for switching
+  domainUnits: DomainUnit[];
+  setDomainUnits: (units: DomainUnit[]) => void;
+  setActiveUnit: (unitId: string, unitName: string) => void;
+
   logout: () => void;
 }
 
@@ -51,13 +57,23 @@ export const useAuthStore = create<AuthState>()(
       setManagerSession: (session) => set({ managerSession: session }),
       conferenteSession: null,
       setConferenteSession: (session) => set({ conferenteSession: session }),
-      logout: () => set({ unitSession: null, managerSession: null, conferenteSession: null }),
+      domainUnits: [],
+      setDomainUnits: (units) => set({ domainUnits: units }),
+      setActiveUnit: (unitId, unitName) => set((state) => ({
+        unitSession: state.unitSession ? {
+          ...state.unitSession,
+          id: unitId,
+          name: unitName,
+        } : null,
+      })),
+      logout: () => set({ unitSession: null, managerSession: null, conferenteSession: null, domainUnits: [] }),
     }),
     {
       name: "fvl-auth",
       partialize: (state) => ({
         unitSession: state.unitSession,
         conferenteSession: state.conferenteSession,
+        domainUnits: state.domainUnits,
       }),
     }
   )
