@@ -4,7 +4,7 @@ import { fetchAllRows } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { getBrazilDayRange } from "@/lib/utils";
 import { ALL_UNITS_ID } from "@/lib/unit-filter";
@@ -40,6 +40,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
   const [returnRate, setReturnRate] = useState(0);
   const [avgLoadTime, setAvgLoadTime] = useState("");
   const [bestDay, setBestDay] = useState("");
+  const [loading, setLoading] = useState(true);
 
   // Pagination
   const [driverPage, setDriverPage] = useState(0);
@@ -199,10 +200,11 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     setConfPage(0);
   }, [unitId, getSince, getUntil, applyFilter]);
 
-  useEffect(() => { fetchInsights(); }, [fetchInsights]);
-  useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
-  useEffect(() => { fetchTopReturns(); }, [fetchTopReturns]);
-  useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchInsights(), fetchTopDrivers(), fetchTopReturns(), fetchTopConferentes()])
+      .finally(() => setLoading(false));
+  }, [fetchInsights, fetchTopDrivers, fetchTopReturns, fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
     title, icon: Icon, data, color, page, setPage, infoText,
@@ -259,6 +261,14 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
       </Card>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
