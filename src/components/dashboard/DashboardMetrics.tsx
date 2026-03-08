@@ -46,43 +46,54 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
   }, [isAll, effectiveIds, unitId]);
 
   const fetchAll = useCallback(async () => {
+    const requestId = ++metricsRequestRef.current;
     setLoading(true);
-    const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
-    const globalEnd = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
-    const { start: todayStart, end: todayEnd } = globalStart
-      ? getBrazilDayRange(globalStart)
-      : getBrazilDayRange();
-    const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
+    try {
+      const globalStart = startDate ? format(startDate, "yyyy-MM-dd") : undefined;
+      const globalEnd = endDate ? format(endDate, "yyyy-MM-dd") : undefined;
 
-    const [ridesRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
-      applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
-      applyFilter(supabase.from("ps_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
-      applyFilter(supabase.from("rto_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
-      applyFilter(supabase.from("piso_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
-      applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).eq("loading_status", "loading"),
-    ]);
+      const { start: todayStart, end: todayEnd } = globalStart
+        ? getBrazilDayRange(globalStart)
+        : getBrazilDayRange();
+      const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
 
-    // Use RPC for accurate TBR count (no 1000 limit) - sum across units if "all"
-    let todayTbrCount = 0;
-    for (const uid of effectiveIds) {
-      const { data: rpcCount } = await supabase.rpc("get_unit_tbr_count", {
-        p_unit_id: uid,
-        p_start: todayStart,
-        p_end: effectiveTodayEnd,
+      const [ridesRes, psRes, rtoRes, pisoRes, loadingRes, rpcResults] = await Promise.all([
+        applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
+        applyFilter(supabase.from("ps_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+        applyFilter(supabase.from("rto_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+        applyFilter(supabase.from("piso_entries").select("id", { count: "exact", head: true })).eq("status", "open"),
+        applyFilter(supabase.from("driver_rides").select("id", { count: "exact", head: true })).eq("loading_status", "loading"),
+        Promise.all(
+          effectiveIds.map((uid) =>
+            supabase.rpc("get_unit_tbr_count", {
+              p_unit_id: uid,
+              p_start: todayStart,
+              p_end: effectiveTodayEnd,
+            })
+          )
+        ),
+      ]);
+
+      const todayTbrCount = rpcResults.reduce((sum, result) => sum + Number(result.data ?? 0), 0);
+
+      if (requestId !== metricsRequestRef.current) return;
+
+      setMetrics({
+        todayRides: ridesRes.count ?? 0,
+        todayTbrs: todayTbrCount,
+        openPs: psRes.count ?? 0,
+        openRto: rtoRes.count ?? 0,
+        openPiso: pisoRes.count ?? 0,
+        activeLoading: loadingRes.count ?? 0,
       });
-      todayTbrCount += Number(rpcCount ?? 0);
+    } catch (error) {
+      console.warn("[DashboardMetrics] erro ao carregar indicadores", error);
+    } finally {
+      if (requestId === metricsRequestRef.current) {
+        setLoading(false);
+      }
     }
-
-    setMetrics({
-      todayRides: ridesRes.count ?? 0,
-      todayTbrs: todayTbrCount,
-      openPs: psRes.count ?? 0,
-      openRto: rtoRes.count ?? 0,
-      openPiso: pisoRes.count ?? 0,
-      activeLoading: loadingRes.count ?? 0,
-    });
-    setLoading(false);
   }, [unitId, startDate, endDate, applyFilter, effectiveIds]);
 
   // Fetch chart data using global dates only
