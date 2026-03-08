@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
-import { UserCheck } from "lucide-react";
+import { UserCheck, Crown } from "lucide-react";
 import InsucessoBalloon from "./InsucessoBalloon";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
