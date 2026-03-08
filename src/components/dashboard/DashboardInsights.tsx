@@ -286,7 +286,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
         <Card>
           <CardContent className="p-4 flex flex-col items-center text-center gap-1">
             <Percent className="h-5 w-5 text-orange-500" />
-            <span className="text-2xl font-bold italic">{returnRate}%</span>
+            {loading ? <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /> : <span className="text-2xl font-bold italic">{returnRate}%</span>}
             <span className="text-xs text-muted-foreground leading-tight flex items-center justify-center">Taxa de Retorno <InfoButton text="Percentual de TBRs que retornaram em relação ao total escaneado." /></span>
           </CardContent>
         </Card>
