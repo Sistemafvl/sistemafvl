@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
-import { Truck, Eye, EyeOff, Search, Loader2, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { Truck, Eye, Search, Loader2, Trash2, ToggleLeft, ToggleRight, EyeOff, User, Car, MapPin, Landmark, KeyRound } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { format } from "date-fns";
 
 type Driver = {
   id: string;
@@ -17,9 +20,32 @@ type Driver = {
   password: string;
   active: boolean;
   created_at: string;
+  email: string | null;
+  whatsapp: string | null;
+  cep: string | null;
+  address: string | null;
+  house_number: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  state: string | null;
+  bank_name: string | null;
+  bank_agency: string | null;
+  bank_account: string | null;
+  pix_key: string | null;
+  pix_key_type: string | null;
+  pix_key_name: string | null;
+  avatar_url: string | null;
+  bio: string | null;
 };
 
 const PAGE_SIZE = 20;
+
+const DetailRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
+  <div className="flex justify-between py-1">
+    <span className="text-xs text-muted-foreground">{label}</span>
+    <span className="text-xs font-medium text-right max-w-[60%] break-all">{value || "—"}</span>
+  </div>
+);
 
 const AdminDriversPage = () => {
   const [drivers, setDrivers] = useState<Driver[]>([]);
@@ -27,13 +53,14 @@ const AdminDriversPage = () => {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
   const [total, setTotal] = useState(0);
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [selectedDriver, setSelectedDriver] = useState<Driver | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchDrivers = async () => {
     setLoading(true);
     let query = supabase
       .from("drivers")
-      .select("id, name, cpf, car_plate, car_model, car_color, password, active, created_at", { count: "exact" })
+      .select("*", { count: "exact" })
       .order("created_at", { ascending: false })
       .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
 
@@ -52,14 +79,6 @@ const AdminDriversPage = () => {
   };
 
   useEffect(() => { fetchDrivers(); }, [page, search]);
-
-  const togglePassword = (id: string) => {
-    setVisiblePasswords((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
 
   const toggleActive = async (driver: Driver) => {
     const { error } = await supabase
@@ -90,9 +109,7 @@ const AdminDriversPage = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center justify-between">
-            <span>{total} motoristas cadastrados</span>
-          </CardTitle>
+          <CardTitle className="text-base">{total} motoristas cadastrados</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="relative max-w-sm">
@@ -119,7 +136,6 @@ const AdminDriversPage = () => {
                       <TableHead>CPF</TableHead>
                       <TableHead>Placa</TableHead>
                       <TableHead>Modelo</TableHead>
-                      <TableHead>Senha</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead className="text-right">Ações</TableHead>
                     </TableRow>
@@ -132,22 +148,15 @@ const AdminDriversPage = () => {
                         <TableCell className="font-mono">{d.car_plate}</TableCell>
                         <TableCell>{d.car_model} {d.car_color && `(${d.car_color})`}</TableCell>
                         <TableCell>
-                          <div className="flex items-center gap-1">
-                            <span className="font-mono text-xs">
-                              {visiblePasswords.has(d.id) ? d.password : "••••••"}
-                            </span>
-                            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => togglePassword(d.id)}>
-                              {visiblePasswords.has(d.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-                            </Button>
-                          </div>
-                        </TableCell>
-                        <TableCell>
                           <span className={`text-xs font-bold ${d.active ? "text-green-600" : "text-red-500"}`}>
                             {d.active ? "Ativo" : "Inativo"}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setSelectedDriver(d); setShowPassword(false); }} title="Ver detalhes">
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => toggleActive(d)} title={d.active ? "Desativar" : "Ativar"}>
                               {d.active ? <ToggleRight className="h-4 w-4 text-green-600" /> : <ToggleLeft className="h-4 w-4 text-muted-foreground" />}
                             </Button>
@@ -160,7 +169,7 @@ const AdminDriversPage = () => {
                     ))}
                     {drivers.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                        <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                           Nenhum motorista encontrado
                         </TableCell>
                       </TableRow>
@@ -171,16 +180,10 @@ const AdminDriversPage = () => {
 
               {totalPages > 1 && (
                 <div className="flex items-center justify-between pt-2">
-                  <p className="text-xs text-muted-foreground">
-                    Página {page + 1} de {totalPages}
-                  </p>
+                  <p className="text-xs text-muted-foreground">Página {page + 1} de {totalPages}</p>
                   <div className="flex gap-2">
-                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
-                      Anterior
-                    </Button>
-                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
-                      Próxima
-                    </Button>
+                    <Button variant="outline" size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>Anterior</Button>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>Próxima</Button>
                   </div>
                 </div>
               )}
@@ -188,6 +191,108 @@ const AdminDriversPage = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Driver Details Modal */}
+      <Dialog open={!!selectedDriver} onOpenChange={(open) => { if (!open) setSelectedDriver(null); }}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User className="h-4 w-4" />
+              {selectedDriver?.name}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedDriver && (
+            <div className="space-y-4">
+              {/* Personal */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <User className="h-3 w-3" /> Dados Pessoais
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <DetailRow label="Nome" value={selectedDriver.name} />
+                  <DetailRow label="CPF" value={selectedDriver.cpf} />
+                  <DetailRow label="Email" value={selectedDriver.email} />
+                  <DetailRow label="WhatsApp" value={selectedDriver.whatsapp} />
+                  <DetailRow label="Bio" value={selectedDriver.bio} />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Vehicle */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Car className="h-3 w-3" /> Veículo
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <DetailRow label="Placa" value={selectedDriver.car_plate} />
+                  <DetailRow label="Modelo" value={selectedDriver.car_model} />
+                  <DetailRow label="Cor" value={selectedDriver.car_color} />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Address */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <MapPin className="h-3 w-3" /> Endereço
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <DetailRow label="CEP" value={selectedDriver.cep} />
+                  <DetailRow label="Endereço" value={selectedDriver.address} />
+                  <DetailRow label="Número" value={selectedDriver.house_number} />
+                  <DetailRow label="Bairro" value={selectedDriver.neighborhood} />
+                  <DetailRow label="Cidade" value={selectedDriver.city} />
+                  <DetailRow label="Estado" value={selectedDriver.state} />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Banking */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Landmark className="h-3 w-3" /> Dados Bancários
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <DetailRow label="Banco" value={selectedDriver.bank_name} />
+                  <DetailRow label="Agência" value={selectedDriver.bank_agency} />
+                  <DetailRow label="Conta" value={selectedDriver.bank_account} />
+                  <DetailRow label="Tipo PIX" value={selectedDriver.pix_key_type} />
+                  <DetailRow label="Chave PIX" value={selectedDriver.pix_key} />
+                  <DetailRow label="Nome PIX" value={selectedDriver.pix_key_name} />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Password & Meta */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <KeyRound className="h-3 w-3" /> Credenciais
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <div className="flex justify-between py-1 items-center">
+                    <span className="text-xs text-muted-foreground">Senha</span>
+                    <div className="flex items-center gap-1">
+                      <span className="font-mono text-xs font-medium">
+                        {showPassword ? selectedDriver.password : "••••••••"}
+                      </span>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => setShowPassword(!showPassword)}>
+                        {showPassword ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                      </Button>
+                    </div>
+                  </div>
+                  <DetailRow label="Status" value={selectedDriver.active ? "Ativo" : "Inativo"} />
+                  <DetailRow label="Cadastrado em" value={format(new Date(selectedDriver.created_at), "dd/MM/yyyy HH:mm")} />
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
