@@ -167,6 +167,18 @@ const OperacaoPage = () => {
     const allReturnCounts: Record<string, number> = {};
     Object.entries(allReturnTbrSets).forEach(([rideId, set]) => { allReturnCounts[rideId] = set.size; });
 
+    // Count PISO-ONLY returns per ride (for Insucessos card)
+    const pisoOnlyTbrSets: Record<string, Set<string>> = {};
+    pisoData.forEach((p: any) => {
+      const upperCode = p.tbr_code?.toUpperCase();
+      if (p.ride_id && upperCode) {
+        if (!pisoOnlyTbrSets[p.ride_id]) pisoOnlyTbrSets[p.ride_id] = new Set();
+        pisoOnlyTbrSets[p.ride_id].add(upperCode);
+      }
+    });
+    const pisoOnlyCounts: Record<string, number> = {};
+    Object.entries(pisoOnlyTbrSets).forEach(([rideId, set]) => { pisoOnlyCounts[rideId] = set.size; });
+
   
 
     const result: DriverCard[] = rides.map((r) => {
@@ -189,7 +201,7 @@ const OperacaoPage = () => {
         total_tbrs: tbrCounts[r.id] ?? 0,
         piso_returns: issueCounts[r.id] ?? 0,
         all_returns: allReturnCounts[r.id] ?? 0,
-        
+        piso_only_returns: pisoOnlyCounts[r.id] ?? 0,
       };
     });
 
@@ -200,9 +212,9 @@ const OperacaoPage = () => {
   const totalCarregamentos = cards.length;
   const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
   const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalLidos = totalTbrsAtual; // Apenas concluídos (ride_tbrs ativos)
-  const totalOriginal = totalTbrsAtual + totalAllReturns; // Para cálculo de performance
-  const performanceRate = totalOriginal > 0 ? ((totalTbrsAtual / totalOriginal) * 100).toFixed(1) : "100";
+  const totalPisoReturns = cards.reduce((s, c) => s + c.piso_only_returns, 0);
+  const totalLidos = totalTbrsAtual + totalAllReturns; // Total original bipado (ride_tbrs + retornos removidos)
+  const performanceRate = totalLidos > 0 ? ((totalTbrsAtual / totalLidos) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>
