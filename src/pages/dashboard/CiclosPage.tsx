@@ -39,6 +39,7 @@ interface DayMetrics {
   totalRides: number;
   totalTbrs: number;
   totalReturns: number;
+  totalScanned: number;
   finishedRides: number;
   avgLoadingMinutes: number | null;
   avgPerTbr: number | null;
@@ -76,6 +77,13 @@ const CiclosPage = () => {
 
   const computeMetrics = useCallback(async (date: string, unitId: string): Promise<DayMetrics> => {
     const { start: dayStart, end: dayEnd } = getBrazilDayRange(date);
+
+    // Fetch canonical scanned count via RPC (same logic as Dashboard)
+    const rpcPromise = supabase.rpc("get_unit_tbr_count", {
+      p_unit_id: unitId,
+      p_start: dayStart,
+      p_end: dayEnd,
+    });
 
     const { data: rides } = await supabase
       .from("driver_rides")
@@ -116,7 +124,6 @@ const CiclosPage = () => {
       totalTbrs = tbrsData.length;
       const pisoData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
 
-      // Count ALL unique return TBR codes per ride (regardless of whether still in ride_tbrs)
       const returnSet = new Set<string>();
       [...pisoData, ...psData, ...rtoData].forEach((e: any) => {
         if (e.ride_id && e.tbr_code) {
@@ -125,6 +132,10 @@ const CiclosPage = () => {
       });
       totalReturns = returnSet.size;
     }
+
+    // Wait for canonical RPC result
+    const { data: rpcCount } = await rpcPromise;
+    const totalScanned = typeof rpcCount === "number" ? rpcCount : totalTbrs + totalReturns;
 
     // Avg loading time
     const loadingTimes = rideList
@@ -161,6 +172,7 @@ const CiclosPage = () => {
       totalRides: rideList.length,
       totalTbrs,
       totalReturns,
+      totalScanned,
       finishedRides,
       avgLoadingMinutes,
       avgPerTbr,
@@ -255,7 +267,7 @@ const CiclosPage = () => {
     const payload = {
       unit_id: unitSession.id,
       record_date: dateStr,
-      qtd_pacotes: record.qtd_pacotes,
+      qtd_pacotes: metrics?.totalScanned ?? record.qtd_pacotes,
       qtd_pacotes_informado: record.qtd_pacotes_informado,
       abertura_galpao: record.abertura_galpao || null,
       hora_inicio_descarregamento: record.hora_inicio_descarregamento || null,
@@ -335,9 +347,9 @@ const CiclosPage = () => {
     }
   };
 
-  const totalOriginal = metrics ? metrics.totalTbrs + metrics.totalReturns : 0;
-  const taxaConclusao = totalOriginal > 0
-    ? (((totalOriginal - metrics!.totalReturns) / totalOriginal) * 100).toFixed(1)
+  const totalScanned = metrics ? metrics.totalScanned : 0;
+  const taxaConclusao = totalScanned > 0
+    ? ((metrics!.totalTbrs / totalScanned) * 100).toFixed(1)
     : "0";
 
   return (
@@ -386,10 +398,10 @@ const CiclosPage = () => {
                 <h3 className="font-bold italic text-sm">Informações Complementares</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold flex items-center gap-1">Qtd Pacotes (TBRs do dia) <InfoButton text="Total de pacotes bipados no dia, incluindo os que retornaram (insucesso, PS, RTO). Preenchido automaticamente." /></Label>
+                    <Label className="text-xs font-semibold flex items-center gap-1">Qtd Pacotes (TBRs do dia) <InfoButton text="Total único de pacotes processados no dia (mesma regra da Visão Geral). Preenchido automaticamente." /></Label>
                     <Input
                       type="number"
-                      value={metrics ? metrics.totalTbrs + metrics.totalReturns : 0}
+                      value={metrics ? metrics.totalScanned : 0}
                       readOnly
                       className="bg-muted"
                     />
@@ -469,9 +481,9 @@ const CiclosPage = () => {
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Package className="h-3 w-3 mx-auto text-primary" />
-                    <p className="text-base font-bold">{metrics.totalTbrs + metrics.totalReturns}</p>
-                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total TBRs Lidos <InfoButton text="Total de pacotes bipados na conferência, incluindo os que retornaram como insucesso, PS ou RTO." /></p>
-                    {prevMetrics && <DeltaBadge value={delta(metrics.totalTbrs + metrics.totalReturns, prevMetrics.totalTbrs + prevMetrics.totalReturns)} />}
+                    <p className="text-base font-bold">{metrics.totalScanned}</p>
+                    <p className="text-[9px] text-muted-foreground flex items-center justify-center gap-0.5">Total TBRs Lidos <InfoButton text="Total único de pacotes processados no dia (mesma regra da Visão Geral)." /></p>
+                    {prevMetrics && <DeltaBadge value={delta(metrics.totalScanned, prevMetrics.totalScanned)} />}
                   </div>
                   <div className="rounded-lg border p-2 text-center space-y-0.5">
                     <Truck className="h-3 w-3 mx-auto text-primary" />
@@ -524,7 +536,7 @@ const CiclosPage = () => {
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-sm">
                     <div>
                       <p className="text-xs text-muted-foreground">Qtd Pacotes (TBRs)</p>
-                      <p className="font-bold">{metrics ? metrics.totalTbrs + metrics.totalReturns : "—"}</p>
+                      <p className="font-bold">{metrics ? metrics.totalScanned : "—"}</p>
                     </div>
                     <div>
                       <p className="text-xs text-muted-foreground">VRID</p>
@@ -533,7 +545,7 @@ const CiclosPage = () => {
                     <div>
                       <p className="text-xs text-muted-foreground">Diferença</p>
                       {(() => {
-                        const diff = (record.qtd_pacotes_informado || 0) - (record.qtd_pacotes || 0);
+                        const diff = (record.qtd_pacotes_informado || 0) - (metrics?.totalScanned ?? record.qtd_pacotes ?? 0);
                         return (
                           <p className={cn("font-bold", diff > 0 ? "text-green-600" : diff < 0 ? "text-destructive" : "")}>
                             {diff > 0 ? `+${diff}` : diff === 0 ? "0" : String(diff)}
