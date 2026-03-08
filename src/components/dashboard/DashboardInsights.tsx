@@ -94,13 +94,13 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     // Return rate
     const [pisoAll, rtoAll, psAll] = await Promise.all([
       fetchAllRows<{ tbr_code: string; reason: string | null }>((from, to) =>
-        supabase.from("piso_entries").select("tbr_code, reason").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("piso_entries").select("tbr_code, reason")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("rto_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("rto_entries").select("tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
       fetchAllRows<{ tbr_code: string }>((from, to) =>
-        supabase.from("ps_entries").select("tbr_code").eq("unit_id", unitId).gte("created_at", since).order("id").range(from, to)
+        applyFilter(supabase.from("ps_entries").select("tbr_code")).gte("created_at", since).order("id").range(from, to)
       ),
     ]);
     const filteredPisoAll = pisoAll.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
