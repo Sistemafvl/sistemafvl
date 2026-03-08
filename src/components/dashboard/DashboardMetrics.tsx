@@ -114,7 +114,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
     // Line chart - TBRs per day
-    const { data: unitRides7 } = await supabase.from("driver_rides").select("id").eq("unit_id", unitId);
+    const { data: unitRides7 } = await applyFilter(supabase.from("driver_rides").select("id"));
     const unitRideSet = new Set((unitRides7 ?? []).map(r => r.id));
 
     const allTbrs = await fetchAllRows<{ scanned_at: string | null; ride_id: string; code: string }>((from, to) =>
