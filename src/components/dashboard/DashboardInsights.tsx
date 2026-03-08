@@ -201,10 +201,11 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     setConfPage(0);
   }, [unitId, getSince, getUntil, applyFilter]);
 
-  useEffect(() => { fetchInsights(); }, [fetchInsights]);
-  useEffect(() => { fetchTopDrivers(); }, [fetchTopDrivers]);
-  useEffect(() => { fetchTopReturns(); }, [fetchTopReturns]);
-  useEffect(() => { fetchTopConferentes(); }, [fetchTopConferentes]);
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([fetchInsights(), fetchTopDrivers(), fetchTopReturns(), fetchTopConferentes()])
+      .finally(() => setLoading(false));
+  }, [fetchInsights, fetchTopDrivers, fetchTopReturns, fetchTopConferentes]);
 
   const PaginatedRankingCard = ({
     title, icon: Icon, data, color, page, setPage, infoText,
