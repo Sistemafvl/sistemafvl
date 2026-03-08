@@ -97,6 +97,36 @@ const RelatoriosPage = () => {
     setLoading(null);
   };
 
+  // Save to DB + mark DNRs only (no PDF)
+  const handleConfirmAndGenerateDB = async () => {
+    if (!unitId || !payrollData) return;
+    setSavingPayroll(true);
+    try {
+      const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
+        unit_id: unitId, generated_by: generatedBy,
+        period_start: format(startDate, "yyyy-MM-dd"), period_end: format(endDate, "yyyy-MM-dd"),
+        report_data: payrollData,
+      } as any).select("id").single();
+      if (savedReport && (savedReport as any).id) {
+        const reportId = (savedReport as any).id;
+        const { data: usedDnrs } = await supabase.from("dnr_entries").select("id")
+          .eq("unit_id", unitId).eq("status", "closed").eq("discounted", true)
+          .is("reported_in_payroll_id" as any, null)
+          .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
+        if (usedDnrs?.length) {
+          for (const dnr of usedDnrs) {
+            await supabase.from("dnr_entries").update({ reported_in_payroll_id: reportId } as any).eq("id", dnr.id);
+          }
+        }
+      }
+      toast({ title: "Relatório salvo!", description: "Folha de pagamento registrada com sucesso." });
+      setPayrollMode(null);
+    } catch {
+      toast({ title: "Erro", description: "Erro ao salvar relatório.", variant: "destructive" });
+    }
+    setSavingPayroll(false);
+  };
+
   // Save to DB + mark DNRs + generate PDF
   const handleConfirmAndGenerate = async () => {
     if (!unitId || !payrollData) return;
