@@ -1,32 +1,45 @@
 
 
-## Plano
+## Plano: Unificar lógica de TBRs + Info buttons nos Ciclos
 
-### 1. Ícone do PWA em dispositivos já instalados
+### Problema identificado
 
-Infelizmente, **não é possível** atualizar o ícone da tela inicial remotamente. O ícone é salvo pelo sistema operacional no momento da instalação:
+Os números diferem porque usam lógicas diferentes:
 
-- **Android (Chrome):** Pode atualizar automaticamente após ~30 dias se detectar mudança no manifest, mas não é garantido.
-- **iOS (Safari):** Nunca atualiza — o usuário precisa remover e adicionar novamente.
+| Tela | Valor | Lógica |
+|------|-------|--------|
+| Dashboard "TBRs escaneados" | 3683 | Conta apenas `ride_tbrs` (ativos na carga) |
+| Operação "TBRs Lidos" | 3843 | `ride_tbrs` + retornos (piso+ps+rto) = total bipado |
+| Ciclos "Total TBRs Lidos" | 3683 | Mesmo que Dashboard (só `ride_tbrs`) |
 
-A única solução confiável é pedir para desinstalar e reinstalar. O service worker (autoUpdate) atualiza código, cache e assets internos, mas o ícone da home screen é controlado pelo OS.
+A diferença (3843 - 3683 = 160) são os 160 insucessos que foram removidos da `ride_tbrs` pelo trigger automático.
 
-### 2. Limpar tabela e manter apenas as 40 mais recentes
+### Correção: unificar para "total bipado" (incluindo retornos)
 
-A tabela tem 69 registros. Vou deletar os 29 mais antigos, mantendo apenas os 40 mais recentes cronologicamente.
+A lógica correta de "TBRs Lidos/Escaneados" deve ser a da Operação: **tudo que foi bipado**, incluindo os que depois viraram insucesso.
 
-```sql
-DELETE FROM system_updates
-WHERE id NOT IN (
-  SELECT id FROM system_updates ORDER BY published_at DESC LIMIT 40
-);
-```
+### Alterações
 
-### 3. Automatizar inserção de atualizações
+**1. `src/components/dashboard/DashboardMetrics.tsx`** — RPC `get_unit_tbr_count` conta só ride_tbrs. Criar nova RPC ou adicionar contagem de retornos ao valor existente. Somar retornos (piso+ps+rto únicos) ao `todayTbrCount` para refletir o total real bipado.
 
-Isso já é uma regra de processo (registrada em memória). A cada implementação/correção que fazemos, o INSERT na `system_updates` é feito como etapa final. Vou reforçar isso garantindo que nunca mais esqueça.
+**2. `src/pages/dashboard/CiclosPage.tsx`** — `metrics.totalTbrs` usa só `tbrsData.length`. Alterar para `totalTbrs = tbrsData.length + totalReturns` (o total original bipado). Aplicar a mesma lógica nos TBRs por ciclo.
+
+**3. Adicionar InfoButtons nos cards do Ciclos (modal Relatório):**
+- Tempo Médio Carreg.: "Média de tempo entre início e finalização de todos os carregamentos do dia."
+- Total TBRs Lidos: "Total de pacotes bipados na conferência, incluindo os que retornaram como insucesso."
+- Total Carregamentos: "Número de carregamentos realizados no dia."
+- Liberação Motorista: "Carregamentos finalizados (motorista liberado)."
+- Taxa de Conclusão: "Percentual de TBRs entregues com sucesso em relação ao total bipado."
+- Insucessos (Dia Anterior): "Quantidade de insucessos operacionais registrados no dia anterior."
+- Frota: "Quantidade e tipo de veículos utilizados no dia."
+- Carreg. Dia Anterior: "Variação percentual de carregamentos em relação ao dia anterior."
+
+**4. Adicionar InfoButtons nos campos complementares da página Ciclos (fora do modal):**
+- Qtd Pacotes (TBRs): "Total de pacotes bipados no dia (preenchido automaticamente)."
+- VRID: "Quantidade informada pelo VRID (preenchimento manual)."
 
 ### Arquivos afetados
-- Nenhum arquivo de código alterado
-- Apenas operação DELETE na tabela `system_updates`
+- `src/components/dashboard/DashboardMetrics.tsx` — somar retornos ao contador de TBRs
+- `src/pages/dashboard/CiclosPage.tsx` — corrigir `totalTbrs` + adicionar InfoButtons
+- Possivelmente nova migração SQL para atualizar a RPC (ou calcular no frontend)
 
