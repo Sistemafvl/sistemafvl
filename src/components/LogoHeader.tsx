@@ -1,8 +1,6 @@
 import logo from "@/assets/logo.png";
-import { useTripleClick } from "@/hooks/use-triple-click";
 
 interface LogoHeaderProps {
-  onTripleClick?: () => void;
   size?: "sm" | "md" | "lg" | "xl";
 }
 
@@ -13,16 +11,9 @@ const sizeClasses = {
   xl: "h-20 sm:h-32",
 };
 
-const LogoHeader = ({ onTripleClick, size = "md" }: LogoHeaderProps) => {
-  const handleClick = useTripleClick({
-    onTripleClick: onTripleClick || (() => {}),
-  });
-
+const LogoHeader = ({ size = "md" }: LogoHeaderProps) => {
   return (
-    <div
-      className="flex items-center justify-center cursor-pointer select-none"
-      onClick={handleClick}
-    >
+    <div className="flex items-center justify-center select-none">
       <img
         src={logo}
         alt="Sistema FVL"

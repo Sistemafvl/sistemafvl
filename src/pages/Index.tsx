@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import LogoHeader from "@/components/LogoHeader";
-import AdminLoginModal from "@/components/AdminLoginModal";
 import UnitLoginForm from "@/components/UnitLoginForm";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
 import { useAuthStore } from "@/stores/auth-store";
@@ -19,11 +18,9 @@ const Index = () => {
   useEffect(() => {
     setTheme("light");
   }, [setTheme]);
-  const [showAdminModal, setShowAdminModal] = useState(false);
   const [showDriverModal, setShowDriverModal] = useState(false);
-  const { isMasterAdmin, unitSession } = useAuthStore();
+  const { unitSession } = useAuthStore();
 
-  if (isMasterAdmin) return <Navigate to="/admin/domains" replace />;
   if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
   if (unitSession?.sessionType === "matriz") return <Navigate to="/matriz" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
@@ -33,7 +30,7 @@ const Index = () => {
   return (
     <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
       <div className="w-full max-w-sm space-y-6 sm:space-y-8">
-        <LogoHeader onTripleClick={() => setShowAdminModal(true)} size="xl" />
+        <LogoHeader size="xl" />
 
         <div className="text-center">
           <h1 className="text-xl font-bold italic text-foreground tracking-tight">
@@ -83,7 +80,6 @@ const Index = () => {
         )}
       </div>
 
-      <AdminLoginModal open={showAdminModal} onOpenChange={setShowAdminModal} />
       <DriverRegistrationModal open={showDriverModal} onOpenChange={setShowDriverModal} />
     </div>
   );

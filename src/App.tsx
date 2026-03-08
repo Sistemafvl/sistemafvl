@@ -29,20 +29,12 @@ import ReativoPage from "./pages/dashboard/ReativoPage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import DriverRescue from "./pages/driver/DriverRescue";
-import AdminLayout from "./components/admin/AdminLayout";
 import MatrizLayout from "./components/matriz/MatrizLayout";
 import MatrizOverview from "./pages/matriz/MatrizOverview";
 import MatrizUnidades from "./pages/matriz/MatrizUnidades";
 import MatrizMotoristas from "./pages/matriz/MatrizMotoristas";
 import MatrizFinanceiro from "./pages/matriz/MatrizFinanceiro";
 import MatrizOcorrencias from "./pages/matriz/MatrizOcorrencias";
-import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
-import ManagersPage from "./pages/admin/ManagersPage";
-import AdminDriversPage from "./pages/admin/AdminDriversPage";
-import DatabasePage from "./pages/admin/DatabasePage";
-import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
-import SecurityPage from "./pages/admin/SecurityPage";
-import AdminUpdatesPage from "./pages/admin/AdminUpdatesPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
@@ -104,16 +96,6 @@ const App = () => (
             <Route path="motoristas" element={<MatrizMotoristas />} />
             <Route path="financeiro" element={<MatrizFinanceiro />} />
             <Route path="ocorrencias" element={<MatrizOcorrencias />} />
-          </Route>
-          <Route path="/admin" element={<AdminLayout />}>
-            <Route index element={<AdminOverviewPage />} />
-            <Route path="overview" element={<AdminOverviewPage />} />
-            <Route path="domains" element={<DomainsUnitsPage />} />
-            <Route path="managers" element={<ManagersPage />} />
-            <Route path="drivers" element={<AdminDriversPage />} />
-            <Route path="database" element={<DatabasePage />} />
-            <Route path="security" element={<SecurityPage />} />
-            <Route path="updates" element={<AdminUpdatesPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
