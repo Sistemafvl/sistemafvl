@@ -108,7 +108,9 @@ const MatrizUnidades = () => {
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground italic text-center py-8">Carregando dados...</p>
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
           {unitStats.map((u, idx) => (
