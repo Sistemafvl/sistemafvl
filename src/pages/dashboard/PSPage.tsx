@@ -1089,6 +1089,9 @@ const PSPage = () => {
                                 <CheckCircle className="h-3 w-3 mr-1" /> Finalizar
                               </Button>
                             )}
+                            <Button variant="ghost" size="sm" onClick={() => setDeletingEntry(e)} title="Excluir PS">
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
                           </div>
                         </TableCell>
                       </TableRow>
