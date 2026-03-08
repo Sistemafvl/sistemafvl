@@ -28,10 +28,24 @@ const DriverRecebiveis = () => {
   const [entries, setEntries] = useState<PayrollEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState<string | null>(null);
+  const [managerCnpj, setManagerCnpj] = useState<string | null>(null);
 
   useEffect(() => {
     if (driverId) loadEntries();
+    if (unitSession?.id) loadManagerCnpj();
   }, [driverId]);
+
+  const loadManagerCnpj = async () => {
+    if (!unitSession?.id) return;
+    const { data } = await supabase
+      .from("managers")
+      .select("cnpj")
+      .eq("unit_id", unitSession.id)
+      .eq("active", true)
+      .limit(1)
+      .maybeSingle();
+    if (data) setManagerCnpj((data as any).cnpj);
+  };
 
   const loadEntries = async () => {
     if (!driverId) return;
