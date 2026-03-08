@@ -398,10 +398,10 @@ const CiclosPage = () => {
                 <h3 className="font-bold italic text-sm">Informações Complementares</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div className="space-y-1.5">
-                    <Label className="text-xs font-semibold flex items-center gap-1">Qtd Pacotes (TBRs do dia) <InfoButton text="Total de pacotes bipados no dia, incluindo os que retornaram (insucesso, PS, RTO). Preenchido automaticamente." /></Label>
+                    <Label className="text-xs font-semibold flex items-center gap-1">Qtd Pacotes (TBRs do dia) <InfoButton text="Total único de pacotes processados no dia (mesma regra da Visão Geral). Preenchido automaticamente." /></Label>
                     <Input
                       type="number"
-                      value={metrics ? metrics.totalTbrs + metrics.totalReturns : 0}
+                      value={metrics ? metrics.totalScanned : 0}
                       readOnly
                       className="bg-muted"
                     />
