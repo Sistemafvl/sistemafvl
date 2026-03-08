@@ -81,19 +81,28 @@ const DashboardHome = () => {
     return () => clearInterval(interval);
   }, []);
 
+  const allUnitIds = useMemo(() => domainUnits.map(u => u.id), [domainUnits]);
+  const isAllUnits = unitSession?.id === ALL_UNITS_ID;
+
   // Fetch feedback summary
   useEffect(() => {
     if (!unitSession?.id) return;
     const fetchFeedback = async () => {
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
+      let q = supabase.from("unit_reviews").select("rating").order("id");
+      if (isAllUnits && allUnitIds.length > 0) {
+        q = q.in("unit_id", allUnitIds);
+      } else {
+        q = q.eq("unit_id", unitSession.id);
+      }
       const revs = await fetchAllRows<{ rating: number }>((from, to) =>
-        supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id).order("id").range(from, to)
+        q.range(from, to)
       );
       setFeedbackTotal(revs.length);
       setFeedbackAvg(revs.length > 0 ? revs.reduce((s, r) => s + r.rating, 0) / revs.length : 0);
     };
     fetchFeedback();
-  }, [unitSession?.id]);
+  }, [unitSession?.id, isAllUnits, allUnitIds]);
 
   // Fetch DNR stats
   useEffect(() => {
