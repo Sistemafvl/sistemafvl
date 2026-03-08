@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard } from "lucide-react";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard, Trash2 } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import { toast } from "@/hooks/use-toast";
