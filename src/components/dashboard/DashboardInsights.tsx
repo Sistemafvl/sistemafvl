@@ -118,7 +118,7 @@ const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Prop
     if (totalOriginal > 0) {
       setReturnRate(Math.round((allReturnTbrs.size / totalOriginal) * 1000) / 10);
     }
-  }, [unitId, startDate, endDate, getSince, getUntil]);
+  }, [unitId, startDate, endDate, getSince, getUntil, applyFilter]);
 
   const fetchTopDrivers = useCallback(async () => {
     const since = getSince();
