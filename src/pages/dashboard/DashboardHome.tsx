@@ -628,7 +628,11 @@ const DashboardHome = () => {
             <CheckCircle className="h-5 w-5 text-emerald-500 shrink-0" />
             <div className="min-w-0">
               <p className="text-[10px] text-muted-foreground uppercase font-semibold flex items-center">DNRs Finalizados <InfoButton text="DNRs finalizados no período. Inclui casos confirmados e descartados." /></p>
-              <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
+              {dnrLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mt-1" />
+              ) : (
+                <p className="text-lg font-bold text-emerald-500">{dnrClosed}</p>
+              )}
             </div>
           </CardContent>
         </Card>
