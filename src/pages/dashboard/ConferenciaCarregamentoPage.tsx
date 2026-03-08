@@ -594,14 +594,6 @@ const ConferenciaCarregamentoPage = () => {
   useEffect(() => { fetchOpenRtos(); }, [fetchOpenRtos]);
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
-  // Polling fallback: refresh rides every 5 seconds as safety net
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (Date.now() < realtimeLockUntil.current) return;
-      fetchRides();
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [fetchRides]);
 
   // Fetch unit logins for the dropdown filter
   useEffect(() => {
