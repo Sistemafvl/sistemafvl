@@ -137,8 +137,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
 
     // Driver daily average
     const finishedRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
-      supabase.from("driver_rides").select("driver_id, completed_at")
-        .eq("unit_id", unitId)
+      applyFilter(supabase.from("driver_rides").select("driver_id, completed_at"))
         .eq("loading_status", "finished")
         .gte("completed_at", rangeStart)
         .lte("completed_at", rangeEnd)
