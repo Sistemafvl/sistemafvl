@@ -347,9 +347,9 @@ const CiclosPage = () => {
     }
   };
 
-  const totalOriginal = metrics ? metrics.totalTbrs + metrics.totalReturns : 0;
-  const taxaConclusao = totalOriginal > 0
-    ? (((totalOriginal - metrics!.totalReturns) / totalOriginal) * 100).toFixed(1)
+  const totalScanned = metrics ? metrics.totalScanned : 0;
+  const taxaConclusao = totalScanned > 0
+    ? ((metrics!.totalTbrs / totalScanned) * 100).toFixed(1)
     : "0";
 
   return (
