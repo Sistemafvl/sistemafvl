@@ -777,6 +777,30 @@ const RelatoriosPage = () => {
           </div>
         </div>
       )}
+      {/* Format Choice Modal */}
+      <FormatChoiceModal
+        open={formatChoiceOpen}
+        onClose={() => { setFormatChoiceOpen(false); setFormatChoiceAction(null); }}
+        onChoose={async (fmt) => {
+          setFormatChoiceOpen(false);
+          if (fmt === "excel" && payrollData) {
+            generatePayrollExcel(payrollData, unitName, startDate, endDate);
+            toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
+            if (formatChoiceAction === "gerar") {
+              // Still save to DB + mark DNRs for "gerar" mode
+              await handleConfirmAndGenerateDB();
+            }
+          } else {
+            if (formatChoiceAction === "espelho") {
+              await handleDownloadPDF();
+            } else if (formatChoiceAction === "gerar") {
+              await handleConfirmAndGenerate();
+            }
+          }
+          setFormatChoiceAction(null);
+        }}
+        title={formatChoiceAction === "gerar" ? "Formato da Folha" : "Formato do Espelho"}
+      />
     </>
   );
 };
