@@ -535,7 +535,9 @@ const DashboardHome = () => {
           <div className="flex-1">
             <p className="text-sm font-semibold text-muted-foreground">Avaliação da Unidade</p>
             <div className="flex items-center gap-3 mt-0.5">
-              {feedbackAvg === null ? (
+              {feedbackLoading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              ) : feedbackAvg === null ? (
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               ) : (
                 <>
