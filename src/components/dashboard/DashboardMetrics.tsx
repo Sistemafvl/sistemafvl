@@ -148,10 +148,10 @@ const DashboardMetrics = ({ unitId, startDate, endDate, allUnitIds = [] }: Props
       const rideIds = finishedRides.map(r => r.driver_id + "_placeholder");
       // Get TBR counts per ride
       const rideIdsList = await fetchAllRows<{ id: string; driver_id: string }>((from, to) =>
-        supabase.from("driver_rides").select("id, driver_id")
-          .eq("unit_id", unitId)
+        applyFilter(supabase.from("driver_rides").select("id, driver_id"))
           .eq("loading_status", "finished")
           .gte("completed_at", rangeStart)
+          .lte("completed_at", rangeEnd)
           .lte("completed_at", rangeEnd)
           .range(from, to)
       );
