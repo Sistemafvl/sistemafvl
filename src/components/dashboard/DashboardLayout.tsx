@@ -5,7 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
-import { UserCheck } from "lucide-react";
+import { UserCheck, Crown } from "lucide-react";
 import InsucessoBalloon from "./InsucessoBalloon";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,11 +38,9 @@ const DashboardLayout = () => {
   if (unitSession.sessionType === "driver") {
     return <Navigate to="/motorista" replace />;
   }
-  if (unitSession.sessionType === "matriz") {
-    return <Navigate to="/matriz" replace />;
-  }
 
-  const hasAccess = !!managerSession || !!conferenteSession;
+  const isDirector = unitSession.sessionType === "matriz";
+  const hasAccess = isDirector || !!managerSession || !!conferenteSession;
 
   return (
     <SidebarProvider>
@@ -54,7 +52,13 @@ const DashboardLayout = () => {
               <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
                 Dashboard
               </span>
-              {conferenteSession && (
+              {isDirector && (
+                <span className="ml-auto text-xs text-amber-600 flex items-center gap-1 font-semibold">
+                  <Crown className="h-3.5 w-3.5" />
+                  {unitSession.name}
+                </span>
+              )}
+              {!isDirector && conferenteSession && (
                 <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
                   <UserCheck className="h-3.5 w-3.5" />
                   {conferenteSession.name}

@@ -77,6 +77,11 @@ const App = () => (
             <Route path="dnr" element={<DNRPage />} />
             <Route path="reversa" element={<ReversaPage />} />
             <Route path="reativo" element={<ReativoPage />} />
+            <Route path="bi" element={<MatrizOverview />} />
+            <Route path="bi/unidades" element={<MatrizUnidades />} />
+            <Route path="bi/motoristas" element={<MatrizMotoristas />} />
+            <Route path="bi/financeiro" element={<MatrizFinanceiro />} />
+            <Route path="bi/ocorrencias" element={<MatrizOcorrencias />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />

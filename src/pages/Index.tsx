@@ -22,7 +22,7 @@ const Index = () => {
   const { unitSession } = useAuthStore();
 
   if (unitSession?.sessionType === "driver") return <Navigate to="/motorista" replace />;
-  if (unitSession?.sessionType === "matriz") return <Navigate to="/matriz" replace />;
+  if (unitSession?.sessionType === "matriz") return <Navigate to="/dashboard" replace />;
   if (unitSession) return <Navigate to="/dashboard" replace />;
 
   const showBanner = (canInstall || !isInstalled) && !dismissedBanner;
