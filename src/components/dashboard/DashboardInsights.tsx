@@ -28,7 +28,11 @@ interface ConferenteRank {
 
 const PAGE_SIZE = 5;
 
-const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
+const DashboardInsights = ({ unitId, startDate, endDate, allUnitIds = [] }: Props) => {
+  const isAll = unitId === ALL_UNITS_ID && allUnitIds.length > 0;
+  const applyFilter = useCallback((q: any): any => {
+    return isAll ? q.in("unit_id", allUnitIds) : q.eq("unit_id", unitId);
+  }, [isAll, allUnitIds, unitId]);
   const [topDrivers, setTopDrivers] = useState<DriverRank[]>([]);
   const [topReturns, setTopReturns] = useState<DriverRank[]>([]);
   const [topConferentes, setTopConferentes] = useState<ConferenteRank[]>([]);
