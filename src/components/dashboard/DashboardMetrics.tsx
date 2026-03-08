@@ -166,7 +166,6 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       const allRideIds = rideIdsList.map(r => r.id);
       
       // Count TBRs per ride using chunked queries
-      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const tbrCounts = await fetchAllRowsWithIn<{ ride_id: string }>(
         (ids) => (from, to) =>
           supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
