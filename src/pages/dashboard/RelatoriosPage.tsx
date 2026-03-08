@@ -40,6 +40,8 @@ const RelatoriosPage = () => {
   // Modal state
   const [payrollMode, setPayrollMode] = useState<"consult" | "espelho" | "gerar" | null>(null);
   const [savingPayroll, setSavingPayroll] = useState(false);
+  const [formatChoiceOpen, setFormatChoiceOpen] = useState(false);
+  const [formatChoiceAction, setFormatChoiceAction] = useState<"espelho" | "gerar" | null>(null);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
