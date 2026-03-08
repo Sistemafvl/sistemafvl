@@ -12,17 +12,31 @@ const formatCpfBR = (cpf: string) => {
   return cpf;
 };
 
+export interface MinPackageDriver {
+  driverId: string;
+  driverName: string;
+  minPackages: number;
+  tbrValueUsed: number;
+  cpf: string;
+  pixKey?: string | null;
+}
+
 export function generatePayrollExcel(
   data: DriverPayrollData[],
   unitName: string,
   startDate: Date,
   endDate: Date,
+  generatedBy?: string,
+  minPackageDrivers?: MinPackageDriver[],
 ) {
   const allDates = [
     ...new Set(data.flatMap((d) => d.days.map((day) => day.date))),
   ].sort();
 
-  // Build header row
+  // Also gather dates from minPackageDrivers if they have payroll data
+  const minDrivers = minPackageDrivers ?? [];
+
+  // Fixed headers
   const fixedHeaders = [
     "NOME COMPLETO",
     "Veículo",
@@ -39,8 +53,8 @@ export function generatePayrollExcel(
   );
   const headers = [...fixedHeaders, ...dateHeaders, "TOTAL"];
 
-  // Build data rows
-  const rows = data.map((d) => {
+  // ── Helper: build driver row ──
+  const buildDriverRow = (d: DriverPayrollData) => {
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     const descontos = d.dnrDiscount ?? 0;
@@ -71,83 +85,201 @@ export function generatePayrollExcel(
       ...dailyValues,
       totalDays,
     ];
-  });
+  };
 
-  // Totals row
-  const grandTotalCompleted = data.reduce((s, d) => s + d.totalCompleted, 0);
-  const grandDescontos = data.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
-  const grandAdicional = data.reduce(
-    (s, d) => s + (d.bonus ?? 0) + (d.reativoTotal ?? 0),
-    0,
-  );
-  const grandTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
+  // ── Helper: build totals row for a dataset ──
+  const buildTotalsRow = (dataset: DriverPayrollData[], label = "TOTAL") => {
+    const grandTotalCompleted = dataset.reduce((s, d) => s + d.totalCompleted, 0);
+    const grandDescontos = dataset.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
+    const grandAdicional = dataset.reduce(
+      (s, d) => s + (d.bonus ?? 0) + (d.reativoTotal ?? 0),
+      0,
+    );
+    const grandTotalValue = dataset.reduce((s, d) => s + d.totalValue, 0);
 
-  const totalsRow = [
-    "TOTAL",
-    "",
-    "",
-    grandTotalCompleted,
-    grandDescontos > 0 ? `-${formatCurrencyBR(grandDescontos)}` : "",
-    grandAdicional > 0 ? `+${formatCurrencyBR(grandAdicional)}` : "",
-    formatCurrencyBR(grandTotalValue),
-    "",
-    "",
-    ...allDates.map((date) => {
-      const dayTotal = data.reduce((s, d) => {
+    return [
+      label,
+      "",
+      "",
+      grandTotalCompleted,
+      grandDescontos > 0 ? `-${formatCurrencyBR(grandDescontos)}` : "",
+      grandAdicional > 0 ? `+${formatCurrencyBR(grandAdicional)}` : "",
+      formatCurrencyBR(grandTotalValue),
+      "",
+      "",
+      ...allDates.map((date) => {
+        const dayTotal = dataset.reduce((s, d) => {
+          const day = d.days.find((day) => day.date === date);
+          return s + (day ? (day.completed ?? day.tbrCount - day.returns) : 0);
+        }, 0);
+        return dayTotal || "";
+      }),
+      grandTotalCompleted,
+    ];
+  };
+
+  // ── Helper: daily totals array for consolidated block ──
+  const getDailyTotals = (dataset: DriverPayrollData[]) =>
+    allDates.map((date) =>
+      dataset.reduce((s, d) => {
         const day = d.days.find((day) => day.date === date);
         return s + (day ? (day.completed ?? day.tbrCount - day.returns) : 0);
-      }, 0);
-      return dayTotal || "";
-    }),
-    grandTotalCompleted,
-  ];
+      }, 0),
+    );
 
-  // Build worksheet data
+  // ── Build minPackage DriverPayrollData entries (empty if no rides) ──
+  const minPkgPayrollData: DriverPayrollData[] = minDrivers.map((mp) => {
+    // Check if this driver already exists in main data
+    const existing = data.find((d) => d.driver.id === mp.driverId);
+    if (existing) return existing;
+    // Empty driver entry
+    return {
+      driver: {
+        id: mp.driverId,
+        name: mp.driverName,
+        cpf: mp.cpf,
+        car_plate: "",
+        car_model: "",
+        car_color: null,
+        pixKey: mp.pixKey,
+      },
+      days: [],
+      totalTbrs: 0,
+      totalReturns: 0,
+      totalCompleted: 0,
+      totalValue: 0,
+      tbrValueUsed: mp.tbrValueUsed,
+      bonus: 0,
+      dnrDiscount: 0,
+      reativoTotal: 0,
+      daysWorked: 0,
+      loginsUsed: [],
+      bestDay: null,
+      worstDay: null,
+      avgDaily: 0,
+    };
+  });
+
+  // ══════════════ BUILD WORKSHEET ══════════════
   const wsData: (string | number)[][] = [];
 
-  // Title rows
-  wsData.push(["MOTORISTAS POR PACOTES"]);
+  // ── SECTION 1: HEADER ──
+  wsData.push(["MOTORISTAS FIXOS POR PACOTES"]);
   wsData.push([]);
+  wsData.push(["DADOS FINANCEIROS"]);
   wsData.push([
     `Unidade: ${unitName}`,
     "",
     "",
     `Período: ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`,
+    "",
+    "",
+    `Gerado por: ${generatedBy ?? "Sistema"}`,
   ]);
-  wsData.push([]);
-  wsData.push(["DADOS FINANCEIROS"]);
   wsData.push(headers);
 
-  // Data rows
-  rows.forEach((row) => wsData.push(row));
+  // ── SECTION 1: MAIN DRIVER ROWS ──
+  data.forEach((d) => wsData.push(buildDriverRow(d)));
 
-  // Totals
-  wsData.push(totalsRow);
+  // ── SECTION 1: TOTALS ──
+  wsData.push(buildTotalsRow(data, "TOTAL"));
 
-  // Empty rows before summary
+  // ── SPACE ──
   wsData.push([]);
   wsData.push([]);
 
-  // Summary block
-  const avgPerPackage =
-    grandTotalCompleted > 0 ? grandTotalValue / grandTotalCompleted : 0;
-  wsData.push(["RESUMO", "Qtd. Pacotes", "Valor Total", "Média Pacote"]);
+  // ── SECTION 2: MINIMUM PACKAGES DRIVERS ──
+  if (minPkgPayrollData.length > 0) {
+    wsData.push(["MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES"]);
+    wsData.push(["DADOS FINANCEIROS"]);
+    wsData.push(headers);
+
+    minPkgPayrollData.forEach((d) => wsData.push(buildDriverRow(d)));
+    wsData.push(buildTotalsRow(minPkgPayrollData, "TOTAL"));
+
+    wsData.push([]);
+    wsData.push([]);
+  }
+
+  // ── SECTION 3: CONSOLIDATED BLOCK ──
+  const mainDailyTotals = getDailyTotals(data);
+  const minDailyTotals = getDailyTotals(minPkgPayrollData);
+  const mainTotal = data.reduce((s, d) => s + d.totalCompleted, 0);
+  const minTotal = minPkgPayrollData.reduce((s, d) => s + d.totalCompleted, 0);
+
+  // Header for consolidated
+  wsData.push(["CONSOLIDADO", "", "", "", "", "", "", "", "", ...dateHeaders, "TOTAL"]);
+
   wsData.push([
-    "TOTAL",
+    "MOTORISTAS POR PACOTES",
+    "", "", "", "", "", "", "", "",
+    ...mainDailyTotals.map((v) => v || ""),
+    mainTotal,
+  ]);
+
+  if (minPkgPayrollData.length > 0) {
+    wsData.push([
+      "MOTORISTAS - MÍNIMO DE 60 PACOTES",
+      "", "", "", "", "", "", "", "",
+      ...minDailyTotals.map((v) => v || ""),
+      minTotal,
+    ]);
+  }
+
+  const combinedDailyTotals = allDates.map((_, i) => mainDailyTotals[i] + minDailyTotals[i]);
+  const combinedTotal = mainTotal + minTotal;
+
+  wsData.push([
+    "Total Pacotes",
+    "", "", "", "", "", "", "", "",
+    ...combinedDailyTotals.map((v) => v || ""),
+    combinedTotal,
+  ]);
+
+  // ── SPACE ──
+  wsData.push([]);
+  wsData.push([]);
+
+  // ── SECTION 4: EXPANDED SUMMARY ──
+  const mainTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
+  const minTotalValue = minPkgPayrollData.reduce((s, d) => s + d.totalValue, 0);
+  const grandTotalValue = mainTotalValue + minTotalValue;
+  const grandTotalCompleted = mainTotal + minTotal;
+  const avgPerPackage = grandTotalCompleted > 0 ? grandTotalValue / grandTotalCompleted : 0;
+  const mainAvg = mainTotal > 0 ? mainTotalValue / mainTotal : 0;
+  const minAvg = minTotal > 0 ? minTotalValue / minTotal : 0;
+
+  wsData.push(["RESUMO", "Qtd. Pacotes Entregues", "Valor Total", "Média Pacote"]);
+  wsData.push([
+    "MOTORISTAS POR PACOTES",
+    mainTotal,
+    formatCurrencyBR(mainTotalValue),
+    formatCurrencyBR(mainAvg),
+  ]);
+  if (minPkgPayrollData.length > 0) {
+    wsData.push([
+      "MOTORISTAS - MÍNIMO DE 60 PACOTES",
+      minTotal,
+      formatCurrencyBR(minTotalValue),
+      formatCurrencyBR(minAvg),
+    ]);
+  }
+  wsData.push([
+    "CUSTO POR PACOTE",
     grandTotalCompleted,
     formatCurrencyBR(grandTotalValue),
     formatCurrencyBR(avgPerPackage),
   ]);
 
-  // Create workbook
+  // ══════════════ CREATE WORKBOOK ══════════════
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
   // Set column widths
   const colWidths = [
-    { wch: 30 }, // NOME COMPLETO
+    { wch: 35 }, // NOME COMPLETO
     { wch: 10 }, // Veículo
     { wch: 18 }, // VALOR POR PACOTE
-    { wch: 25 }, // TOTAL DE PACOTES
+    { wch: 28 }, // TOTAL DE PACOTES
     { wch: 15 }, // DESCONTOS
     { wch: 15 }, // ADICIONAL
     { wch: 18 }, // TOTAL GERAL
