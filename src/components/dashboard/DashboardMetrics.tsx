@@ -8,7 +8,7 @@ import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, R
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
 import { getBrazilDayRange, getBrazilTodayStr, toBrazilDateStr } from "@/lib/utils";
-import { fetchAllRows } from "@/lib/supabase-helpers";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 
 interface Props {
   unitId: string;
