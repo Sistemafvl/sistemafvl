@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Package, DollarSign, Target, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle } from "lucide-react";
+import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, Zap } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -32,6 +32,7 @@ const DriverHome = () => {
   const [bonuses, setBonuses] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [fixedValues, setFixedValues] = useState<any[]>([]);
+  const [reativoEntries, setReativoEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // DNR stats
@@ -67,7 +68,7 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes] = await Promise.all([
+      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes, reatRes] = await Promise.all([
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
@@ -89,6 +90,11 @@ const DriverHome = () => {
           .lte("period_start", endDate),
         supabase.from("driver_fixed_values" as any).select("unit_id, target_date, fixed_value")
           .eq("driver_id", driverId),
+        supabase.from("reativo_entries").select("reativo_value, ride_id")
+          .eq("driver_id", driverId)
+          .eq("unit_id", unitId!)
+          .gte("activated_at", start)
+          .lte("activated_at", end),
       ]);
       const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
         (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
@@ -106,6 +112,7 @@ const DriverHome = () => {
       setCustomValues(cv.data ?? []);
       setBonuses(bn.data ?? []);
       setFixedValues((fvRes as any).data ?? []);
+      setReativoEntries(reatRes.data ?? []);
       setLoading(false);
     };
     fetch();
@@ -206,9 +213,11 @@ const DriverHome = () => {
       }
     });
 
-    // Add bonuses
+    // Add bonuses + reativos
     const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
     totalGanho += totalBonus;
+    const totalReativos = reativoEntries.reduce((s: number, re: any) => s + Number(re.reativo_value), 0);
+    totalGanho += totalReativos;
 
     const totalLidos = totalTbrs;
     const concluidos = Math.max(0, totalTbrs - totalReturns);
@@ -217,8 +226,8 @@ const DriverHome = () => {
     const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
-  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, startDate, endDate]);
+    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days, totalReativos };
+  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, reativoEntries, startDate, endDate]);
 
   const chartData = useMemo(() => {
     const ridesByDay = new Map<string, number>();
@@ -386,7 +395,7 @@ const DriverHome = () => {
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
     { label: "TBRs Lidos", value: metrics.totalLidos, icon: Package, color: "text-blue-600" },
     { label: "Total Ganho", value: formatBRL(metrics.totalGanho), icon: DollarSign, color: "text-emerald-600" },
-    { label: "Entregues", value: metrics.concluidos, icon: Target, color: "text-emerald-600" },
+    { label: "Reativos", value: formatBRL(metrics.totalReativos), icon: Zap, color: "text-amber-600" },
     { label: "Insucessos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
     { label: "Quinzena", value: formatBRL(quinzenaValue), icon: CalendarDays, color: "text-purple-600" },
   ];
