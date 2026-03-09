@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil, CalendarIcon, Users, TrendingUp } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil, CalendarIcon, Users, TrendingUp, ClipboardCheck, FileText, RotateCcw } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import jsPDF from "jspdf";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -107,6 +111,12 @@ const RetornoPisoPage = () => {
   const [reasonSearchOpen, setReasonSearchOpen] = useState(false);
   const [editingReasonId, setEditingReasonId] = useState<string | null>(null);
   const [editingReasonLabel, setEditingReasonLabel] = useState("");
+
+  // Conferência de Retorno state
+  const [confSheetOpen, setConfSheetOpen] = useState(false);
+  const [checkedTbrs, setCheckedTbrs] = useState<Set<string>>(new Set());
+  const [confScanInput, setConfScanInput] = useState("");
+  const confInputRef = useRef<HTMLInputElement>(null);
 
   // PS Modal state
   const [psModalOpen, setPsModalOpen] = useState(false);
@@ -561,6 +571,95 @@ const RetornoPisoPage = () => {
 
   const uniqueDriverNames = [...new Set(entries.map(e => e.driver_name).filter(Boolean) as string[])].sort();
 
+  // Conferência handlers
+  const handleConfScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || !confScanInput.trim()) return;
+    const code = confScanInput.trim().toUpperCase();
+    const match = entries.find(en => en.tbr_code.toUpperCase() === code);
+    if (match) {
+      setCheckedTbrs(prev => new Set(prev).add(match.id));
+      toast({ title: "TBR conferido", description: match.tbr_code });
+    } else {
+      toast({ title: "TBR não encontrado", description: "Este TBR não está na lista de retornos.", variant: "destructive" });
+    }
+    setConfScanInput("");
+  };
+
+  const toggleCheck = (id: string) => {
+    setCheckedTbrs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfPdf = () => {
+    const pdf = new jsPDF("l", "mm", "a4");
+    const pw = 297;
+    const margin = 10;
+    const unitName = unitSession?.name ?? "Unidade";
+    const dateStr = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+
+    // Header
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Conferência de Retorno", margin, 16);
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`${unitName} — ${dateStr}`, margin, 22);
+    pdf.text(`Conferidos: ${checkedTbrs.size} / ${entries.length}`, margin, 27);
+
+    // Table
+    const headers = ["Status", "TBR", "Motorista", "Rota", "Motivo", "Data/Hora"];
+    const colWidths = [18, 38, 55, 30, 80, 40];
+    let y = 34;
+
+    // Header row
+    pdf.setFillColor(13, 148, 136);
+    pdf.rect(margin, y, pw - margin * 2, 7, "F");
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "bold");
+    let x = margin + 2;
+    headers.forEach((h, i) => {
+      pdf.text(h, x, y + 5);
+      x += colWidths[i];
+    });
+    y += 7;
+
+    // Rows
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
+    const sortedEntries = [...entries].sort((a, b) => {
+      const aChecked = checkedTbrs.has(a.id) ? 0 : 1;
+      const bChecked = checkedTbrs.has(b.id) ? 0 : 1;
+      return aChecked - bChecked;
+    });
+
+    for (const entry of sortedEntries) {
+      if (y > 195) { pdf.addPage(); y = 15; }
+      const isChecked = checkedTbrs.has(entry.id);
+      if (y % 2 === 0) { pdf.setFillColor(243, 244, 246); pdf.rect(margin, y, pw - margin * 2, 6, "F"); }
+      x = margin + 2;
+      pdf.setFontSize(8);
+      pdf.text(isChecked ? "✓ Conferido" : "Pendente", x, y + 4);
+      x += colWidths[0];
+      pdf.text(entry.tbr_code, x, y + 4);
+      x += colWidths[1];
+      pdf.text((entry.driver_name ?? "-").substring(0, 30), x, y + 4);
+      x += colWidths[2];
+      pdf.text(entry.route ?? "-", x, y + 4);
+      x += colWidths[3];
+      pdf.text(entry.reason.substring(0, 45), x, y + 4);
+      x += colWidths[4];
+      pdf.text(format(new Date(entry.created_at), "dd/MM HH:mm"), x, y + 4);
+      y += 6;
+    }
+
+    pdf.save(`conferencia_retorno_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+    toast({ title: "PDF gerado com sucesso" });
+  };
+
   return (
     <div className="space-y-4">
       {/* Indicator Cards */}
@@ -594,6 +693,105 @@ const RetornoPisoPage = () => {
           </CardContent>
         </Card>
       </div>
+
+      {/* Conferência de Retorno Button */}
+      <Button
+        variant="outline"
+        className="w-full gap-2 border-primary/30 hover:bg-primary/5"
+        onClick={() => { setConfSheetOpen(true); setTimeout(() => confInputRef.current?.focus(), 200); }}
+      >
+        <ClipboardCheck className="h-4 w-4 text-primary" />
+        <span className="font-semibold">Conferência de Retorno</span>
+        {checkedTbrs.size > 0 && (
+          <Badge variant="secondary" className="ml-1 text-xs">{checkedTbrs.size}/{entries.length}</Badge>
+        )}
+      </Button>
+
+      {/* Conferência Sheet */}
+      <Sheet open={confSheetOpen} onOpenChange={setConfSheetOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg flex flex-col p-0">
+          <SheetHeader className="p-4 pb-2 border-b">
+            <SheetTitle className="flex items-center gap-2">
+              <ClipboardCheck className="h-5 w-5 text-primary" />
+              Conferência de Retorno
+            </SheetTitle>
+          </SheetHeader>
+
+          <div className="p-4 space-y-3 border-b">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                ref={confInputRef}
+                value={confScanInput}
+                onChange={(e) => setConfScanInput(e.target.value)}
+                onKeyDown={handleConfScan}
+                placeholder="Bipe ou digite o TBR..."
+                className="pl-9 h-10"
+              />
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                Conferidos: <span className="font-bold text-foreground">{checkedTbrs.size}</span> / {entries.length}
+              </span>
+              <div className="flex gap-2">
+                {checkedTbrs.size > 0 && (
+                  <Button variant="ghost" size="sm" className="text-xs gap-1" onClick={() => setCheckedTbrs(new Set())}>
+                    <RotateCcw className="h-3 w-3" /> Limpar
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="text-xs gap-1" onClick={handleConfPdf} disabled={entries.length === 0}>
+                  <FileText className="h-3 w-3" /> Gerar PDF
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          <ScrollArea className="flex-1 p-4">
+            <div className="space-y-1">
+              {entries.length === 0 ? (
+                <p className="text-center text-muted-foreground italic py-8">Nenhum retorno para conferir</p>
+              ) : (
+                [...entries].sort((a, b) => {
+                  const aC = checkedTbrs.has(a.id) ? 0 : 1;
+                  const bC = checkedTbrs.has(b.id) ? 0 : 1;
+                  if (aC !== bC) return aC - bC;
+                  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+                }).map(entry => {
+                  const isChecked = checkedTbrs.has(entry.id);
+                  return (
+                    <div
+                      key={entry.id}
+                      className={cn(
+                        "flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                        isChecked ? "bg-primary/5 border-primary/30" : "hover:bg-muted/50"
+                      )}
+                      onClick={() => toggleCheck(entry.id)}
+                    >
+                      <Checkbox checked={isChecked} className="mt-0.5" />
+                      <div className="flex-1 min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold">{entry.tbr_code}</span>
+                          <span className="text-sm truncate">{entry.driver_name ?? "—"}</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                          <span>Rota: {entry.route ?? "—"}</span>
+                          <span>•</span>
+                          <span className="truncate">{entry.reason}</span>
+                          <span>•</span>
+                          <span>{format(new Date(entry.created_at), "HH:mm")}</span>
+                        </div>
+                      </div>
+                      {isChecked && (
+                        <Check className="h-4 w-4 text-primary shrink-0 mt-1" />
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </ScrollArea>
+        </SheetContent>
+      </Sheet>
 
       <Card>
         <CardHeader>
