@@ -32,6 +32,7 @@ const DriverHome = () => {
   const [bonuses, setBonuses] = useState<any[]>([]);
   const [units, setUnits] = useState<any[]>([]);
   const [fixedValues, setFixedValues] = useState<any[]>([]);
+  const [reativoEntries, setReativoEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   // DNR stats
