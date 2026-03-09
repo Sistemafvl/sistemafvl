@@ -112,6 +112,12 @@ const RetornoPisoPage = () => {
   const [editingReasonId, setEditingReasonId] = useState<string | null>(null);
   const [editingReasonLabel, setEditingReasonLabel] = useState("");
 
+  // Conferência de Retorno state
+  const [confSheetOpen, setConfSheetOpen] = useState(false);
+  const [checkedTbrs, setCheckedTbrs] = useState<Set<string>>(new Set());
+  const [confScanInput, setConfScanInput] = useState("");
+  const confInputRef = useRef<HTMLInputElement>(null);
+
   // PS Modal state
   const [psModalOpen, setPsModalOpen] = useState(false);
   const [psEntry, setPsEntry] = useState<PisoEntry | null>(null);
