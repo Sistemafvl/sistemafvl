@@ -226,8 +226,8 @@ const DriverHome = () => {
     const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days };
-  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, startDate, endDate]);
+    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days, totalReativos };
+  }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, reativoEntries, startDate, endDate]);
 
   const chartData = useMemo(() => {
     const ridesByDay = new Map<string, number>();
