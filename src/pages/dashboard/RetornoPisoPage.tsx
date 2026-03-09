@@ -7,7 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/calendar";
-import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil, CalendarIcon, Users, TrendingUp } from "lucide-react";
+import { PackageX, Search, Loader2, X, Plus, AlertTriangle, Trash2, Camera, RefreshCw, Check, ChevronsUpDown, Pencil, CalendarIcon, Users, TrendingUp, ClipboardCheck, FileText, RotateCcw } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import jsPDF from "jspdf";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
