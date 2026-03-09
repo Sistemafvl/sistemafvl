@@ -213,9 +213,11 @@ const DriverHome = () => {
       }
     });
 
-    // Add bonuses
+    // Add bonuses + reativos
     const totalBonus = bonuses.reduce((s: number, b: any) => s + Number(b.amount), 0);
     totalGanho += totalBonus;
+    const totalReativos = reativoEntries.reduce((s: number, re: any) => s + Number(re.reativo_value), 0);
+    totalGanho += totalReativos;
 
     const totalLidos = totalTbrs;
     const concluidos = Math.max(0, totalTbrs - totalReturns);
