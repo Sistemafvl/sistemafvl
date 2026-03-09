@@ -161,10 +161,11 @@ const DriverHome = () => {
     ridesByDay.forEach((rideIds, day) => {
       const dayTbrs = tbrs.filter((t: any) => rideIds.includes(t.ride_id));
 
-      // 1. TBRs unicos por codigo
+      // ride_tbrs already has returns removed by auto_remove_tbr_from_ride trigger
+      // so uniqueCodes.size = concluídos (delivered successfully)
       const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
 
-      // 2. Codigos que retornaram
+      // Count returns for the "Insucessos" card only
       const returnCodes = new Set<string>();
       [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
         if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) {
@@ -172,31 +173,8 @@ const DriverHome = () => {
         }
       });
 
-      // 3. Retornos liquidos (verificar ultima corrida do dia)
-      const sortedDayRides = rides
-        .filter((r: any) => rideIds.includes(r.id))
-        .sort((a: any, b: any) =>
-          new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime()
-        );
-
-      const netReturns = new Set<string>();
-      returnCodes.forEach(code => {
-        let lastRideId: string | null = null;
-        for (const ride of sortedDayRides) {
-          if (dayTbrs.some((t: any) => t.ride_id === ride.id && t.code === code)) {
-            lastRideId = ride.id;
-          }
-        }
-        if (lastRideId) {
-          const hasReturnInLast = [...pisoEntries, ...psEntries, ...rtoEntries].some(
-            (p: any) => p.ride_id === lastRideId && p.tbr_code === code
-          );
-          if (hasReturnInLast) netReturns.add(code);
-        }
-      });
-
-      const dayTbrCount = uniqueCodes.size;
-      const dayReturnCount = netReturns.size;
+      const dayTbrCount = uniqueCodes.size; // = concluídos (trigger already cleaned)
+      const dayReturnCount = returnCodes.size;
       totalTbrs += dayTbrCount;
       totalReturns += dayReturnCount;
 
@@ -209,7 +187,8 @@ const DriverHome = () => {
         totalGanho += fixedVal;
       } else {
         const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
-        totalGanho += Math.max(0, dayTbrCount - dayReturnCount) * tbrVal;
+        // No subtraction needed — ride_tbrs already only contains delivered TBRs
+        totalGanho += dayTbrCount * tbrVal;
       }
     });
 
@@ -219,8 +198,9 @@ const DriverHome = () => {
     const totalReativos = reativoEntries.reduce((s: number, re: any) => s + Number(re.reativo_value), 0);
     totalGanho += totalReativos;
 
-    const totalLidos = totalTbrs;
-    const concluidos = Math.max(0, totalTbrs - totalReturns);
+    // totalLidos = volume original (concluídos + retornos)
+    const totalLidos = totalTbrs + totalReturns;
+    const concluidos = totalTbrs;
     const taxaConclusao = totalLidos > 0 ? (concluidos / totalLidos) * 100 : 0;
     const workedDays = ridesByDay.size;
     const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
