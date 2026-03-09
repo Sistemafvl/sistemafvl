@@ -861,6 +861,12 @@ export function generatePayrollExcel(
       border: borderThin,
     });
     
+    // Apply currency formatting to driver sheet
+    // Valor por Pacote in header (row 6)
+    applyCurrencyFormat(driverWs, 1, 6, 6);
+    // Financial summary rows: Valor por Pacote, Subtotal, Descontos, Adicional, TOTAL A PAGAR
+    applyCurrencyFormat(driverWs, 1, finStartRow + 1, totalPayRow - 1);
+    
     XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
   });
 
