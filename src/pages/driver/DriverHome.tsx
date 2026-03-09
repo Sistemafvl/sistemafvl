@@ -395,7 +395,7 @@ const DriverHome = () => {
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
     { label: "TBRs Lidos", value: metrics.totalLidos, icon: Package, color: "text-blue-600" },
     { label: "Total Ganho", value: formatBRL(metrics.totalGanho), icon: DollarSign, color: "text-emerald-600" },
-    { label: "Entregues", value: metrics.concluidos, icon: Target, color: "text-emerald-600" },
+    { label: "Reativos", value: formatBRL(metrics.totalReativos), icon: Zap, color: "text-amber-600" },
     { label: "Insucessos", value: metrics.totalReturns, icon: RotateCcw, color: "text-red-600" },
     { label: "Quinzena", value: formatBRL(quinzenaValue), icon: CalendarDays, color: "text-purple-600" },
   ];
