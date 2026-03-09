@@ -243,6 +243,9 @@ const ConferenciaCarregamentoPage = () => {
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
 
+  // Photo modal
+  const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
+
   // Delete TBR with manager password
   const [showDeleteTbrPasswordModal, setShowDeleteTbrPasswordModal] = useState(false);
   const [deleteTbrPassword, setDeleteTbrPassword] = useState("");
