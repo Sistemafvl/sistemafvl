@@ -3134,6 +3134,25 @@ const ConferenciaCarregamentoPage = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Photo Modal */}
+      <Dialog open={!!photoModalUrl} onOpenChange={(open) => !open && setPhotoModalUrl(null)}>
+        <DialogContent className="sm:max-w-md p-2 bg-transparent border-none shadow-none">
+          <div className="relative">
+            <img
+              src={photoModalUrl || ""}
+              alt="Foto do motorista"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+            />
+            <button
+              onClick={() => setPhotoModalUrl(null)}
+              className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
