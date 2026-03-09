@@ -661,6 +661,26 @@ export function generatePayrollExcel(
     border: borderThin,
   });
 
+  // ══════════════ APPLY CURRENCY FORMATTING ══════════════
+  // Currency columns: VALOR POR PACOTE (2), DESCONTOS (4), ADICIONAL (5), TOTAL GERAL (6)
+  const currencyCols = [COL_VALUE, COL_DISCOUNTS, COL_ADDITIONAL, COL_TOTAL_GERAL];
+  
+  // Main data rows + total row
+  for (const col of currencyCols) {
+    applyCurrencyFormat(ws, col, rowTracker.dataStartRow, rowTracker.totalRow);
+  }
+  
+  // Min package rows + total row
+  for (const col of currencyCols) {
+    applyCurrencyFormat(ws, col, rowTracker.minDataStartRow, rowTracker.minTotalRow);
+  }
+  
+  // Resumo section: Valor Total (col 2) and Média Pacote (col 3)
+  for (const r of rowTracker.resumoRows) {
+    applyCurrencyFormat(ws, 2, r, r);
+    applyCurrencyFormat(ws, 3, r, r);
+  }
+
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Folha de Pagamento");
