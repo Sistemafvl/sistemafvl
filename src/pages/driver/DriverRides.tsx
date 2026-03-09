@@ -224,8 +224,9 @@ const DriverRides = () => {
             </p>
           ) : (
             rides.map((ride, idx) => {
-              const totalLidos = ride.tbrCount ?? 0;
-              const entregues = Math.max(0, (ride.tbrCount ?? 0) - (ride.returnCount ?? 0));
+              // ride_tbrs already has returns removed by trigger, so tbrCount = concluídos
+              const entregues = ride.tbrCount ?? 0;
+              const totalLidos = entregues + (ride.returnCount ?? 0); // volume original
               const totalGanho = entregues * (ride.tbrValue ?? 0) + (ride.reativoValue ?? 0);
               const reativoVal = ride.reativoValue ?? 0;
               const tempo = calcDuration(ride.started_at, ride.finished_at);

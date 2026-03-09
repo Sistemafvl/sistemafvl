@@ -352,13 +352,9 @@ const DriverHome = () => {
         } else {
           const dayTbrs = tbrData.filter((t: any) => dayRideIds.includes(t.ride_id));
           const uniqueCodes = new Set(dayTbrs.map((t: any) => t.code));
-          const returnCodes = new Set<string>();
-          [...piData, ...psData, ...rtoData].forEach((p: any) => {
-            if (p.ride_id && dayRideIds.includes(p.ride_id) && p.tbr_code) returnCodes.add(p.tbr_code);
-          });
-          const dayReturnCount = [...returnCodes].filter(c => uniqueCodes.has(c)).length;
+          // ride_tbrs already cleaned by trigger — no subtraction needed
           const tbrVal = (uid && customMap.get(uid)) ?? (uid && settingsMap.get(uid)) ?? 0;
-          total += Math.max(0, uniqueCodes.size - dayReturnCount) * tbrVal;
+          total += uniqueCodes.size * tbrVal;
         }
       });
 
