@@ -68,7 +68,7 @@ const DriverHome = () => {
       const unitIds = [...new Set(r.map((x) => x.unit_id))];
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes] = await Promise.all([
+      const [piRaw, psData, rtoData, us, un, cv, bn, fvRes, reatRes] = await Promise.all([
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
@@ -90,6 +90,11 @@ const DriverHome = () => {
           .lte("period_start", endDate),
         supabase.from("driver_fixed_values" as any).select("unit_id, target_date, fixed_value")
           .eq("driver_id", driverId),
+        supabase.from("reativo_entries").select("reativo_value, ride_id")
+          .eq("driver_id", driverId)
+          .eq("unit_id", unitId!)
+          .gte("activated_at", start)
+          .lte("activated_at", end),
       ]);
       const tbrData = await fetchAllRowsWithIn<{ id: string; ride_id: string; code: string }>(
         (ids) => (from, to) => supabase.from("ride_tbrs").select("id, ride_id, code").in("ride_id", ids).order("id").range(from, to),
