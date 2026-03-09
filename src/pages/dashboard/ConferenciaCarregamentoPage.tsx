@@ -243,6 +243,9 @@ const ConferenciaCarregamentoPage = () => {
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
 
+  // Photo modal
+  const [photoModalUrl, setPhotoModalUrl] = useState<string | null>(null);
+
   // Delete TBR with manager password
   const [showDeleteTbrPasswordModal, setShowDeleteTbrPasswordModal] = useState(false);
   const [deleteTbrPassword, setDeleteTbrPassword] = useState("");
@@ -2018,7 +2021,10 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         <div className="flex items-center gap-3 mt-2">
-                          <Avatar className="h-16 w-16 shrink-0">
+                          <Avatar 
+                            className={cn("h-16 w-16 shrink-0", ride.driver_avatar && "cursor-pointer hover:ring-2 hover:ring-primary transition-all")}
+                            onClick={() => ride.driver_avatar && setPhotoModalUrl(ride.driver_avatar)}
+                          >
                             {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
                             <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
                               {(ride.driver_name ?? "M")[0].toUpperCase()}
@@ -2426,7 +2432,10 @@ const ConferenciaCarregamentoPage = () => {
 
                   {/* Driver Info */}
                   <div className="flex items-center gap-3">
-                    <Avatar className="h-16 w-16 shrink-0">
+                    <Avatar 
+                      className={cn("h-16 w-16 shrink-0", ride.driver_avatar && "cursor-pointer hover:ring-2 hover:ring-primary transition-all")}
+                      onClick={() => ride.driver_avatar && setPhotoModalUrl(ride.driver_avatar)}
+                    >
                       {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
                       <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
                         {(ride.driver_name ?? "M")[0].toUpperCase()}
@@ -3122,6 +3131,25 @@ const ConferenciaCarregamentoPage = () => {
               <History className="h-4 w-4" />
               Criar Carregamento Retroativo
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Photo Modal */}
+      <Dialog open={!!photoModalUrl} onOpenChange={(open) => !open && setPhotoModalUrl(null)}>
+        <DialogContent className="sm:max-w-md p-2 bg-transparent border-none shadow-none">
+          <div className="relative">
+            <img
+              src={photoModalUrl || ""}
+              alt="Foto do motorista"
+              className="w-full h-auto max-h-[80vh] object-contain rounded-lg"
+            />
+            <button
+              onClick={() => setPhotoModalUrl(null)}
+              className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
         </DialogContent>
       </Dialog>
