@@ -210,7 +210,7 @@ const DriverHome = () => {
     const currentUnitId = unitSession?.id;
     const configuredTbrVal = (currentUnitId && customMap.get(currentUnitId)) ?? (currentUnitId && settingsMap.get(currentUnitId)) ?? 0;
 
-    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, totalReturnValue, workedDays, days, totalReativos };
+    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, configuredTbrVal, workedDays, days, totalReativos };
   }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, reativoEntries, startDate, endDate]);
 
   const chartData = useMemo(() => {
