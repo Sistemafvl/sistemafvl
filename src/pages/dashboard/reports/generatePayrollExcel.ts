@@ -65,6 +65,18 @@ function setCellFormula(ws: XLSX.WorkSheet, row: number, col: number, formula: s
   if (style) ws[addr].s = style;
 }
 
+// Helper to apply currency format to a column range
+function applyCurrencyFormat(ws: XLSX.WorkSheet, col: number, rowStart: number, rowEnd: number) {
+  const currencyFmt = '"R$" #,##0.00';
+  for (let r = rowStart; r <= rowEnd; r++) {
+    const addr = XLSX.utils.encode_cell({ r, c: col });
+    if (ws[addr]) {
+      ws[addr].z = currencyFmt;
+      ws[addr].s = { ...(ws[addr].s || {}), numFmt: currencyFmt };
+    }
+  }
+}
+
 // Helper to get Excel column letter
 function colLetter(col: number): string {
   let result = "";
@@ -649,6 +661,26 @@ export function generatePayrollExcel(
     border: borderThin,
   });
 
+  // ══════════════ APPLY CURRENCY FORMATTING ══════════════
+  // Currency columns: VALOR POR PACOTE (2), DESCONTOS (4), ADICIONAL (5), TOTAL GERAL (6)
+  const currencyCols = [COL_VALUE, COL_DISCOUNTS, COL_ADDITIONAL, COL_TOTAL_GERAL];
+  
+  // Main data rows + total row
+  for (const col of currencyCols) {
+    applyCurrencyFormat(ws, col, rowTracker.dataStartRow, rowTracker.totalRow);
+  }
+  
+  // Min package rows + total row
+  for (const col of currencyCols) {
+    applyCurrencyFormat(ws, col, rowTracker.minDataStartRow, rowTracker.minTotalRow);
+  }
+  
+  // Resumo section: Valor Total (col 2) and Média Pacote (col 3)
+  for (const r of rowTracker.resumoRows) {
+    applyCurrencyFormat(ws, 2, r, r);
+    applyCurrencyFormat(ws, 3, r, r);
+  }
+
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Folha de Pagamento");
@@ -828,6 +860,12 @@ export function generatePayrollExcel(
       alignment: centerAlign,
       border: borderThin,
     });
+    
+    // Apply currency formatting to driver sheet
+    // Valor por Pacote in header (row 6)
+    applyCurrencyFormat(driverWs, 1, 6, 6);
+    // Financial summary rows: Valor por Pacote, Subtotal, Descontos, Adicional, TOTAL A PAGAR
+    applyCurrencyFormat(driverWs, 1, finStartRow + 1, totalPayRow - 1);
     
     XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
   });
