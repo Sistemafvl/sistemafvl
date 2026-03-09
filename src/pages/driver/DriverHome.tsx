@@ -206,7 +206,22 @@ const DriverHome = () => {
     const mediaTbrsDia = workedDays > 0 ? concluidos / workedDays : 0;
     const days = eachDayOfInterval({ start: parseISO(startDate), end: parseISO(endDate) });
 
-    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, workedDays, days, totalReativos };
+    // Calculate total return value (returns × tbr value per day)
+    let totalReturnValue = 0;
+    ridesByDay.forEach((rideIds, day) => {
+      const returnCodes2 = new Set<string>();
+      [...pisoEntries, ...psEntries, ...rtoEntries].forEach((p: any) => {
+        if (p.ride_id && rideIds.includes(p.ride_id) && p.tbr_code) {
+          returnCodes2.add(p.tbr_code);
+        }
+      });
+      const firstRide = rides.find((r: any) => r.id === rideIds[0]);
+      const unitId = firstRide?.unit_id;
+      const tbrVal = (unitId && customMap.get(unitId)) ?? (unitId && settingsMap.get(unitId)) ?? 0;
+      totalReturnValue += returnCodes2.size * tbrVal;
+    });
+
+    return { totalRides, totalTbrs, totalLidos, concluidos, totalGanho, taxaConclusao, mediaTbrsDia, totalReturns, totalReturnValue, workedDays, days, totalReativos };
   }, [rides, tbrs, pisoEntries, allPisoEntries, psEntries, rtoEntries, unitSettings, customValues, bonuses, fixedValues, reativoEntries, startDate, endDate]);
 
   const chartData = useMemo(() => {
