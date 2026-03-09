@@ -112,6 +112,7 @@ const DriverHome = () => {
       setCustomValues(cv.data ?? []);
       setBonuses(bn.data ?? []);
       setFixedValues((fvRes as any).data ?? []);
+      setReativoEntries(reatRes.data ?? []);
       setLoading(false);
     };
     fetch();
