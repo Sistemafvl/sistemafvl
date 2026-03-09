@@ -376,7 +376,7 @@ const DriverHome = () => {
     { label: "Concluídos", value: metrics.totalTbrs, icon: CheckCircle2, color: "text-green-600" },
     { label: "Total Ganho", value: formatBRL(metrics.totalGanho), icon: DollarSign, color: "text-emerald-600" },
     { label: "Reativos", value: formatBRL(metrics.totalReativos), icon: Zap, color: "text-amber-600" },
-    { label: `Insucessos (${metrics.totalReturns})`, value: formatBRL(metrics.totalReturnValue), icon: RotateCcw, color: "text-red-600" },
+    { label: `Insucessos (${metrics.totalReturns})`, value: formatBRL(metrics.configuredTbrVal), icon: RotateCcw, color: "text-red-600" },
     { label: "Quinzena", value: formatBRL(quinzenaValue), icon: CalendarDays, color: "text-purple-600" },
   ];
 
