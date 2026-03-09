@@ -2021,7 +2021,10 @@ const ConferenciaCarregamentoPage = () => {
                         </div>
 
                         <div className="flex items-center gap-3 mt-2">
-                          <Avatar className="h-16 w-16 shrink-0">
+                          <Avatar 
+                            className={cn("h-16 w-16 shrink-0", ride.driver_avatar && "cursor-pointer hover:ring-2 hover:ring-primary transition-all")}
+                            onClick={() => ride.driver_avatar && setPhotoModalUrl(ride.driver_avatar)}
+                          >
                             {ride.driver_avatar && <AvatarImage src={ride.driver_avatar} />}
                             <AvatarFallback className="bg-primary/10 text-primary font-bold text-xl">
                               {(ride.driver_name ?? "M")[0].toUpperCase()}
