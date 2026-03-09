@@ -571,6 +571,95 @@ const RetornoPisoPage = () => {
 
   const uniqueDriverNames = [...new Set(entries.map(e => e.driver_name).filter(Boolean) as string[])].sort();
 
+  // Conferência handlers
+  const handleConfScan = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter" || !confScanInput.trim()) return;
+    const code = confScanInput.trim().toUpperCase();
+    const match = entries.find(en => en.tbr_code.toUpperCase() === code);
+    if (match) {
+      setCheckedTbrs(prev => new Set(prev).add(match.id));
+      toast({ title: "TBR conferido", description: match.tbr_code });
+    } else {
+      toast({ title: "TBR não encontrado", description: "Este TBR não está na lista de retornos.", variant: "destructive" });
+    }
+    setConfScanInput("");
+  };
+
+  const toggleCheck = (id: string) => {
+    setCheckedTbrs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleConfPdf = () => {
+    const pdf = new jsPDF("l", "mm", "a4");
+    const pw = 297;
+    const margin = 10;
+    const unitName = unitSession?.name ?? "Unidade";
+    const dateStr = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+
+    // Header
+    pdf.setFontSize(14);
+    pdf.setFont("helvetica", "bold");
+    pdf.text("Conferência de Retorno", margin, 16);
+    pdf.setFontSize(9);
+    pdf.setFont("helvetica", "normal");
+    pdf.text(`${unitName} — ${dateStr}`, margin, 22);
+    pdf.text(`Conferidos: ${checkedTbrs.size} / ${entries.length}`, margin, 27);
+
+    // Table
+    const headers = ["Status", "TBR", "Motorista", "Rota", "Motivo", "Data/Hora"];
+    const colWidths = [18, 38, 55, 30, 80, 40];
+    let y = 34;
+
+    // Header row
+    pdf.setFillColor(13, 148, 136);
+    pdf.rect(margin, y, pw - margin * 2, 7, "F");
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFontSize(8);
+    pdf.setFont("helvetica", "bold");
+    let x = margin + 2;
+    headers.forEach((h, i) => {
+      pdf.text(h, x, y + 5);
+      x += colWidths[i];
+    });
+    y += 7;
+
+    // Rows
+    pdf.setFont("helvetica", "normal");
+    pdf.setTextColor(0, 0, 0);
+    const sortedEntries = [...entries].sort((a, b) => {
+      const aChecked = checkedTbrs.has(a.id) ? 0 : 1;
+      const bChecked = checkedTbrs.has(b.id) ? 0 : 1;
+      return aChecked - bChecked;
+    });
+
+    for (const entry of sortedEntries) {
+      if (y > 195) { pdf.addPage(); y = 15; }
+      const isChecked = checkedTbrs.has(entry.id);
+      if (y % 2 === 0) { pdf.setFillColor(243, 244, 246); pdf.rect(margin, y, pw - margin * 2, 6, "F"); }
+      x = margin + 2;
+      pdf.setFontSize(8);
+      pdf.text(isChecked ? "✓ Conferido" : "Pendente", x, y + 4);
+      x += colWidths[0];
+      pdf.text(entry.tbr_code, x, y + 4);
+      x += colWidths[1];
+      pdf.text((entry.driver_name ?? "-").substring(0, 30), x, y + 4);
+      x += colWidths[2];
+      pdf.text(entry.route ?? "-", x, y + 4);
+      x += colWidths[3];
+      pdf.text(entry.reason.substring(0, 45), x, y + 4);
+      x += colWidths[4];
+      pdf.text(format(new Date(entry.created_at), "dd/MM HH:mm"), x, y + 4);
+      y += 6;
+    }
+
+    pdf.save(`conferencia_retorno_${format(new Date(), "yyyyMMdd_HHmm")}.pdf`);
+    toast({ title: "PDF gerado com sucesso" });
+  };
+
   return (
     <div className="space-y-4">
       {/* Indicator Cards */}
