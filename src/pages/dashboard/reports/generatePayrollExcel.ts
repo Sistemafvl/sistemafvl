@@ -65,6 +65,18 @@ function setCellFormula(ws: XLSX.WorkSheet, row: number, col: number, formula: s
   if (style) ws[addr].s = style;
 }
 
+// Helper to apply currency format to a column range
+function applyCurrencyFormat(ws: XLSX.WorkSheet, col: number, rowStart: number, rowEnd: number) {
+  const currencyFmt = '"R$" #,##0.00';
+  for (let r = rowStart; r <= rowEnd; r++) {
+    const addr = XLSX.utils.encode_cell({ r, c: col });
+    if (ws[addr]) {
+      ws[addr].z = currencyFmt;
+      ws[addr].s = { ...(ws[addr].s || {}), numFmt: currencyFmt };
+    }
+  }
+}
+
 // Helper to get Excel column letter
 function colLetter(col: number): string {
   let result = "";
