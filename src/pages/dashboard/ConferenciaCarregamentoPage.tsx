@@ -940,11 +940,6 @@ const ConferenciaCarregamentoPage = () => {
       const totalScans = prevScanCount + 1;
       scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
 
-      // Persistent scan count (independent of local state timing)
-      if (!scanCountsRef.current[rideId]) scanCountsRef.current[rideId] = {};
-      const prevScanCount = scanCountsRef.current[rideId][code.toUpperCase()] || 0;
-      const totalScans = prevScanCount + 1;
-      scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
 
       if (totalScans === 1 && count === 0) {
         // OPTIMISTIC UPDATE FIRST — show TBR immediately
