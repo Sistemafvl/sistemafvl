@@ -131,7 +131,20 @@ const DriverRides = () => {
     fetchRides();
   }, [driverId, startDate, endDate]);
 
-  const formatDate = (iso: string) =>
+  // Average TBRs concluded per day across all loaded rides
+  const avgPerDay = useMemo(() => {
+    if (rides.length === 0) return 0;
+    const daySet = new Set<string>();
+    let totalConcluidos = 0;
+    rides.forEach((r) => {
+      const day = new Date(r.completed_at).toISOString().slice(0, 10);
+      daySet.add(day);
+      totalConcluidos += r.tbrCount ?? 0;
+    });
+    return daySet.size > 0 ? Math.round(totalConcluidos / daySet.size) : 0;
+  }, [rides]);
+
+
     new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   const formatTime = (iso: string) =>
