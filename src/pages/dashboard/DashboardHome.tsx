@@ -47,7 +47,7 @@ interface TimelineEvent {
   conferente: string | null;
   action: string;
   detail: string;
-  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo";
+  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo" | "reversa";
   photo_url?: string | null;
   reason?: string | null;
   observations?: string | null;
