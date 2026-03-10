@@ -2452,6 +2452,18 @@ const ConferenciaCarregamentoPage = () => {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
+                      {(() => {
+                        const avg = driverAvgMap.get(ride.driver_id);
+                        const currentTbrs = focusedTbrs.length;
+                        if (avg === undefined || avg === 0) return null;
+                        const ratio = currentTbrs / avg;
+                        const color = ratio <= 1.0 ? "border-green-500 text-green-700 bg-green-500/10" : ratio <= 1.1 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                        return (
+                          <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                            {avg}
+                          </div>
+                        );
+                      })()}
                       <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
                         <Hash className="h-3.5 w-3.5 mr-0.5" />
                         {ride.sequence_number}º
