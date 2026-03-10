@@ -13,7 +13,7 @@ const MatrizFinanceiro = () => {
   const { unitSession } = useAuthStore();
   const domainId = unitSession?.domain_id || "";
 
-  const [dateStart, setDateStart] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
+  const [dateStart, setDateStart] = useState(format(subDays(new Date(), 15), "yyyy-MM-dd"));
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [units, setUnits] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);

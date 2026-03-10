@@ -63,17 +63,12 @@ export function useConferenteSessionLock() {
     setConferenteSession(null);
   }, [setConferenteSession]);
 
-  // Subscribe to realtime + polling fallback
+  // Subscribe to realtime only (no polling fallback to reduce Cloud consumption)
   useEffect(() => {
     if (!unitSession?.id || !conferenteSession?.id) {
-      // Cleanup if no session
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
-      }
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
       }
       return;
     }
@@ -113,33 +108,9 @@ export function useConferenteSessionLock() {
 
     channelRef.current = channel;
 
-    // Polling fallback every 3 seconds
-    const poll = async () => {
-      if (kickedRef.current) return;
-      try {
-        const { data } = await supabase
-          .from("conferente_sessions" as any)
-          .select("session_token")
-          .eq("conferente_id", conferenteId)
-          .maybeSingle();
-
-        if (data && (data as any).session_token !== myToken) {
-          handleKick();
-        }
-      } catch (e) {
-        console.error("Poll error:", e);
-      }
-    };
-
-    pollRef.current = setInterval(poll, 3000);
-
     return () => {
       supabase.removeChannel(channel);
       channelRef.current = null;
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
     };
   }, [unitSession?.id, conferenteSession?.id, claimSession, handleKick]);
 
