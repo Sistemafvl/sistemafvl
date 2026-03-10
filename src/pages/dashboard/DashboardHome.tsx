@@ -331,6 +331,15 @@ const DashboardHome = () => {
             is_seller: ps.is_seller,
           });
         }
+        if (ps.reversa_at) {
+          timeline.push({
+            timestamp: ps.reversa_at,
+            conferente: confName,
+            action: "Status: Reversa Enviada",
+            detail: ps.description,
+            type: "reversa",
+          });
+        }
       });
 
       // RTO — always open event + optional close event
