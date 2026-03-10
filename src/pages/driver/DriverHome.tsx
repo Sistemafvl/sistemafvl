@@ -509,21 +509,6 @@ const DriverHome = () => {
             ))}
            </div>
 
-           {/* Ranking card */}
-           <Card className="border-amber-500/30">
-             <CardContent className="p-3 flex items-center gap-3">
-               <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
-                 <Trophy className="h-5 w-5 text-amber-500" />
-               </div>
-               <div className="min-w-0">
-                 <p className="text-[10px] text-muted-foreground uppercase font-semibold">Sua Posição no Ranking</p>
-                 <p className="text-xl font-bold text-amber-600">
-                   {rankPosition ? `#${rankPosition.pos} de ${rankPosition.total}` : "—"}
-                 </p>
-                 <p className="text-[10px] text-muted-foreground">Quinzena atual • TBRs finalizados</p>
-               </div>
-             </CardContent>
-           </Card>
 
            {/* DNR Cards */}
            <div className="grid grid-cols-2 gap-2">
