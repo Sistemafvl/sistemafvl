@@ -419,7 +419,7 @@ const DashboardHome = () => {
       });
 
       // Sort chronologically with tie-breaker by event priority
-      const typePriority: Record<string, number> = { started: 1, origin: 2, loaded: 3, piso: 4, removal: 5, ps: 6, rto: 7, dnr: 8, rescue: 9, reativo: 10, finished: 11 };
+      const typePriority: Record<string, number> = { started: 1, origin: 2, loaded: 3, piso: 4, removal: 5, ps: 6, rto: 7, dnr: 8, rescue: 9, reativo: 10, reversa: 11, finished: 12 };
       timeline.sort((a, b) => {
         const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
         if (diff !== 0) return diff;

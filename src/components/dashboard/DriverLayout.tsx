@@ -36,6 +36,7 @@ const DriverLayout = () => {
         </main>
       </div>
       <DriverCallAlert />
+      <DriverDailyNotices />
     </SidebarProvider>
   );
 };
