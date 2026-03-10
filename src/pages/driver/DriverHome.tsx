@@ -6,12 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap, Trophy } from "lucide-react";
-import React, { Suspense } from "react";
-const RechartsComponents = React.lazy(() => import("recharts").then(mod => ({ default: () => null, ...mod })));
-// Lazy wrappers for recharts
-const LazyLineChart = React.lazy(() => import("recharts").then(m => ({ default: m.LineChart })));
-const LazyBarChart = React.lazy(() => import("recharts").then(m => ({ default: m.BarChart })));
-const LazyPieChart = React.lazy(() => import("recharts").then(m => ({ default: m.PieChart })));
+import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr, getBrazilNow, formatBRL } from "@/lib/utils";
