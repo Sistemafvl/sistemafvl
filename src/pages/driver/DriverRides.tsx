@@ -315,10 +315,10 @@ const DriverRides = () => {
                        <span className="text-[10px] text-muted-foreground leading-none">Concl.</span>
                        <span className="text-xs font-bold text-green-600">{entregues}</span>
                      </div>
-                     <div className="flex flex-col items-center p-1.5 rounded-md bg-red-500/10 border border-red-500/20">
-                       <AlertTriangle className="h-3 w-3 text-red-600 mb-0.5" />
-                       <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
-                       <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-teal-500/10 border border-teal-500/20">
+                       <TrendingUp className="h-3 w-3 text-teal-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Méd/Dia</span>
+                       <span className="text-xs font-bold text-teal-600">{avgPerDay}</span>
                      </div>
                      <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
                        <Zap className="h-3 w-3 text-amber-600 mb-0.5" />
