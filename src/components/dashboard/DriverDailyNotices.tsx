@@ -2,13 +2,14 @@ import { useState, useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { getBrazilTodayStr } from "@/lib/utils";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { ShieldCheck, LifeBuoy, Landmark, Zap } from "lucide-react";
 
 const NOTICES = [
@@ -91,7 +92,6 @@ const DriverDailyNotices = () => {
     if (currentIndex < NOTICES.length - 1) {
       setCurrentIndex(currentIndex + 1);
     } else {
-      // Mark as seen
       const today = getBrazilTodayStr();
       const key = `driver_notices_seen_${driverId}_${today}`;
       localStorage.setItem(key, "1");
@@ -105,27 +105,29 @@ const DriverDailyNotices = () => {
   const Icon = notice.icon;
 
   return (
-    <Dialog open onOpenChange={() => {}}>
-      <DialogContent className="max-w-md max-h-[85vh] flex flex-col [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()}>
-        <DialogHeader className="shrink-0">
+    <AlertDialog open>
+      <AlertDialogContent className="max-w-md">
+        <AlertDialogHeader>
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <Icon className="h-5 w-5 text-primary" />
             </div>
             <div>
-              <DialogTitle className="text-base">{notice.title}</DialogTitle>
-              <DialogDescription className="text-xs">
+              <AlertDialogTitle className="text-base">{notice.title}</AlertDialogTitle>
+              <AlertDialogDescription className="text-xs">
                 Aviso {currentIndex + 1} de {NOTICES.length}
-              </DialogDescription>
+              </AlertDialogDescription>
             </div>
           </div>
-        </DialogHeader>
-        <div className="mt-2 overflow-y-auto flex-1 min-h-0">{notice.body}</div>
-        <Button onClick={handleOk} className="w-full mt-2 shrink-0">
-          Ok, Ciente
-        </Button>
-      </DialogContent>
-    </Dialog>
+        </AlertDialogHeader>
+        <div className="mt-2">{notice.body}</div>
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={handleOk} className="w-full">
+            Ok, Ciente
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 };
 
