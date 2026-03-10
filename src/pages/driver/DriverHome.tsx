@@ -53,6 +53,7 @@ const DriverHome = () => {
         .eq("unit_id", unitId!)
         .gte("completed_at", start)
         .lte("completed_at", end)
+        .neq("loading_status", "cancelled")
         .order("completed_at", { ascending: true });
 
       const r = ridesData ?? [];
@@ -311,6 +312,7 @@ const DriverHome = () => {
         .eq("unit_id", unitId)
         .gte("completed_at", start)
         .lte("completed_at", end)
+        .neq("loading_status", "cancelled")
         .order("completed_at", { ascending: true });
 
       const r = qRides ?? [];
