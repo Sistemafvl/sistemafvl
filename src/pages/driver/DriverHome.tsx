@@ -373,6 +373,34 @@ const DriverHome = () => {
     fetchQuinzena();
   }, [driverId]);
 
+  // Ranking position
+  const [rankPosition, setRankPosition] = useState<{ pos: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!driverId || !unitSession?.id) return;
+    const fetchRanking = async () => {
+      const br = getBrazilNow();
+      const day = br.getDate();
+      const year = br.getFullYear();
+      const month = br.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const qStartDay = day <= 15 ? 1 : 16;
+      const qEndDay = day <= 15 ? 15 : lastDay;
+      const qStartStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(qStartDay).padStart(2, "0")}T03:00:00.000Z`;
+      const qEndStr = new Date(new Date(`${year}-${String(month + 1).padStart(2, "0")}-${String(qEndDay).padStart(2, "0")}T03:00:00.000Z`).getTime() + 86400000 - 1).toISOString();
+
+      const { data } = await supabase.rpc("get_top_drivers_by_tbrs", {
+        p_unit_id: unitSession.id,
+        p_since: qStartStr,
+        p_until: qEndStr,
+      });
+      if (!data || data.length === 0) { setRankPosition(null); return; }
+      const idx = data.findIndex((d: any) => d.driver_id === driverId);
+      if (idx === -1) { setRankPosition(null); return; }
+      setRankPosition({ pos: idx + 1, total: data.length });
+    };
+    fetchRanking();
+  }, [driverId, unitSession?.id]);
+
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
     { label: "Concluídos", value: metrics.totalTbrs, icon: CheckCircle2, color: "text-green-600" },
