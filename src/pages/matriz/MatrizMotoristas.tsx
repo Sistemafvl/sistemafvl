@@ -46,7 +46,7 @@ const MatrizMotoristas = () => {
         fetchAllRows<any>((from, to) =>
           supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)
         ),
-        fetchAllRows<any>((from, to) => supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, active").order("id").range(from, to)),
+        Promise.resolve([]), // drivers fetched after rides load
         fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, driver_id, dnr_value, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
