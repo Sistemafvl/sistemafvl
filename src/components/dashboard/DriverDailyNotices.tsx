@@ -106,8 +106,8 @@ const DriverDailyNotices = () => {
 
   return (
     <Dialog open onOpenChange={() => {}}>
-      <DialogContent className="max-w-md [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
+      <DialogContent className="max-w-md max-h-[85vh] flex flex-col [&>button]:hidden" onPointerDownOutside={(e) => e.preventDefault()}>
+        <DialogHeader className="shrink-0">
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
               <Icon className="h-5 w-5 text-primary" />
@@ -120,8 +120,8 @@ const DriverDailyNotices = () => {
             </div>
           </div>
         </DialogHeader>
-        <div className="mt-2">{notice.body}</div>
-        <Button onClick={handleOk} className="w-full mt-2">
+        <div className="mt-2 overflow-y-auto flex-1 min-h-0">{notice.body}</div>
+        <Button onClick={handleOk} className="w-full mt-2 shrink-0">
           Ok, Ciente
         </Button>
       </DialogContent>
