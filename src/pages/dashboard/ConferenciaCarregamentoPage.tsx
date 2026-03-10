@@ -79,6 +79,12 @@ interface SwapDriver {
   car_color: string | null;
 }
 
+const shortName = (name: string | undefined | null): string => {
+  if (!name) return "Motorista";
+  const parts = name.trim().split(/\s+/);
+  return parts.length <= 2 ? name : `${parts[0]} ${parts[1]}`;
+};
+
 const formatDuration = (startedAt: string, finishedAt: string) => {
   const mins = differenceInMinutes(new Date(finishedAt), new Date(startedAt));
   if (mins >= 60) {
