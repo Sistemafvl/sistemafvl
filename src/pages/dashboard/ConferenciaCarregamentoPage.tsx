@@ -496,6 +496,8 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
+  }, [unitId, startDate, endDate]);
+
   // Fetch historical average TBRs/day per driver (30 days)
   useEffect(() => {
     if (!unitId || rides.length === 0) { setDriverAvgMap(new Map()); return; }
@@ -521,7 +523,6 @@ const ConferenciaCarregamentoPage = () => {
       const countMap = new Map<string, number>();
       (counts ?? []).forEach((c: any) => countMap.set(c.ride_id, Number(c.tbr_count)));
 
-      // Group by driver → day → sum TBRs
       const driverDays = new Map<string, Map<string, number>>();
       histRides.forEach(r => {
         const day = r.completed_at.slice(0, 10);
@@ -540,9 +541,6 @@ const ConferenciaCarregamentoPage = () => {
     };
     fetchAvg();
   }, [unitId, rides]);
-
-
-  }, [unitId, startDate, endDate]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
 
