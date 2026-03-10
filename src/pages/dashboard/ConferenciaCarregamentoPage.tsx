@@ -277,6 +277,9 @@ const ConferenciaCarregamentoPage = () => {
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const saveTbrRef = useRef<(rideId: string, code: string) => Promise<void>>();
 
+  // Driver historical average TBRs/day (30 days)
+  const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
+
   const playSuccessBeep = () => {
     try {
       const ctx = new AudioContext();
@@ -493,9 +496,51 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-  
-
   }, [unitId, startDate, endDate]);
+
+  // Fetch historical average TBRs/day per driver (30 days)
+  useEffect(() => {
+    if (!unitId || rides.length === 0) { setDriverAvgMap(new Map()); return; }
+    const driverIds = [...new Set(rides.map(r => r.driver_id))];
+    if (driverIds.length === 0) return;
+
+    const fetchAvg = async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const { data: histRides } = await supabase
+        .from("driver_rides")
+        .select("id, driver_id, completed_at")
+        .eq("unit_id", unitId)
+        .in("driver_id", driverIds)
+        .gte("completed_at", since.toISOString())
+        .eq("loading_status", "finished");
+
+      if (!histRides || histRides.length === 0) { setDriverAvgMap(new Map()); return; }
+
+      const histRideIds = histRides.map(r => r.id);
+      const { data: counts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: histRideIds });
+
+      const countMap = new Map<string, number>();
+      (counts ?? []).forEach((c: any) => countMap.set(c.ride_id, Number(c.tbr_count)));
+
+      const driverDays = new Map<string, Map<string, number>>();
+      histRides.forEach(r => {
+        const day = r.completed_at.slice(0, 10);
+        if (!driverDays.has(r.driver_id)) driverDays.set(r.driver_id, new Map());
+        const dayMap = driverDays.get(r.driver_id)!;
+        dayMap.set(day, (dayMap.get(day) ?? 0) + (countMap.get(r.id) ?? 0));
+      });
+
+      const avgMap = new Map<string, number>();
+      driverDays.forEach((dayMap, dId) => {
+        const days = dayMap.size;
+        const total = [...dayMap.values()].reduce((s, v) => s + v, 0);
+        avgMap.set(dId, days > 0 ? Math.round(total / days) : 0);
+      });
+      setDriverAvgMap(avgMap);
+    };
+    fetchAvg();
+  }, [unitId, rides]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
 
@@ -1999,6 +2044,18 @@ const ConferenciaCarregamentoPage = () => {
                               {(ride.driver_name ?? "M")[0].toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
+                          {(() => {
+                            const avg = driverAvgMap.get(ride.driver_id);
+                            const currentTbrs = (tbrs[ride.id] ?? []).length;
+                            if (avg === undefined || avg === 0) return null;
+                            const ratio = currentTbrs / avg;
+                            const color = ratio >= 0.9 ? "border-green-500 text-green-700 bg-green-500/10" : ratio >= 0.7 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                            return (
+                              <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                                {avg}
+                              </div>
+                            );
+                          })()}
                           <h3 className="text-lg font-bold">{ride.driver_name}</h3>
                         </div>
                         {isSearchActive && ride.unit_id !== unitId && (
@@ -2410,6 +2467,18 @@ const ConferenciaCarregamentoPage = () => {
                         {(ride.driver_name ?? "M")[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
+                    {(() => {
+                      const avg = driverAvgMap.get(ride.driver_id);
+                      const currentTbrs = (tbrs[ride.id] ?? []).length;
+                      if (avg === undefined || avg === 0) return null;
+                      const ratio = currentTbrs / avg;
+                      const color = ratio >= 0.9 ? "border-green-500 text-green-700 bg-green-500/10" : ratio >= 0.7 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                      return (
+                        <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                          {avg}
+                        </div>
+                      );
+                    })()}
                     <h3 className="text-lg font-bold">{ride.driver_name}</h3>
                   </div>
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
@@ -130,6 +130,20 @@ const DriverRides = () => {
     };
     fetchRides();
   }, [driverId, startDate, endDate]);
+
+  // Average TBRs concluded per day across all loaded rides
+  const avgPerDay = useMemo(() => {
+    if (rides.length === 0) return 0;
+    const daySet = new Set<string>();
+    let totalConcluidos = 0;
+    rides.forEach((r) => {
+      const day = new Date(r.completed_at).toISOString().slice(0, 10);
+      daySet.add(day);
+      totalConcluidos += r.tbrCount ?? 0;
+    });
+    return daySet.size > 0 ? Math.round(totalConcluidos / daySet.size) : 0;
+  }, [rides]);
+
 
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
@@ -302,10 +316,10 @@ const DriverRides = () => {
                        <span className="text-[10px] text-muted-foreground leading-none">Concl.</span>
                        <span className="text-xs font-bold text-green-600">{entregues}</span>
                      </div>
-                     <div className="flex flex-col items-center p-1.5 rounded-md bg-red-500/10 border border-red-500/20">
-                       <AlertTriangle className="h-3 w-3 text-red-600 mb-0.5" />
-                       <span className="text-[10px] text-muted-foreground leading-none">Insuc.</span>
-                       <span className="text-xs font-bold text-red-600">{ride.returnCount ?? 0}</span>
+                     <div className="flex flex-col items-center p-1.5 rounded-md bg-teal-500/10 border border-teal-500/20">
+                       <TrendingUp className="h-3 w-3 text-teal-600 mb-0.5" />
+                       <span className="text-[10px] text-muted-foreground leading-none">Méd/Dia</span>
+                       <span className="text-xs font-bold text-teal-600">{avgPerDay}</span>
                      </div>
                      <div className="flex flex-col items-center p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20">
                        <Zap className="h-3 w-3 text-amber-600 mb-0.5" />
