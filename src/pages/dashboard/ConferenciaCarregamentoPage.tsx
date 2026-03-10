@@ -2027,6 +2027,18 @@ const ConferenciaCarregamentoPage = () => {
                           {isFinished && (
                             <CheckCircle className="h-5 w-5 text-green-600" />
                           )}
+                          {(() => {
+                            const avg = driverAvgMap.get(ride.driver_id);
+                            const currentTbrs = (tbrs[ride.id] ?? []).length;
+                            if (avg === undefined || avg === 0) return null;
+                            const ratio = currentTbrs / avg;
+                            const color = ratio <= 1.0 ? "border-green-500 text-green-700 bg-green-500/10" : ratio <= 1.1 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                            return (
+                              <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                                {avg}
+                              </div>
+                            );
+                          })()}
                           <button
                             onClick={() => handleOpenDriverModal(ride.driver_id)}
                             className="h-7 w-7 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors"
