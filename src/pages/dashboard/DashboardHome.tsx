@@ -76,7 +76,7 @@ const DashboardHome = () => {
   const [dnrAnalyzing, setDnrAnalyzing] = useState({ count: 0, value: 0 });
   const [dnrClosed, setDnrClosed] = useState(0);
   useEffect(() => {
-    const interval = setInterval(() => setDateTime(new Date()), 1000);
+    const interval = setInterval(() => setDateTime(new Date()), 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -84,34 +84,22 @@ const DashboardHome = () => {
   useEffect(() => {
     if (!unitSession?.id) return;
     const fetchStats = async () => {
-      const [
-        feedbackCountRes,
-        feedbackSumRes,
-        dnrOpenCountRes,
-        dnrOpenSumRes,
-        dnrAnalyzingCountRes,
-        dnrAnalyzingSumRes,
-        dnrClosedCountRes,
-      ] = await Promise.all([
-        supabase.from("unit_reviews").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id),
+      const [reviewsRes, dnrRes] = await Promise.all([
         supabase.from("unit_reviews").select("rating").eq("unit_id", unitSession.id),
-        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "open"),
-        supabase.from("dnr_entries").select("dnr_value").eq("unit_id", unitSession.id).eq("status", "open"),
-        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "analyzing"),
-        supabase.from("dnr_entries").select("dnr_value").eq("unit_id", unitSession.id).eq("status", "analyzing"),
-        supabase.from("dnr_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitSession.id).eq("status", "closed"),
+        supabase.from("dnr_entries").select("status, dnr_value").eq("unit_id", unitSession.id),
       ]);
       
-      const totalFeedback = feedbackCountRes.count ?? 0;
-      const ratings = feedbackSumRes.data ?? [];
-      setFeedbackTotal(totalFeedback);
-      setFeedbackAvg(totalFeedback > 0 ? ratings.reduce((s, r) => s + r.rating, 0) / totalFeedback : 0);
+      const ratings = reviewsRes.data ?? [];
+      setFeedbackTotal(ratings.length);
+      setFeedbackAvg(ratings.length > 0 ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : 0);
       
-      const openValues = dnrOpenSumRes.data ?? [];
-      const analyzingValues = dnrAnalyzingSumRes.data ?? [];
-      setDnrOpen({ count: dnrOpenCountRes.count ?? 0, value: openValues.reduce((s, e) => s + Number(e.dnr_value), 0) });
-      setDnrAnalyzing({ count: dnrAnalyzingCountRes.count ?? 0, value: analyzingValues.reduce((s, e) => s + Number(e.dnr_value), 0) });
-      setDnrClosed(dnrClosedCountRes.count ?? 0);
+      const allDnr = dnrRes.data ?? [];
+      const open = allDnr.filter(e => e.status === "open");
+      const analyzing = allDnr.filter(e => e.status === "analyzing");
+      const closed = allDnr.filter(e => e.status === "closed");
+      setDnrOpen({ count: open.length, value: open.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(closed.length);
     };
     fetchStats();
   }, [unitSession?.id]);
