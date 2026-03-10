@@ -375,8 +375,8 @@ const ConferenciaCarregamentoPage = () => {
 
           await saveTbrRef.current?.(rideId, code);
 
-          // Resume scanning after a delay so user sees the result
-          setTimeout(() => { scanningPaused = false; }, 1500);
+          // Resume scanning after a shorter delay for faster flow
+          setTimeout(() => { scanningPaused = false; }, 800);
         } catch {}
       }, 100);
     } catch (err) {

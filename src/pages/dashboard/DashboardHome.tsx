@@ -658,8 +658,8 @@ const DashboardHome = () => {
                       <h4 className="font-bold italic text-xs mb-3 text-muted-foreground uppercase tracking-wide">Linha do Tempo</h4>
                       <div className="relative pl-4 space-y-0">
                         {tbrResult.timeline.map((evt, i) => {
-                          const colorMap: Record<string, string> = { origin: "text-primary", loaded: "text-primary", removal: "text-destructive", ps: "text-destructive", rto: "text-amber-600", dnr: "text-destructive", piso: "text-muted-foreground", started: "text-emerald-600", finished: "text-emerald-700", rescue: "text-blue-600", reativo: "text-purple-600" };
-                          const dotMap: Record<string, string> = { origin: "bg-primary", loaded: "bg-primary", removal: "bg-destructive", ps: "bg-destructive", rto: "bg-amber-600", dnr: "bg-destructive", piso: "bg-muted-foreground", started: "bg-emerald-600", finished: "bg-emerald-700", rescue: "bg-blue-600", reativo: "bg-purple-600" };
+                          const colorMap: Record<string, string> = { origin: "text-primary", loaded: "text-primary", removal: "text-destructive", ps: "text-destructive", rto: "text-amber-600", dnr: "text-destructive", piso: "text-muted-foreground", started: "text-emerald-600", finished: "text-emerald-700", rescue: "text-blue-600", reativo: "text-purple-600", reversa: "text-indigo-600" };
+                          const dotMap: Record<string, string> = { origin: "bg-primary", loaded: "bg-primary", removal: "bg-destructive", ps: "bg-destructive", rto: "bg-amber-600", dnr: "bg-destructive", piso: "bg-muted-foreground", started: "bg-emerald-600", finished: "bg-emerald-700", rescue: "bg-blue-600", reativo: "bg-purple-600", reversa: "bg-indigo-600" };
                           const color = colorMap[evt.type] ?? "text-muted-foreground";
                           const dotColor = dotMap[evt.type] ?? "bg-muted-foreground";
                           return (
