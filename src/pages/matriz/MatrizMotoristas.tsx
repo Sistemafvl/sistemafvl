@@ -52,15 +52,28 @@ const MatrizMotoristas = () => {
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
-      ]).then(([ridesData, driversData, dnrData, psData, settingsData, customData, minPkgData]) => {
+      ]).then(([ridesData, _driversPlaceholder, dnrData, psData, settingsData, customData, minPkgData]) => {
         setRides(ridesData);
-        setDrivers(driversData);
         setDnrEntries(dnrData);
         setPsEntries(psData);
         setUnitSettings(settingsData);
         setCustomValues(customData);
         setMinPackages(minPkgData);
         setLoading(false);
+
+        // Fetch drivers only for those with rides
+        const driverIdsFromRides = [...new Set(ridesData.map((r: any) => r.driver_id))];
+        if (driverIdsFromRides.length > 0) {
+          import("@/lib/supabase-helpers").then(({ fetchAllRowsWithIn }) => {
+            fetchAllRowsWithIn<any>(
+              (ids) => (from, to) => supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, active").in("id", ids).order("id").range(from, to),
+              driverIdsFromRides
+            ).then(data => setDrivers(data));
+          });
+        } else {
+          setDrivers([]);
+        }
+
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
           fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
