@@ -77,11 +77,23 @@ const MatrizOverview = () => {
         setDnrEntries(dnrData);
         setPisoEntries(pisoData);
         setReviews(reviewsData);
-        setDrivers(driversData);
         setUnitSettings(settingsData);
         setCustomValues(customData);
         setMinPackages(minPkgData);
         setLoading(false);
+
+        // Fetch drivers only for those with rides (instead of ALL drivers)
+        const driverIdsFromRides = [...new Set(ridesData.map((r: any) => r.driver_id))];
+        if (driverIdsFromRides.length > 0) {
+          import("@/lib/supabase-helpers").then(({ fetchAllRowsWithIn }) => {
+            fetchAllRowsWithIn<any>(
+              (ids) => (from, to) => supabase.from("drivers_public").select("id, name").in("id", ids).order("id").range(from, to),
+              driverIdsFromRides
+            ).then(data => setDrivers(data));
+          });
+        } else {
+          setDrivers([]);
+        }
 
         // Fetch TBRs with pagination (bypass 1000 limit)
         const rideIds = ridesData.map((r: any) => r.id);
