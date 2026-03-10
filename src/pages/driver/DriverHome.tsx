@@ -119,16 +119,29 @@ const DriverHome = () => {
     fetch();
   }, [driverId, startDate, endDate]);
 
-  // Fetch DNR stats
+  // Fetch DNR stats (filtered by current fortnight)
   useEffect(() => {
     if (!driverId) return;
     const fetchDnr = async () => {
       const unitId = unitSession?.id;
+      const br = getBrazilNow();
+      const day = br.getDate();
+      const year = br.getFullYear();
+      const month = br.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const qStartDay = day <= 15 ? 1 : 16;
+      const qEndDay = day <= 15 ? 15 : lastDay;
+      const qStart = `${year}-${String(month + 1).padStart(2, "0")}-${String(qStartDay).padStart(2, "0")}`;
+      const qEnd = `${year}-${String(month + 1).padStart(2, "0")}-${String(qEndDay).padStart(2, "0")}`;
+      const { start } = getBrazilDayRange(qStart);
+      const { end } = getBrazilDayRange(qEnd);
       const { data } = await supabase
         .from("dnr_entries")
         .select("status, dnr_value")
         .eq("driver_id", driverId)
-        .eq("unit_id", unitId!);
+        .eq("unit_id", unitId!)
+        .gte("created_at", start)
+        .lte("created_at", end);
       const all = (data ?? []) as any[];
       const open = all.filter(e => e.status === "analyzing");
       const closed = all.filter(e => e.status === "closed");
