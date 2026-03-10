@@ -277,6 +277,9 @@ const ConferenciaCarregamentoPage = () => {
   const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const saveTbrRef = useRef<(rideId: string, code: string) => Promise<void>>();
 
+  // Driver historical average TBRs/day (30 days)
+  const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
+
   const playSuccessBeep = () => {
     try {
       const ctx = new AudioContext();
