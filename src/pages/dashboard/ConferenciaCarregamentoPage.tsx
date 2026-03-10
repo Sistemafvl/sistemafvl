@@ -79,6 +79,12 @@ interface SwapDriver {
   car_color: string | null;
 }
 
+const shortName = (name: string | undefined | null): string => {
+  if (!name) return "Motorista";
+  const parts = name.trim().split(/\s+/);
+  return parts.length <= 2 ? name : `${parts[0]} ${parts[1]}`;
+};
+
 const formatDuration = (startedAt: string, finishedAt: string) => {
   const mins = differenceInMinutes(new Date(finishedAt), new Date(startedAt));
   if (mins >= 60) {
@@ -2021,6 +2027,18 @@ const ConferenciaCarregamentoPage = () => {
                           {isFinished && (
                             <CheckCircle className="h-5 w-5 text-green-600" />
                           )}
+                          {(() => {
+                            const avg = driverAvgMap.get(ride.driver_id);
+                            const currentTbrs = (tbrs[ride.id] ?? []).length;
+                            if (avg === undefined || avg === 0) return null;
+                            const ratio = currentTbrs / avg;
+                            const color = ratio <= 1.0 ? "border-green-500 text-green-700 bg-green-500/10" : ratio <= 1.1 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                            return (
+                              <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                                {avg}
+                              </div>
+                            );
+                          })()}
                           <button
                             onClick={() => handleOpenDriverModal(ride.driver_id)}
                             className="h-7 w-7 flex items-center justify-center rounded-full bg-muted hover:bg-muted/80 transition-colors"
@@ -2044,19 +2062,7 @@ const ConferenciaCarregamentoPage = () => {
                               {(ride.driver_name ?? "M")[0].toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          {(() => {
-                            const avg = driverAvgMap.get(ride.driver_id);
-                            const currentTbrs = (tbrs[ride.id] ?? []).length;
-                            if (avg === undefined || avg === 0) return null;
-                            const ratio = currentTbrs / avg;
-                            const color = ratio >= 0.9 ? "border-green-500 text-green-700 bg-green-500/10" : ratio >= 0.7 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
-                            return (
-                              <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
-                                {avg}
-                              </div>
-                            );
-                          })()}
-                          <h3 className="text-lg font-bold">{ride.driver_name}</h3>
+                          <h3 className="text-lg font-bold">{shortName(ride.driver_name)}</h3>
                         </div>
                         {isSearchActive && ride.unit_id !== unitId && (
                           <Badge className="bg-orange-500 text-white hover:bg-orange-600 text-[10px]">
@@ -2446,6 +2452,18 @@ const ConferenciaCarregamentoPage = () => {
                       </Badge>
                     </div>
                     <div className="flex items-center gap-2">
+                      {(() => {
+                        const avg = driverAvgMap.get(ride.driver_id);
+                        const currentTbrs = focusedTbrs.length;
+                        if (avg === undefined || avg === 0) return null;
+                        const ratio = currentTbrs / avg;
+                        const color = ratio <= 1.0 ? "border-green-500 text-green-700 bg-green-500/10" : ratio <= 1.1 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
+                        return (
+                          <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
+                            {avg}
+                          </div>
+                        );
+                      })()}
                       <Badge variant="default" className="text-sm px-3 py-0.5 font-bold">
                         <Hash className="h-3.5 w-3.5 mr-0.5" />
                         {ride.sequence_number}º
@@ -2467,19 +2485,7 @@ const ConferenciaCarregamentoPage = () => {
                         {(ride.driver_name ?? "M")[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    {(() => {
-                      const avg = driverAvgMap.get(ride.driver_id);
-                      const currentTbrs = (tbrs[ride.id] ?? []).length;
-                      if (avg === undefined || avg === 0) return null;
-                      const ratio = currentTbrs / avg;
-                      const color = ratio >= 0.9 ? "border-green-500 text-green-700 bg-green-500/10" : ratio >= 0.7 ? "border-amber-500 text-amber-700 bg-amber-500/10" : "border-red-500 text-red-700 bg-red-500/10";
-                      return (
-                        <div className={`h-7 w-7 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${color}`} title={`Média: ${avg} TBRs/dia · Atual: ${currentTbrs} TBRs`}>
-                          {avg}
-                        </div>
-                      );
-                    })()}
-                    <h3 className="text-lg font-bold">{ride.driver_name}</h3>
+                    <h3 className="text-lg font-bold">{shortName(ride.driver_name)}</h3>
                   </div>
 
                   {/* Vehicle & details */}
