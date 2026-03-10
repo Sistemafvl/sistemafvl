@@ -145,6 +145,7 @@ const DriverRides = () => {
   }, [rides]);
 
 
+  const formatDate = (iso: string) =>
     new Date(iso).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   const formatTime = (iso: string) =>
