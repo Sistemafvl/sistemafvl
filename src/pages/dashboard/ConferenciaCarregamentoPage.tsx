@@ -375,8 +375,8 @@ const ConferenciaCarregamentoPage = () => {
 
           await saveTbrRef.current?.(rideId, code);
 
-          // Resume scanning after a delay so user sees the result
-          setTimeout(() => { scanningPaused = false; }, 1500);
+          // Resume scanning after a shorter delay for faster flow
+          setTimeout(() => { scanningPaused = false; }, 800);
         } catch {}
       }, 100);
     } catch (err) {
@@ -940,91 +940,10 @@ const ConferenciaCarregamentoPage = () => {
       const totalScans = prevScanCount + 1;
       scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
 
-      // Check if TBR has a closed PS — if so, block it permanently
-      if (totalScans === 1) {
-        const { data: closedPs } = await supabase
-          .from("ps_entries")
-          .select("id")
-          .ilike("tbr_code", code)
-          .eq("status", "closed")
-          .limit(1);
-        if (closedPs && closedPs.length > 0) {
-          playErrorBeep();
-          const { toast } = await import("@/hooks/use-toast");
-          toast({
-            title: "TBR finalizado no PS",
-            description: "Este TBR já foi finalizado no Problem Solve e não pode ser carregado novamente.",
-            variant: "destructive",
-          });
-          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-          // Reset scan count so it doesn't accumulate
-          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
-          return;
-        }
-      }
 
       if (totalScans === 1 && count === 0) {
-        // Check if TBR already exists in ANY other ride (definitive block)
-        const { data: previousTbrs } = await supabase
-          .from("ride_tbrs")
-          .select("id, ride_id")
-          .ilike("code", code)
-          .neq("ride_id", rideId)
-          .limit(1);
-
-        if (previousTbrs && previousTbrs.length > 0) {
-          playErrorBeep();
-          const { toast } = await import("@/hooks/use-toast");
-          toast({
-            title: "TBR já vinculado",
-            description: "Este TBR já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) antes de ser bipado novamente.",
-            variant: "destructive",
-          });
-          setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
-          setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
-          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
-          return;
-        }
-
-        // Check piso_entries for trip_number calculation
-        const { data: pisoEntries } = await supabase
-          .from("piso_entries")
-          .select("id, ride_id")
-          .ilike("tbr_code", code);
-
-        let tripNumber = 1;
-        const previousRideIds = new Set<string>();
-        (pisoEntries ?? []).forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
-        previousRideIds.delete(rideId);
-
-        if (previousRideIds.size > 0) {
-          tripNumber = previousRideIds.size + 1;
-          playReincidenceBeep();
-        }
-
-        // Close piso and rto entries in background (don't block optimistic UI)
-        // Case-insensitive match prevents mismatch by code casing
-        const closedAt = new Date().toISOString();
-        void Promise.all([
-          supabase
-            .from("piso_entries")
-            .update({ status: "closed", closed_at: closedAt } as any)
-            .ilike("tbr_code", code)
-            .eq("status", "open"),
-          supabase
-            .from("rto_entries")
-            .update({ status: "closed", closed_at: closedAt } as any)
-            .ilike("tbr_code", code)
-            .eq("status", "open"),
-        ]);
-
-        newTbr.trip_number = tripNumber;
-
-        // Track synchronously BEFORE async React setState
+        // OPTIMISTIC UPDATE FIRST — show TBR immediately
         processedCodesRef.current[rideId]?.add(code.toUpperCase());
-
-        // Block Realtime refresh for 3s to prevent flicker on optimistic insert
         realtimeLockUntil.current = Date.now() + 3000;
 
         setTbrs((prev) => ({
@@ -1033,6 +952,64 @@ const ConferenciaCarregamentoPage = () => {
         }));
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
+
+        // Run validations in parallel AFTER optimistic update
+        const [closedPsRes, previousTbrsRes, pisoEntriesRes] = await Promise.all([
+          supabase.from("ps_entries").select("id").ilike("tbr_code", code).eq("status", "closed").limit(1),
+          supabase.from("ride_tbrs").select("id, ride_id").ilike("code", code).neq("ride_id", rideId).limit(1),
+          supabase.from("piso_entries").select("id, ride_id").ilike("tbr_code", code),
+        ]);
+
+        // Validate closed PS
+        if (closedPsRes.data && closedPsRes.data.length > 0) {
+          // Rollback
+          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
+          processedCodesRef.current[rideId]?.delete(code.toUpperCase());
+          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
+          toast({ title: "TBR finalizado no PS", description: "Este TBR já foi finalizado no Problem Solve e não pode ser carregado novamente.", variant: "destructive" });
+          return;
+        }
+
+        // Validate TBR in another ride
+        if (previousTbrsRes.data && previousTbrsRes.data.length > 0) {
+          // Rollback
+          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
+          processedCodesRef.current[rideId]?.delete(code.toUpperCase());
+          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
+          playErrorBeep();
+          const { toast } = await import("@/hooks/use-toast");
+          toast({ title: "TBR já vinculado", description: "Este TBR já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) antes de ser bipado novamente.", variant: "destructive" });
+          return;
+        }
+
+        // Calculate trip_number from piso entries
+        let tripNumber = 1;
+        const previousRideIds = new Set<string>();
+        (pisoEntriesRes.data ?? []).forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
+        previousRideIds.delete(rideId);
+
+        if (previousRideIds.size > 0) {
+          tripNumber = previousRideIds.size + 1;
+          playReincidenceBeep();
+        }
+
+        // Update trip_number on the optimistic entry
+        if (tripNumber > 1) {
+          newTbr.trip_number = tripNumber;
+          setTbrs((prev) => ({
+            ...prev,
+            [rideId]: (prev[rideId] ?? []).map(t => t.id === tempId ? { ...t, trip_number: tripNumber } : t),
+          }));
+        }
+
+        // Close piso and rto entries in background
+        const closedAt = new Date().toISOString();
+        void Promise.all([
+          supabase.from("piso_entries").update({ status: "closed", closed_at: closedAt } as any).ilike("tbr_code", code).eq("status", "open"),
+          supabase.from("rto_entries").update({ status: "closed", closed_at: closedAt } as any).ilike("tbr_code", code).eq("status", "open"),
+        ]);
 
         // DB-level duplicate check before insert (safety net)
         const { data: existingTbr } = await supabase
@@ -1044,21 +1021,13 @@ const ConferenciaCarregamentoPage = () => {
           .limit(1);
 
         if (existingTbr && existingTbr.length > 0) {
-          // Already exists in DB — remove from local state to avoid ghost entry
-          setTbrs((prev) => ({
-            ...prev,
-            [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId),
-          }));
+          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
           return;
         }
 
         const { error: insertError } = await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
         if (insertError) {
-          // Rollback optimistic state
-          setTbrs((prev) => ({
-            ...prev,
-            [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId),
-          }));
+          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
           playErrorBeep();
           const { toast } = await import("@/hooks/use-toast");
           if (insertError.message?.includes('TBR already exists in another active loading')) {

@@ -5,6 +5,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DriverSidebar from "./DriverSidebar";
 import DriverCallAlert from "./DriverCallAlert";
+import DriverDailyNotices from "./DriverDailyNotices";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
@@ -35,6 +36,7 @@ const DriverLayout = () => {
         </main>
       </div>
       <DriverCallAlert />
+      <DriverDailyNotices />
     </SidebarProvider>
   );
 };

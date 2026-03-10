@@ -263,7 +263,19 @@ const PSPage = () => {
       .limit(1)
       .maybeSingle();
 
-    if (!tbrData) {
+    let rideId: string | null = tbrData?.ride_id ?? null;
+
+    // Fallback: if ride_tbrs has no record (trigger deleted it), search piso/rto/ps entries
+    if (!rideId) {
+      const [pisoFallback, rtoFallback, psFallback] = await Promise.all([
+        supabase.from("piso_entries").select("ride_id").ilike("tbr_code", code).not("ride_id", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("rto_entries").select("ride_id").ilike("tbr_code", code).not("ride_id", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        supabase.from("ps_entries").select("ride_id").ilike("tbr_code", code).not("ride_id", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      rideId = pisoFallback.data?.ride_id ?? rtoFallback.data?.ride_id ?? psFallback.data?.ride_id ?? null;
+    }
+
+    if (!rideId) {
       setHistory(null);
       setHistoryModalOpen(true);
       setIncludeMode(true);
@@ -276,7 +288,7 @@ const PSPage = () => {
     const { data: ride } = await supabase
       .from("driver_rides")
       .select("id, route, login, loading_status, completed_at, conferente_id, driver_id")
-      .eq("id", tbrData.ride_id)
+      .eq("id", rideId)
       .maybeSingle();
 
     if (!ride) {

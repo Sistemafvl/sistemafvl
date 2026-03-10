@@ -47,7 +47,7 @@ interface TimelineEvent {
   conferente: string | null;
   action: string;
   detail: string;
-  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo";
+  type: "origin" | "removal" | "loaded" | "ps" | "rto" | "dnr" | "piso" | "started" | "finished" | "rescue" | "reativo" | "reversa";
   photo_url?: string | null;
   reason?: string | null;
   observations?: string | null;
@@ -331,6 +331,15 @@ const DashboardHome = () => {
             is_seller: ps.is_seller,
           });
         }
+        if (ps.reversa_at) {
+          timeline.push({
+            timestamp: ps.reversa_at,
+            conferente: confName,
+            action: "Status: Reversa Enviada",
+            detail: ps.description,
+            type: "reversa",
+          });
+        }
       });
 
       // RTO — always open event + optional close event
@@ -410,7 +419,7 @@ const DashboardHome = () => {
       });
 
       // Sort chronologically with tie-breaker by event priority
-      const typePriority: Record<string, number> = { started: 1, origin: 2, loaded: 3, piso: 4, removal: 5, ps: 6, rto: 7, dnr: 8, rescue: 9, reativo: 10, finished: 11 };
+      const typePriority: Record<string, number> = { started: 1, origin: 2, loaded: 3, piso: 4, removal: 5, ps: 6, rto: 7, dnr: 8, rescue: 9, reativo: 10, reversa: 11, finished: 12 };
       timeline.sort((a, b) => {
         const diff = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime();
         if (diff !== 0) return diff;
@@ -649,8 +658,8 @@ const DashboardHome = () => {
                       <h4 className="font-bold italic text-xs mb-3 text-muted-foreground uppercase tracking-wide">Linha do Tempo</h4>
                       <div className="relative pl-4 space-y-0">
                         {tbrResult.timeline.map((evt, i) => {
-                          const colorMap: Record<string, string> = { origin: "text-primary", loaded: "text-primary", removal: "text-destructive", ps: "text-destructive", rto: "text-amber-600", dnr: "text-destructive", piso: "text-muted-foreground", started: "text-emerald-600", finished: "text-emerald-700", rescue: "text-blue-600", reativo: "text-purple-600" };
-                          const dotMap: Record<string, string> = { origin: "bg-primary", loaded: "bg-primary", removal: "bg-destructive", ps: "bg-destructive", rto: "bg-amber-600", dnr: "bg-destructive", piso: "bg-muted-foreground", started: "bg-emerald-600", finished: "bg-emerald-700", rescue: "bg-blue-600", reativo: "bg-purple-600" };
+                          const colorMap: Record<string, string> = { origin: "text-primary", loaded: "text-primary", removal: "text-destructive", ps: "text-destructive", rto: "text-amber-600", dnr: "text-destructive", piso: "text-muted-foreground", started: "text-emerald-600", finished: "text-emerald-700", rescue: "text-blue-600", reativo: "text-purple-600", reversa: "text-indigo-600" };
+                          const dotMap: Record<string, string> = { origin: "bg-primary", loaded: "bg-primary", removal: "bg-destructive", ps: "bg-destructive", rto: "bg-amber-600", dnr: "bg-destructive", piso: "bg-muted-foreground", started: "bg-emerald-600", finished: "bg-emerald-700", rescue: "bg-blue-600", reativo: "bg-purple-600", reversa: "bg-indigo-600" };
                           const color = colorMap[evt.type] ?? "text-muted-foreground";
                           const dotColor = dotMap[evt.type] ?? "bg-muted-foreground";
                           return (

@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap } from "lucide-react";
+import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap, Trophy } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -373,6 +373,34 @@ const DriverHome = () => {
     fetchQuinzena();
   }, [driverId]);
 
+  // Ranking position
+  const [rankPosition, setRankPosition] = useState<{ pos: number; total: number } | null>(null);
+  useEffect(() => {
+    if (!driverId || !unitSession?.id) return;
+    const fetchRanking = async () => {
+      const br = getBrazilNow();
+      const day = br.getDate();
+      const year = br.getFullYear();
+      const month = br.getMonth();
+      const lastDay = new Date(year, month + 1, 0).getDate();
+      const qStartDay = day <= 15 ? 1 : 16;
+      const qEndDay = day <= 15 ? 15 : lastDay;
+      const qStartStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(qStartDay).padStart(2, "0")}T03:00:00.000Z`;
+      const qEndStr = new Date(new Date(`${year}-${String(month + 1).padStart(2, "0")}-${String(qEndDay).padStart(2, "0")}T03:00:00.000Z`).getTime() + 86400000 - 1).toISOString();
+
+      const { data } = await supabase.rpc("get_top_drivers_by_tbrs", {
+        p_unit_id: unitSession.id,
+        p_since: qStartStr,
+        p_until: qEndStr,
+      });
+      if (!data || data.length === 0) { setRankPosition(null); return; }
+      const idx = data.findIndex((d: any) => d.driver_id === driverId);
+      if (idx === -1) { setRankPosition(null); return; }
+      setRankPosition({ pos: idx + 1, total: data.length });
+    };
+    fetchRanking();
+  }, [driverId, unitSession?.id]);
+
   const summaryCards = [
     { label: "Total Corridas", value: metrics.totalRides, icon: Car, color: "text-primary" },
     { label: "Concluídos", value: metrics.totalTbrs, icon: CheckCircle2, color: "text-green-600" },
@@ -451,6 +479,22 @@ const DriverHome = () => {
               </Card>
             ))}
            </div>
+
+           {/* Ranking card */}
+           <Card className="border-amber-500/30">
+             <CardContent className="p-3 flex items-center gap-3">
+               <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                 <Trophy className="h-5 w-5 text-amber-500" />
+               </div>
+               <div className="min-w-0">
+                 <p className="text-[10px] text-muted-foreground uppercase font-semibold">Sua Posição no Ranking</p>
+                 <p className="text-xl font-bold text-amber-600">
+                   {rankPosition ? `#${rankPosition.pos} de ${rankPosition.total}` : "—"}
+                 </p>
+                 <p className="text-[10px] text-muted-foreground">Quinzena atual • TBRs finalizados</p>
+               </div>
+             </CardContent>
+           </Card>
 
            {/* DNR Cards */}
            <div className="grid grid-cols-2 gap-2">
