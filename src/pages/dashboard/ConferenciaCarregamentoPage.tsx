@@ -496,7 +496,51 @@ const ConferenciaCarregamentoPage = () => {
     }
     setIsLoading(false);
 
-  
+  // Fetch historical average TBRs/day per driver (30 days)
+  useEffect(() => {
+    if (!unitId || rides.length === 0) { setDriverAvgMap(new Map()); return; }
+    const driverIds = [...new Set(rides.map(r => r.driver_id))];
+    if (driverIds.length === 0) return;
+
+    const fetchAvg = async () => {
+      const since = new Date();
+      since.setDate(since.getDate() - 30);
+      const { data: histRides } = await supabase
+        .from("driver_rides")
+        .select("id, driver_id, completed_at")
+        .eq("unit_id", unitId)
+        .in("driver_id", driverIds)
+        .gte("completed_at", since.toISOString())
+        .eq("loading_status", "finished");
+
+      if (!histRides || histRides.length === 0) { setDriverAvgMap(new Map()); return; }
+
+      const histRideIds = histRides.map(r => r.id);
+      const { data: counts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: histRideIds });
+
+      const countMap = new Map<string, number>();
+      (counts ?? []).forEach((c: any) => countMap.set(c.ride_id, Number(c.tbr_count)));
+
+      // Group by driver → day → sum TBRs
+      const driverDays = new Map<string, Map<string, number>>();
+      histRides.forEach(r => {
+        const day = r.completed_at.slice(0, 10);
+        if (!driverDays.has(r.driver_id)) driverDays.set(r.driver_id, new Map());
+        const dayMap = driverDays.get(r.driver_id)!;
+        dayMap.set(day, (dayMap.get(day) ?? 0) + (countMap.get(r.id) ?? 0));
+      });
+
+      const avgMap = new Map<string, number>();
+      driverDays.forEach((dayMap, dId) => {
+        const days = dayMap.size;
+        const total = [...dayMap.values()].reduce((s, v) => s + v, 0);
+        avgMap.set(dId, days > 0 ? Math.round(total / days) : 0);
+      });
+      setDriverAvgMap(avgMap);
+    };
+    fetchAvg();
+  }, [unitId, rides]);
+
 
   }, [unitId, startDate, endDate]);
 
