@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, CheckCircle2, UserCheck } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 
