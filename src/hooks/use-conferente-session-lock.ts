@@ -18,7 +18,7 @@ export function useConferenteSessionLock() {
   const { unitSession, conferenteSession, setConferenteSession } = useAuthStore();
   const tokenRef = useRef<string>(getOrCreateSessionToken());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
   const kickedRef = useRef(false);
 
   // Claim session: upsert into conferente_sessions
