@@ -880,7 +880,7 @@ export function generatePayrollExcel(
 }
 
 // ══════════════ INDICADORES SHEET ══════════════
-function createIndicadoresSheet(wb: XLSX.utils.BookType, data: DriverPayrollData[]) {
+function createIndicadoresSheet(wb: XLSX.WorkBook, data: DriverPayrollData[]) {
   const wsData: (string | number)[][] = [];
 
   // Calculate metrics for each driver
