@@ -170,10 +170,10 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
 
           const vw = videoRef.current.videoWidth;
           const vh = videoRef.current.videoHeight;
-          const vfLeft = vw * 0.35;
-          const vfRight = vw * 0.65;
-          const vfTop = vh * 0.15;
-          const vfBottom = vh * 0.45;
+          const vfLeft = vw * 0.20;
+          const vfRight = vw * 0.80;
+          const vfTop = vh * 0.20;
+          const vfBottom = vh * 0.80;
 
           const tbrBarcodes = barcodes.filter((b: any) => {
             if (!b.rawValue.toUpperCase().startsWith("TBR")) return false;
