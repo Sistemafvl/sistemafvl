@@ -274,7 +274,12 @@ const DashboardSidebar = () => {
                         onClick={() => setOpenMobile(false)}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {item.url === "/dashboard/conferencia" && pendingCount > 0 && (
+                          <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
+                            {pendingCount}
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
