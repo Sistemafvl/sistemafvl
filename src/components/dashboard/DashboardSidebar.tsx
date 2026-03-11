@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap, Crown, PieChart, Building2, Users2, Receipt, ShieldAlert } from "lucide-react";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
 import { supabase } from "@/integrations/supabase/client";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
+import { Badge } from "@/components/ui/badge";
 import DirectorUnitSwitcher from "./DirectorUnitSwitcher";
 import {
   Sidebar,
@@ -98,9 +99,46 @@ const DashboardSidebar = () => {
   const [driverModalOpen, setDriverModalOpen] = useState(false);
   const [conferentes, setConferentes] = useState<ConferenteOption[]>([]);
   const [conferenteSelectOpen, setConferenteSelectOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const pendingFetchRef = useRef(false);
 
   const isDirector = unitSession?.sessionType === "matriz";
   const showManagerMenu = isDirector || !!managerSession;
+
+  // Fetch pending loading count
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
+    const fetchPending = async () => {
+      if (pendingFetchRef.current) return;
+      pendingFetchRef.current = true;
+      const { count } = await supabase
+        .from("driver_rides")
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", unitSession.id)
+        .eq("loading_status", "pending")
+        .gte("completed_at", todayISO);
+      setPendingCount(count ?? 0);
+      pendingFetchRef.current = false;
+    };
+
+    fetchPending();
+
+    const channel = supabase
+      .channel("pending-rides-count")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "driver_rides",
+        filter: `unit_id=eq.${unitSession.id}`,
+      }, () => { fetchPending(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [unitSession?.id]);
 
   // Fetch conferentes for the unit
   useEffect(() => {
@@ -236,7 +274,12 @@ const DashboardSidebar = () => {
                         onClick={() => setOpenMobile(false)}
                       >
                         <item.icon className="h-4 w-4 shrink-0" />
-                        <span>{item.title}</span>
+                        <span className="flex-1">{item.title}</span>
+                        {item.url === "/dashboard/conferencia" && pendingCount > 0 && (
+                          <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
+                            {pendingCount}
+                          </Badge>
+                        )}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
