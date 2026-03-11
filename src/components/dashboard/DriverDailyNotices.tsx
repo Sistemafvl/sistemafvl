@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { ShieldCheck, LifeBuoy, Landmark, Zap, Banknote } from "lucide-react";
+import { ShieldCheck, LifeBuoy, Zap, Banknote } from "lucide-react";
 
 const NOTICES = [
   {
@@ -43,21 +43,6 @@ const NOTICES = [
         <p>
           Isso garante mais <strong>rapidez e agilidade</strong> com seus pacotes do dia, e os pacotes resgatados serão contabilizados corretamente no seu relatório.
         </p>
-      </div>
-    ),
-  },
-  {
-    icon: Landmark,
-    title: "Cadastre seus dados bancários",
-    body: (
-      <div className="space-y-2 text-sm text-muted-foreground">
-        <p>Para receber seus pagamentos corretamente, siga os passos:</p>
-        <ol className="list-decimal list-inside space-y-1">
-          <li>Acesse <strong>"Documentos"</strong> no menu lateral</li>
-          <li>Role até a seção <strong>"Dados Bancários / Pix"</strong></li>
-          <li>Preencha o <strong>tipo de chave</strong>, <strong>chave Pix</strong> e <strong>nome do titular</strong></li>
-          <li>Clique em <strong>"Salvar"</strong></li>
-        </ol>
       </div>
     ),
   },
