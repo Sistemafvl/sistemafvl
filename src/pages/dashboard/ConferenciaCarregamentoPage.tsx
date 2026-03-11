@@ -504,10 +504,16 @@ const ConferenciaCarregamentoPage = () => {
 
   }, [unitId, startDate, endDate]);
 
+  // Stable driver IDs key - only changes when the set of drivers changes, not on every TBR scan
+  const stableDriverIdsKey = useMemo(() => {
+    const ids = [...new Set(rides.map(r => r.driver_id))].sort();
+    return ids.join(",");
+  }, [rides]);
+
   // Fetch historical average TBRs/day per driver (30 days)
   useEffect(() => {
-    if (!unitId || rides.length === 0) { setDriverAvgMap(new Map()); return; }
-    const driverIds = [...new Set(rides.map(r => r.driver_id))];
+    if (!unitId || stableDriverIdsKey === "") { setDriverAvgMap(new Map()); return; }
+    const driverIds = stableDriverIdsKey.split(",");
     if (driverIds.length === 0) return;
 
     const fetchAvg = async () => {

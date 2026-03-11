@@ -61,20 +61,30 @@ const InsucessoBalloon = () => {
     fetchInsucessos();
   }, [fetchInsucessos]);
 
-  // Realtime: when a ride_tbr is inserted or piso_entries change, refetch
+  // Debounced refetch for Realtime events (15s debounce to reduce DB hits)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedFetch = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { fetchInsucessos(); }, 15000);
+  }, [fetchInsucessos]);
+
+  // Cleanup debounce on unmount
+  useEffect(() => { return () => { if (debounceRef.current) clearTimeout(debounceRef.current); }; }, []);
+
+  // Realtime: when a ride_tbr is inserted or piso_entries change, debounced refetch
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
       .channel("insucesso-balloon")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => {
-        fetchInsucessos();
+        debouncedFetch();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "piso_entries", filter: `unit_id=eq.${unitId}` }, () => {
-        fetchInsucessos();
+        debouncedFetch();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [unitId, fetchInsucessos]);
+  }, [unitId, debouncedFetch]);
 
   // If count changes after dismiss, re-show
   useEffect(() => {
