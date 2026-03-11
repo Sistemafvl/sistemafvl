@@ -552,7 +552,7 @@ const ConferenciaCarregamentoPage = () => {
       setDriverAvgMap(avgMap);
     };
     fetchAvg();
-  }, [unitId, rides]);
+  }, [unitId, stableDriverIdsKey]);
 
   const [searchUnitNames, setSearchUnitNames] = useState<Record<string, string>>({});
 
