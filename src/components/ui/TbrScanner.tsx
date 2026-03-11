@@ -175,14 +175,16 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
           const vfTop = vh * 0.20;
           const vfBottom = vh * 0.80;
 
-          const tbrBarcodes = barcodes.filter((b: any) => {
-            if (!b.rawValue.toUpperCase().startsWith("TBR")) return false;
+          const insideBarcodes = barcodes.filter((b: any) => {
             const bb = b.boundingBox;
             if (!bb) return false;
             return bb.x >= vfLeft && bb.y >= vfTop && bb.x + bb.width <= vfRight && bb.y + bb.height <= vfBottom;
           });
 
-          if (tbrBarcodes.length !== 1) return;
+          if (insideBarcodes.length !== 1) return;
+
+          const code = insideBarcodes[0].rawValue?.trim().toUpperCase();
+          if (!code) return;
 
           const code = tbrBarcodes[0].rawValue.toUpperCase();
           if (recentCodes.has(code)) return;
