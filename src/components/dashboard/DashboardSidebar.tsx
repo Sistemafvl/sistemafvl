@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap, Crown, PieChart, Building2, Users2, Receipt, ShieldAlert } from "lucide-react";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
@@ -6,6 +6,7 @@ import { useAuthStore } from "@/stores/auth-store";
 import LogoHeader from "@/components/LogoHeader";
 import { supabase } from "@/integrations/supabase/client";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
+import { Badge } from "@/components/ui/badge";
 import DirectorUnitSwitcher from "./DirectorUnitSwitcher";
 import {
   Sidebar,
