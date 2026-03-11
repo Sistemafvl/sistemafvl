@@ -130,17 +130,29 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
   };
 
   // Camera
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment", width: { ideal: 1920 }, height: { ideal: 1080 } },
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+      setShowCamera(true);
+    } catch {
+      // Camera access denied or unavailable
+    }
+  }, []);
+
+  // Attach stream to video element once it's rendered
+  useEffect(() => {
+    if (!showCamera || !streamRef.current) return;
+
+    const attachStream = async () => {
+      // Wait a tick for the video element to mount
+      await new Promise((r) => setTimeout(r, 50));
+      if (videoRef.current && streamRef.current) {
+        videoRef.current.srcObject = streamRef.current;
         await videoRef.current.play();
       }
-      setShowCamera(true);
 
       if (!("BarcodeDetector" in window)) return;
 
@@ -158,7 +170,6 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
 
           const vw = videoRef.current.videoWidth;
           const vh = videoRef.current.videoHeight;
-          // Viewfinder: 30% width centered, positioned at 25% from top
           const vfLeft = vw * 0.35;
           const vfRight = vw * 0.65;
           const vfTop = vh * 0.15;
@@ -181,8 +192,14 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
           await processCode(code);
         } catch {}
       }, 100);
-    } catch {}
-  };
+    };
+
+    attachStream();
+
+    return () => {
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+    };
+  }, [showCamera, processCode]);
 
   const stopCamera = () => {
     if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
