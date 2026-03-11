@@ -18,6 +18,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { cn, formatDateBR, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 import jsPDF from "jspdf";
 import { loadLogoBase64 } from "./reports/pdf-utils";
 

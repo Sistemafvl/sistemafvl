@@ -23,6 +23,7 @@ import { format, differenceInMinutes } from "date-fns";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 
 
 interface RideWithDriver {
