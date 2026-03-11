@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth-store";
+import { supabase } from "@/integrations/supabase/client";
 import { getBrazilTodayStr } from "@/lib/utils";
 import {
   AlertDialog,
@@ -10,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { ShieldCheck, LifeBuoy, Landmark, Zap } from "lucide-react";
+import { ShieldCheck, LifeBuoy, Landmark, Zap, Banknote } from "lucide-react";
 
 const NOTICES = [
   {
@@ -77,16 +79,41 @@ const NOTICES = [
 
 const DriverDailyNotices = () => {
   const { unitSession } = useAuthStore();
+  const navigate = useNavigate();
   const driverId = unitSession?.user_profile_id;
   const [currentIndex, setCurrentIndex] = useState(-1);
+  const [showBankModal, setShowBankModal] = useState(false);
 
   useEffect(() => {
     if (!driverId) return;
     const today = getBrazilTodayStr();
     const key = `driver_notices_seen_${driverId}_${today}`;
-    if (localStorage.getItem(key)) return;
+    if (localStorage.getItem(key)) {
+      // Notices already seen today, check bank data
+      checkBankData();
+      return;
+    }
     setCurrentIndex(0);
   }, [driverId]);
+
+  const checkBankData = async () => {
+    if (!driverId) return;
+    // If already confirmed this session, skip
+    if (localStorage.getItem(`driver_bank_filled_${driverId}`)) return;
+
+    try {
+      const { data } = await supabase.functions.invoke("get-driver-details", {
+        body: { driver_id: driverId, self_access: true },
+      });
+      if (!data?.pix_key) {
+        setShowBankModal(true);
+      } else {
+        localStorage.setItem(`driver_bank_filled_${driverId}`, "1");
+      }
+    } catch {
+      // Don't block on error
+    }
+  };
 
   const handleOk = () => {
     if (currentIndex < NOTICES.length - 1) {
@@ -96,8 +123,56 @@ const DriverDailyNotices = () => {
       const key = `driver_notices_seen_${driverId}_${today}`;
       localStorage.setItem(key, "1");
       setCurrentIndex(-1);
+      // After all notices, check bank data
+      checkBankData();
     }
   };
+
+  const handleGoToDocuments = () => {
+    setShowBankModal(false);
+    navigate("/motorista/documentos");
+  };
+
+  // Bank data modal
+  if (showBankModal) {
+    return (
+      <AlertDialog open>
+        <AlertDialogContent className="max-w-md">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center shrink-0">
+                <Banknote className="h-5 w-5 text-destructive" />
+              </div>
+              <div>
+                <AlertDialogTitle className="text-base">Dados Bancários Pendentes</AlertDialogTitle>
+                <AlertDialogDescription className="text-xs">
+                  Ação obrigatória
+                </AlertDialogDescription>
+              </div>
+            </div>
+          </AlertDialogHeader>
+          <div className="mt-2">
+            <div className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                Você ainda <strong>não cadastrou seus dados bancários</strong>. Para receber seus pagamentos corretamente, é necessário preencher suas informações de PIX.
+              </p>
+              <p>
+                Acesse a seção <strong>"Documentos"</strong> e preencha seus dados bancários antes de continuar.
+              </p>
+              <p className="font-semibold text-foreground">
+                Esta ação é obrigatória para continuar usando o sistema.
+              </p>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={handleGoToDocuments} className="w-full">
+              Ir para Documentos
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    );
+  }
 
   if (currentIndex < 0) return null;
 

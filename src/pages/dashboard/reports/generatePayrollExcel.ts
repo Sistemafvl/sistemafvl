@@ -33,6 +33,8 @@ const yellowFill = { fgColor: { rgb: "FFD700" } };
 const greenFill = { fgColor: { rgb: "92D050" } };
 const grayFill = { fgColor: { rgb: "D9D9D9" } };
 const lightBlueFill = { fgColor: { rgb: "DBEAFE" } };
+const orangeFill = { fgColor: { rgb: "FFA500" } };
+const redLightFill = { fgColor: { rgb: "FFC7CE" } };
 const boldFont = { bold: true, sz: 11 };
 const boldFontLg = { bold: true, sz: 13 };
 const centerAlign = { horizontal: "center", vertical: "center" };
@@ -58,14 +60,12 @@ function mergeRow(ws: XLSX.WorkSheet, row: number, colStart: number, colEnd: num
   ws["!merges"].push({ s: { r: row, c: colStart }, e: { r: row, c: colEnd } });
 }
 
-// Helper to set a cell with formula
 function setCellFormula(ws: XLSX.WorkSheet, row: number, col: number, formula: string, style?: Record<string, unknown>) {
   const addr = XLSX.utils.encode_cell({ r: row, c: col });
   ws[addr] = { t: "n", f: formula };
   if (style) ws[addr].s = style;
 }
 
-// Helper to apply currency format to a column range
 function applyCurrencyFormat(ws: XLSX.WorkSheet, col: number, rowStart: number, rowEnd: number) {
   const currencyFmt = '"R$" #,##0.00';
   for (let r = rowStart; r <= rowEnd; r++) {
@@ -77,7 +77,6 @@ function applyCurrencyFormat(ws: XLSX.WorkSheet, col: number, rowStart: number, 
   }
 }
 
-// Helper to get Excel column letter
 function colLetter(col: number): string {
   let result = "";
   let c = col;
@@ -88,7 +87,6 @@ function colLetter(col: number): string {
   return result;
 }
 
-// Sanitize sheet name for Excel (max 31 chars, no special chars)
 function sanitizeSheetName(name: string): string {
   return name
     .replace(/[\\/*?:\[\]]/g, "")
@@ -128,7 +126,6 @@ export function generatePayrollExcel(
   const totalCols = headers.length;
   const lastCol = totalCols - 1;
   
-  // Column indices
   const COL_NAME = 0;
   const COL_VEHICLE = 1;
   const COL_VALUE = 2;
@@ -175,7 +172,6 @@ export function generatePayrollExcel(
   // ══════════════ BUILD MAIN WORKSHEET DATA ══════════════
   const wsData: (string | number)[][] = [];
 
-  // Track row indices for styling
   const rowTracker = {
     titleRow: 0,
     dataFinanceiraRow: 2,
@@ -184,17 +180,16 @@ export function generatePayrollExcel(
     dataStartRow: 5,
     dataEndRow: 0,
     totalRow: 0,
-    // Section 2 - Min packages
     minTitleRow: -1,
     minDataFinRow: -1,
     minHeaderRow: -1,
     minDataStartRow: -1,
     minDataEndRow: -1,
     minTotalRow: -1,
-    // Section 3
     consolidadoHeaderRow: -1,
     consolidadoRows: [] as number[],
-    // Section 4
+    totalPacotesAmazonRow: -1,
+    diferencaRow: -1,
     resumoHeaderRow: -1,
     resumoRows: [] as number[],
   };
@@ -214,7 +209,7 @@ export function generatePayrollExcel(
   ]); // row 3
   wsData.push(headers); // row 4
 
-  // ── SECTION 1: MAIN DRIVER ROWS (values only, formulas added after) ──
+  // ── SECTION 1: MAIN DRIVER ROWS ──
   data.forEach((d) => {
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
@@ -230,40 +225,39 @@ export function generatePayrollExcel(
     wsData.push([
       d.driver.name,
       vehicleType,
-      tbrVal, // numeric for formula
-      d.totalCompleted, // will be replaced by formula
-      descontos > 0 ? descontos : "", // numeric
-      adicional > 0 ? adicional : "", // numeric
-      0, // placeholder for formula
+      tbrVal,
+      d.totalCompleted,
+      descontos > 0 ? descontos : "",
+      adicional > 0 ? adicional : "",
+      0,
       formatCpfBR(d.driver.cpf),
       d.driver.pixKey ?? "",
       ...dailyValues,
-      0, // placeholder for TOTAL formula
+      0,
     ]);
   });
   rowTracker.dataEndRow = wsData.length - 1;
 
-  // ── SECTION 1: TOTALS ROW (placeholders) ──
+  // ── SECTION 1: TOTALS ROW ──
   wsData.push([
     "TOTAL",
     "",
     "",
-    0, // formula
-    0, // formula
-    0, // formula
-    0, // formula
+    0,
+    0,
+    0,
+    0,
     "",
     "",
-    ...allDates.map(() => 0), // formulas
-    0, // formula
+    ...allDates.map(() => 0),
+    0,
   ]);
   rowTracker.totalRow = wsData.length - 1;
 
-  // ── SPACE ──
   wsData.push([]);
   wsData.push([]);
 
-  // ── SECTION 2: MINIMUM PACKAGES DRIVERS (ALWAYS CREATED) ──
+  // ── SECTION 2: MINIMUM PACKAGES — repeat ALL main drivers + 10 blank rows ──
   rowTracker.minTitleRow = wsData.length;
   wsData.push(["MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES"]);
 
@@ -275,49 +269,40 @@ export function generatePayrollExcel(
 
   rowTracker.minDataStartRow = wsData.length;
   
-  // Add existing min package drivers or empty rows
-  const minRowsToCreate = Math.max(minPkgPayrollData.length, 10);
-  for (let i = 0; i < minRowsToCreate; i++) {
-    const d = minPkgPayrollData[i];
-    if (d) {
-      const tbrVal = d.tbrValueUsed ?? 0;
-      const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
-      const descontos = d.dnrDiscount ?? 0;
-      const adicional = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
-      const dailyValues = allDates.map((date) => {
-        const day = d.days.find((day) => day.date === date);
-        if (!day) return "";
-        return day.completed ?? day.tbrCount - day.returns;
-      });
-      wsData.push([
-        d.driver.name,
-        vehicleType,
-        tbrVal,
-        d.totalCompleted,
-        descontos > 0 ? descontos : "",
-        adicional > 0 ? adicional : "",
-        0,
-        formatCpfBR(d.driver.cpf),
-        d.driver.pixKey ?? "",
-        ...dailyValues,
-        0,
-      ]);
-    } else {
-      // Empty row with structure for manual entry
-      wsData.push([
-        "",
-        "",
-        0,
-        0,
-        "",
-        "",
-        0,
-        "",
-        "",
-        ...allDates.map(() => ""),
-        0,
-      ]);
-    }
+  // Repeat ALL drivers from the main table with their info but empty date columns
+  data.forEach((d) => {
+    const tbrVal = d.tbrValueUsed ?? 0;
+    const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
+    wsData.push([
+      d.driver.name,
+      vehicleType,
+      tbrVal,
+      0, // formula placeholder
+      "",
+      "",
+      0,
+      formatCpfBR(d.driver.cpf),
+      d.driver.pixKey ?? "",
+      ...allDates.map(() => ""), // EMPTY for manual fill
+      0,
+    ]);
+  });
+
+  // Add 10 blank rows for manual additions
+  for (let i = 0; i < 10; i++) {
+    wsData.push([
+      "",
+      "",
+      0,
+      0,
+      "",
+      "",
+      0,
+      "",
+      "",
+      ...allDates.map(() => ""),
+      0,
+    ]);
   }
   rowTracker.minDataEndRow = wsData.length - 1;
 
@@ -368,7 +353,24 @@ export function generatePayrollExcel(
     0,
   ]);
 
-  // ── SPACE ──
+  // Total Pacotes Amazon (blank for manual fill)
+  rowTracker.totalPacotesAmazonRow = wsData.length;
+  wsData.push([
+    "Total Pacotes Amazon",
+    "", "", "", "", "", "", "", "",
+    ...allDates.map(() => ""),
+    "",
+  ]);
+
+  // Diferença = Total Pacotes - Total Pacotes Amazon
+  rowTracker.diferencaRow = wsData.length;
+  wsData.push([
+    "Diferença",
+    "", "", "", "", "", "", "", "",
+    ...allDates.map(() => 0),
+    0,
+  ]);
+
   wsData.push([]);
   wsData.push([]);
 
@@ -390,19 +392,13 @@ export function generatePayrollExcel(
 
   // ══════════════ ADD FORMULAS ══════════════
   
-  // Main data rows - add formulas
+  // Main data rows
   for (let r = rowTracker.dataStartRow; r <= rowTracker.dataEndRow; r++) {
-    const excelRow = r + 1; // Excel is 1-indexed
-    
-    // TOTAL column (sum of daily values)
+    const excelRow = r + 1;
     const dateStartCol = colLetter(COL_DATES_START);
     const dateEndCol = colLetter(COL_TOTAL - 1);
     setCellFormula(ws, r, COL_TOTAL, `SUM(${dateStartCol}${excelRow}:${dateEndCol}${excelRow})`);
-    
-    // TOTAL DE PACOTES ENTREGUES = TOTAL column value
     setCellFormula(ws, r, COL_PACKAGES, `${colLetter(COL_TOTAL)}${excelRow}`);
-    
-    // TOTAL GERAL = (Pacotes * Valor) - Descontos + Adicional
     const packagesCell = `${colLetter(COL_PACKAGES)}${excelRow}`;
     const valueCell = `${colLetter(COL_VALUE)}${excelRow}`;
     const discountsCell = `${colLetter(COL_DISCOUNTS)}${excelRow}`;
@@ -415,22 +411,16 @@ export function generatePayrollExcel(
   const dataStartExcelRow = rowTracker.dataStartRow + 1;
   const dataEndExcelRow = rowTracker.dataEndRow + 1;
   
-  // Sum for TOTAL DE PACOTES
   setCellFormula(ws, rowTracker.totalRow, COL_PACKAGES, `SUM(${colLetter(COL_PACKAGES)}${dataStartExcelRow}:${colLetter(COL_PACKAGES)}${dataEndExcelRow})`);
-  // Sum for DESCONTOS
   setCellFormula(ws, rowTracker.totalRow, COL_DISCOUNTS, `SUM(${colLetter(COL_DISCOUNTS)}${dataStartExcelRow}:${colLetter(COL_DISCOUNTS)}${dataEndExcelRow})`);
-  // Sum for ADICIONAL
   setCellFormula(ws, rowTracker.totalRow, COL_ADDITIONAL, `SUM(${colLetter(COL_ADDITIONAL)}${dataStartExcelRow}:${colLetter(COL_ADDITIONAL)}${dataEndExcelRow})`);
-  // Sum for TOTAL GERAL
   setCellFormula(ws, rowTracker.totalRow, COL_TOTAL_GERAL, `SUM(${colLetter(COL_TOTAL_GERAL)}${dataStartExcelRow}:${colLetter(COL_TOTAL_GERAL)}${dataEndExcelRow})`);
-  // Sum for each date column
   for (let c = COL_DATES_START; c < COL_TOTAL; c++) {
     setCellFormula(ws, rowTracker.totalRow, c, `SUM(${colLetter(c)}${dataStartExcelRow}:${colLetter(c)}${dataEndExcelRow})`);
   }
-  // Sum for TOTAL column
   setCellFormula(ws, rowTracker.totalRow, COL_TOTAL, `SUM(${colLetter(COL_TOTAL)}${dataStartExcelRow}:${colLetter(COL_TOTAL)}${dataEndExcelRow})`);
 
-  // Min package rows - add formulas
+  // Min package rows formulas
   for (let r = rowTracker.minDataStartRow; r <= rowTracker.minDataEndRow; r++) {
     const excelRow = r + 1;
     const dateStartCol = colLetter(COL_DATES_START);
@@ -458,44 +448,47 @@ export function generatePayrollExcel(
   }
   setCellFormula(ws, rowTracker.minTotalRow, COL_TOTAL, `SUM(${colLetter(COL_TOTAL)}${minDataStartExcelRow}:${colLetter(COL_TOTAL)}${minDataEndExcelRow})`);
 
-  // Consolidado formulas - reference the TOTAL rows
-  const consRow1 = rowTracker.consolidadoRows[0]; // Motoristas por pacotes
-  const consRow2 = rowTracker.consolidadoRows[1]; // Min 60
-  const consRow3 = rowTracker.consolidadoRows[2]; // Total Pacotes
+  // Consolidado formulas
+  const consRow1 = rowTracker.consolidadoRows[0];
+  const consRow2 = rowTracker.consolidadoRows[1];
+  const consRow3 = rowTracker.consolidadoRows[2];
   
-  // Row 1: reference main TOTAL row
   for (let c = COL_DATES_START; c <= COL_TOTAL; c++) {
     setCellFormula(ws, consRow1, c, `${colLetter(c)}${totalExcelRow}`);
   }
-  
-  // Row 2: reference min TOTAL row
   for (let c = COL_DATES_START; c <= COL_TOTAL; c++) {
     setCellFormula(ws, consRow2, c, `${colLetter(c)}${minTotalExcelRow}`);
   }
-  
-  // Row 3: sum of row 1 and row 2
   const consRow1Excel = consRow1 + 1;
   const consRow2Excel = consRow2 + 1;
+  const consRow3Excel = consRow3 + 1;
   for (let c = COL_DATES_START; c <= COL_TOTAL; c++) {
     setCellFormula(ws, consRow3, c, `${colLetter(c)}${consRow1Excel}+${colLetter(c)}${consRow2Excel}`);
   }
 
+  // Total Pacotes Amazon — blank (manual), no formulas needed
+  // Diferença = Total Pacotes - Total Pacotes Amazon
+  const amazonRow = rowTracker.totalPacotesAmazonRow;
+  const diffRow = rowTracker.diferencaRow;
+  const amazonExcel = amazonRow + 1;
+  const diffExcel = diffRow + 1;
+  for (let c = COL_DATES_START; c <= COL_TOTAL; c++) {
+    setCellFormula(ws, diffRow, c, `${colLetter(c)}${consRow3Excel}-IF(${colLetter(c)}${amazonExcel}="",0,${colLetter(c)}${amazonExcel})`);
+  }
+
   // Resumo formulas
-  const resumoRow1 = rowTracker.resumoRows[0]; // Motoristas por pacotes
-  const resumoRow2 = rowTracker.resumoRows[1]; // Min 60
-  const resumoRow3 = rowTracker.resumoRows[2]; // Custo por pacote
+  const resumoRow1 = rowTracker.resumoRows[0];
+  const resumoRow2 = rowTracker.resumoRows[1];
+  const resumoRow3 = rowTracker.resumoRows[2];
   
-  // Row 1: Main drivers
-  setCellFormula(ws, resumoRow1, 1, `${colLetter(COL_PACKAGES)}${totalExcelRow}`); // Qtd Pacotes
-  setCellFormula(ws, resumoRow1, 2, `${colLetter(COL_TOTAL_GERAL)}${totalExcelRow}`); // Valor Total
-  setCellFormula(ws, resumoRow1, 3, `IF(B${resumoRow1 + 1}=0,0,C${resumoRow1 + 1}/B${resumoRow1 + 1})`); // Média
+  setCellFormula(ws, resumoRow1, 1, `${colLetter(COL_PACKAGES)}${totalExcelRow}`);
+  setCellFormula(ws, resumoRow1, 2, `${colLetter(COL_TOTAL_GERAL)}${totalExcelRow}`);
+  setCellFormula(ws, resumoRow1, 3, `IF(B${resumoRow1 + 1}=0,0,C${resumoRow1 + 1}/B${resumoRow1 + 1})`);
   
-  // Row 2: Min 60
   setCellFormula(ws, resumoRow2, 1, `${colLetter(COL_PACKAGES)}${minTotalExcelRow}`);
   setCellFormula(ws, resumoRow2, 2, `${colLetter(COL_TOTAL_GERAL)}${minTotalExcelRow}`);
   setCellFormula(ws, resumoRow2, 3, `IF(B${resumoRow2 + 1}=0,0,C${resumoRow2 + 1}/B${resumoRow2 + 1})`);
   
-  // Row 3: Combined
   setCellFormula(ws, resumoRow3, 1, `B${resumoRow1 + 1}+B${resumoRow2 + 1}`);
   setCellFormula(ws, resumoRow3, 2, `C${resumoRow1 + 1}+C${resumoRow2 + 1}`);
   setCellFormula(ws, resumoRow3, 3, `IF(B${resumoRow3 + 1}=0,0,C${resumoRow3 + 1}/B${resumoRow3 + 1})`);
@@ -527,20 +520,17 @@ export function generatePayrollExcel(
   });
   mergeRow(ws, rowTracker.titleRow, 0, lastCol);
 
-  // "DADOS FINANCEIROS" row
   applyStyleToRow(ws, rowTracker.dataFinanceiraRow, 0, lastCol, {
     font: boldFont,
     alignment: leftAlign,
   });
   mergeRow(ws, rowTracker.dataFinanceiraRow, 0, lastCol);
 
-  // Meta row
   applyStyleToRow(ws, rowTracker.metaRow, 0, lastCol, {
     font: { bold: true, sz: 10 },
     alignment: leftAlign,
   });
 
-  // Headers row
   applyStyleToRow(ws, rowTracker.headerRow, 0, lastCol, {
     font: boldFont,
     fill: yellowFill,
@@ -548,7 +538,6 @@ export function generatePayrollExcel(
     border: borderThin,
   });
 
-  // Data rows
   for (let r = rowTracker.dataStartRow; r <= rowTracker.dataEndRow; r++) {
     applyStyleToRow(ws, r, 0, 0, { font: { sz: 11 }, alignment: leftAlign, border: borderThin });
     for (let c = 1; c <= lastCol; c++) {
@@ -558,7 +547,6 @@ export function generatePayrollExcel(
     }
   }
 
-  // TOTAL row
   applyStyleToRow(ws, rowTracker.totalRow, 0, lastCol, {
     font: boldFont,
     fill: greenFill,
@@ -633,6 +621,30 @@ export function generatePayrollExcel(
     border: borderThin,
   });
 
+  // Total Pacotes Amazon row style
+  applyStyleToRow(ws, amazonRow, 0, lastCol, {
+    font: boldFont,
+    fill: orangeFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+  const amazonLabelAddr = XLSX.utils.encode_cell({ r: amazonRow, c: 0 });
+  if (ws[amazonLabelAddr]) {
+    ws[amazonLabelAddr].s = { ...ws[amazonLabelAddr].s, alignment: leftAlign };
+  }
+
+  // Diferença row style
+  applyStyleToRow(ws, diffRow, 0, lastCol, {
+    font: boldFont,
+    fill: redLightFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+  const diffLabelAddr = XLSX.utils.encode_cell({ r: diffRow, c: 0 });
+  if (ws[diffLabelAddr]) {
+    ws[diffLabelAddr].s = { ...ws[diffLabelAddr].s, alignment: leftAlign };
+  }
+
   // Section 4: Resumo
   applyStyleToRow(ws, rowTracker.resumoHeaderRow, 0, 3, {
     font: boldFont,
@@ -662,20 +674,14 @@ export function generatePayrollExcel(
   });
 
   // ══════════════ APPLY CURRENCY FORMATTING ══════════════
-  // Currency columns: VALOR POR PACOTE (2), DESCONTOS (4), ADICIONAL (5), TOTAL GERAL (6)
   const currencyCols = [COL_VALUE, COL_DISCOUNTS, COL_ADDITIONAL, COL_TOTAL_GERAL];
   
-  // Main data rows + total row
   for (const col of currencyCols) {
     applyCurrencyFormat(ws, col, rowTracker.dataStartRow, rowTracker.totalRow);
   }
-  
-  // Min package rows + total row
   for (const col of currencyCols) {
     applyCurrencyFormat(ws, col, rowTracker.minDataStartRow, rowTracker.minTotalRow);
   }
-  
-  // Resumo section: Valor Total (col 2) and Média Pacote (col 3)
   for (const r of rowTracker.resumoRows) {
     applyCurrencyFormat(ws, 2, r, r);
     applyCurrencyFormat(ws, 3, r, r);
@@ -685,6 +691,9 @@ export function generatePayrollExcel(
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Folha de Pagamento");
 
+  // ══════════════ CREATE INDICADORES SHEET ══════════════
+  createIndicadoresSheet(wb, data);
+
   // ══════════════ CREATE INDIVIDUAL DRIVER SHEETS ══════════════
   const allDrivers = [...data, ...minPkgPayrollData.filter(mp => !data.some(d => d.driver.id === mp.driver.id))];
   
@@ -692,7 +701,6 @@ export function generatePayrollExcel(
     const sheetName = sanitizeSheetName(d.driver.name || "Motorista");
     const driverWsData: (string | number)[][] = [];
     
-    // Header section
     driverWsData.push(["RESUMO DO MOTORISTA"]);
     driverWsData.push([]);
     driverWsData.push(["Nome", d.driver.name]);
@@ -703,7 +711,6 @@ export function generatePayrollExcel(
     driverWsData.push(["Valor por Pacote", tbrVal]);
     driverWsData.push([]);
     
-    // Daily detail section
     driverWsData.push(["DETALHAMENTO DIÁRIO"]);
     driverWsData.push(["Data", "Pacotes", "Retornos", "Concluídos"]);
     
@@ -715,11 +722,10 @@ export function generatePayrollExcel(
           format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy"),
           day.tbrCount,
           day.returns,
-          0, // formula placeholder
+          0,
         ]);
       });
     } else {
-      // Empty rows for manual entry
       for (let i = 0; i < 15; i++) {
         driverWsData.push(["", 0, 0, 0]);
       }
@@ -727,27 +733,25 @@ export function generatePayrollExcel(
     
     const dailyEndRow = driverWsData.length - 1;
     
-    // Total row
     driverWsData.push(["TOTAL", 0, 0, 0]);
     const totalDailyRow = driverWsData.length - 1;
     
     driverWsData.push([]);
     
-    // Financial summary
     driverWsData.push(["RESUMO FINANCEIRO"]);
-    driverWsData.push(["Total Pacotes Concluídos", 0]); // formula
+    driverWsData.push(["Total Pacotes Concluídos", 0]);
     driverWsData.push(["Valor por Pacote", tbrVal]);
-    driverWsData.push(["Subtotal (Pacotes × Valor)", 0]); // formula
+    driverWsData.push(["Subtotal (Pacotes × Valor)", 0]);
     driverWsData.push(["Descontos (DNR)", d.dnrDiscount ?? 0]);
     driverWsData.push(["Adicional (Bônus + Reativo)", (d.bonus ?? 0) + (d.reativoTotal ?? 0)]);
-    driverWsData.push(["TOTAL A PAGAR", 0]); // formula
+    driverWsData.push(["TOTAL A PAGAR", 0]);
+    driverWsData.push(["Média Pacote (Custo/Pacote)", 0]); // NEW: average package cost
     
     const driverWs = XLSX.utils.aoa_to_sheet(driverWsData);
     
-    // Add formulas for daily rows
+    // Daily rows formulas
     for (let r = dailyStartRow; r <= dailyEndRow; r++) {
       const excelRow = r + 1;
-      // Concluídos = Pacotes - Retornos
       setCellFormula(driverWs, r, 3, `IF(B${excelRow}=0,0,B${excelRow}-C${excelRow})`);
     }
     
@@ -761,21 +765,21 @@ export function generatePayrollExcel(
     
     // Financial summary formulas
     const finStartRow = totalDailyRow + 3;
-    setCellFormula(driverWs, finStartRow, 1, `D${totalExcel}`); // Total Pacotes = ref TOTAL Concluídos
-    // Subtotal row
-    setCellFormula(driverWs, finStartRow + 2, 1, `B${finStartRow + 1}*B${finStartRow + 2}`); // Pacotes * Valor
-    // TOTAL A PAGAR
+    setCellFormula(driverWs, finStartRow, 1, `D${totalExcel}`);
+    setCellFormula(driverWs, finStartRow + 2, 1, `B${finStartRow + 1}*B${finStartRow + 2}`);
     const subtotalRow = finStartRow + 3;
     const discountsRow = finStartRow + 4;
     const additionalRow = finStartRow + 5;
     const totalPayRow = finStartRow + 6;
+    const mediaPackRow = finStartRow + 7; // Média Pacote row
     setCellFormula(driverWs, totalPayRow - 1, 1, `B${subtotalRow}-B${discountsRow}+B${additionalRow}`);
+    // Média Pacote = TOTAL A PAGAR / Total Pacotes Concluídos
+    setCellFormula(driverWs, mediaPackRow - 1, 1, `IF(B${finStartRow + 1}=0,0,B${totalPayRow}/B${finStartRow + 1})`);
     
     // Set column widths for driver sheet
     driverWs["!cols"] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
     
     // Apply styles
-    // Title
     applyStyleToRow(driverWs, 0, 0, 3, {
       font: boldFontLg,
       fill: lightBlueFill,
@@ -784,7 +788,6 @@ export function generatePayrollExcel(
     });
     mergeRow(driverWs, 0, 0, 3);
     
-    // Info rows
     for (let r = 2; r <= 6; r++) {
       applyStyleToRow(driverWs, r, 0, 1, {
         font: { sz: 11 },
@@ -797,7 +800,6 @@ export function generatePayrollExcel(
       }
     }
     
-    // Daily header
     applyStyleToRow(driverWs, 8, 0, 3, {
       font: boldFont,
       fill: lightBlueFill,
@@ -806,7 +808,6 @@ export function generatePayrollExcel(
     });
     mergeRow(driverWs, 8, 0, 3);
     
-    // Daily columns header
     applyStyleToRow(driverWs, 9, 0, 3, {
       font: boldFont,
       fill: yellowFill,
@@ -814,7 +815,6 @@ export function generatePayrollExcel(
       border: borderThin,
     });
     
-    // Daily data rows
     for (let r = dailyStartRow; r <= dailyEndRow; r++) {
       applyStyleToRow(driverWs, r, 0, 3, {
         font: { sz: 11 },
@@ -823,7 +823,6 @@ export function generatePayrollExcel(
       });
     }
     
-    // Daily total row
     applyStyleToRow(driverWs, totalDailyRow, 0, 3, {
       font: boldFont,
       fill: greenFill,
@@ -831,7 +830,6 @@ export function generatePayrollExcel(
       border: borderThin,
     });
     
-    // Financial summary header
     applyStyleToRow(driverWs, totalDailyRow + 2, 0, 1, {
       font: boldFont,
       fill: lightBlueFill,
@@ -840,8 +838,8 @@ export function generatePayrollExcel(
     });
     mergeRow(driverWs, totalDailyRow + 2, 0, 1);
     
-    // Financial rows
-    for (let r = finStartRow; r <= totalPayRow - 1; r++) {
+    // Financial rows (including the new Média Pacote row)
+    for (let r = finStartRow; r <= mediaPackRow - 1; r++) {
       applyStyleToRow(driverWs, r, 0, 1, {
         font: { sz: 11 },
         alignment: leftAlign,
@@ -860,12 +858,18 @@ export function generatePayrollExcel(
       alignment: centerAlign,
       border: borderThin,
     });
+
+    // Média Pacote row style
+    applyStyleToRow(driverWs, mediaPackRow - 1, 0, 1, {
+      font: boldFont,
+      fill: orangeFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
     
-    // Apply currency formatting to driver sheet
-    // Valor por Pacote in header (row 6)
+    // Apply currency formatting
     applyCurrencyFormat(driverWs, 1, 6, 6);
-    // Financial summary rows: Valor por Pacote, Subtotal, Descontos, Adicional, TOTAL A PAGAR
-    applyCurrencyFormat(driverWs, 1, finStartRow + 1, totalPayRow - 1);
+    applyCurrencyFormat(driverWs, 1, finStartRow + 1, mediaPackRow - 1);
     
     XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
   });
@@ -873,4 +877,189 @@ export function generatePayrollExcel(
   // ══════════════ SAVE FILE ══════════════
   const fileName = `folha_pagamento_${unitName.replace(/\s+/g, "_")}_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.xlsx`;
   XLSX.writeFile(wb, fileName);
+}
+
+// ══════════════ INDICADORES SHEET ══════════════
+function createIndicadoresSheet(wb: XLSX.WorkBook, data: DriverPayrollData[]) {
+  const wsData: (string | number)[][] = [];
+
+  // Calculate metrics for each driver
+  const metrics = data.map((d) => {
+    const totalPaid = ((d.totalCompleted * (d.tbrValueUsed ?? 0)) - (d.dnrDiscount ?? 0) + (d.bonus ?? 0) + (d.reativoTotal ?? 0));
+    const avgPerPackage = d.totalCompleted > 0 ? totalPaid / d.totalCompleted : 0;
+    const tbrVal = d.tbrValueUsed ?? 0;
+    return {
+      name: d.driver.name,
+      vehicle: tbrVal <= 2.5 ? "MOTO" : "CARRO",
+      packages: d.totalCompleted,
+      totalPaid,
+      avgPerPackage,
+      daysWorked: d.daysWorked,
+    };
+  }).filter(m => m.packages > 0);
+
+  // Sort by avg package cost (cheapest first)
+  const byAvg = [...metrics].sort((a, b) => a.avgPerPackage - b.avgPerPackage);
+  // Sort by volume (highest first)
+  const byVolume = [...metrics].sort((a, b) => b.packages - a.packages);
+  // Sort by total cost (highest first)
+  const byCost = [...metrics].sort((a, b) => b.totalPaid - a.totalPaid);
+
+  // ── RESUMO GERAL ──
+  wsData.push(["INDICADORES E MÉTRICAS"]);
+  wsData.push([]);
+  wsData.push(["RESUMO GERAL"]);
+
+  const totalDrivers = metrics.length;
+  const totalPackages = metrics.reduce((s, m) => s + m.packages, 0);
+  const totalCost = metrics.reduce((s, m) => s + m.totalPaid, 0);
+  const avgGeneral = totalPackages > 0 ? totalCost / totalPackages : 0;
+  const cheapest = byAvg[0];
+  const mostExpensive = byAvg[byAvg.length - 1];
+  const highestVolume = byVolume[0];
+  const lowestVolume = byVolume[byVolume.length - 1];
+
+  wsData.push(["Total de Motoristas", totalDrivers]);
+  wsData.push(["Total de Pacotes", totalPackages]);
+  wsData.push(["Custo Total", totalCost]);
+  wsData.push(["Média Geral por Pacote", avgGeneral]);
+  wsData.push([]);
+  wsData.push(["Motorista Mais Barato", cheapest?.name ?? "-", "", cheapest ? cheapest.avgPerPackage : 0]);
+  wsData.push(["Motorista Mais Caro", mostExpensive?.name ?? "-", "", mostExpensive ? mostExpensive.avgPerPackage : 0]);
+  wsData.push(["Maior Volume", highestVolume?.name ?? "-", "", highestVolume ? highestVolume.packages : 0]);
+  wsData.push(["Menor Volume", lowestVolume?.name ?? "-", "", lowestVolume ? lowestVolume.packages : 0]);
+
+  wsData.push([]);
+  wsData.push([]);
+
+  // ── RANKING POR MÉDIA PACOTE ──
+  wsData.push(["RANKING POR MÉDIA DE PACOTE (MAIS BARATO → MAIS CARO)"]);
+  const rankAvgHeaderRow = wsData.length;
+  wsData.push(["#", "Nome", "Veículo", "Pacotes", "Valor Total", "Média/Pacote"]);
+  const rankAvgStartRow = wsData.length;
+  byAvg.forEach((m, i) => {
+    wsData.push([i + 1, m.name, m.vehicle, m.packages, m.totalPaid, m.avgPerPackage]);
+  });
+  const rankAvgEndRow = wsData.length - 1;
+
+  wsData.push([]);
+  wsData.push([]);
+
+  // ── RANKING POR VOLUME ──
+  wsData.push(["RANKING POR VOLUME DE PACOTES (MAIS → MENOS)"]);
+  const rankVolHeaderRow = wsData.length;
+  wsData.push(["#", "Nome", "Veículo", "Pacotes", "Valor Total", "Média/Pacote"]);
+  const rankVolStartRow = wsData.length;
+  byVolume.forEach((m, i) => {
+    wsData.push([i + 1, m.name, m.vehicle, m.packages, m.totalPaid, m.avgPerPackage]);
+  });
+  const rankVolEndRow = wsData.length - 1;
+
+  wsData.push([]);
+  wsData.push([]);
+
+  // ── RANKING POR CUSTO TOTAL ──
+  wsData.push(["RANKING POR CUSTO TOTAL (MAIS CARO → MAIS BARATO)"]);
+  const rankCostHeaderRow = wsData.length;
+  wsData.push(["#", "Nome", "Veículo", "Pacotes", "Valor Total", "Média/Pacote"]);
+  const rankCostStartRow = wsData.length;
+  byCost.forEach((m, i) => {
+    wsData.push([i + 1, m.name, m.vehicle, m.packages, m.totalPaid, m.avgPerPackage]);
+  });
+  const rankCostEndRow = wsData.length - 1;
+
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  ws["!cols"] = [
+    { wch: 30 }, { wch: 35 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 18 },
+  ];
+
+  // Title style
+  applyStyleToRow(ws, 0, 0, 5, {
+    font: boldFontLg,
+    fill: lightBlueFill,
+    alignment: centerAlign,
+    border: borderThin,
+  });
+  mergeRow(ws, 0, 0, 5);
+
+  // Resumo Geral header
+  applyStyleToRow(ws, 2, 0, 5, {
+    font: boldFont,
+    fill: grayFill,
+    alignment: leftAlign,
+    border: borderThin,
+  });
+  mergeRow(ws, 2, 0, 5);
+
+  // Resumo rows
+  for (let r = 3; r <= 10; r++) {
+    applyStyleToRow(ws, r, 0, 3, {
+      font: { sz: 11 },
+      alignment: leftAlign,
+      border: borderThin,
+    });
+    const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
+    if (ws[labelAddr]) ws[labelAddr].s = { ...ws[labelAddr].s, font: boldFont };
+  }
+
+  // Currency format for resumo
+  applyCurrencyFormat(ws, 1, 5, 6); // Custo Total, Média Geral
+  applyCurrencyFormat(ws, 3, 8, 9); // cheapest/expensive avg
+
+  // Style ranking sections
+  const rankingSections = [
+    { titleRow: rankAvgHeaderRow - 1, headerRow: rankAvgHeaderRow, startRow: rankAvgStartRow, endRow: rankAvgEndRow },
+    { titleRow: rankVolHeaderRow - 1, headerRow: rankVolHeaderRow, startRow: rankVolStartRow, endRow: rankVolEndRow },
+    { titleRow: rankCostHeaderRow - 1, headerRow: rankCostHeaderRow, startRow: rankCostStartRow, endRow: rankCostEndRow },
+  ];
+
+  for (const section of rankingSections) {
+    // Section title
+    applyStyleToRow(ws, section.titleRow, 0, 5, {
+      font: boldFont,
+      fill: lightBlueFill,
+      alignment: leftAlign,
+      border: borderThin,
+    });
+    mergeRow(ws, section.titleRow, 0, 5);
+
+    // Header row
+    applyStyleToRow(ws, section.headerRow, 0, 5, {
+      font: boldFont,
+      fill: yellowFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+
+    // Data rows
+    for (let r = section.startRow; r <= section.endRow; r++) {
+      applyStyleToRow(ws, r, 0, 5, {
+        font: { sz: 11 },
+        alignment: centerAlign,
+        border: borderThin,
+      });
+      // Name left-aligned
+      const nameAddr = XLSX.utils.encode_cell({ r, c: 1 });
+      if (ws[nameAddr]) ws[nameAddr].s = { ...ws[nameAddr].s, alignment: leftAlign };
+
+      // Highlight top 3
+      if (r - section.startRow < 3) {
+        applyStyleToRow(ws, r, 0, 5, {
+          font: { sz: 11, bold: true },
+          fill: { fgColor: { rgb: r - section.startRow === 0 ? "FFD700" : r - section.startRow === 1 ? "C0C0C0" : "CD7F32" } },
+          alignment: centerAlign,
+          border: borderThin,
+        });
+        const nameAddr2 = XLSX.utils.encode_cell({ r, c: 1 });
+        if (ws[nameAddr2]) ws[nameAddr2].s = { ...ws[nameAddr2].s, alignment: leftAlign };
+      }
+    }
+
+    // Currency columns
+    applyCurrencyFormat(ws, 4, section.startRow, section.endRow); // Valor Total
+    applyCurrencyFormat(ws, 5, section.startRow, section.endRow); // Média/Pacote
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, "Indicadores");
 }
