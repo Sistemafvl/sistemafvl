@@ -462,22 +462,6 @@ const DriverHome = () => {
         </CardContent>
       </Card>
 
-      {/* Banking reminder */}
-      <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 flex gap-3 items-start">
-        <FileWarning className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
-        <div className="text-sm space-y-1">
-          <p className="font-semibold text-amber-700 dark:text-amber-400">Não esqueça de cadastrar seus dados bancários!</p>
-          <p className="text-muted-foreground text-xs leading-relaxed">
-            Para receber seus pagamentos corretamente, siga os passos:
-          </p>
-          <ol className="text-xs text-muted-foreground list-decimal list-inside space-y-0.5">
-            <li>Acesse <strong>Documentos</strong> no menu lateral</li>
-            <li>Role até o final da página, na seção <strong>Dados Bancários / Pix</strong></li>
-            <li>Preencha o tipo de chave, chave Pix e nome do titular</li>
-            <li>Clique em <strong>Salvar</strong></li>
-          </ol>
-        </div>
-      </div>
 
       {/* System test notice */}
       <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex gap-3 items-start">
