@@ -186,7 +186,6 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
           const code = insideBarcodes[0].rawValue?.trim().toUpperCase();
           if (!code) return;
 
-          const code = tbrBarcodes[0].rawValue.toUpperCase();
           if (recentCodes.has(code)) return;
           recentCodes.add(code);
           setTimeout(() => recentCodes.delete(code), 5000);
