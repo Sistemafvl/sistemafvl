@@ -18,6 +18,7 @@ import {
 import { toast } from "@/hooks/use-toast";
 import { cn, formatDateBR, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 import jsPDF from "jspdf";
 import { loadLogoBase64 } from "./reports/pdf-utils";
 
@@ -572,9 +573,9 @@ const ReversaPage = () => {
               </div>
 
               {cameraOpen && (
-                <div className="relative rounded-lg overflow-hidden bg-black aspect-video">
+                <div className="relative rounded-lg overflow-hidden bg-black aspect-square max-w-xs mx-auto">
                   <video ref={videoRef} className="w-full h-full object-cover" muted playsInline />
-                  <div className="absolute inset-[20%] border-2 border-dashed border-white/60 rounded-lg pointer-events-none" />
+                  <QrViewfinder />
                 </div>
               )}
 

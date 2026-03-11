@@ -23,6 +23,7 @@ import { format, differenceInMinutes } from "date-fns";
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from "@/components/ui/command";
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 
 
 interface RideWithDriver {
@@ -2873,7 +2874,7 @@ const ConferenciaCarregamentoPage = () => {
           <div className="space-y-3">
             <div className="relative w-full aspect-square bg-black rounded-lg overflow-hidden">
               <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
-              <div className="absolute inset-[20%] border-2 border-primary/50 rounded-lg pointer-events-none" />
+              <QrViewfinder />
             </div>
             {lastScannedCode && (
               <div className="flex items-center gap-2 p-2 rounded-md bg-muted text-sm">

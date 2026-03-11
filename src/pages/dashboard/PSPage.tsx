@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard, Trash2 } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 import { toast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -956,13 +957,10 @@ const PSPage = () => {
 
           {/* Camera scanner overlay */}
           {scannerOpen && (
-            <div className="relative rounded-lg overflow-hidden border bg-black">
-              <video ref={scannerVideoRef} className="w-full h-48 object-cover" playsInline muted />
-              {/* Square overlay */}
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="w-40 h-40 border-2 border-primary rounded-lg opacity-70" />
-              </div>
-              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between">
+            <div className="relative rounded-lg overflow-hidden border bg-black aspect-square max-w-xs mx-auto">
+              <video ref={scannerVideoRef} className="w-full h-full object-cover" playsInline muted />
+              <QrViewfinder />
+              <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between z-20">
                 {lastScannedCode && (
                   <span className="text-xs bg-background/80 text-foreground px-2 py-1 rounded">{lastScannedCode}</span>
                 )}
