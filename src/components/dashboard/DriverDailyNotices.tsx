@@ -12,7 +12,7 @@ import {
   AlertDialogFooter,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { ShieldCheck, LifeBuoy, Landmark, Zap, Banknote } from "lucide-react";
+import { ShieldCheck, LifeBuoy, Zap, Banknote } from "lucide-react";
 
 const NOTICES = [
   {
