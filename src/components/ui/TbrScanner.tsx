@@ -244,43 +244,49 @@ const TbrScanner = ({ onScan, placeholder = "Digite ou bipe o TBR...", disabled 
 
       {/* Camera view */}
       {showCamera && (
-        <div className="relative rounded-lg overflow-hidden bg-foreground/95 aspect-[4/3]">
+        <div className="relative rounded-lg overflow-hidden bg-foreground/95 aspect-square max-w-xs mx-auto">
           <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
 
-          {/* Dark overlay outside viewfinder */}
+          {/* Dark overlay with square QR-code viewfinder cutout */}
           <div className="absolute inset-0 pointer-events-none">
-            {/* Semi-transparent dark overlay */}
             <div className="absolute inset-0 bg-black/50" />
-            {/* Clear viewfinder cutout - 30% width, at 25% from top */}
+            {/* Square cutout centered — 60% of container */}
             <div
               className="absolute bg-transparent"
               style={{
-                left: "35%",
-                top: "15%",
-                width: "30%",
-                height: "30%",
+                left: "20%",
+                top: "20%",
+                width: "60%",
+                height: "60%",
                 boxShadow: "0 0 0 9999px rgba(0,0,0,0.5)",
-                borderRadius: "8px",
+                borderRadius: "4px",
               }}
             />
-            {/* Viewfinder border */}
-            <div
-              className="absolute border-2 border-white/70 rounded-lg"
-              style={{ left: "35%", top: "15%", width: "30%", height: "30%" }}
-            />
-            {/* Corner accents */}
-            <div className="absolute" style={{ left: "35%", top: "15%", width: "30%", height: "30%" }}>
-              <div className="absolute top-0 left-0 w-5 h-5 border-t-[3px] border-l-[3px] border-white rounded-tl-lg" />
-              <div className="absolute top-0 right-0 w-5 h-5 border-t-[3px] border-r-[3px] border-white rounded-tr-lg" />
-              <div className="absolute bottom-0 left-0 w-5 h-5 border-b-[3px] border-l-[3px] border-white rounded-bl-lg" />
-              <div className="absolute bottom-0 right-0 w-5 h-5 border-b-[3px] border-r-[3px] border-white rounded-br-lg" />
+            {/* QR-style corner brackets */}
+            <div className="absolute" style={{ left: "20%", top: "20%", width: "60%", height: "60%" }}>
+              {/* Top-left */}
+              <div className="absolute top-0 left-0 w-6 h-6 border-t-[3px] border-l-[3px] border-primary rounded-tl-sm" />
+              {/* Top-right */}
+              <div className="absolute top-0 right-0 w-6 h-6 border-t-[3px] border-r-[3px] border-primary rounded-tr-sm" />
+              {/* Bottom-left */}
+              <div className="absolute bottom-0 left-0 w-6 h-6 border-b-[3px] border-l-[3px] border-primary rounded-bl-sm" />
+              {/* Bottom-right */}
+              <div className="absolute bottom-0 right-0 w-6 h-6 border-b-[3px] border-r-[3px] border-primary rounded-br-sm" />
+
+              {/* QR finder pattern squares (top-left, top-right, bottom-left) */}
+              <div className="absolute top-1.5 left-1.5 w-4 h-4 border-2 border-primary/40 rounded-sm" />
+              <div className="absolute top-1.5 right-1.5 w-4 h-4 border-2 border-primary/40 rounded-sm" />
+              <div className="absolute bottom-1.5 left-1.5 w-4 h-4 border-2 border-primary/40 rounded-sm" />
+
+              {/* Scanning line that bounces up and down */}
+              <div className="absolute inset-x-1 animate-scan" style={{ top: "0%", height: "100%" }}>
+                <div className="absolute w-full h-0.5 bg-primary shadow-[0_0_10px_hsl(var(--primary)/0.6)]" />
+              </div>
             </div>
-            {/* Scanning line animation */}
-            <div
-              className="absolute animate-scan"
-              style={{ left: "36%", width: "28%", top: "15%", height: "30%" }}
-            >
-              <div className="absolute w-full h-0.5 bg-primary/60 shadow-[0_0_8px_hsl(var(--primary)/0.4)]" />
+
+            {/* Label */}
+            <div className="absolute bottom-[12%] left-0 right-0 text-center">
+              <span className="text-[10px] text-white/60 font-medium tracking-wider uppercase">Posicione o código no quadro</span>
             </div>
           </div>
 
