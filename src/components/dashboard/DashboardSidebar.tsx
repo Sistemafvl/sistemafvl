@@ -99,9 +99,46 @@ const DashboardSidebar = () => {
   const [driverModalOpen, setDriverModalOpen] = useState(false);
   const [conferentes, setConferentes] = useState<ConferenteOption[]>([]);
   const [conferenteSelectOpen, setConferenteSelectOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const pendingFetchRef = useRef(false);
 
   const isDirector = unitSession?.sessionType === "matriz";
   const showManagerMenu = isDirector || !!managerSession;
+
+  // Fetch pending loading count
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString();
+
+    const fetchPending = async () => {
+      if (pendingFetchRef.current) return;
+      pendingFetchRef.current = true;
+      const { count } = await supabase
+        .from("driver_rides")
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", unitSession.id)
+        .eq("loading_status", "pending")
+        .gte("completed_at", todayISO);
+      setPendingCount(count ?? 0);
+      pendingFetchRef.current = false;
+    };
+
+    fetchPending();
+
+    const channel = supabase
+      .channel("pending-rides-count")
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "driver_rides",
+        filter: `unit_id=eq.${unitSession.id}`,
+      }, () => { fetchPending(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [unitSession?.id]);
 
   // Fetch conferentes for the unit
   useEffect(() => {
