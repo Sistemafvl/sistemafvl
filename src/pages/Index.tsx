@@ -43,7 +43,7 @@ const Index = () => {
             SISTEMA LOGÍSTICO
           </h1>
           <p className="text-sm text-muted-foreground italic mt-1">
-            Selecione seu domínio e unidade para entrar
+            Selecione dominio e unidade para logar
           </p>
         </div>
 
