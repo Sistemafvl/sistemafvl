@@ -657,8 +657,8 @@ const ConferenciaCarregamentoPage = () => {
   useEffect(() => { fetchOpenRtos(); }, [fetchOpenRtos]);
   const fetchRidesRef = useRef(fetchRides);
   const fetchOpenRtosRef = useRef(fetchOpenRtos);
-  useEffect(() => { 
-    fetchRidesRef.current = fetchRides; 
+  useEffect(() => {
+    fetchRidesRef.current = fetchRides;
     fetchOpenRtosRef.current = fetchOpenRtos;
   }, [fetchRides, fetchOpenRtos]);
 
