@@ -104,18 +104,25 @@ const DriverCallAlert = () => {
 
     // Trigger native Web Notification if allowed
     if ("Notification" in window && Notification.permission === "granted") {
-      // Show push notification when app is in background or always
-      if (document.visibilityState === "hidden") {
-        try {
-          new Notification("🔔 SUA VEZ!", {
-            body: callerName ? `Conferente ${callerName} te chamou. Dirija-se ao local de carregamento.` : "Dirija-se ao local de carregamento.",
-            icon: "/icon-192x192.png", // PWA default icon naming
-            vibrate: [500, 200, 500, 200, 500],
-            requireInteraction: true,
-          } as any);
-        } catch (e) {
-          // Ignore fallback if browser doesn't support complex opts
+      const title = "🔔 SUA VEZ!";
+      const options: any = {
+        body: callerName ? `Conferente ${callerName} te chamou. Dirija-se ao local de carregamento.` : "Dirija-se ao local de carregamento.",
+        icon: "/icon-192x192.png", // PWA default icon naming
+        vibrate: [500, 200, 500, 200, 500],
+        requireInteraction: true,
+      };
+
+      // Always show notification, even if app is active
+      try {
+        if ("serviceWorker" in navigator) {
+          navigator.serviceWorker.ready.then((registration) => {
+            registration.showNotification(title, options);
+          });
+        } else {
+          new Notification(title, options as any); // fallback for non-SW browsers
         }
+      } catch (e) {
+        new Notification(title, options as any); // extreme fallback
       }
     }
 

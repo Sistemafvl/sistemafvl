@@ -593,7 +593,7 @@ const RelatoriosPage = () => {
   };
 
   const reportCards = [
-    { key: "payroll", title: "Folha de Pagamento", description: "Ficha individual por motorista com design profissional", icon: FileText,
+    { key: "payroll", title: "Fechamento", description: "Ficha individual por motorista com design profissional", icon: FileText,
       action: () => openPayrollModal("gerar"),
       secondAction: () => openPayrollModal("consult"),
       espelhoAction: () => openPayrollModal("espelho"),
@@ -615,9 +615,9 @@ const RelatoriosPage = () => {
     );
   }) ?? [];
 
-  const modalTitle = payrollMode === "gerar" ? "Gerar — Folha de Pagamento"
-    : payrollMode === "espelho" ? "Espelho — Folha de Pagamento"
-    : "Consulta — Folha de Pagamento";
+  const modalTitle = payrollMode === "gerar" ? "Gerar — Fechamento"
+    : payrollMode === "espelho" ? "Espelho — Fechamento"
+    : "Consulta — Fechamento";
 
   return (
     <>

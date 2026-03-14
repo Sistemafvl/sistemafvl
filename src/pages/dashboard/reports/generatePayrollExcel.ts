@@ -689,7 +689,7 @@ export function generatePayrollExcel(
 
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Folha de Pagamento");
+  XLSX.utils.book_append_sheet(wb, ws, "Fechamento");
 
   // ══════════════ CREATE INDICADORES SHEET ══════════════
   createIndicadoresSheet(wb, data);

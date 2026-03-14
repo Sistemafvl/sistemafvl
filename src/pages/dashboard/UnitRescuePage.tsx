@@ -14,6 +14,7 @@ interface DriverRideInfo {
   rideId: string;
   driverId: string;
   driverName: string;
+  loadingStatus: string | null;
 }
 
 interface TbrItem {
@@ -53,17 +54,27 @@ const UnitRescuePage = () => {
         `)
         .eq("unit_id", unitId)
         .gte("completed_at", today.toISOString())
+        .neq("loading_status", "cancelled")
         .order("completed_at", { ascending: false });
 
       if (rides) {
-        // Dedup by driver_id, taking the most recent ride (already ordered descending)
         const driverMap = new Map<string, DriverRideInfo>();
-        rides.forEach((r: any) => {
+        const activeFirst = (a: any, b: any) => {
+          // Prioritize loading/pending over finished
+          const isAActive = ["loading", "pending"].includes(a.loading_status);
+          const isBActive = ["loading", "pending"].includes(b.loading_status);
+          if (isAActive && !isBActive) return -1;
+          if (!isAActive && isBActive) return 1;
+          return new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime();
+        };
+
+        rides.sort(activeFirst).forEach((r: any) => {
           if (!driverMap.has(r.driver_id)) {
             driverMap.set(r.driver_id, {
               rideId: r.id,
               driverId: r.driver_id,
               driverName: r.drivers_public?.name ?? "Desconhecido",
+              loadingStatus: r.loading_status,
             });
           }
         });
@@ -153,6 +164,14 @@ const UnitRescuePage = () => {
         tbr_code: t.code,
       }));
       await supabase.from("rescue_entries").insert(rescueLogs);
+
+      // 4. Update target ride to "loading" if it was "pending", so the car turns black on UI
+      if (targetInfo.loadingStatus === "pending") {
+        await supabase.from("driver_rides").update({ 
+          loading_status: "loading",
+          started_at: new Date().toISOString()
+        } as any).eq("id", targetInfo.rideId);
+      }
 
       toast.success(`${selectedTbrIds.size} TBR(s) transferido(s) com sucesso!`);
       // Remove transferred TBRs from local state to reflect UI instantly
