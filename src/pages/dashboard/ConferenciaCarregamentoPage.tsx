@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Users, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package } from "lucide-react";
+import { Car, MapPin, User, Users, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package, GripVertical } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -247,6 +247,8 @@ const ConferenciaCarregamentoPage = () => {
   const [retroLoading, setRetroLoading] = useState(false);
   const [retroSearchLoading, setRetroSearchLoading] = useState(false);
   const retroDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [draggedRideId, setDraggedRideId] = useState<string | null>(null);
+  const [dragOverRideId, setDragOverRideId] = useState<string | null>(null);
 
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
@@ -970,6 +972,67 @@ const ConferenciaCarregamentoPage = () => {
         }
       }
     }, 250);
+  };
+
+  const handleDragStart = (rideId: string) => {
+    if (!managerSession) return;
+    setDraggedRideId(rideId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, rideId: string) => {
+    if (!managerSession) return;
+    e.preventDefault();
+    if (draggedRideId !== rideId) {
+      setDragOverRideId(rideId);
+    }
+  };
+
+  const handleDrop = async (targetRideId: string) => {
+    if (!managerSession || !draggedRideId || draggedRideId === targetRideId) {
+      setDraggedRideId(null);
+      setDragOverRideId(null);
+      return;
+    }
+
+    const currentRides = [...displayRides];
+    const draggedIdx = currentRides.findIndex(r => r.id === draggedRideId);
+    const targetIdx = currentRides.findIndex(r => r.id === targetRideId);
+
+    if (draggedIdx === -1 || targetIdx === -1) return;
+
+    // LOCAL REORDER
+    const [draggedRide] = currentRides.splice(draggedIdx, 1);
+    currentRides.splice(targetIdx, 0, draggedRide);
+
+    // PERSIST NEW SEQUENCES
+    // Ensure we only update rides that actually changed their position to save RPCs/Requests
+    const updates = currentRides.map((r, index) => {
+      const newSeq = index + 1;
+      return { id: r.id, sequence_number: newSeq };
+    }).filter((upd, idx) => {
+      // Find the original ride at this position
+      return displayRides[idx]?.id !== upd.id || displayRides[idx]?.sequence_number !== upd.sequence_number;
+    });
+
+    // Optimistic Update
+    setRides(prev => {
+      const updated = [...prev];
+      currentRides.forEach((r, idx) => {
+        const foundIdx = updated.findIndex(u => u.id === r.id);
+        if (foundIdx !== -1) updated[foundIdx] = { ...updated[foundIdx], sequence_number: idx + 1 };
+      });
+      return updated.sort((a, b) => (a.sequence_number || 0) - (b.sequence_number || 0));
+    });
+
+    setDraggedRideId(null);
+    setDragOverRideId(null);
+
+    // Database updates
+    for (const upd of updates) {
+      await supabase.from("driver_rides").update({ sequence_number: upd.sequence_number }).eq("id", upd.id);
+    }
+
+    fetchRides();
   };
 
   // Save TBR logic (shared between scanner debounce and manual Enter)
@@ -2040,7 +2103,19 @@ const ConferenciaCarregamentoPage = () => {
                 const isMyRide = !!managerSession || ride.conferente_id === conferenteSession?.id;
 
                 return (
-                  <div key={ride.id} className="w-[85vw] sm:w-[320px] shrink-0">
+                  <div 
+                    key={ride.id} 
+                    className={cn(
+                      "w-[85vw] sm:w-[320px] shrink-0 transition-opacity",
+                      draggedRideId === ride.id && "opacity-40",
+                      dragOverRideId === ride.id && "ring-2 ring-primary ring-offset-2 rounded-xl"
+                    )}
+                    draggable={!!managerSession && !isSearchActive}
+                    onDragStart={() => handleDragStart(ride.id)}
+                    onDragOver={(e) => handleDragOver(e, ride.id)}
+                    onDrop={() => handleDrop(ride.id)}
+                    onDragEnd={() => { setDraggedRideId(null); setDragOverRideId(null); }}
+                  >
                     <Card className={cn(
                       "relative overflow-hidden h-full transition-colors",
                       isLoadingStatus && "bg-blue-50 border-blue-200",
@@ -2048,6 +2123,12 @@ const ConferenciaCarregamentoPage = () => {
                       isCancelled && "bg-red-50 border-red-200"
                     )}>
                       <CardContent className="p-4 flex flex-col items-center gap-3">
+                        {/* Drag handle for manager */}
+                        {managerSession && !isSearchActive && (
+                          <div className="absolute top-2 right-1/2 translate-x-1/2 cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-primary transition-colors">
+                            <GripVertical className="h-5 w-5" />
+                          </div>
+                        )}
                         {/* TBR Counter badge + Bell icon (top-left) */}
                         <div className="absolute top-2 left-2 flex flex-col items-center gap-1">
                           <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-bold gap-0.5" title="TBRs no carregamento">
