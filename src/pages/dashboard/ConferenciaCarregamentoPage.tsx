@@ -655,6 +655,13 @@ const ConferenciaCarregamentoPage = () => {
   }, [unitId]);
 
   useEffect(() => { fetchOpenRtos(); }, [fetchOpenRtos]);
+  const fetchRidesRef = useRef(fetchRides);
+  const fetchOpenRtosRef = useRef(fetchOpenRtos);
+  useEffect(() => { 
+    fetchRidesRef.current = fetchRides; 
+    fetchOpenRtosRef.current = fetchOpenRtos;
+  }, [fetchRides, fetchOpenRtos]);
+
   useEffect(() => { fetchRides(); }, [fetchRides]);
 
 
@@ -673,8 +680,7 @@ const ConferenciaCarregamentoPage = () => {
     fetchLogins();
   }, [unitId]);
 
-  const fetchRidesRef = useRef(fetchRides);
-  useEffect(() => { fetchRidesRef.current = fetchRides; }, [fetchRides]);
+  // Unit logins fetch removed from here to reduce noise if redundant, but keeping the refs logic
 
   useEffect(() => {
     if (!unitId) return;
@@ -795,7 +801,8 @@ const ConferenciaCarregamentoPage = () => {
           .limit(1)
           .maybeSingle();
 
-        if (closedPiso) {
+        const success = (closedPiso as any)?.id; // Check if closedPiso exists
+        if (success) {
           await supabase.from("piso_entries").update({ status: "open", closed_at: null, reason: "Removido do carregamento" } as any).eq("id", closedPiso.id);
         } else {
           await supabase.from("piso_entries").insert({
@@ -1016,20 +1023,20 @@ const ConferenciaCarregamentoPage = () => {
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
 
         // CALL NEW RPC (Consolidates all previous parallel calls)
-        const { data: rpcRes, error: rpcError } = await supabase.rpc('process_tbr_scan', {
+        const { data: rpcRes, error: rpcError } = await (supabase as any).rpc('process_tbr_scan', {
           p_ride_id: rideId,
           p_code: code,
           p_unit_id: unitId
         });
 
-        if (rpcError || (rpcRes && !rpcRes.success)) {
+        if (rpcError || (rpcRes && !(rpcRes as any).success)) {
           // ROLLBACK on error
           setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
           processedCodesRef.current[rideId]?.delete(code.toUpperCase());
           scanCountsRef.current[rideId][code.toUpperCase()] = 0;
           playErrorBeep();
 
-          const errorMsg = rpcRes?.error || rpcError?.message;
+          const errorMsg = (rpcRes as any)?.error || rpcError?.message;
           const { toast } = await import("@/hooks/use-toast");
           toast({ title: "Erro ao salvar TBR", description: errorMsg, variant: "destructive" });
           return;
@@ -1114,9 +1121,7 @@ const ConferenciaCarregamentoPage = () => {
   // Synchronous tracking of codes already enqueued/processed per ride (avoids stale React state)
   const processedCodesRef = useRef<Record<string, Set<string>>>({});
 
-  const fetchRidesRef = useRef(fetchRides);
   fetchRidesRef.current = fetchRides;
-  const fetchOpenRtosRef = useRef(fetchOpenRtos);
   fetchOpenRtosRef.current = fetchOpenRtos;
 
   // Instant duplicate detection BEFORE queue — synchronous, no DB calls
@@ -1714,7 +1719,7 @@ const ConferenciaCarregamentoPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic">Carregamento</h1>
+        <h1 className="text-2xl font-bold italic">Carregamento - V5</h1>
         {managerSession && (
           <Button
             variant="outline"
@@ -1876,7 +1881,7 @@ const ConferenciaCarregamentoPage = () => {
 
           {/* KPI Cards next to dates */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold text-red-500">v4:</span>
+            <span className="text-[10px] font-bold text-red-500">v5:</span>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 min-w-[100px] shadow-sm">
               <Package className="h-3.5 w-3.5 text-primary" />
               <div className="flex flex-col">
