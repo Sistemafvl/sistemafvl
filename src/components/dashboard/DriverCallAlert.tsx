@@ -99,8 +99,25 @@ const DriverCallAlert = () => {
   const stopSirenRef = useRef<(() => void) | null>(null);
   const vibrationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const startAlert = useCallback(() => {
+  const startAlert = useCallback((callerName: string | null) => {
     setIsAlerting(true);
+
+    // Trigger native Web Notification if allowed
+    if ("Notification" in window && Notification.permission === "granted") {
+      // Show push notification when app is in background or always
+      if (document.visibilityState === "hidden") {
+        try {
+          new Notification("🔔 SUA VEZ!", {
+            body: callerName ? `Conferente ${callerName} te chamou. Dirija-se ao local de carregamento.` : "Dirija-se ao local de carregamento.",
+            icon: "/icon-192x192.png", // PWA default icon naming
+            vibrate: [500, 200, 500, 200, 500],
+            requireInteraction: true,
+          } as any);
+        } catch (e) {
+          // Ignore fallback if browser doesn't support complex opts
+        }
+      }
+    }
 
     // Start continuous siren
     if (!stopSirenRef.current) {
@@ -185,7 +202,7 @@ const DriverCallAlert = () => {
     if (isValidCall && calledAt !== lastCalledAtRef.current) {
       lastCalledAtRef.current = calledAt;
       setCalledByName(callerName);
-      startAlert();
+      startAlert(callerName);
     } else if (!calledAt) {
       lastCalledAtRef.current = null;
     }

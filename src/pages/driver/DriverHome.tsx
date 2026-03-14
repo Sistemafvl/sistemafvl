@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap } from "lucide-react";
+import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap, Bell } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -21,6 +21,7 @@ const DriverHome = () => {
 
   const [startDate, setStartDate] = useState(() => getBrazilTodayStr());
   const [endDate, setEndDate] = useState(() => getBrazilTodayStr());
+  const [notifPermission, setNotifPermission] = useState(() => "Notification" in window ? Notification.permission : "granted");
   const [rides, setRides] = useState<any[]>([]);
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
@@ -445,6 +446,33 @@ const DriverHome = () => {
         <TrendingUp className="h-5 w-5 text-primary" />
         Visão Geral
       </h1>
+
+      {notifPermission === "default" && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
+          <div className="flex gap-3 items-center">
+            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <Bell className="h-5 w-5 text-primary" />
+            </div>
+            <div className="text-sm space-y-1 min-w-0">
+              <p className="font-semibold text-primary">Ativar notificações de chamada</p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Seja avisado prontamente quando chegar sua vez de carregar, mesmo com a tela apagada.
+              </p>
+            </div>
+          </div>
+          <Button 
+            size="sm" 
+            className="w-full sm:w-auto mt-2 sm:mt-0"
+            onClick={() => {
+              if ("Notification" in window) {
+                Notification.requestPermission().then(p => setNotifPermission(p));
+              }
+            }}
+          >
+            Habilitar
+          </Button>
+        </div>
+      )}
 
       {/* Date filter */}
       <Card>

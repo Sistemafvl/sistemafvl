@@ -307,10 +307,11 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
                         <p className="text-[11px] text-muted-foreground">Nenhum arquivo</p>
                       )}
                     </div>
-                    <label className="cursor-pointer shrink-0">
+                    <div className="shrink-0">
                       <input
+                        id={`doc-${dt.value}`}
                         type="file"
-                        accept=".pdf,.png,.jpg,.jpeg"
+                        accept=".pdf,image/*"
                         className="hidden"
                         onChange={(e) => {
                           const f = e.target.files?.[0];
@@ -319,23 +320,27 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
                               toast({ title: "Arquivo muito grande", description: "Máximo 5MB.", variant: "destructive" });
                               return;
                             }
-                            const ext = f.name.split(".").pop()?.toLowerCase();
-                            if (!["pdf", "png", "jpg", "jpeg"].includes(ext ?? "")) {
-                              toast({ title: "Formato inválido", description: "Use PDF, PNG ou JPG.", variant: "destructive" });
+                            const ext = f.name.split(".").pop()?.toLowerCase() || "";
+                            const isImage = f.type.startsWith("image/") || ["png", "jpg", "jpeg", "heic", "webp"].includes(ext);
+                            const isPdf = f.type === "application/pdf" || ext === "pdf";
+                            
+                            if (!isImage && !isPdf) {
+                              toast({ title: "Formato inválido", description: "Selecione uma imagem ou PDF.", variant: "destructive" });
                               return;
                             }
                             setDocFiles(prev => ({ ...prev, [dt.value]: f }));
                           }
+                          // This ensures the same file can be selected again if needed
                           e.target.value = "";
                         }}
                       />
-                      <Button size="sm" variant="outline" asChild className="h-7 text-xs">
-                        <span>
+                      <Button size="sm" variant="outline" asChild className="h-7 text-xs cursor-pointer">
+                        <label htmlFor={`doc-${dt.value}`}>
                           {uploadingDoc === dt.value ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1" />}
                           {file ? "Trocar" : "Enviar"}
-                        </span>
+                        </label>
                       </Button>
-                    </label>
+                    </div>
                   </div>
                 );
               })}
