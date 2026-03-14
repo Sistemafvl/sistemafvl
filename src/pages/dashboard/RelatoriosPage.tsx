@@ -450,7 +450,7 @@ const RelatoriosPage = () => {
 
     // Fetch reativo entries for the period
     const { data: reativoData } = await supabase.from("reativo_entries")
-      .select("driver_id, reativo_value")
+      .select("id, driver_id, reativo_value, activated_at, tbr_code, observations")
       .eq("unit_id", unitId!)
       .eq("status", "active")
       .gte("activated_at", startDate.toISOString())
@@ -461,6 +461,28 @@ const RelatoriosPage = () => {
         reativoByDriver.set(r.driver_id, (reativoByDriver.get(r.driver_id) ?? 0) + Number(r.reativo_value));
       }
     });
+
+    const bonusEntries = (bonusRes.data ?? []).map((b: any) => ({
+      id: b.id || Math.random().toString(),
+      date: b.period_start,
+      driverId: b.driver_id,
+      driverName: driverMap.get(b.driver_id)?.name ?? "Motorista",
+      value: Number(b.amount),
+      description: b.description ?? "Bônus",
+      type: "bonus" as const
+    }));
+
+    const reativoEntries = (reativoData ?? []).map((r: any) => ({
+      id: r.id || Math.random().toString(),
+      date: r.activated_at,
+      driverId: r.driver_id,
+      driverName: driverMap.get(r.driver_id)?.name ?? "Motorista",
+      value: Number(r.reativo_value),
+      description: `Reativo TBR ${r.tbr_code}${r.observations ? ` - ${r.observations}` : ""}`,
+      type: "reativo" as const
+    }));
+
+    const allAdditionalEntries = [...bonusEntries, ...reativoEntries];
 
     const pixByDriver = new Map<string, string>();
     await Promise.all(driverIds.map(async (did) => {
@@ -545,6 +567,7 @@ const RelatoriosPage = () => {
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
         avgDaily: days.length ? Math.round(totalTbrs / days.length) : 0,
+        additionalEntries: allAdditionalEntries.filter(a => a.driverId === driverId),
       };
     }).sort((a, b) => b.totalTbrs - a.totalTbrs);
 

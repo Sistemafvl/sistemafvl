@@ -192,6 +192,9 @@ export function generatePayrollExcel(
     diferencaRow: -1,
     resumoHeaderRow: -1,
     resumoRows: [] as number[],
+    adicionaisHeaderRow: -1,
+    adicionaisRows: [] as number[],
+    adicionaisTotalRow: -1,
   };
 
   // ── SECTION 1: HEADER ──
@@ -386,6 +389,31 @@ export function generatePayrollExcel(
 
   rowTracker.resumoRows.push(wsData.length);
   wsData.push(["CUSTO POR PACOTE", 0, 0, 0]);
+
+  wsData.push([]);
+  wsData.push([]);
+
+  // ── SECTION 5: EXTRATO DE ADICIONAIS ──
+  const allAdditionals = data.flatMap(d => d.additionalEntries || []).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  
+  if (allAdditionals.length > 0) {
+    rowTracker.adicionaisHeaderRow = wsData.length;
+    wsData.push(["* EXTRATO DE ADICIONAIS (BÔNUS E REATIVOS)"]);
+    wsData.push(["Data", "Motorista", "Descrição", "Valor"]);
+
+    allAdditionals.forEach((add) => {
+      rowTracker.adicionaisRows.push(wsData.length);
+      wsData.push([
+        format(new Date(add.date), "dd/MM/yyyy"),
+        add.driverName,
+        add.description,
+        add.value
+      ]);
+    });
+
+    rowTracker.adicionaisTotalRow = wsData.length;
+    wsData.push(["TOTAL DE ADICIONAIS", "", "", allAdditionals.reduce((sum, a) => sum + a.value, 0)]);
+  }
 
   // ══════════════ CREATE WORKSHEET ══════════════
   const ws = XLSX.utils.aoa_to_sheet(wsData);
@@ -673,6 +701,46 @@ export function generatePayrollExcel(
     border: borderThin,
   });
 
+  // Section 5: Adicionais styles
+  if (rowTracker.adicionaisHeaderRow !== -1) {
+    applyStyleToRow(ws, rowTracker.adicionaisHeaderRow, 0, 3, {
+      font: boldFontLg,
+      fill: { fgColor: { rgb: "008080" } }, // Teal
+      alignment: centerAlign,
+      border: borderThin,
+    });
+    const addr = XLSX.utils.encode_cell({ r: rowTracker.adicionaisHeaderRow, c: 0 });
+    if (ws[addr]) ws[addr].s.font.color = { rgb: "FFFFFF" };
+    mergeRow(ws, rowTracker.adicionaisHeaderRow, 0, 3);
+
+    applyStyleToRow(ws, rowTracker.adicionaisHeaderRow + 1, 0, 3, {
+      font: boldFont,
+      fill: grayFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+
+    for (const r of rowTracker.adicionaisRows) {
+      applyStyleToRow(ws, r, 0, 3, {
+        font: { sz: 11 },
+        alignment: leftAlign,
+        border: borderThin,
+      });
+      const valAddr = XLSX.utils.encode_cell({ r, c: 3 });
+      if (ws[valAddr]) ws[valAddr].s = { ...ws[valAddr].s, font: { bold: true, color: { rgb: "16A34A" } }, alignment: centerAlign };
+    }
+
+    applyStyleToRow(ws, rowTracker.adicionaisTotalRow, 0, 3, {
+      font: boldFont,
+      fill: greenFill,
+      alignment: centerAlign,
+      border: borderThin,
+    });
+    mergeRow(ws, rowTracker.adicionaisTotalRow, 0, 2);
+    const totalAddr = XLSX.utils.encode_cell({ r: rowTracker.adicionaisTotalRow, c: 0 });
+    if (ws[totalAddr]) ws[totalAddr].s = { ...ws[totalAddr].s, alignment: { horizontal: "right", vertical: "center" } };
+  }
+
   // ══════════════ APPLY CURRENCY FORMATTING ══════════════
   const currencyCols = [COL_VALUE, COL_DISCOUNTS, COL_ADDITIONAL, COL_TOTAL_GERAL];
   
@@ -685,6 +753,10 @@ export function generatePayrollExcel(
   for (const r of rowTracker.resumoRows) {
     applyCurrencyFormat(ws, 2, r, r);
     applyCurrencyFormat(ws, 3, r, r);
+  }
+  
+  if (rowTracker.adicionaisHeaderRow !== -1) {
+    applyCurrencyFormat(ws, 3, rowTracker.adicionaisRows[0], rowTracker.adicionaisTotalRow);
   }
 
   // ══════════════ CREATE WORKBOOK ══════════════

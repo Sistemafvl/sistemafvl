@@ -156,33 +156,7 @@ const MotoristasParceirosPage = () => {
     setLoading(false);
   };
 
-  // Fetch last operation for the current page only
-  useEffect(() => {
-    if (paginated.length === 0) return;
-    const fetchLastOps = async () => {
-      const driverIds = paginated.map(d => d.id);
-      // We only need the latest ride for each driver in the current page
-      // Still needs to fetch and group, but only for those 50 IDs
-      const { data: rides } = await supabase
-        .from("driver_rides")
-        .select("driver_id, completed_at")
-        .in("driver_id", driverIds)
-        .order("completed_at", { ascending: false });
 
-      const lastOpMap = new Map<string, string>();
-      (rides ?? []).forEach(r => {
-        if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
-      });
-
-      setAllDrivers(prev => prev.map(d => {
-        if (lastOpMap.has(d.id)) {
-          return { ...d, lastOperation: lastOpMap.get(d.id)! };
-        }
-        return d;
-      }));
-    };
-    fetchLastOps();
-  }, [page, paginated.length]); // Re-run when page changes or results change
 
   const handleDownloadZip = async () => {
     if (driverDocs.length === 0) {
@@ -225,11 +199,16 @@ const MotoristasParceirosPage = () => {
   const neighborhoods = [...new Set(allDrivers.filter(d => (!filterState || d.state === filterState) && (!filterCity || d.city === filterCity)).map(d => d.neighborhood).filter(Boolean) as string[])].sort();
 
   const filtered = allDrivers.filter(d => {
-    if (search && !(
-      (d.name ?? "").toLowerCase().includes(search.toLowerCase()) ||
-      (d.cpf ?? "").includes(search.replace(/\D/g, "")) ||
-      (d.car_plate ?? "").toLowerCase().includes(search.toLowerCase())
-    )) return false;
+    if (search) {
+      const cleanSearch = search.toLowerCase();
+      const numSearch = search.replace(/\D/g, "");
+      
+      const matchName = (d.name ?? "").toLowerCase().includes(cleanSearch);
+      const matchPlat = (d.car_plate ?? "").toLowerCase().includes(cleanSearch);
+      const matchCpf = numSearch ? (d.cpf ?? "").includes(numSearch) : false;
+
+      if (!(matchName || matchPlat || matchCpf)) return false;
+    }
     if (filterState && d.state !== filterState) return false;
     if (filterCity && d.city !== filterCity) return false;
     if (filterNeighborhood && d.neighborhood !== filterNeighborhood) return false;
@@ -240,6 +219,34 @@ const MotoristasParceirosPage = () => {
 
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+
+  // Fetch last operation for the current page only
+  useEffect(() => {
+    if (paginated.length === 0) return;
+    const fetchLastOps = async () => {
+      const driverIds = paginated.map(d => d.id);
+      // We only need the latest ride for each driver in the current page
+      // Still needs to fetch and group, but only for those 50 IDs
+      const { data: rides } = await supabase
+        .from("driver_rides")
+        .select("driver_id, completed_at")
+        .in("driver_id", driverIds)
+        .order("completed_at", { ascending: false });
+
+      const lastOpMap = new Map<string, string>();
+      (rides ?? []).forEach(r => {
+        if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
+      });
+
+      setAllDrivers(prev => prev.map(d => {
+        if (lastOpMap.has(d.id)) {
+          return { ...d, lastOperation: lastOpMap.get(d.id)! };
+        }
+        return d;
+      }));
+    };
+    fetchLastOps();
+  }, [page, paginated.length]); // Re-run when page changes or results change
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep, filterUnit, unitDriverIds]);
@@ -412,8 +419,8 @@ const MotoristasParceirosPage = () => {
             <div className="space-y-3 text-sm">
               <div className="flex items-center justify-center pb-2">
                 <Avatar className="h-20 w-20">
-                  <AvatarImage src={viewDriver.avatar_url ?? undefined} alt={viewDriver.name} />
-                  <AvatarFallback className="text-2xl font-bold">{viewDriver.name.charAt(0)}</AvatarFallback>
+                  <AvatarImage src={viewDriver.avatar_url ?? undefined} alt={viewDriver.name || "Motorista"} />
+                  <AvatarFallback className="text-2xl font-bold">{(viewDriver.name || "M").charAt(0)}</AvatarFallback>
                 </Avatar>
               </div>
               <div><span className="font-semibold text-muted-foreground">Nome:</span> <span className="font-bold">{viewDriver.name}</span></div>

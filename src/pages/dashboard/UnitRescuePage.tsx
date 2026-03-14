@@ -24,7 +24,7 @@ interface TbrItem {
 }
 
 const UnitRescuePage = () => {
-  const { unitSession } = useAuthStore();
+  const { unitSession, conferenteSession } = useAuthStore();
   const unitId = unitSession?.id;
 
   const [loadingDrivers, setLoadingDrivers] = useState(true);
@@ -167,10 +167,14 @@ const UnitRescuePage = () => {
 
       // 4. Update target ride to "loading" if it was "pending", so the car turns black on UI
       if (targetInfo.loadingStatus === "pending") {
-        await supabase.from("driver_rides").update({ 
+        const updateData: any = { 
           loading_status: "loading",
           started_at: new Date().toISOString()
-        } as any).eq("id", targetInfo.rideId);
+        };
+        if (conferenteSession?.id) {
+          updateData.conferente_id = conferenteSession.id;
+        }
+        await supabase.from("driver_rides").update(updateData).eq("id", targetInfo.rideId);
       }
 
       toast.success(`${selectedTbrIds.size} TBR(s) transferido(s) com sucesso!`);

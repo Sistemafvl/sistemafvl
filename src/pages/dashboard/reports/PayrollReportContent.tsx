@@ -5,6 +5,16 @@ import { formatCpf, formatCurrency, formatDateBR } from "./pdf-utils";
 import ReportHeader from "./ReportHeader";
 import ReportFooter from "./ReportFooter";
 
+export interface AdditionalEntry {
+  id: string;
+  date: string;
+  driverId: string;
+  driverName: string;
+  value: number;
+  description: string;
+  type: "bonus" | "reativo";
+}
+
 export interface DriverPayrollData {
   driver: {
     id: string;
@@ -36,6 +46,7 @@ export interface DriverPayrollData {
   bestDay: { date: string; tbrs: number } | null;
   worstDay: { date: string; tbrs: number } | null;
   avgDaily: number;
+  additionalEntries?: AdditionalEntry[];
 }
 
 interface Props {
@@ -219,6 +230,49 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
               </table>
             </div>
           </div>
+
+          {/* List of Additionals summary if any exist */}
+          {(() => {
+            const allAdditionals = data.flatMap(d => d.additionalEntries || []);
+            if (allAdditionals.length === 0) return null;
+            return (
+              <div style={{ marginTop: "16px", pageBreakInside: "avoid" }}>
+                <div style={{ fontSize: "9px", fontWeight: 700, background: COLORS.teal, color: COLORS.white, padding: "4px 8px", borderRadius: "4px 4px 0 0" }}>
+                  * EXTRATO DE ADICIONAIS (BÔNUS E REATIVOS)
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={compactHeaderStyle({ width: "80px" })}>Data</th>
+                      <th style={compactHeaderStyle({ textAlign: "left", width: "140px" })}>Motorista</th>
+                      <th style={compactHeaderStyle({ textAlign: "left" })}>Descrição</th>
+                      <th style={compactHeaderStyle({ width: "80px" })}>Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allAdditionals
+                      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                      .map((add, idx) => (
+                        <tr key={add.id || idx}>
+                          <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatDateBR(add.date)}</td>
+                          <td style={compactCellStyle({ textAlign: "left", fontWeight: 600, background: altRowBg(idx) })}>{add.driverName}</td>
+                          <td style={compactCellStyle({ textAlign: "left", background: altRowBg(idx) })}>{add.description}</td>
+                          <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx), color: "#16a34a" })}>
+                            +{formatCurrency(add.value)}
+                          </td>
+                        </tr>
+                      ))}
+                    <tr>
+                      <td colSpan={3} style={compactCellStyle({ textAlign: "right", fontWeight: 800, background: COLORS.grayLight })}>TOTAL DE ADICIONAIS</td>
+                      <td style={compactCellStyle({ fontWeight: 800, background: COLORS.green, color: "#16a34a" })}>
+                        +{formatCurrency(allAdditionals.reduce((sum, item) => sum + item.value, 0))}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
           <ReportFooter />
         </div>
