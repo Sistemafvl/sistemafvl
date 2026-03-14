@@ -1719,7 +1719,7 @@ const ConferenciaCarregamentoPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic">Carregamento - V5</h1>
+        <h1 className="text-2xl font-bold italic">Carregamento</h1>
         {managerSession && (
           <Button
             variant="outline"
@@ -1881,11 +1881,10 @@ const ConferenciaCarregamentoPage = () => {
 
           {/* KPI Cards next to dates */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-bold text-red-500">v5:</span>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 min-w-[100px] shadow-sm">
               <Package className="h-3.5 w-3.5 text-primary" />
               <div className="flex flex-col">
-                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Vans</span>
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">DA's</span>
                 <span className="text-sm font-bold leading-none">{displayRides.length}</span>
               </div>
             </div>
