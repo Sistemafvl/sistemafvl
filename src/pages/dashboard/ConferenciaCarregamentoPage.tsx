@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package } from "lucide-react";
+import { Car, MapPin, User, Users, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -580,7 +580,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const { data: ridesData } = await supabase
       .from("driver_rides")
-      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, queue_entry_id")
+      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, completed_at, queue_entry_id")
       .in("id", matchingRideIds)
       .order("sequence_number", { ascending: true });
 
