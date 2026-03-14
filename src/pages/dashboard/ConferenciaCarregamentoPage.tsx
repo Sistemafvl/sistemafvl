@@ -683,28 +683,6 @@ const ConferenciaCarregamentoPage = () => {
 
   // Unit logins fetch removed from here to reduce noise if redundant, but keeping the refs logic
 
-  useEffect(() => {
-    if (!unitId) return;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const debouncedFetch = (payload?: any) => {
-      if (Date.now() < realtimeLockUntil.current) return;
-      // Filter ride_tbrs events: only react if ride_id belongs to current unit's rides
-      if (payload?.new?.ride_id || payload?.old?.ride_id) {
-        const eventRideId = payload.new?.ride_id || payload.old?.ride_id;
-        if (currentRideIdsRef.current.length > 0 && !currentRideIdsRef.current.includes(eventRideId)) return;
-      }
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { fetchRidesRef.current(); }, 2000);
-    };
-    const channel = supabase
-      .channel("conferencia-v2-" + unitId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, debouncedFetch)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
-      .subscribe();
-    return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
-  }, [unitId]);
 
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
@@ -717,15 +695,26 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   const handleIniciar = async (rideId: string) => {
-    // Auto-fill conferente from session if not already set
-    const ride = rides.find(r => r.id === rideId);
-    const conferenteId = ride?.conferente_id || conferenteSession?.id;
-    // Optimistic: update local state and open overlay immediately
+    const { data: currentRide } = await supabase
+      .from("driver_rides")
+      .select("loading_status, conferente_id")
+      .eq("id", rideId)
+      .maybeSingle();
+
+    if (currentRide?.loading_status === "loading" && currentRide.conferente_id && currentRide.conferente_id !== conferenteSession?.id) {
+      const other = conferentes.find(c => c.id === currentRide.conferente_id)?.name || "outro conferente";
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Já em conferência", description: `Este carregamento já está sendo conferido por ${other}.`, variant: "destructive" });
+      fetchRides();
+      return;
+    }
+
+    const conferenteId = currentRide?.conferente_id || conferenteSession?.id;
     setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId || r.conferente_id } : r));
     if (conferenteId) setLockedConferenteIds((prev) => new Set(prev).add(rideId));
     setFocusedRideId(rideId);
-    // Then persist to DB in background
-    if (conferenteId && !ride?.conferente_id) {
+    
+    if (conferenteId && !currentRide?.conferente_id) {
       await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId } as any).eq("id", rideId);
     } else {
       await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
@@ -2206,6 +2195,12 @@ const ConferenciaCarregamentoPage = () => {
                               <Button size="sm" className="flex-1 gap-1" onClick={() => setIniciarConfirmRideId(ride.id)} disabled={!ride.conferente_id && !conferenteSession}>
                                 <Play className="h-3.5 w-3.5" /> Iniciar
                               </Button>
+                            )}
+                            {isLoadingStatus && !isMyRide && (
+                              <div className="flex-1 flex items-center justify-center gap-1.5 py-1 px-3 bg-blue-100 text-blue-700 rounded-md text-[10px] font-bold border border-blue-200">
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <span className="truncate">Em conferência por {conferentes.find(c => c.id === ride.conferente_id)?.name || "outro"}</span>
+                              </div>
                             )}
                             {isLoadingStatus && isMyRide && (
                               <>
