@@ -111,6 +111,7 @@ const RetornoPisoPage = () => {
   const [reasonSearchOpen, setReasonSearchOpen] = useState(false);
   const [editingReasonId, setEditingReasonId] = useState<string | null>(null);
   const [editingReasonLabel, setEditingReasonLabel] = useState("");
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
 
   // Conferência de Retorno state
   const [confSheetOpen, setConfSheetOpen] = useState(false);
@@ -136,6 +137,7 @@ const RetornoPisoPage = () => {
       loadCustomReasons();
       loadPsCustomReasons();
       loadConferenteOptions();
+      setBulkSelected(new Set());
     }
   }, [unitSession]);
 
@@ -585,6 +587,36 @@ const RetornoPisoPage = () => {
     setConfScanInput("");
   };
 
+  const handleBulkDelete = async () => {
+    if (!managerSession || bulkSelected.size === 0) return;
+    
+    // Obter os itens selecionados
+    const itemsToDelete = entries.filter(e => bulkSelected.has(e.id));
+    if (itemsToDelete.length === 0) return;
+
+    const idsToDelete = itemsToDelete.map(e => e.id);
+    const codesToDelete = itemsToDelete.map(e => e.tbr_code);
+
+    try {
+      // 1. Deletar de piso_entries
+      await supabase.from("piso_entries").delete().in("id", idsToDelete);
+      // 2. Deletar de ride_tbrs
+      await supabase.from("ride_tbrs").delete().in("code", codesToDelete);
+      // 3. Deletar de ps_entries
+      await supabase.from("ps_entries").delete().in("tbr_code", codesToDelete).eq("unit_id", unitSession!.id);
+      // 4. Deletar de rto_entries
+      await supabase.from("rto_entries").delete().in("tbr_code", codesToDelete).eq("unit_id", unitSession!.id);
+      // 5. Deletar de dnr_entries
+      await supabase.from("dnr_entries").delete().in("tbr_code", codesToDelete).eq("unit_id", unitSession!.id);
+
+      setEntries((prev) => prev.filter((p) => !bulkSelected.has(p.id)));
+      setBulkSelected(new Set());
+      toast({ title: `${itemsToDelete.length} TBR(s) excluído(s) definitivamente.` });
+    } catch (error) {
+      toast({ title: "Erro ao excluir itens em lote.", variant: "destructive" });
+    }
+  };
+
   const toggleCheck = (id: string) => {
     setCheckedTbrs(prev => {
       const next = new Set(prev);
@@ -694,18 +726,27 @@ const RetornoPisoPage = () => {
         </Card>
       </div>
 
-      {/* Conferência de Retorno Button */}
-      <Button
-        variant="outline"
-        className="w-full gap-2 border-primary/30 hover:bg-primary/5"
-        onClick={() => { setConfSheetOpen(true); setTimeout(() => confInputRef.current?.focus(), 200); }}
-      >
-        <ClipboardCheck className="h-4 w-4 text-primary" />
-        <span className="font-semibold">Conferência de Retorno</span>
-        {checkedTbrs.size > 0 && (
-          <Badge variant="secondary" className="ml-1 text-xs">{checkedTbrs.size}/{entries.length}</Badge>
+      {/* Conferência de Retorno e Ações em Lote */}
+      <div className="flex gap-2 w-full">
+        <Button
+          variant="outline"
+          className="flex-1 gap-2 border-primary/30 hover:bg-primary/5"
+          onClick={() => { setConfSheetOpen(true); setTimeout(() => confInputRef.current?.focus(), 200); }}
+        >
+          <ClipboardCheck className="h-4 w-4 text-primary" />
+          <span className="font-semibold">Conferência de Retorno</span>
+          {checkedTbrs.size > 0 && (
+            <Badge variant="secondary" className="ml-1 text-xs">{checkedTbrs.size}/{entries.length}</Badge>
+          )}
+        </Button>
+        {managerSession && bulkSelected.size > 0 && (
+          <Button variant="destructive" className="gap-2 shrink-0" onClick={handleBulkDelete}>
+            <Trash2 className="h-4 w-4" />
+            <span className="hidden sm:inline">Excluir ({bulkSelected.size})</span>
+            <span className="sm:hidden">({bulkSelected.size})</span>
+          </Button>
         )}
-      </Button>
+      </div>
 
       {/* Conferência Sheet */}
       <Sheet open={confSheetOpen} onOpenChange={setConfSheetOpen}>
@@ -866,6 +907,21 @@ const RetornoPisoPage = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    {managerSession && (
+                      <TableHead className="w-[40px] px-2 text-center">
+                        <Checkbox 
+                          checked={filteredEntries.length > 0 && bulkSelected.size === filteredEntries.length}
+                          onCheckedChange={(checked) => {
+                            if (checked) {
+                              setBulkSelected(new Set(filteredEntries.map(e => e.id)));
+                            } else {
+                              setBulkSelected(new Set());
+                            }
+                          }}
+                          aria-label="Selecionar todos"
+                        />
+                      </TableHead>
+                    )}
                     <TableHead className="font-bold">TBR</TableHead>
                     <TableHead className="font-bold">Motorista</TableHead>
                     <TableHead className="font-bold">Rota</TableHead>
@@ -878,6 +934,19 @@ const RetornoPisoPage = () => {
                 <TableBody>
                   {filteredEntries.map((e) => (
                     <TableRow key={e.id}>
+                      {managerSession && (
+                        <TableCell className="px-2 text-center">
+                          <Checkbox 
+                            checked={bulkSelected.has(e.id)}
+                            onCheckedChange={(checked) => {
+                              const newSet = new Set(bulkSelected);
+                              if (checked) newSet.add(e.id);
+                              else newSet.delete(e.id);
+                              setBulkSelected(newSet);
+                            }}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                       <TableCell>{e.driver_name ?? "-"}</TableCell>
                       <TableCell>{e.route ?? "-"}</TableCell>
