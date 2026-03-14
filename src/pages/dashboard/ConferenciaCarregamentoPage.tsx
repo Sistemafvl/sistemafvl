@@ -287,16 +287,7 @@ const ConferenciaCarregamentoPage = () => {
   // Driver historical average TBRs/day (30 days)
   const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
 
-  const loadingStats = useMemo(() => {
-    return rides.reduce((acc, ride) => {
-      const status = ride.loading_status || "pending";
-      if (status === "finished") acc.finished++;
-      else if (status === "loading") acc.loading++;
-      else if (status === "pending") acc.pending++;
-      else if (status === "cancelled") acc.cancelled++;
-      return acc;
-    }, { finished: 0, loading: 0, pending: 0, cancelled: 0 });
-  }, [rides]);
+
 
   const playSuccessBeep = () => {
     try {
@@ -1723,47 +1714,53 @@ const ConferenciaCarregamentoPage = () => {
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-          <h1 className="text-2xl font-bold italic shrink-0">Carregamento</h1>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide no-scrollbar -mx-1 px-1">
-            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-green-50/50 border-green-100 text-green-700 min-w-[110px]">
-              <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Finalizado</span>
-                <span className="text-xl font-bold leading-none">{loadingStats.finished}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-slate-50 border-slate-200 text-slate-700 min-w-[110px]">
-              <Clock className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Aguardando</span>
-                <span className="text-xl font-bold leading-none">{loadingStats.pending}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-blue-50/80 border-blue-200 text-blue-700 min-w-[110px]">
-              <Play className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Carregando</span>
-                <span className="text-xl font-bold leading-none">{loadingStats.loading}</span>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-red-50/50 border-red-100 text-red-700 min-w-[110px]">
-              <Ban className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex flex-col">
-                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Cancelado</span>
-                <span className="text-xl font-bold leading-none">{loadingStats.cancelled}</span>
-              </div>
-            </div>
-          </div>
+        <h1 className="text-2xl font-bold italic shrink-0">Carregamento</h1>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full max-w-4xl">
+          <Card className="bg-white border-border/50">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
+              <Package className="h-4 w-4 text-primary" />
+              <span className="text-lg font-bold italic leading-none">{displayRides.length}</span>
+              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Carregamentos</span>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white border-border/50">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
+              <ScanBarcode className="h-4 w-4 text-primary" />
+              <span className="text-lg font-bold italic leading-none">
+                {Object.values(displayTbrs).reduce((acc, current) => acc + current.length, 0)}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Total TBRs</span>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white border-border/50">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
+              <Play className="h-4 w-4 text-blue-500" />
+              <span className="text-lg font-bold italic leading-none">
+                {displayRides.filter(r => r.loading_status === "loading").length}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Em Aberto</span>
+            </CardContent>
+          </Card>
+          
+          <Card className="bg-white border-border/50">
+            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
+              <CheckCircle className="h-4 w-4 text-green-500" />
+              <span className="text-lg font-bold italic leading-none">
+                {displayRides.filter(r => r.loading_status === "finished").length}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Finalizados</span>
+            </CardContent>
+          </Card>
         </div>
+
         {managerSession && (
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 shrink-0 lg:ml-auto"
+            className="gap-1.5 shrink-0 hidden lg:flex"
             onClick={() => {
               setShowRetroModal(true);
               setRetroDate(undefined);
@@ -1777,6 +1774,27 @@ const ConferenciaCarregamentoPage = () => {
           </Button>
         )}
       </div>
+      
+      {/* Mobile-only retro button to keep it visible */}
+      {managerSession && (
+        <div className="lg:hidden flex justify-end">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => {
+              setShowRetroModal(true);
+              setRetroDate(undefined);
+              setRetroDriverSearch("");
+              setRetroDriverResults([]);
+              setRetroSelectedDriver(null);
+            }}
+          >
+            <History className="h-3.5 w-3.5" />
+            Retroativo
+          </Button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
