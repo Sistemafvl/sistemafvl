@@ -63,7 +63,7 @@ const DriverReviews = () => {
 
     const [unitsRes, reviewsRes] = await Promise.all([
       supabase.from("units").select("id, name").in("id", unitIds),
-      supabase.from("unit_reviews").select("*").eq("driver_id", driverId).in("unit_id", unitIds),
+      supabase.from("unit_reviews").select("id, unit_id, rating, comment").eq("driver_id", driverId).in("unit_id", unitIds),
     ]);
 
     const unitMap = new Map((unitsRes.data ?? []).map((u) => [u.id, u.name]));

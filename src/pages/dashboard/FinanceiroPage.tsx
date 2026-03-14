@@ -54,7 +54,7 @@ const FinanceiroPage = () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
     const reportsData = await fetchAllRows<any>((from, to) =>
-      supabase.from("payroll_reports" as any).select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
+      supabase.from("payroll_reports" as any).select("id, generated_by, period_start, period_end, report_data, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
     );
     setReports(reportsData);
 

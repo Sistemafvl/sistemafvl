@@ -46,7 +46,7 @@ const DriverRides = () => {
       const unitId = unitSession?.id;
       const { data } = await supabase
         .from("driver_rides")
-        .select("*")
+        .select("id, driver_id, unit_id, conferente_id, completed_at, started_at, finished_at, notes, route, login, password")
         .eq("driver_id", driverId)
         .eq("unit_id", unitId!)
         .gte("completed_at", startDate.toISOString())

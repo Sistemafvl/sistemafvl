@@ -98,9 +98,12 @@ const MatrizOverview = () => {
         // Fetch TBRs with pagination (bypass 1000 limit)
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string; scanned_at: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id, scanned_at").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
+          import("@/lib/supabase-helpers").then(({ fetchAllRowsWithIn }) => {
+            fetchAllRowsWithIn<{ id: string; ride_id: string }>((ids) => (from, to) =>
+              supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", ids).order("id").range(from, to),
+              rideIds
+            ).then(data => setTbrs(data));
+          });
         } else {
           setTbrs([]);
         }
@@ -219,14 +222,17 @@ const MatrizOverview = () => {
   // Chart 6: TBRs diários (linha)
   const chartDailyTbrs = useMemo(() => {
     const map: Record<string, number> = {};
+    const rideDates: Record<string, string> = {};
+    rides.forEach(r => { rideDates[r.id] = format(new Date(r.completed_at), "dd/MM"); });
+
     tbrs.forEach(t => {
-      if (t.scanned_at) {
-        const day = format(new Date(t.scanned_at), "dd/MM");
+      const day = rideDates[t.ride_id] || (t.scanned_at ? format(new Date(t.scanned_at), "dd/MM") : null);
+      if (day) {
         map[day] = (map[day] || 0) + 1;
       }
     });
     return Object.entries(map).sort().map(([d, v]) => ({ dia: d, tbrs: v }));
-  }, [tbrs]);
+  }, [tbrs, rides]);
 
   // Chart 7: Média TBRs por carregamento por unidade (barras)
   const chartAvgTbrsByUnit = useMemo(() => {

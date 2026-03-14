@@ -192,7 +192,7 @@ const CiclosPage = () => {
     // Load cycle_record for this date
     const { data: cycleData } = await supabase
       .from("cycle_records" as any)
-      .select("*")
+      .select("qtd_pacotes, qtd_pacotes_informado, abertura_galpao, hora_inicio_descarregamento, hora_termino_descarregamento")
       .eq("unit_id", unitSession.id)
       .eq("record_date", dateStr)
       .maybeSingle();

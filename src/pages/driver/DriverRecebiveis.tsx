@@ -61,7 +61,7 @@ const DriverRecebiveis = () => {
     const unitId = unitSession?.id;
     const { data: reports } = await supabase
       .from("payroll_reports" as any)
-      .select("*")
+      .select("id, period_start, period_end, generated_by, created_at, report_data")
       .eq("unit_id", unitId!)
       .order("created_at", { ascending: false });
 

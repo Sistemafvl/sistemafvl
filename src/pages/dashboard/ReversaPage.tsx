@@ -123,7 +123,7 @@ const ReversaPage = () => {
     setLoadingBatches(true);
     const { data } = await (supabase
       .from("reversa_batches" as any)
-      .select("*")
+      .select("id, conferente_name, total_scanned, total_pending, created_at")
       .eq("unit_id", unitSession.id)
       .order("created_at", { ascending: false })
       .limit(500) as any);

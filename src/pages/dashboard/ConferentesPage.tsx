@@ -99,7 +99,7 @@ const ConferentesPage = () => {
     setLoading(true);
     const { data } = await supabase
       .from("user_profiles")
-      .select("*")
+      .select("id, name, cpf, unit_id, active, created_at")
       .eq("unit_id", unitSession.id)
       .order("name");
     if (data) setConferentes(data);

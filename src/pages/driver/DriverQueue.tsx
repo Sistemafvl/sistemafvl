@@ -117,7 +117,7 @@ const DriverQueue = () => {
 
     const { data: allEntries } = await supabase
       .from("queue_entries")
-      .select("*")
+      .select("id, driver_id, unit_id, status, joined_at, called_at, completed_at, called_by_name")
       .eq("unit_id", unitId)
       .in("status", ["waiting", "approved"])
       .order("joined_at", { ascending: true });

@@ -131,7 +131,7 @@ const QueuePanel = () => {
     if (!unitId) return;
     const { data } = await supabase
       .from("queue_entries")
-      .select("*")
+      .select("id, driver_id, unit_id, status, joined_at")
       .eq("unit_id", unitId)
       .in("status", ["waiting", "approved"])
       .order("joined_at", { ascending: true });

@@ -14,7 +14,7 @@ function getOrCreateSessionToken(): string {
   return token;
 }
 
-export function useConferenteSessionLock() {
+export function useConferenteSessionLock(shouldSubscribe = true) {
   const { unitSession, conferenteSession, setConferenteSession } = useAuthStore();
   const tokenRef = useRef<string>(getOrCreateSessionToken());
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
@@ -65,7 +65,7 @@ export function useConferenteSessionLock() {
 
   // Subscribe to realtime only (no polling fallback to reduce Cloud consumption)
   useEffect(() => {
-    if (!unitSession?.id || !conferenteSession?.id) {
+    if (!unitSession?.id || !conferenteSession?.id || !shouldSubscribe) {
       if (channelRef.current) {
         supabase.removeChannel(channelRef.current);
         channelRef.current = null;
@@ -102,17 +102,17 @@ export function useConferenteSessionLock() {
           }
         }
       )
-      .subscribe((status) => {
-        console.log(`Conferente lock channel status: ${status}`);
-      });
+      .subscribe();
 
     channelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(channel);
-      channelRef.current = null;
+      if (channel) {
+        supabase.removeChannel(channel);
+        channelRef.current = null;
+      }
     };
-  }, [unitSession?.id, conferenteSession?.id, claimSession, handleKick]);
+  }, [unitSession?.id, conferenteSession?.id, shouldSubscribe]);
 
   // Cleanup on tab close
   useEffect(() => {

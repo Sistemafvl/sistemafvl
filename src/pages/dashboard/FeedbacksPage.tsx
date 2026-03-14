@@ -29,7 +29,7 @@ const FeedbacksPage = () => {
       setLoading(true);
       const { fetchAllRows } = await import("@/lib/supabase-helpers");
       const revs = await fetchAllRows<any>((from, to) =>
-        supabase.from("unit_reviews").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
+        supabase.from("unit_reviews").select("id, driver_id, rating, comment, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
       );
       setReviews(revs);
 

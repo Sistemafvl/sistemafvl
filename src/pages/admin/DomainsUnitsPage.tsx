@@ -34,12 +34,12 @@ const DomainsUnitsPage = () => {
   const [newUnitPassword, setNewUnitPassword] = useState("");
 
   const fetchDomains = async () => {
-    const { data } = await supabase.from("domains").select("*").order("name");
+    const { data } = await supabase.from("domains").select("id, name, active, created_at").order("name");
     if (data) setDomains(data);
   };
 
   const fetchUnits = async (domainId: string) => {
-    const { data } = await supabase.from("units").select("*").eq("domain_id", domainId).order("is_matriz", { ascending: false }).order("name");
+    const { data } = await supabase.from("units").select("id, name, domain_id, active, is_matriz").eq("domain_id", domainId).order("is_matriz", { ascending: false }).order("name");
     if (data) setUnits(data as Unit[]);
   };
 

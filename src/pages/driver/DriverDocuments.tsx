@@ -57,7 +57,7 @@ const DriverDocuments = () => {
     const fetchData = async () => {
       setLoading(true);
       const [docsRes, driverRes] = await Promise.all([
-        supabase.from("driver_documents").select("*").eq("driver_id", driverId).order("created_at", { ascending: false }),
+        supabase.from("driver_documents").select("id, doc_type, file_url, file_name, created_at").eq("driver_id", driverId).order("created_at", { ascending: false }),
         supabase.from("drivers").select("bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type").eq("id", driverId).maybeSingle(),
       ]);
       setDocs((docsRes.data as any) ?? []);
@@ -123,7 +123,7 @@ const DriverDocuments = () => {
       file_name: file.name,
     } as any);
 
-    const { data: refreshed } = await supabase.from("driver_documents").select("*").eq("driver_id", driverId).order("created_at", { ascending: false });
+    const { data: refreshed } = await supabase.from("driver_documents").select("id, doc_type, file_url, file_name, created_at").eq("driver_id", driverId).order("created_at", { ascending: false });
     setDocs((refreshed as any) ?? []);
     setUploading(null);
     toast({ title: "Documento enviado!", description: `${DOC_TYPES.find((d) => d.value === docType)?.label} atualizado.` });

@@ -45,7 +45,7 @@ const ManagersPage = () => {
 
   const fetchManagers = () => {
     if (!selectedUnit) { setManagers([]); return; }
-    supabase.from("managers").select("*").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
+    supabase.from("managers").select("id, unit_id, name, cnpj, password, manager_password, active, created_at").eq("unit_id", selectedUnit).order("name").then(({ data }) => { if (data) setManagers(data); });
   };
 
   useEffect(() => { fetchManagers(); }, [selectedUnit]);

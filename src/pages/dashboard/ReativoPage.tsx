@@ -74,7 +74,7 @@ const ReativoPage = () => {
     const { start, end } = getBrazilDayRange(dateStr);
     const { data } = await supabase
       .from("reativo_entries")
-      .select("*")
+      .select("id, tbr_code, driver_name, route, login, conferente_name, manager_name, reativo_value, activated_at, status, observations")
       .eq("unit_id", unitId)
       .gte("activated_at", start)
       .lte("activated_at", end)
@@ -146,7 +146,7 @@ const ReativoPage = () => {
   };
 
   const loadRideHistory = async (rideId: string, scannedAt: string | null, code: string) => {
-    const { data: ride } = await supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle();
+    const { data: ride } = await supabase.from("driver_rides").select("id, driver_id, route, login, conferente_id, loading_status, completed_at, finished_at").eq("id", rideId).maybeSingle();
     if (!ride) { setNotFound(true); setSearching(false); return; }
 
     const [driverRes, confRes, pisoRes, psRes, rtoRes] = await Promise.all([

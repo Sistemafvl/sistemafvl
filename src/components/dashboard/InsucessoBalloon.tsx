@@ -75,8 +75,8 @@ const InsucessoBalloon = () => {
   useEffect(() => {
     if (!unitId) return;
     const channel = supabase
-      .channel("insucesso-balloon")
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, () => {
+      .channel(`insucesso-balloon-${unitId}`)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, () => {
         debouncedFetch();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "piso_entries", filter: `unit_id=eq.${unitId}` }, () => {

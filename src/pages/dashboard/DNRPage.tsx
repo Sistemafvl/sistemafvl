@@ -68,7 +68,7 @@ const DNRPage = () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
     const data = await fetchAllRows<DnrEntry>((from, to) =>
-      supabase.from("dnr_entries").select("*").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
+      supabase.from("dnr_entries").select("id, tbr_code, driver_name, car_model, car_plate, car_color, route, login, conferente_name, loaded_at, dnr_value, observations, status, created_by_name, created_at, approved_at, closed_at, discounted").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to)
     );
     setEntries(data);
     setLoadingEntries(false);
@@ -105,7 +105,7 @@ const DNRPage = () => {
     }
 
     const rideId = tbrData[0].ride_id;
-    const { data: ride } = await supabase.from("driver_rides").select("*").eq("id", rideId).maybeSingle();
+    const { data: ride } = await supabase.from("driver_rides").select("id, driver_id, route, login, started_at, completed_at, conferente_id").eq("id", rideId).maybeSingle();
     if (!ride) { setTbrNotFound(true); setTbrLoading(false); return; }
 
     const [driverRes, confRes] = await Promise.all([

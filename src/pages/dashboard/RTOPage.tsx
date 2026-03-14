@@ -89,7 +89,7 @@ const RTOPage = () => {
     if (!unitSession) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
     const data = await fetchAllRows<any>((from, to) =>
-      supabase.from("rto_entries").select("*").eq("unit_id", unitSession.id).order("created_at", { ascending: false }).range(from, to)
+      supabase.from("rto_entries").select("id, tbr_code, driver_name, route, description, status, created_at, conferente_id, cep").eq("unit_id", unitSession.id).order("created_at", { ascending: false }).range(from, to)
     );
     {
       const confIds = [...new Set(data.filter(e => e.conferente_id).map(e => e.conferente_id!))];

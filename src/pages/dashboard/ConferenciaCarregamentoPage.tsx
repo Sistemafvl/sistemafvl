@@ -287,6 +287,17 @@ const ConferenciaCarregamentoPage = () => {
   // Driver historical average TBRs/day (30 days)
   const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
 
+  const loadingStats = useMemo(() => {
+    return rides.reduce((acc, ride) => {
+      const status = ride.loading_status || "pending";
+      if (status === "finished") acc.finished++;
+      else if (status === "loading") acc.loading++;
+      else if (status === "pending") acc.pending++;
+      else if (status === "cancelled") acc.cancelled++;
+      return acc;
+    }, { finished: 0, loading: 0, pending: 0, cancelled: 0 });
+  }, [rides]);
+
   const playSuccessBeep = () => {
     try {
       const ctx = new AudioContext();
@@ -412,7 +423,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const { data } = await supabase
       .from("driver_rides")
-      .select("*")
+      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, queue_entry_id")
       .eq("unit_id", unitId)
       .gte("completed_at", startDate.toISOString())
       .lte("completed_at", endDate.toISOString())
@@ -465,7 +476,7 @@ const ConferenciaCarregamentoPage = () => {
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const tbrData = await fetchAllRowsWithIn<any>(
         (ids) => (from, to) =>
-          supabase.from("ride_tbrs").select("*")
+          supabase.from("ride_tbrs").select("id, code, scanned_at, trip_number, highlight, ride_id")
             .in("ride_id", ids)
             .order("id")
             .range(from, to),
@@ -568,7 +579,7 @@ const ConferenciaCarregamentoPage = () => {
     // Global search: find TBRs across ALL units
     const { fetchAllRows: fetchAll } = await import("@/lib/supabase-helpers");
     const matchingTbrs = await fetchAll<any>((from, to) =>
-      supabase.from("ride_tbrs").select("*").ilike("code", `%${searchTerm.trim()}%`).order("scanned_at", { ascending: false }).range(from, to)
+      supabase.from("ride_tbrs").select("id, code, scanned_at, ride_id, trip_number, highlight").ilike("code", `%${searchTerm.trim()}%`).order("scanned_at", { ascending: false }).range(from, to)
     );
 
     if (matchingTbrs.length === 0) { setSearchRides([]); setSearchTbrs({}); setSearchUnitNames({}); return; }
@@ -577,7 +588,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const { data: ridesData } = await supabase
       .from("driver_rides")
-      .select("*")
+      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, queue_entry_id")
       .in("id", matchingRideIds)
       .order("sequence_number", { ascending: true });
 
@@ -620,7 +631,7 @@ const ConferenciaCarregamentoPage = () => {
     setSearchRides(mapped);
 
     const allTbrData = await fetchAll<any>((from, to) =>
-      supabase.from("ride_tbrs").select("*").in("ride_id", matchingRideIds).order("scanned_at", { ascending: false }).range(from, to)
+      supabase.from("ride_tbrs").select("id, code, scanned_at, ride_id, trip_number, highlight").in("ride_id", matchingRideIds).order("scanned_at", { ascending: false }).range(from, to)
     );
 
     const grouped: Record<string, Tbr[]> = {};
@@ -671,6 +682,9 @@ const ConferenciaCarregamentoPage = () => {
     fetchLogins();
   }, [unitId]);
 
+  const fetchRidesRef = useRef(fetchRides);
+  useEffect(() => { fetchRidesRef.current = fetchRides; }, [fetchRides]);
+
   useEffect(() => {
     if (!unitId) return;
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -682,17 +696,17 @@ const ConferenciaCarregamentoPage = () => {
         if (currentRideIdsRef.current.length > 0 && !currentRideIdsRef.current.includes(eventRideId)) return;
       }
       if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => { fetchRides(); }, 2000);
+      debounceTimer = setTimeout(() => { fetchRidesRef.current(); }, 2000);
     };
     const channel = supabase
-      .channel("conferencia-" + unitId)
+      .channel("conferencia-v2-" + unitId)
       .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, debouncedFetch)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs" }, (payload) => debouncedFetch(payload))
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "ride_tbrs", filter: `unit_id=eq.${unitId}` }, (payload) => debouncedFetch(payload))
       .subscribe();
     return () => { if (debounceTimer) clearTimeout(debounceTimer); supabase.removeChannel(channel); };
-  }, [unitId, fetchRides]);
+  }, [unitId]);
 
 
   const handleSelectConferente = async (rideId: string, conferenteId: string) => {
@@ -998,7 +1012,6 @@ const ConferenciaCarregamentoPage = () => {
       const totalScans = prevScanCount + 1;
       scanCountsRef.current[rideId][code.toUpperCase()] = totalScans;
 
-
       if (totalScans === 1 && count === 0) {
         // OPTIMISTIC UPDATE FIRST — show TBR immediately
         processedCodesRef.current[rideId]?.add(code.toUpperCase());
@@ -1011,97 +1024,45 @@ const ConferenciaCarregamentoPage = () => {
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => { inputRefs.current[rideId]?.focus(); scrollTbrList(rideId); }, 50);
 
-        // Run validations in parallel AFTER optimistic update
-        const [closedPsRes, previousTbrsRes, pisoEntriesRes] = await Promise.all([
-          supabase.from("ps_entries").select("id").ilike("tbr_code", code).eq("status", "closed").limit(1),
-          supabase.from("ride_tbrs").select("id, ride_id").ilike("code", code).neq("ride_id", rideId).limit(1),
-          supabase.from("piso_entries").select("id, ride_id").ilike("tbr_code", code),
-        ]);
+        // CALL NEW RPC (Consolidates all previous parallel calls)
+        const { data: rpcRes, error: rpcError } = await supabase.rpc('process_tbr_scan', {
+          p_ride_id: rideId,
+          p_code: code,
+          p_unit_id: unitId
+        });
 
-        // Validate closed PS
-        if (closedPsRes.data && closedPsRes.data.length > 0) {
-          // Rollback
+        if (rpcError || (rpcRes && !rpcRes.success)) {
+          // ROLLBACK on error
           setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
           processedCodesRef.current[rideId]?.delete(code.toUpperCase());
           scanCountsRef.current[rideId][code.toUpperCase()] = 0;
           playErrorBeep();
+          
+          const errorMsg = rpcRes?.error || rpcError?.message;
           const { toast } = await import("@/hooks/use-toast");
-          toast({ title: "TBR finalizado no PS", description: "Este TBR já foi finalizado no Problem Solve e não pode ser carregado novamente.", variant: "destructive" });
+          toast({ title: "Erro ao salvar TBR", description: errorMsg, variant: "destructive" });
           return;
         }
 
-        // Validate TBR in another ride
-        if (previousTbrsRes.data && previousTbrsRes.data.length > 0) {
-          // Rollback
-          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
-          processedCodesRef.current[rideId]?.delete(code.toUpperCase());
-          scanCountsRef.current[rideId][code.toUpperCase()] = 0;
-          playErrorBeep();
-          const { toast } = await import("@/hooks/use-toast");
-          toast({ title: "TBR já vinculado", description: "Este TBR já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) antes de ser bipado novamente.", variant: "destructive" });
-          return;
+        // Handle success results from RPC
+        const result = rpcRes as any;
+        if (result.is_duplicate) {
+           // RPC says it was already in this ride, but local state might have been stale
+           // Just cleanup the temp entry if it's already there
+           setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
+        } else if (result.trip_number > 1) {
+           playReincidenceBeep();
+           setTbrs((prev) => ({
+             ...prev,
+             [rideId]: (prev[rideId] ?? []).map(t => t.id === tempId ? { ...t, trip_number: result.trip_number } : t)
+           }));
+        } else {
+           playSuccessBeep();
         }
-
-        // Calculate trip_number from piso entries
-        let tripNumber = 1;
-        const previousRideIds = new Set<string>();
-        (pisoEntriesRes.data ?? []).forEach(p => { if (p.ride_id) previousRideIds.add(p.ride_id); });
-        previousRideIds.delete(rideId);
-
-        if (previousRideIds.size > 0) {
-          tripNumber = previousRideIds.size + 1;
-          playReincidenceBeep();
-        }
-
-        // Update trip_number on the optimistic entry
-        if (tripNumber > 1) {
-          newTbr.trip_number = tripNumber;
-          setTbrs((prev) => ({
-            ...prev,
-            [rideId]: (prev[rideId] ?? []).map(t => t.id === tempId ? { ...t, trip_number: tripNumber } : t),
-          }));
-        }
-
-        // Close piso and rto entries in background
-        const closedAt = new Date().toISOString();
-        void Promise.all([
-          supabase.from("piso_entries").update({ status: "closed", closed_at: closedAt } as any).ilike("tbr_code", code).eq("status", "open"),
-          supabase.from("rto_entries").update({ status: "closed", closed_at: closedAt } as any).ilike("tbr_code", code).eq("status", "open"),
-        ]);
-
-        // DB-level duplicate check before insert (safety net)
-        const { data: existingTbr } = await supabase
-          .from("ride_tbrs")
-          .select("id")
-          .eq("ride_id", rideId)
-          .ilike("code", code)
-          .eq("trip_number", tripNumber)
-          .limit(1);
-
-        if (existingTbr && existingTbr.length > 0) {
-          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
-          return;
-        }
-
-        const { error: insertError } = await supabase.from("ride_tbrs").insert({ ride_id: rideId, code, trip_number: tripNumber, scanned_at: newTbr.scanned_at } as any);
-        if (insertError) {
-          setTbrs((prev) => ({ ...prev, [rideId]: (prev[rideId] ?? []).filter(t => t.id !== tempId) }));
-          playErrorBeep();
-          const { toast } = await import("@/hooks/use-toast");
-          if (insertError.message?.includes('TBR already exists in another active loading')) {
-            toast({ title: "TBR já vinculado", description: `${code} já está vinculado a outro carregamento. Precisa passar por insucesso (Retorno Piso / PS / RTO) primeiro.`, variant: "destructive" });
-          } else {
-            toast({ title: "Erro ao salvar TBR", description: insertError.message, variant: "destructive" });
-          }
-          return;
-        }
-        playSuccessBeep();
       } else if (totalScans >= 2 && totalScans < 5) {
         // 2nd-4th beep: temporary red warning, NO yellow — accidental double-scan is common
         newTbr._duplicate = true;
-
         realtimeLockUntil.current = Date.now() + 15000;
-
         setTbrs((prev) => {
           const updated = (prev[rideId] ?? []).map(t =>
             t.code.toUpperCase() === code.toUpperCase() ? { ...t, _duplicate: true } : t
@@ -1109,7 +1070,6 @@ const ConferenciaCarregamentoPage = () => {
           return { ...prev, [rideId]: [newTbr, ...updated] };
         });
         playErrorBeep();
-
         setTimeout(() => {
           setTbrs((prev) => {
             const list = prev[rideId] ?? [];
@@ -1124,27 +1084,18 @@ const ConferenciaCarregamentoPage = () => {
       } else if (totalScans >= 5) {
         // 5x beep: don't add the 5th TBR at all. Remove duplicates, keep the REAL (oldest) entry as yellow.
         playErrorBeep();
-
-        // Sort occurrences by scanned_at ascending so the oldest (real DB entry) is first
         const sorted = [...occurrences].sort((a, b) => 
           new Date(a.scanned_at || 0).getTime() - new Date(b.scanned_at || 0).getTime()
         );
         const realEntry = sorted[0]; // oldest = real DB entry
-        const duplicateIds = sorted.slice(1).map(t => t.id); // all others are temp/duplicates
-
-        // Save yellow highlight to DB immediately so any refetch restores it permanently
+        const duplicateIds = sorted.slice(1).map(t => t.id);
         if (realEntry?.id) {
           supabase.from("ride_tbrs").update({ highlight: "yellow" }).eq("id", realEntry.id).then(() => {});
         }
-        // Delete duplicate entries from DB (they may be temp or real duplicates)
         for (const dupId of duplicateIds) {
           if (dupId) supabase.from("ride_tbrs").delete().eq("id", dupId).then(() => {});
         }
-
-        // Extend realtime lock to prevent refetch from overwriting
         realtimeLockUntil.current = Date.now() + 15000;
-
-        // Immediately update local state: remove all duplicates, mark real entry as yellow
         const idsToRemove = new Set(duplicateIds.filter(Boolean));
         setTbrs((prev) => {
           const list = prev[rideId] ?? [];
@@ -1153,7 +1104,6 @@ const ConferenciaCarregamentoPage = () => {
             .map(t => t.id === realEntry?.id ? { ...t, _triplicate: false, _duplicate: false, _yellowHighlight: true } : t);
           return { ...prev, [rideId]: filtered };
         });
-
         setTbrInputs((prev) => ({ ...prev, [rideId]: "" }));
         setTimeout(() => inputRefs.current[rideId]?.focus(), 50);
       }
@@ -1256,9 +1206,17 @@ const ConferenciaCarregamentoPage = () => {
     processingQueueRef.current[rideId] = true;
 
     while (queueRef.current[rideId]?.length > 0) {
-      const code = queueRef.current[rideId].shift()!;
+      // Delay to accumulate extremely fast scanner inputs (e.g. 100-300ms window)
+      await new Promise(r => setTimeout(r, 200)); 
+      
+      const batchCodes = queueRef.current[rideId].splice(0, 20); // up to 20 at a time
+      if (batchCodes.length === 0) continue;
+
       try {
-        await saveTbrRef.current?.(rideId, code);
+        // Since `saveTbr` does complex individual logic (trip_number, dupes, toast errors),
+        // we execute them in parallel via Promise.all for the batch, but they still resolve individually.
+        // This is a middle-ground batching approach to not break the intricate floor/return logic of a single scan.
+        await Promise.all(batchCodes.map(code => saveTbrRef.current?.(rideId, code)));
       } catch (err) {
         console.error("Queue processing error:", err);
       }
@@ -1764,13 +1722,48 @@ const ConferenciaCarregamentoPage = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic">Carregamento</h1>
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+          <h1 className="text-2xl font-bold italic shrink-0">Carregamento</h1>
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide no-scrollbar -mx-1 px-1">
+            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-green-50/50 border-green-100 text-green-700 min-w-[110px]">
+              <CheckCircle className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Finalizado</span>
+                <span className="text-xl font-bold leading-none">{loadingStats.finished}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-slate-50 border-slate-200 text-slate-700 min-w-[110px]">
+              <Clock className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Aguardando</span>
+                <span className="text-xl font-bold leading-none">{loadingStats.pending}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-blue-50/80 border-blue-200 text-blue-700 min-w-[110px]">
+              <Play className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Carregando</span>
+                <span className="text-xl font-bold leading-none">{loadingStats.loading}</span>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-1.5 p-2 rounded-lg border bg-red-50/50 border-red-100 text-red-700 min-w-[110px]">
+              <Ban className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[10px] font-bold uppercase tracking-wider opacity-70 leading-none mb-1">Cancelado</span>
+                <span className="text-xl font-bold leading-none">{loadingStats.cancelled}</span>
+              </div>
+            </div>
+          </div>
+        </div>
         {managerSession && (
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 shrink-0"
+            className="gap-1.5 shrink-0 lg:ml-auto"
             onClick={() => {
               setShowRetroModal(true);
               setRetroDate(undefined);

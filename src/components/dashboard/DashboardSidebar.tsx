@@ -90,7 +90,7 @@ interface ConferenteOption {
 const DashboardSidebar = () => {
   const { logout, unitSession, managerSession, setManagerSession, conferenteSession, setConferenteSession } = useAuthStore();
   const { setOpenMobile } = useSidebar();
-  const { claimSession, releaseSession } = useConferenteSessionLock();
+  const { claimSession, releaseSession } = useConferenteSessionLock(false);
   const [loginOpen, setLoginOpen] = useState(false);
   const [cnpj, setCnpj] = useState("");
   const [password, setPassword] = useState("");
@@ -128,7 +128,7 @@ const DashboardSidebar = () => {
     fetchPending();
 
     const channel = supabase
-      .channel("pending-rides-count")
+      .channel(`pending-rides-count-${unitSession.id}`)
       .on("postgres_changes", {
         event: "*",
         schema: "public",

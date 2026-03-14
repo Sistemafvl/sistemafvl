@@ -113,30 +113,25 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
-    // Line chart - TBRs per day (exclude cancelled)
-    const unitRidesInRange = allRidesInRange.filter(r => r.loading_status !== "cancelled");
-    const unitRideIds = unitRidesInRange.map(r => r.id);
-
-    let filteredTbrs: { scanned_at: string | null; ride_id: string }[] = [];
-    if (unitRideIds.length > 0) {
-      filteredTbrs = await fetchAllRowsWithIn<{ scanned_at: string | null; ride_id: string }>(
-        (ids) => (from, to) =>
-          supabase.from("ride_tbrs").select("scanned_at, ride_id").in("ride_id", ids).order("id").range(from, to),
-        unitRideIds
-      );
-    }
-
+    // Line chart - TBRs per day (optimized)
     const tbrsByDay: Record<string, number> = {};
-    days.forEach(d => tbrsByDay[d] = 0);
-    filteredTbrs.forEach(t => {
-      if (!t.scanned_at) return;
-      const d = toBrazilDateStr(t.scanned_at);
-      if (tbrsByDay[d] !== undefined) tbrsByDay[d]++;
-    });
+    
+    // Buscar em paralelo as contagens para cada dia do gráfico
+    await Promise.all(days.map(async (dStr) => {
+      const { start: dayStart, end: dayEnd } = getBrazilDayRange(dStr);
+      // Para saber os TBRs do dia, filtramos pelo scanned_at
+      const { count } = await supabase
+        .from("ride_tbrs")
+        .select("id", { count: "exact", head: true })
+        .gte("scanned_at", dayStart)
+        .lte("scanned_at", dayEnd);
+        
+      tbrsByDay[dStr] = count ?? 0;
+    }));
 
     setLineData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: tbrsByDay[d] })));
 
-    // Driver daily average - derived from the same consolidated query
+    // Driver daily average - optimized
     const finishedRides = allRidesInRange.filter(r => r.loading_status === "finished");
 
     if (finishedRides.length > 0) {
@@ -146,52 +141,32 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
         driverRideIds[r.driver_id].push(r.id);
       });
 
-      const allFinishedRideIds = finishedRides.map(r => r.id);
-      
-      // Count TBRs per ride using chunked queries
-      const tbrCounts = await fetchAllRowsWithIn<{ ride_id: string }>(
-        (ids) => (from, to) =>
-          supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-        allFinishedRideIds
-      );
-
-      const tbrCountByRide: Record<string, number> = {};
-      tbrCounts.forEach(t => {
-        tbrCountByRide[t.ride_id] = (tbrCountByRide[t.ride_id] || 0) + 1;
-      });
-
-      // Fetch returns (piso, ps, rto) to discount from totals
-      const [pisoReturns, psReturns, rtoReturns] = await Promise.all([
-        fetchAllRowsWithIn<{ ride_id: string }>(
-          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-          allFinishedRideIds
-        ),
-        fetchAllRowsWithIn<{ ride_id: string }>(
-          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-          allFinishedRideIds
-        ),
-        fetchAllRowsWithIn<{ ride_id: string }>(
-          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-          allFinishedRideIds
-        ),
-      ]);
-
-      const returnsByRide: Record<string, number> = {};
-      [...pisoReturns, ...psReturns, ...rtoReturns].forEach(r => {
-        if (r.ride_id) returnsByRide[r.ride_id] = (returnsByRide[r.ride_id] || 0) + 1;
-      });
-
-      // Calc per driver (completed = tbrs - returns)
+      const driverIds = Object.keys(driverRideIds);
       const driverTotals: Record<string, number> = {};
-      Object.entries(driverRideIds).forEach(([driverId, rIds]) => {
-        driverTotals[driverId] = rIds.reduce((sum, rid) => {
-          const tbrs = tbrCountByRide[rid] || 0;
-          const returns = returnsByRide[rid] || 0;
-          return sum + Math.max(tbrs - returns, 0);
-        }, 0);
-      });
 
-      const driverIds = Object.keys(driverTotals);
+      // Buscamos em paralelo as contagens para cada motorista em vez de baixar todas as linhas
+      await Promise.all(driverIds.map(async (driverId) => {
+        const rIds = driverRideIds[driverId];
+        
+        // Contar TBRs confirmados (já limpos no DB pelo trigger auto_remove_tbr_from_ride)
+        let tbrsCount = 0;
+        // Dividir em chunks caso o motorista tenha muitas corridas no período (limite do IN)
+        for (let i = 0; i < rIds.length; i += 200) {
+           const chunkIds = rIds.slice(i, i + 200);
+           const { count } = await supabase
+             .from("ride_tbrs")
+             .select("id", { count: "exact", head: true })
+             .in("ride_id", chunkIds);
+           tbrsCount += (count ?? 0);
+        }
+
+        // Os retornos não precisam ser subtraídos porque o trigger no Supabase 
+        // já exclui o TBR da tabela `ride_tbrs` quando ele vira um Insucesso/PS/RTO.
+        // Logo, a contagem de `ride_tbrs` acima = concluidos.
+        
+        driverTotals[driverId] = tbrsCount;
+      }));
+
       const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
       const driverMap = new Map((drivers ?? []).map(d => [d.id, d.name ?? "Desconhecido"]));
 

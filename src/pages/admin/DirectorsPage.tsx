@@ -37,7 +37,7 @@ const DirectorsPage = () => {
 
   const fetchDirectors = () => {
     if (!matrizUnitId) return;
-    supabase.from("directors").select("*").eq("unit_id", matrizUnitId).order("name").then(({ data }) => { if (data) setDirectors(data); });
+    supabase.from("directors").select("id, unit_id, name, cpf, password, active, created_at").eq("unit_id", matrizUnitId).order("name").then(({ data }) => { if (data) setDirectors(data); });
   };
 
   useEffect(() => {

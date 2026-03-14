@@ -48,7 +48,7 @@ const DriverHome = () => {
       const unitId = unitSession?.id;
       const { data: ridesData } = await supabase
         .from("driver_rides")
-        .select("*")
+        .select("id, unit_id, driver_id, route, login, completed_at, finished_at, loading_status")
         .eq("driver_id", driverId)
         .eq("unit_id", unitId!)
         .gte("completed_at", start)
@@ -370,7 +370,7 @@ const DriverHome = () => {
 
       const { data: qRides } = await supabase
         .from("driver_rides")
-        .select("*")
+        .select("id, unit_id, driver_id, completed_at, loading_status")
         .eq("driver_id", driverId)
         .eq("unit_id", unitId)
         .gte("completed_at", start)

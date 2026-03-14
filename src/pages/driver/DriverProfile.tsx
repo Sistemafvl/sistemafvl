@@ -54,7 +54,7 @@ const DriverProfile = () => {
       setLoading(true);
       const { data } = await supabase
         .from("drivers")
-        .select("*")
+        .select("id, name, cpf, email, whatsapp, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url")
         .eq("id", driverId)
         .single();
       if (data) {

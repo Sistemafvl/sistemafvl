@@ -38,7 +38,7 @@ const DriverRescue = () => {
 
     const { data } = await supabase
       .from("rescue_entries")
-      .select("*")
+      .select("id, tbr_code, original_driver_id, original_ride_id, rescuer_ride_id, rescuer_driver_id, created_at, scanned_at")
       .eq("unit_id", unitId)
       .eq("rescuer_driver_id", rescuerDriverId)
       .gte("created_at", dateFrom.toISOString())

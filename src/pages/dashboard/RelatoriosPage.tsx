@@ -390,7 +390,7 @@ const RelatoriosPage = () => {
 
   // Separated data fetching for reuse
   const fetchPayrollData = async (common: { uName: string; tVal: number; logo: string }) => {
-    const { data: rides } = await supabase.from("driver_rides").select("*").eq("unit_id", unitId!)
+    const { data: rides } = await supabase.from("driver_rides").select("id, driver_id, completed_at, login").eq("unit_id", unitId!)
       .gte("completed_at", startDate.toISOString()).lte("completed_at", endDate.toISOString());
     if (!rides?.length) { toast({ title: "Sem dados", description: "Nenhum carregamento no período.", variant: "destructive" }); return; }
 

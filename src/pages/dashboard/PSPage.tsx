@@ -168,7 +168,7 @@ const PSPage = () => {
     const data = await fetchAllRows<any>((from, to) => {
       let query = supabase
         .from("ps_entries")
-        .select("*")
+        .select("id, tbr_code, driver_name, route, description, reason, photo_url, status, created_at, conferente_id, is_seller, observations")
         .eq("unit_id", unitSession.id)
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString())

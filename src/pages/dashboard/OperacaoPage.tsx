@@ -71,7 +71,7 @@ const OperacaoPage = () => {
 
     const { data: rides } = await supabase
       .from("driver_rides")
-      .select("*")
+      .select("id, driver_id, route, login, conferente_id, loading_status, started_at, finished_at, completed_at")
       .eq("unit_id", unitSession.id)
       .gte("completed_at", dayStart)
       .lte("completed_at", dayEnd)
@@ -355,8 +355,8 @@ const OperacaoPage = () => {
                             // Fetch returns for this ride
                             const [pisoR, psR, rtoR] = await Promise.all([
                               supabase.from("piso_entries").select("tbr_code, reason").eq("ride_id", c.ride_id),
-                              supabase.from("ps_entries").select("tbr_code").eq("ride_id", c.ride_id),
-                              supabase.from("rto_entries").select("tbr_code").eq("ride_id", c.ride_id),
+                              supabase.from("ps_entries").select("id, tbr_code").eq("ride_id", c.ride_id),
+                              supabase.from("rto_entries").select("id, tbr_code").eq("ride_id", c.ride_id),
                             ]);
                             const returnSet = new Set<string>();
                             const filteredPiso = (pisoR.data ?? []).filter((e: any) => !OPERATIONAL_PISO_REASONS.includes(e.reason ?? ""));
