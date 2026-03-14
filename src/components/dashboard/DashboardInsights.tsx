@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllRows } from "@/lib/supabase-helpers";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -82,8 +82,11 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
       if (best) setBestDay(dayNames[Number(best[0])]);
 
       const rideIds = rides30.map(r => r.id);
-      const { count: tbrTotal } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rideIds);
-      setAvgTbrs(tbrTotal ? Math.round((tbrTotal / rides30.length) * 10) / 10 : 0);
+      const allTbrs = await fetchAllRowsWithIn<{ id: string }>(
+        (chunk) => (from, to) => supabase.from("ride_tbrs").select("id").in("ride_id", chunk).range(from, to),
+        rideIds
+      );
+      setAvgTbrs(allTbrs.length ? Math.round((allTbrs.length / rides30.length) * 10) / 10 : 0);
     }
 
     // Return rate
@@ -106,8 +109,11 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const rideIds = (rides30 ?? []).map(r => r.id);
     let totalTbrsInPeriod = 0;
     if (rideIds.length > 0) {
-      const { count } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rideIds);
-      totalTbrsInPeriod = count ?? 0;
+      const tbList = await fetchAllRowsWithIn<{ id: string }>(
+        (chunk) => (from, to) => supabase.from("ride_tbrs").select("id").in("ride_id", chunk).range(from, to),
+        rideIds
+      );
+      totalTbrsInPeriod = tbList.length;
     }
     const totalOriginal = totalTbrsInPeriod + allReturnTbrs.size;
     if (totalOriginal > 0) {

@@ -114,16 +114,15 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     });
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
-    // Line chart - TBRs per day (CONSOLIDATED: Single query for all TBRs in range)
+    const allRIds = allRidesInRange.map(r => r.id);
+
+    // Line chart - TBRs per day (CONSOLIDATED: Single chunked query for all TBRs in range based on rides)
     const tbrsByDay: Record<string, number> = {};
     days.forEach(d => tbrsByDay[d] = 0);
 
-    const allTbrsInRange = await fetchAllRows<{ scanned_at: string }>((from, to) =>
-      (supabase.from("ride_tbrs") as any).select("scanned_at")
-        .eq("unit_id", unitId)
-        .gte("scanned_at", rangeStart)
-        .lte("scanned_at", rangeEnd)
-        .order("scanned_at").range(from, to)
+    const allTbrsInRange = await fetchAllRowsWithIn<{ scanned_at: string }>(
+      (chunk) => (from, to) => supabase.from("ride_tbrs").select("scanned_at").in("ride_id", chunk).range(from, to),
+      allRIds
     );
 
     allTbrsInRange.forEach(t => {
@@ -148,12 +147,11 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       
       // CONSOLIDATED: Single query for all TBRs of all targeted rides
       const rideIdToTbrCount: Record<string, number> = {};
-      const allRIds = finishedRides.map(r => r.id);
+      const finishedRIds = finishedRides.map(r => r.id);
       
-      const allTbrsForDrivers = await fetchAllRows<{ ride_id: string }>((from, to) =>
-        supabase.from("ride_tbrs").select("ride_id")
-          .in("ride_id", allRIds)
-          .range(from, to)
+      const allTbrsForDrivers = await fetchAllRowsWithIn<{ ride_id: string }>(
+        (chunk) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", chunk).range(from, to),
+        finishedRIds
       );
 
       allTbrsForDrivers.forEach(t => {
