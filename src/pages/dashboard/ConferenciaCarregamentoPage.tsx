@@ -43,6 +43,7 @@ interface RideWithDriver {
   car_color?: string;
   started_at?: string | null;
   finished_at?: string | null;
+  completed_at?: string;
   queue_entry_id?: string | null;
 }
 
@@ -414,7 +415,7 @@ const ConferenciaCarregamentoPage = () => {
 
     const { data } = await supabase
       .from("driver_rides")
-      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, queue_entry_id")
+      .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, completed_at, queue_entry_id")
       .eq("unit_id", unitId)
       .gte("completed_at", startDate.toISOString())
       .lte("completed_at", endDate.toISOString())
@@ -1685,22 +1686,48 @@ const ConferenciaCarregamentoPage = () => {
     fetchPisoCodes();
   }, [unitId]);
 
-  // Subscribe to piso_entries changes to keep red highlighting in sync
+  // Subscribe to driver_rides and ride_tbrs changes for REALTIME KPI UPDATES
   useEffect(() => {
     if (!unitId) return;
+
     const channel = supabase
-      .channel("piso-highlight-" + unitId)
-      .on("postgres_changes", { event: "*", schema: "public", table: "piso_entries", filter: `unit_id=eq.${unitId}` }, async () => {
-        const { data } = await supabase
-          .from("piso_entries")
-          .select("tbr_code")
-          .eq("unit_id", unitId)
-          .eq("status", "open");
-        setPisoTbrCodes(new Set((data ?? []).map((e: any) => e.tbr_code.toUpperCase())));
+      .channel("carregamento-realtime-" + unitId)
+      .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => {
+        fetchRides();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs" }, (payload: any) => {
+        // Since ride_tbrs doesn't have unit_id directly, we check if the ride_id belongs to the current unit's rides
+        if (payload.new && currentRideIdsRef.current.includes(payload.new.ride_id)) {
+          fetchRides();
+        } else if (payload.old && currentRideIdsRef.current.includes(payload.old.ride_id)) {
+          fetchRides();
+        }
       })
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
-  }, [unitId]);
+  }, [unitId, fetchRides]);
+
+  // Cycle logic (same as CiclosPage) - Realtime as it depends on displayRides/displayTbrs
+  const cycleMetrics = useMemo(() => {
+    const date = format(startDate, "yyyy-MM-dd");
+    const cycle1Cutoff = `${date}T11:30:00.000Z`; // 08:30 BRT
+    const cycle2Cutoff = `${date}T12:30:00.000Z`; // 09:30 BRT
+
+    const ridesInC1 = displayRides.filter(r => r.completed_at && r.completed_at <= cycle1Cutoff);
+    const ridesInC2 = displayRides.filter(r => r.completed_at && r.completed_at <= cycle2Cutoff);
+    const ridesInC3 = displayRides.filter(r => r.loading_status !== "cancelled");
+
+    const tbrsInC1 = ridesInC1.reduce((acc, r) => acc + (displayTbrs[r.id]?.length || 0), 0);
+    const tbrsInC2 = ridesInC2.reduce((acc, r) => acc + (displayTbrs[r.id]?.length || 0), 0);
+    const tbrsInC3 = ridesInC3.reduce((acc, r) => acc + (displayTbrs[r.id]?.length || 0), 0);
+
+    return {
+      c1: { rides: ridesInC1.length, tbrs: tbrsInC1 },
+      c2: { rides: ridesInC2.length, tbrs: tbrsInC2 },
+      c3: { rides: ridesInC3.length, tbrs: tbrsInC3 }
+    };
+  }, [displayRides, displayTbrs, startDate]);
 
   const getTbrItemClass = (tbr: Tbr, isInActiveRide?: boolean) => {
     if (tbr.is_rescue) return "bg-black text-white border-black";
@@ -1718,8 +1745,32 @@ const ConferenciaCarregamentoPage = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic">Carregamento</h1>
+      <div className="flex items-end justify-between gap-4">
+        <div className="flex items-center gap-8">
+          <h1 className="text-2xl font-bold italic shrink-0">Carregamento</h1>
+          
+          <div className="hidden lg:flex items-center gap-3">
+            {/* Cycle info blocks */}
+            <div className="flex flex-col items-center px-4 py-1.5 rounded-lg border bg-white shadow-sm min-w-[140px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Ciclo 1 (até 08:30)</span>
+              <span className="text-lg font-bold text-primary leading-tight">{cycleMetrics.c1.rides}</span>
+              <span className="text-[10px] text-muted-foreground">{cycleMetrics.c1.tbrs} TBRs</span>
+            </div>
+            
+            <div className="flex flex-col items-center px-4 py-1.5 rounded-lg border bg-white shadow-sm min-w-[140px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Ciclo 2 (até 09:30)</span>
+              <span className="text-lg font-bold text-primary leading-tight">{cycleMetrics.c2.rides}</span>
+              <span className="text-[10px] text-muted-foreground">{cycleMetrics.c2.tbrs} TBRs</span>
+            </div>
+            
+            <div className="flex flex-col items-center px-4 py-1.5 rounded-lg border bg-white shadow-sm min-w-[140px]">
+              <span className="text-[10px] text-muted-foreground font-semibold">Ciclo 3 (total)</span>
+              <span className="text-lg font-bold text-primary leading-tight">{cycleMetrics.c3.rides}</span>
+              <span className="text-[10px] text-muted-foreground">{cycleMetrics.c3.tbrs} TBRs</span>
+            </div>
+          </div>
+        </div>
+        
         {managerSession && (
           <Button
             variant="outline"
@@ -1882,10 +1933,10 @@ const ConferenciaCarregamentoPage = () => {
           {/* KPI Cards next to dates */}
           <div className="flex items-center gap-2 flex-wrap">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 min-w-[100px] shadow-sm">
-              <Package className="h-3.5 w-3.5 text-primary" />
+              <Users className="h-3.5 w-3.5 text-primary" />
               <div className="flex flex-col">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">DA's</span>
-                <span className="text-sm font-bold leading-none">{displayRides.length}</span>
+                <span className="text-sm font-bold leading-none">{displayRides.filter(r => r.loading_status !== "cancelled").length}</span>
               </div>
             </div>
 
@@ -1895,6 +1946,16 @@ const ConferenciaCarregamentoPage = () => {
                 <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">TBRs</span>
                 <span className="text-sm font-bold leading-none">
                   {Object.values(displayTbrs).reduce((acc, current) => acc + current.length, 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-gray-50/50 border-gray-100 text-gray-500 min-w-[100px] shadow-sm">
+              <Clock className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Aguardando</span>
+                <span className="text-sm font-bold leading-none">
+                  {displayRides.filter(r => r.loading_status === "pending").length}
                 </span>
               </div>
             </div>
