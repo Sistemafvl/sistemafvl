@@ -40,6 +40,8 @@ interface ReversaBatch {
   conferente_name: string | null;
   total_scanned: number;
   total_pending: number;
+  lacre: string | null;
+  vrid: string | null;
   created_at: string;
 }
 
@@ -92,6 +94,10 @@ const ReversaPage = () => {
   const streamRef = useRef<MediaStream | null>(null);
   const scanCooldownRef = useRef(false);
 
+  // Extra Details
+  const [lacre, setLacre] = useState("");
+  const [vrid, setVrid] = useState("");
+
   // PDF
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
@@ -123,7 +129,7 @@ const ReversaPage = () => {
     setLoadingBatches(true);
     const { data } = await (supabase
       .from("reversa_batches" as any)
-      .select("id, conferente_name, total_scanned, total_pending, created_at")
+      .select("id, conferente_name, total_scanned, total_pending, lacre, vrid, created_at")
       .eq("unit_id", unitSession.id)
       .order("created_at", { ascending: false })
       .limit(500) as any);
@@ -229,6 +235,14 @@ const ReversaPage = () => {
   const scannedEntries = entries.filter(e => scannedCodes.has(e.tbr_code.toUpperCase()));
   const pendingEntries = entries.filter(e => !scannedCodes.has(e.tbr_code.toUpperCase()));
 
+  const handleConfirmAll = () => {
+    if (entries.length === 0) return;
+    const allIds = entries.map(e => e.tbr_code.toUpperCase());
+    setScannedCodes(new Set(allIds));
+    playSuccessBeep();
+    toast({ title: "Pronto!", description: "Todos os TBRs foram marcados como conferidos." });
+  };
+
   // Finalize reversa — create batch + update ps_entries
   const handleFinalize = async () => {
     if (scannedEntries.length === 0) return;
@@ -241,6 +255,8 @@ const ReversaPage = () => {
         conferente_name: conferenteSession?.name ?? null,
         total_scanned: scannedEntries.length,
         total_pending: pendingEntries.length,
+        lacre: lacre.trim() || null,
+        vrid: vrid.trim() || null,
       })
       .select("id")
       .single() as any);
@@ -266,7 +282,9 @@ const ReversaPage = () => {
   const generatePdf = async () => {
     setGeneratingPdf(true);
     try {
-      await buildReversaPdf(entries.map(e => ({ ...e, _status: "Pendente" })), 0, entries.length, `reversa_pendentes_${new Date().toISOString().slice(0, 10)}.pdf`);
+      // Fake batch data to attach the currently typed Lacre and VRID to the preview print
+      const tempBatch: Partial<ReversaBatch> = { lacre, vrid };
+      await buildReversaPdf(entries.map(e => ({ ...e, _status: "Pendente" })), 0, entries.length, `reversa_pendentes_${new Date().toISOString().slice(0, 10)}.pdf`, tempBatch as ReversaBatch);
     } catch { toast({ title: "Erro ao gerar PDF", variant: "destructive" }); }
     setGeneratingPdf(false);
   };
@@ -312,9 +330,12 @@ const ReversaPage = () => {
     pdf.setFont("helvetica", "normal");
     pdf.text(`Unidade: ${unitSession?.name ?? ""}`, margin + 24, y + 14);
     if (batch) {
-      pdf.text(`Data: ${formatDateTime(batch.created_at)}`, margin + 24, y + 19);
+      pdf.text(`Data: ${formatDateTime(batch.created_at || new Date().toISOString())}`, margin + 24, y + 19);
       if (batch.conferente_name) {
-        pdf.text(`Conferente: ${batch.conferente_name}`, margin + 100, y + 19);
+        pdf.text(`Conferente: ${batch.conferente_name}`, margin + 80, y + 19);
+      }
+      if (batch.lacre || batch.vrid) {
+        pdf.text(`Lacre: ${batch.lacre || "-"}    VRID: ${batch.vrid || "-"}`, margin + 130, y + 19);
       }
     } else {
       pdf.text(`Data: ${new Date().toLocaleDateString("pt-BR")}`, margin + 24, y + 19);
@@ -547,6 +568,38 @@ const ReversaPage = () => {
                 <div className="flex-1 rounded-lg bg-primary/10 border border-primary/20 p-3 text-center">
                   <p className="text-2xl font-bold text-primary">{entries.length}</p>
                   <p className="text-[10px] font-semibold text-primary uppercase">Total</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-muted/30 p-2 rounded-lg border">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase px-1">Lacre do Caminhão</label>
+                  <Input 
+                    value={lacre} 
+                    onChange={e => setLacre(e.target.value)} 
+                    placeholder="Ex: 123456" 
+                    className="h-9" 
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-bold text-muted-foreground uppercase px-1">VRID</label>
+                  <Input 
+                    value={vrid} 
+                    onChange={e => setVrid(e.target.value)} 
+                    placeholder="Ex: VRID-999" 
+                    className="h-9" 
+                  />
+                </div>
+                <div className="flex items-end">
+                  <Button 
+                    variant="default" 
+                    onClick={handleConfirmAll} 
+                    disabled={entries.length === 0 || scannedCodes.size === entries.length}
+                    className="w-full h-9 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Confirmar Todos
+                  </Button>
                 </div>
               </div>
 
