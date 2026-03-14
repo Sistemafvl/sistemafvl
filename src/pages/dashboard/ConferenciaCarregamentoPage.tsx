@@ -1711,12 +1711,8 @@ const ConferenciaCarregamentoPage = () => {
     return "bg-muted/50";
   };
 
-  console.log("!!! CONFERENCIA CARREGAMENTO PAGE LOADED !!!");
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <div className="bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-sm animate-pulse inline-block">
-        MODO DE TESTE: SE VOCE VE ISSO O CODIGO ATUALIZOU
-      </div>
       <div className="flex items-center justify-between gap-4">
         <h1 className="text-2xl font-bold italic">Carregamento</h1>
         {managerSession && (
