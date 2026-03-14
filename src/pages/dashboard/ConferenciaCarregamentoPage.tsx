@@ -1713,54 +1713,13 @@ const ConferenciaCarregamentoPage = () => {
 
   return (
     <div className="p-4 md:p-6 space-y-6 overflow-x-hidden">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold italic shrink-0">Carregamento</h1>
-        
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 w-full max-w-4xl">
-          <Card className="bg-white border-border/50">
-            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
-              <Package className="h-4 w-4 text-primary" />
-              <span className="text-lg font-bold italic leading-none">{displayRides.length}</span>
-              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Carregamentos</span>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white border-border/50">
-            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
-              <ScanBarcode className="h-4 w-4 text-primary" />
-              <span className="text-lg font-bold italic leading-none">
-                {Object.values(displayTbrs).reduce((acc, current) => acc + current.length, 0)}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Total TBRs</span>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white border-border/50">
-            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
-              <Play className="h-4 w-4 text-blue-500" />
-              <span className="text-lg font-bold italic leading-none">
-                {displayRides.filter(r => r.loading_status === "loading").length}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Em Aberto</span>
-            </CardContent>
-          </Card>
-          
-          <Card className="bg-white border-border/50">
-            <CardContent className="p-3 flex flex-col items-center justify-center text-center gap-0.5">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span className="text-lg font-bold italic leading-none">
-                {displayRides.filter(r => r.loading_status === "finished").length}
-              </span>
-              <span className="text-[10px] text-muted-foreground font-semibold italic uppercase tracking-wider">Finalizados</span>
-            </CardContent>
-          </Card>
-        </div>
-
+      <div className="flex items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold italic">Carregamento</h1>
         {managerSession && (
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5 shrink-0 hidden lg:flex"
+            className="gap-1.5 shrink-0"
             onClick={() => {
               setShowRetroModal(true);
               setRetroDate(undefined);
@@ -1774,27 +1733,6 @@ const ConferenciaCarregamentoPage = () => {
           </Button>
         )}
       </div>
-      
-      {/* Mobile-only retro button to keep it visible */}
-      {managerSession && (
-        <div className="lg:hidden flex justify-end">
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => {
-              setShowRetroModal(true);
-              setRetroDate(undefined);
-              setRetroDriverSearch("");
-              setRetroDriverResults([]);
-              setRetroSelectedDriver(null);
-            }}
-          >
-            <History className="h-3.5 w-3.5" />
-            Retroativo
-          </Button>
-        </div>
-      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-3">
@@ -1911,7 +1849,7 @@ const ConferenciaCarregamentoPage = () => {
           </Popover>
         </div>
 
-        <div className="flex flex-row gap-3">
+        <div className="flex flex-row flex-wrap items-center gap-3">
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" className="gap-2 justify-start">
@@ -1935,6 +1873,47 @@ const ConferenciaCarregamentoPage = () => {
               <Calendar mode="single" selected={endDate} onSelect={handleEndDateSelect} initialFocus className={cn("p-3 pointer-events-auto")} />
             </PopoverContent>
           </Popover>
+
+          {/* KPI Cards next to dates */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide no-scrollbar -mx-1 px-1">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 min-w-[100px] shadow-sm">
+              <Package className="h-3.5 w-3.5 text-primary" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">Vans</span>
+                <span className="text-sm font-bold leading-none">{displayRides.length}</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 min-w-[100px] shadow-sm">
+              <ScanBarcode className="h-3.5 w-3.5 text-primary" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">TBRs</span>
+                <span className="text-sm font-bold leading-none">
+                  {Object.values(displayTbrs).reduce((acc, current) => acc + current.length, 0)}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-blue-50/50 border-blue-100 text-blue-700 min-w-[100px] shadow-sm">
+              <Play className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Aberto</span>
+                <span className="text-sm font-bold leading-none">
+                  {displayRides.filter(r => r.loading_status === "loading").length}
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-green-50/50 border-green-100 text-green-700 min-w-[100px] shadow-sm">
+              <CheckCircle className="h-3.5 w-3.5 shrink-0" />
+              <div className="flex flex-col">
+                <span className="text-[9px] font-bold uppercase tracking-wider opacity-70 leading-none">Fim</span>
+                <span className="text-sm font-bold leading-none">
+                  {displayRides.filter(r => r.loading_status === "finished").length}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
