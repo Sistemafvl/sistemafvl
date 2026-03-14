@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Car, MapPin, User, Users, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package, GripVertical } from "lucide-react";
+import { Car, MapPin, User, Users, Hash, KeyRound, Play, CheckCircle, RotateCcw, ScanBarcode, UserCheck, Clock, Search, X, CalendarIcon, Timer, Pencil, Eye, Lightbulb, Keyboard, Ban, ArrowRightLeft, Loader2, Bell, Lock, Camera, Trash2, Check, Maximize2, Minimize2, AlertTriangle, History, CheckSquare, Package, GripVertical, Download } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -249,6 +249,8 @@ const ConferenciaCarregamentoPage = () => {
   const retroDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [draggedRideId, setDraggedRideId] = useState<string | null>(null);
   const [dragOverRideId, setDragOverRideId] = useState<string | null>(null);
+  const [focusSearchActive, setFocusSearchActive] = useState(false);
+  const [focusSearchInput, setFocusSearchInput] = useState("");
 
   // Finalizar confirmation modal
   const [finalizarConfirmRideId, setFinalizarConfirmRideId] = useState<string | null>(null);
@@ -972,6 +974,31 @@ const ConferenciaCarregamentoPage = () => {
         }
       }
     }, 250);
+  };
+
+  const exportCsv = () => {
+    const rows: string[][] = [["TBR", "Motorista", "Hora da Leitura", "Status", "Sequência"]];
+    rides.forEach(ride => {
+      const rideTbrList = tbrs[ride.id] ?? [];
+      if (rideTbrList.length === 0) {
+        rows.push(["", ride.driver_name ?? "", "", ride.loading_status ?? "", String(ride.sequence_number ?? "")]);
+      } else {
+        rideTbrList.forEach((tbr, idx) => {
+          const d = new Date(tbr.scanned_at);
+          const hora = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
+          const status = tbr._yellowHighlight ? "Insucesso" : ride.loading_status === "finished" ? "Finalizado" : ride.loading_status === "cancelled" ? "Cancelado" : "Carregado";
+          rows.push([tbr.code, idx === 0 ? (ride.driver_name ?? "") : "", hora, status, idx === 0 ? String(ride.sequence_number ?? "") : ""]);
+        });
+      }
+    });
+    const csvContent = rows.map(r => r.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Carregamento_${new Date().toLocaleDateString("pt-BR").replace(/\//g, "-")}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const handleDragStart = (rideId: string) => {
@@ -2051,6 +2078,18 @@ const ConferenciaCarregamentoPage = () => {
               </div>
             </div>
           </div>
+
+          {/* CSV Export button */}
+          {!isSearchActive && (
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-white border-border/50 shadow-sm hover:bg-muted/50 transition-colors text-muted-foreground hover:text-foreground"
+              title="Exportar CSV de TBRs"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span className="text-[10px] font-bold uppercase tracking-wider">CSV</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -2554,16 +2593,6 @@ const ConferenciaCarregamentoPage = () => {
                                 <Button
                                   type="button"
                                   size="icon"
-                                  variant="outline"
-                                  className="h-8 w-8 shrink-0"
-                                  onClick={() => startCamera(ride.id)}
-                                  title="Abrir câmera para escanear"
-                                >
-                                  <Camera className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  type="button"
-                                  size="icon"
                                   variant={manualMode[ride.id] ? "default" : "outline"}
                                   className="h-8 w-8 shrink-0"
                                   onClick={() => setManualMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }))}
@@ -2723,10 +2752,36 @@ const ConferenciaCarregamentoPage = () => {
                           <CheckSquare className="h-3.5 w-3.5" />
                         </button>
                       )}
+                      {/* Lupa de busca no focus mode */}
+                      <button
+                        onClick={() => {
+                          setFocusSearchActive(prev => !prev);
+                          setFocusSearchInput("");
+                        }}
+                        className={cn("h-6 w-6 flex items-center justify-center rounded transition-colors", focusSearchActive ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground")}
+                        title="Buscar TBR"
+                      >
+                        <Search className="h-3.5 w-3.5" />
+                      </button>
                     </div>
-                    {focusedTbrs.length > 0 && (
-                      <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
-                        {focusedTbrs.map((t, i) => (
+                    {focusSearchActive && (
+                      <div className="flex gap-1 items-center">
+                        <Input
+                          className="h-7 text-xs font-mono flex-1"
+                          placeholder="Bipar ou digitar TBR para localizar..."
+                          value={focusSearchInput}
+                          onChange={e => setFocusSearchInput(e.target.value)}
+                          autoFocus
+                        />
+                      </div>
+                    )}
+                    {focusedTbrs.length > 0 && (() => {
+                      const visibleFocus = focusSearchActive && focusSearchInput.trim().length > 0
+                        ? focusedTbrs.filter(t => t.code.toUpperCase().includes(focusSearchInput.trim().toUpperCase()))
+                        : focusedTbrs;
+                      return (
+                        <div ref={(el) => { tbrListRefs.current[`focus-${ride.id}`] = el; }} className="max-h-48 overflow-y-auto space-y-1">
+                          {visibleFocus.map((t, i) => (
                           <div key={t.id} className={cn("flex items-center gap-2 text-xs rounded px-2 py-1 transition-colors", getTbrItemClass(t, true))}>
                             <span className="font-bold text-primary">{focusedTbrs.length - i}.</span>
                             <span className="font-mono">{t.code}</span>
@@ -2748,11 +2803,12 @@ const ConferenciaCarregamentoPage = () => {
                               />
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          ))}
+                        </div>
+                      );
+                    })()}
 
-                    {/* TBR Input */}
+                    {/* TBR Input — camera removed, only keyboard mode button */}
                     <div className="flex gap-1 items-center">
                       <div className="relative flex-1">
                         {!manualMode[ride.id] && (
@@ -2768,9 +2824,6 @@ const ConferenciaCarregamentoPage = () => {
                           autoFocus
                         />
                       </div>
-                      <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => startCamera(ride.id)} title="Câmera">
-                        <Camera className="h-3.5 w-3.5" />
-                      </Button>
                       <Button type="button" size="icon" variant={manualMode[ride.id] ? "default" : "outline"} className="h-8 w-8 shrink-0" onClick={() => setManualMode(prev => ({ ...prev, [ride.id]: !prev[ride.id] }))} title={manualMode[ride.id] ? "Modo manual" : "Modo scanner"}>
                         <Keyboard className="h-3.5 w-3.5" />
                       </Button>

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard, Trash2 } from "lucide-react";
+import { AlertTriangle, Search, CheckCircle, X, ChevronLeft, ChevronRight, CalendarIcon, FileText, Camera, RefreshCw, Plus, Pencil, Loader2, Keyboard, Trash2, Package } from "lucide-react";
 import { translateStatus } from "@/lib/status-labels";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import QrViewfinder from "@/components/ui/QrViewfinder";
@@ -112,6 +112,9 @@ const PSPage = () => {
   const [editingEntry, setEditingEntry] = useState<PsEntry | null>(null);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [deletingEntry, setDeletingEntry] = useState<PsEntry | null>(null);
+  const [manualModePs, setManualModePs] = useState(false);
+  const [psTbrSearch, setPsTbrSearch] = useState("");
+  const [psTbrSearchOpen, setPsTbrSearchOpen] = useState(false);
 
   // Filters
   const [startDate, setStartDate] = useState<Date>(() => { const d = new Date(); d.setHours(0,0,0,0); return d; });
@@ -204,10 +207,11 @@ const PSPage = () => {
 
   const handleTbrInput = (value: string) => {
     setTbrInput(value);
+    if (manualModePs) return; // In manual mode, only trigger on Enter
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const code = value.trim();
-      if (code.toUpperCase().startsWith("TBR") && code.length >= 5) {
+      if (code.toUpperCase().startsWith("TBR") && code.length >= 10) {
         if (!isValidTbrCode(code)) {
           toast({ title: "TBR inválido", description: "O código TBR deve conter apenas 'TBR' seguido de números.", variant: "destructive" });
           setTbrInput("");
@@ -934,22 +938,48 @@ const PSPage = () => {
                 ref={inputRef}
                 value={tbrInput}
                 onChange={(e) => handleTbrInput(e.target.value)}
-                placeholder="Leia ou digite o código TBR..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && manualModePs) {
+                    const code = tbrInput.trim();
+                    if (code.length >= 3) {
+                      if (!isValidTbrCode(code)) {
+                        toast({ title: 'TBR inválido', description: 'O código TBR deve conter apenas TBR seguido de números.', variant: 'destructive' });
+                        setTbrInput('');
+                      } else {
+                        searchTbr(code);
+                      }
+                    }
+                  }
+                }}
+                placeholder={manualModePs ? "Digite o TBR e pressione Enter..." : "Leia ou digite o código TBR..."}
                 className="pl-9 h-11"
                 disabled={searching}
                 autoFocus
               />
             </div>
             <Button
-              variant="outline"
+              variant={manualModePs ? "default" : "outline"}
               size="icon"
               className="h-11 w-11 shrink-0"
-              onClick={() => {
-                inputRef.current?.focus();
-              }}
-              title="Digitar TBR"
+              onClick={() => { setManualModePs(prev => !prev); inputRef.current?.focus(); }}
+              title={manualModePs ? "Modo manual ativo (Enter para buscar)" : "Ativar modo de digitação livre"}
             >
               <Keyboard className="h-5 w-5" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-11 w-11 shrink-0 bg-amber-50 border-amber-300 hover:bg-amber-100 text-amber-700"
+              onClick={() => {
+                const tempCode = `SEM_EMBALAGEM_${Date.now()}`;
+                setTbrCode(tempCode);
+                setHistory(null);
+                setHistoryModalOpen(true);
+                setIncludeMode(true);
+              }}
+              title="PS sem embalagem / sem TBR identificável"
+            >
+              <Package className="h-5 w-5" />
             </Button>
             <Button
               variant="outline"
@@ -1040,6 +1070,26 @@ const PSPage = () => {
             <Button variant="outline" size="sm" onClick={generatePDF} className="gap-1" disabled={generatingPdf}>
               {generatingPdf ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} PDF
             </Button>
+
+            {/* Lupa para busca por TBR na lista */}
+            <Button
+              variant={psTbrSearchOpen ? "default" : "outline"}
+              size="sm"
+              className="gap-1"
+              onClick={() => { setPsTbrSearchOpen(p => !p); setPsTbrSearch(""); }}
+              title="Buscar TBR na lista"
+            >
+              <Search className="h-3.5 w-3.5" />
+            </Button>
+            {psTbrSearchOpen && (
+              <Input
+                className="h-9 text-sm font-mono w-40"
+                placeholder="Buscar TBR..."
+                value={psTbrSearch}
+                onChange={e => setPsTbrSearch(e.target.value)}
+                autoFocus
+              />
+            )}
           </div>
 
           {isLoading ? (
@@ -1066,7 +1116,7 @@ const PSPage = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {entries.map((e) => (
+                    {(psTbrSearchOpen && psTbrSearch.trim() ? entries.filter(e => e.tbr_code.toUpperCase().includes(psTbrSearch.trim().toUpperCase())) : entries).map((e) => (
                       <TableRow key={e.id}>
                         <TableCell className="font-mono text-xs">{e.tbr_code}</TableCell>
                         <TableCell>{e.driver_name ?? "-"}</TableCell>
