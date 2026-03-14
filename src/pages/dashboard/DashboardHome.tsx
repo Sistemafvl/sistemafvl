@@ -94,12 +94,13 @@ const DashboardHome = () => {
       setFeedbackAvg(ratings.length > 0 ? ratings.reduce((s, r) => s + r.rating, 0) / ratings.length : 0);
       
       const allDnr = dnrRes.data ?? [];
-      const open = allDnr.filter(e => e.status === "open");
-      const analyzing = allDnr.filter(e => e.status === "analyzing");
-      const closed = allDnr.filter(e => e.status === "closed");
-      setDnrOpen({ count: open.length, value: open.reduce((s, e) => s + Number(e.dnr_value), 0) });
-      setDnrAnalyzing({ count: analyzing.length, value: analyzing.reduce((s, e) => s + Number(e.dnr_value), 0) });
-      setDnrClosed(closed.length);
+      const openDnr = allDnr.filter(e => e.status === "open");
+      const analyzingDnr = allDnr.filter(e => e.status === "analyzing");
+      const closedCount = allDnr.filter(e => e.status === "closed").length;
+      
+      setDnrOpen({ count: openDnr.length, value: openDnr.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrAnalyzing({ count: analyzingDnr.length, value: analyzingDnr.reduce((s, e) => s + Number(e.dnr_value), 0) });
+      setDnrClosed(closedCount);
     };
     fetchStats();
   }, [unitSession?.id]);
@@ -135,16 +136,16 @@ const DashboardHome = () => {
       setTbrResult(null);
       setTbrNotFound(false);
 
-      // Build timeline by querying ALL tables for this TBR code
-      const [allRideTbrs, allPiso, allPs, allRto, allDnr, allRescue, allReativo] = await Promise.all([
-        supabase.from("ride_tbrs").select("id, code, scanned_at, trip_number, highlight, ride_id, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, sequence_number, unit_id)").ilike("code", code),
-        supabase.from("piso_entries").select("id, tbr_code, created_at, conferente_id, reason, driver_name, route, ride_id").ilike("tbr_code", code),
-        supabase.from("ps_entries").select("id, tbr_code, status, description, created_at, closed_at, reversa_at, photo_url, reason, observations, is_seller, conferente_id").ilike("tbr_code", code),
-        supabase.from("rto_entries").select("id, tbr_code, status, description, created_at, closed_at, conferente_id").ilike("tbr_code", code),
-        supabase.from("dnr_entries").select("id, tbr_code, status, dnr_value, created_at, approved_at, closed_at, discounted, observations, conferente_name, login, driver_name, route").ilike("tbr_code", code),
-        supabase.from("rescue_entries").select("id, tbr_code, scanned_at, created_at, original_driver_id, rescuer_driver_id").ilike("tbr_code", code),
-        supabase.from("reativo_entries").select("id, tbr_code, reativo_value, activated_at, created_at, conferente_name, manager_name, driver_name, route").ilike("tbr_code", code),
-      ]);
+        // Build timeline by querying ALL tables for this TBR code (Optimized selection to reduce payload)
+        const [allRideTbrs, allPiso, allPs, allRto, allDnr, allRescue, allReativo] = await Promise.all([
+          supabase.from("ride_tbrs").select("id, code, scanned_at, ride_id, driver_rides!inner(id, driver_id, conferente_id, route, login, loading_status, started_at, finished_at, completed_at, unit_id)").ilike("code", code),
+          supabase.from("piso_entries").select("id, created_at, conferente_id, reason, driver_name, route, ride_id").ilike("tbr_code", code),
+          supabase.from("ps_entries").select("id, status, description, created_at, closed_at, reversa_at, photo_url, reason, observations, is_seller, conferente_id").ilike("tbr_code", code),
+          supabase.from("rto_entries").select("id, status, description, created_at, closed_at, conferente_id").ilike("tbr_code", code),
+          supabase.from("dnr_entries").select("id, status, dnr_value, created_at, approved_at, closed_at, discounted, observations, conferente_name, login, driver_name, route").ilike("tbr_code", code),
+          supabase.from("rescue_entries").select("id, scanned_at, created_at, original_driver_id, rescuer_driver_id").ilike("tbr_code", code),
+          supabase.from("reativo_entries").select("id, reativo_value, activated_at, created_at, conferente_name, manager_name, driver_name, route").ilike("tbr_code", code),
+        ]);
 
       const rideTbrs = allRideTbrs.data ?? [];
       const pisoEntries = allPiso.data ?? [];

@@ -142,18 +142,6 @@ const MotoristasParceirosPage = () => {
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
 
-    const driverIds = driversData.map(d => d.id).filter(Boolean) as string[];
-    // Fetch last operation for each driver
-    const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const lastRides = await fetchAllRows<{ driver_id: string; completed_at: string }>((from, to) =>
-      supabase.from("driver_rides").select("driver_id, completed_at").in("driver_id", driverIds).order("completed_at", { ascending: false }).range(from, to)
-    );
-
-    const lastOpMap = new Map<string, string>();
-    lastRides.forEach(r => {
-      if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
-    });
-
     setAllDrivers(driversData.map(d => ({
       ...d,
       id: d.id!,
@@ -163,10 +151,38 @@ const MotoristasParceirosPage = () => {
       car_plate: d.car_plate!,
       active: d.active!,
       created_at: d.created_at!,
-      lastOperation: lastOpMap.get(d.id!) ?? null,
+      lastOperation: null, // Will be loaded on demand/per page
     })));
     setLoading(false);
   };
+
+  // Fetch last operation for the current page only
+  useEffect(() => {
+    if (paginated.length === 0) return;
+    const fetchLastOps = async () => {
+      const driverIds = paginated.map(d => d.id);
+      // We only need the latest ride for each driver in the current page
+      // Still needs to fetch and group, but only for those 50 IDs
+      const { data: rides } = await supabase
+        .from("driver_rides")
+        .select("driver_id, completed_at")
+        .in("driver_id", driverIds)
+        .order("completed_at", { ascending: false });
+
+      const lastOpMap = new Map<string, string>();
+      (rides ?? []).forEach(r => {
+        if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
+      });
+
+      setAllDrivers(prev => prev.map(d => {
+        if (lastOpMap.has(d.id)) {
+          return { ...d, lastOperation: lastOpMap.get(d.id)! };
+        }
+        return d;
+      }));
+    };
+    fetchLastOps();
+  }, [page, paginated.length]); // Re-run when page changes or results change
 
   const handleDownloadZip = async () => {
     if (driverDocs.length === 0) {

@@ -501,6 +501,13 @@ const PSPage = () => {
       return;
     }
 
+    // Fechar piso_entry aberta com mesmo tbr_code (THE FIX)
+    await supabase.from("piso_entries")
+      .update({ status: "closed", closed_at: new Date().toISOString() } as any)
+      .ilike("tbr_code", tbrCode.trim())
+      .eq("unit_id", unitSession.id)
+      .eq("status", "open");
+
     // Remover TBR da ride_tbrs se está em carregamento ativo
     if (history?.ride_id) {
       await supabase.from("ride_tbrs").delete()
