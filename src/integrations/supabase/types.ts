@@ -1647,6 +1647,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      process_tbr_scan: {
+        Args: { p_code: string; p_ride_id: string; p_unit_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       app_role: "admin"
