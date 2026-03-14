@@ -1110,6 +1110,25 @@ const ConferenciaCarregamentoPage = () => {
         } else {
           playSuccessBeep();
         }
+
+        // Guarantee: always close any open insucesso (piso_entry) and rto_entry for this TBR.
+        // This ensures the insucesso list is cleaned up even if the DB function version
+        // on Lovable Cloud doesn't include this logic.
+        if (unitId) {
+          const codeUpper = code.trim().toUpperCase();
+          await supabase
+            .from('piso_entries' as any)
+            .update({ status: 'closed', closed_at: new Date().toISOString() })
+            .ilike('tbr_code', codeUpper)
+            .eq('status', 'open')
+            .eq('unit_id', unitId);
+          await supabase
+            .from('rto_entries' as any)
+            .update({ status: 'closed', closed_at: new Date().toISOString() })
+            .ilike('tbr_code', codeUpper)
+            .eq('status', 'open')
+            .eq('unit_id', unitId);
+        }
       } else if (totalScans >= 2 && totalScans < 5) {
         // 2nd-4th beep: temporary red warning, NO yellow — accidental double-scan is common
         newTbr._duplicate = true;
