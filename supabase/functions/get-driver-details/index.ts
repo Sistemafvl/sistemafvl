@@ -15,20 +15,21 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { driver_id, include_password, self_access } = await req.json();
+    const { driver_id, driver_ids, include_password, self_access } = await req.json();
 
-    if (!driver_id) {
+    if (!driver_id && (!driver_ids || !Array.isArray(driver_ids))) {
       return new Response(
-        JSON.stringify({ error: "Missing driver_id" }),
+        JSON.stringify({ error: "Missing driver_id or driver_ids array" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Base fields - bank data
-    let selectFields = "bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
+    let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
     // Self-access: driver accessing their own data (validated by driver_id match)
-    if (self_access) {
+    // Bulk access is NOT allowed for self-access to keep it simple and secure
+    if (self_access && driver_id) {
       // Verify the driver exists
       const { data: driverCheck } = await supabase
         .from("drivers")
@@ -63,7 +64,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    // For non-self access, require JWT authentication
+    // For non-self access (Managers/Admins), require JWT authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
@@ -99,23 +100,44 @@ Deno.serve(async (req) => {
       selectFields += ", password";
     }
 
-    const { data, error } = await supabase
-      .from("drivers")
-      .select(selectFields)
-      .eq("id", driver_id)
-      .maybeSingle();
+    if (driver_ids && Array.isArray(driver_ids)) {
+      // Bulk query
+      const { data, error } = await supabase
+        .from("drivers")
+        .select(selectFields)
+        .in("id", driver_ids);
 
-    if (error) {
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: error.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(data),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    } else {
+      // Single query
+      const { data, error } = await supabase
+        .from("drivers")
+        .select(selectFields)
+        .eq("id", driver_id)
+        .maybeSingle();
+
+      if (error) {
+        return new Response(
+          JSON.stringify({ error: error.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(
+        JSON.stringify(data),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    return new Response(
-      JSON.stringify(data),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (err) {
     return new Response(
       JSON.stringify({ error: "Internal server error" }),

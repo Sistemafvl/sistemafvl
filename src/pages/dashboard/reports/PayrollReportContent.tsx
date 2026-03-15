@@ -140,6 +140,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   <th style={compactHeaderStyle({ minWidth: "50px" })}>Desc.</th>
                   <th style={compactHeaderStyle({ minWidth: "50px" })}>Adic.</th>
                   <th style={compactHeaderStyle({ minWidth: "60px" })}>Total R$</th>
+                  <th style={compactHeaderStyle({ minWidth: "70px" })}>PIX</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,6 +172,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                         {adicional > 0 ? `+${formatCurrency(adicional)}` : "—"}
                       </td>
                       <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(totalValue)}</td>
+                      <td style={compactCellStyle({ textAlign: "left", fontSize: "6px", background: altRowBg(idx) })}>{d.driver.pixKey || "—"}</td>
                     </tr>
                   );
                 })}
@@ -192,6 +194,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                     {(grandTotalBonus + grandTotalReativo) > 0 ? `+${formatCurrency(grandTotalBonus + grandTotalReativo)}` : "—"}
                   </td>
                   <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{formatCurrency(grandTotalValue)}</td>
+                  <td style={compactCellStyle({ background: COLORS.tealLight })}></td>
                 </tr>
               </tbody>
             </table>

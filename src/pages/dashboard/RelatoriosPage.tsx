@@ -430,6 +430,27 @@ const RelatoriosPage = () => {
     const allPiso = allPisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
     const allTbrs = tbrsData;
     const driverMap = new Map(drivers.map(d => [d.id, d]));
+    
+    // Collect all driver IDs from different sources (rides, min packages, bonus, dnr, reativo)
+    const allRelevantDriverIds = new Set<string>(driverIds);
+    ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => allRelevantDriverIds.add(mp.driver_id));
+    (bonusRes.data ?? []).forEach((b: any) => allRelevantDriverIds.add(b.driver_id));
+    (fixedValuesRes.data ?? []).forEach((fv: any) => allRelevantDriverIds.add(fv.driver_id));
+    
+    const pixByDriver = new Map<string, string>();
+    const driverIdsToFetch = Array.from(allRelevantDriverIds);
+    if (driverIdsToFetch.length > 0) {
+      try {
+        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch } });
+        if (Array.isArray(pixData)) {
+          pixData.forEach((d: any) => {
+            if (d.id && d.pix_key) pixByDriver.set(d.id, d.pix_key);
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching PIX keys in bulk:", err);
+      }
+    }
     const customValueMap = new Map<string, number>();
     (customValuesRes.data ?? []).forEach((cv: any) => { customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value)); });
     const bonusByDriver = new Map<string, number>();
@@ -485,18 +506,6 @@ const RelatoriosPage = () => {
     }));
 
     const allAdditionalEntries = [...bonusEntries, ...reativoEntries];
-
-    // Temporarily disabled to improve performance/stability - too many parallel edge function calls
-    /*
-    const pixByDriver = new Map<string, string>();
-    await Promise.all(driverIds.map(async (did) => {
-      try {
-        const { data } = await supabase.functions.invoke("get-driver-details", { body: { driver_id: did, self_access: true } });
-        if (data?.pix_key) pixByDriver.set(did, data.pix_key);
-      } catch {}
-    }));
-    */
-    const pixByDriver = new Map<string, string>();
 
     const result: DriverPayrollData[] = driverIds.map(driverId => {
       const driver = driverMap.get(driverId);
@@ -599,20 +608,8 @@ const RelatoriosPage = () => {
         .in("id", missingMinPkgIds);
       extraDrivers = extraD ?? [];
     }
-    // Also fetch pix keys for missing drivers
-    // Temporarily disabled to improve performance/stability
-    /*
-    await Promise.all(
-      missingMinPkgIds.map(async (did) => {
-        try {
-          const { data: dd } = await supabase.functions.invoke("get-driver-details", {
-            body: { driver_id: did, self_access: true },
-          });
-          if (dd?.pix_key) pixByDriver.set(did, dd.pix_key);
-        } catch {}
-      }),
-    );
-    */
+    // PIX keys are already fetched in bulk at the beginning of this function
+
 
     const minPkgDriversList: MinPackageDriver[] = minPkgDriverIds.map((did) => {
       const existingDriver = driverMap.get(did);
