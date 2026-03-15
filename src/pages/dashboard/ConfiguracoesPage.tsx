@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { KeyRound, Trash2, Plus, DollarSign, Save, Loader2, Users, Gift, Search, X, Package, CalendarCheck, Pencil, Check } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { formatDateFullBR } from "./reports/pdf-utils";
 
 interface CustomValue {
   id: string;
@@ -543,7 +544,7 @@ const ConfiguracoesPage = () => {
                   <div className="flex-1">
                     <span className="font-semibold">{b.driver_name ?? "—"}</span>
                     {b.description && <span className="text-muted-foreground ml-2 text-xs">({b.description})</span>}
-                    <p className="text-xs text-muted-foreground">Data: {b.period_start}</p>
+                    <p className="text-xs text-muted-foreground">Data: {formatDateFullBR(b.period_start)}</p>
                   </div>
                   <span className="text-green-600 font-mono font-bold">+R$ {formatCurrency(Number(b.amount))}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteBonus(b.id)}>
@@ -684,7 +685,7 @@ const ConfiguracoesPage = () => {
                 <div key={fv.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
                   <div className="flex-1">
                     <span className="font-semibold">{fv.driver_name}</span>
-                    <p className="text-xs text-muted-foreground">Data: {fv.target_date}</p>
+                    <p className="text-xs text-muted-foreground">Data: {formatDateFullBR(fv.target_date)}</p>
                   </div>
                   <span className="text-primary font-mono font-bold">R$ {formatCurrency(fv.fixed_value)}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteFixedValue(fv.id)}>

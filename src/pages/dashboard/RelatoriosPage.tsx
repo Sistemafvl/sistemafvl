@@ -15,7 +15,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
-import { loadLogoBase64, generatePDFFromContainer, formatCurrency } from "./reports/pdf-utils";
+import { loadLogoBase64, generatePDFFromContainer, formatCurrency, formatDateFullBR } from "./reports/pdf-utils";
 import PayrollReportContent, { type DriverPayrollData } from "./reports/PayrollReportContent";
 import DailySummaryReportContent, { type DailySummaryRow } from "./reports/DailySummaryReportContent";
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
@@ -768,7 +768,7 @@ const RelatoriosPage = () => {
               <div className="flex-1">
                 <h2 className="text-lg font-bold italic">{modalTitle}</h2>
                 <p className="text-sm text-muted-foreground">
-                  {format(startDate, "dd/MM/yyyy")} até {format(endDate, "dd/MM/yyyy")} • {payrollData.length} motorista(s)
+                  {formatDateFullBR(startDate.toISOString().split("T")[0])} até {formatDateFullBR(endDate.toISOString().split("T")[0])} • {payrollData.length} motorista(s)
                 </p>
               </div>
               {payrollMode === "espelho" && (
@@ -863,7 +863,7 @@ const RelatoriosPage = () => {
                             <TableBody>
                               {d.days.map((day) => (
                                 <TableRow key={day.date}>
-                                  <TableCell className="text-xs px-2 py-1.5">{format(new Date(day.date + "T12:00:00"), "dd/MM")}</TableCell>
+                                  <TableCell className="text-xs px-2 py-1.5">{formatDateFullBR(day.date)}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5">{day.login || "—"}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right">{day.returns}</TableCell>
