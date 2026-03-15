@@ -151,13 +151,24 @@ const DashboardSidebar = () => {
     const fetchPendingDisputes = async () => {
       if (pendingDisputesFetchRef.current) return;
       pendingDisputesFetchRef.current = true;
-      const { count } = await supabase
-        .from("ride_disputes" as any)
-        .select("id", { count: "exact", head: true })
-        .eq("unit_id", unitSession.id)
-        .eq("status", "pending");
-      setPendingDisputesCount(count ?? 0);
-      pendingDisputesFetchRef.current = false;
+      try {
+        const { count, error } = await supabase
+          .from("ride_disputes" as any)
+          .select("id", { count: "exact", head: true })
+          .eq("unit_id", unitSession.id)
+          .eq("status", "pending");
+        
+        if (error) {
+          console.warn("Error fetching pending disputes (might be missing table):", error);
+          setPendingDisputesCount(0);
+        } else {
+          setPendingDisputesCount(count ?? 0);
+        }
+      } catch (err) {
+        console.error("Critical error in fetchPendingDisputes:", err);
+      } finally {
+        pendingDisputesFetchRef.current = false;
+      }
     };
 
     fetchPendingDisputes();
@@ -169,7 +180,13 @@ const DashboardSidebar = () => {
         schema: "public",
         table: "ride_disputes" as any,
         filter: `unit_id=eq.${unitSession.id}`,
-      }, () => { fetchPendingDisputes(); })
+      }, () => { 
+        try {
+          fetchPendingDisputes(); 
+        } catch (e) {
+          console.error("Realtime subscription error for ride_disputes:", e);
+        }
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

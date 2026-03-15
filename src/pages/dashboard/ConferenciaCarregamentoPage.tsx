@@ -425,6 +425,7 @@ const ConferenciaCarregamentoPage = () => {
       .eq("unit_id", unitId)
       .gte("completed_at", startDate.toISOString())
       .lte("completed_at", endDate.toISOString())
+      .order("completed_at", { ascending: true })
       .order("sequence_number", { ascending: true });
 
     // Stale response check

@@ -456,24 +456,37 @@ const RelatoriosPage = () => {
     const driverIdsToFetch = Array.from(allRelevantDriverIds);
     if (driverIdsToFetch.length > 0) {
       try {
+        // Try edge function first
         const { data: pixData, error: pixError } = await supabase.functions.invoke("get-driver-details", { 
           body: { driver_ids: driverIdsToFetch, self_access: true } 
         });
         
-        if (pixError) {
-          console.error("PIX fetch error from edge function:", pixError);
-        } else if (Array.isArray(pixData)) {
+        if (!pixError && Array.isArray(pixData)) {
           pixData.forEach((d: any) => {
-            // Ensure we only set valid strings in the map
             if (d.id && d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
               pixByDriver.set(d.id, d.pix_key.trim());
             }
           });
-        } else {
-          console.warn("PIX data received is not an array:", pixData);
+        }
+
+        // Fallback: fetch directly from drivers table for missing ones
+        const missingPixIds = driverIdsToFetch.filter(id => !pixByDriver.has(id));
+        if (missingPixIds.length > 0) {
+          const { data: directDrivers } = await supabase
+            .from("drivers" as any)
+            .select("id, pix_key")
+            .in("id", missingPixIds);
+          
+          if (directDrivers) {
+            directDrivers.forEach((d: any) => {
+              if (d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
+                pixByDriver.set(d.id, d.pix_key.trim());
+              }
+            });
+          }
         }
       } catch (err) {
-        console.error("Critical error fetching PIX keys in bulk:", err);
+        console.error("Critical error fetching PIX keys:", err);
       }
     }
     const customValueMap = new Map<string, number>();
@@ -501,7 +514,7 @@ const RelatoriosPage = () => {
 
     const bonusEntries = (bonusRes.data ?? []).map((b: any) => ({
       id: b.id || Math.random().toString(),
-      date: b.period_start.split("T")[0],
+      date: typeof b.period_start === "string" ? b.period_start.split("T")[0] : format(new Date(b.period_start), "yyyy-MM-dd"),
       driverId: b.driver_id,
       driverName: driverMap.get(b.driver_id)?.name ?? "Motorista",
       value: Number(b.amount),
@@ -780,7 +793,7 @@ const RelatoriosPage = () => {
               <div className="flex-1">
                 <h2 className="text-lg font-bold italic">{modalTitle}</h2>
                 <p className="text-sm text-muted-foreground">
-                  {formatDateFullBR(startDate.toISOString().split("T")[0])} até {formatDateFullBR(endDate.toISOString().split("T")[0])} • {payrollData.length} motorista(s)
+                  {formatDateFullBR(format(startDate, "yyyy-MM-dd"))} até {formatDateFullBR(format(endDate, "yyyy-MM-dd"))} • {payrollData.length} motorista(s)
                 </p>
               </div>
               {payrollMode === "espelho" && (
@@ -909,6 +922,8 @@ const RelatoriosPage = () => {
           setIsProcessingModal(true);
           try {
             if (fmt === "excel" && payrollData) {
+              // Wrap in timeout to allow loading spinner to render before heavy work
+              await new Promise(r => setTimeout(r, 100));
               generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
               toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
               if (formatChoiceAction === "gerar") {

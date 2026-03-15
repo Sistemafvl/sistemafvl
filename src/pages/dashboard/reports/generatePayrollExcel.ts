@@ -946,6 +946,9 @@ export function generatePayrollExcel(
     XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
   });
 
+  // Create Summary Indicators Sheet
+  createIndicadoresSheet(wb, data);
+
   // ══════════════ SAVE FILE ══════════════
   const fileName = `folha_pagamento_${unitName.replace(/\s+/g, "_")}_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.xlsx`;
   XLSX.writeFile(wb, fileName);
