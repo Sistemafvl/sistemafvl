@@ -443,6 +443,7 @@ const RelatoriosPage = () => {
     const driverIdsToFetch = Array.from(allRelevantDriverIds);
     if (driverIdsToFetch.length > 0) {
       try {
+<<<<<<< HEAD
         console.log(`Fetching PIX keys for ${driverIdsToFetch.length} drivers...`);
         const { data: pixData, error: pixError } = await supabase.functions.invoke("get-driver-details", { 
           body: { driver_ids: driverIdsToFetch, self_access: true } 
@@ -452,6 +453,10 @@ const RelatoriosPage = () => {
           console.error("PIX fetch error from edge function:", pixError);
         } else if (Array.isArray(pixData)) {
           console.log(`Successfully fetched ${pixData.length} PIX detail entries.`);
+=======
+        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch, self_access: true } });
+        if (Array.isArray(pixData)) {
+>>>>>>> 735ad088aaf771a023faf3328c4eb73bb241d954
           pixData.forEach((d: any) => {
             // Ensure we only set valid strings in the map
             if (d.id && d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
