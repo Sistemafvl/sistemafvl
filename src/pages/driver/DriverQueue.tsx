@@ -45,7 +45,9 @@ const DriverQueue = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [avgWaitMinutes, setAvgWaitMinutes] = useState(0);
   const [activeRide, setActiveRide] = useState<ActiveRide | null>(null);
+  const [lastCompletedRide, setLastCompletedRide] = useState<ActiveRide | null>(null);
   const [tbrCount, setTbrCount] = useState(0);
+  const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
 
   const driverId = unitSession?.user_profile_id;
@@ -96,6 +98,34 @@ const DriverQueue = () => {
 
     const ride = data && data.length > 0 ? data[0] : null;
     setActiveRide(ride as ActiveRide | null);
+
+    // Fetch last completed ride if no active ride
+    if (!ride) {
+      const { data: lastData } = await supabase
+        .from("driver_rides")
+        .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id")
+        .eq("driver_id", driverId)
+        .eq("loading_status", "completed")
+        .order("completed_at", { ascending: false })
+        .limit(1);
+
+      if (lastData && lastData.length > 0) {
+        setLastCompletedRide(lastData[0] as ActiveRide);
+        
+        // Fetch TBR count for last ride
+        const { count: lastCount } = await supabase
+          .from("ride_tbrs")
+          .select("*", { count: "exact", head: true })
+          .eq("ride_id", lastData[0].id);
+        setLastTbrCount(lastCount ?? 0);
+      } else {
+        setLastCompletedRide(null);
+        setLastTbrCount(0);
+      }
+    } else {
+      setLastCompletedRide(null);
+      setLastTbrCount(0);
+    }
 
     // Calculate queue position using sequence_number
     if (ride && ride.sequence_number) {
@@ -453,6 +483,61 @@ const DriverQueue = () => {
             {loading ? "Saindo..." : "SAIR DA FILA"}
           </Button>
         </>
+      )}
+
+      {/* Histórico do último carregamento concluído */}
+      {!activeRide && lastCompletedRide && (
+        <Card className="border-muted relative overflow-hidden mt-6 opacity-80 hover:opacity-100 transition-opacity">
+          <CardHeader className="pb-3 px-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <CardTitle className="text-muted-foreground flex items-center gap-2 text-base">
+                <RotateCcw className="h-5 w-5 flex-shrink-0" />
+                Último Histórico do Carregamento
+              </CardTitle>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <ScanBarcode className="h-3 w-3" />
+                  TBRs: {lastTbrCount}
+                </Badge>
+                <Badge variant="outline" className="text-xs whitespace-nowrap">
+                  Finalizado em {new Date(lastCompletedRide.completed_at!).toLocaleDateString('pt-BR')}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 px-4">
+            {lastCompletedRide.route && (
+              <div className="flex items-center gap-3">
+                <MapPin className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">Rota</p>
+                  <p className="text-base font-semibold break-words">{lastCompletedRide.route}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-4">
+              {lastCompletedRide.login && (
+                <div className="flex items-center gap-3">
+                  <LogIn className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Login</p>
+                    <p className="text-sm font-semibold break-words">{lastCompletedRide.login}</p>
+                  </div>
+                </div>
+              )}
+              {lastCompletedRide.password && (
+                <div className="flex items-center gap-3">
+                  <KeyRound className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">Senha</p>
+                    <p className="text-sm font-semibold">{lastCompletedRide.password}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

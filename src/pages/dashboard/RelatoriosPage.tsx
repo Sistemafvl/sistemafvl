@@ -92,8 +92,9 @@ const RelatoriosPage = () => {
       const result = await fetchPayrollData(common);
       if (!result) { setLoading(null); return; }
       setPayrollMode(mode);
-    } catch {
-      toast({ title: "Erro", description: "Erro ao buscar dados.", variant: "destructive" });
+    } catch (err) {
+      console.error("Error fetching payroll data:", err);
+      toast({ title: "Erro", description: "Erro ao buscar dados para o relatório.", variant: "destructive" });
     }
     setLoading(null);
   };
@@ -493,7 +494,10 @@ const RelatoriosPage = () => {
     }));
 
     const result: DriverPayrollData[] = driverIds.map(driverId => {
-      const driver = driverMap.get(driverId)!;
+      const driver = driverMap.get(driverId);
+      if (!driver) {
+        console.warn(`Driver with ID ${driverId} not found in drivers_public`);
+      }
       const driverRides = rides.filter(r => r.driver_id === driverId);
       const tbrVal = customValueMap.get(driverId) ?? common.tVal;
       const dayMap = new Map<string, { login: string | null; rideIds: string[] }>();
@@ -556,8 +560,12 @@ const RelatoriosPage = () => {
 
       return {
         driver: {
-          id: driver.id, name: driver.name, cpf: driver.cpf,
-          car_plate: driver.car_plate, car_model: driver.car_model, car_color: driver.car_color,
+          id: driverId, 
+          name: driver?.name ?? "Motorista Desconhecido", 
+          cpf: driver?.cpf ?? "—",
+          car_plate: driver?.car_plate ?? "—", 
+          car_model: driver?.car_model ?? "—", 
+          car_color: driver?.car_color ?? null,
           pixKey: pixByDriver.get(driverId) ?? null,
         },
         days, totalTbrs, totalReturns, totalCompleted,
@@ -634,7 +642,7 @@ const RelatoriosPage = () => {
       d.driver.cpf?.toLowerCase().includes(q) ||
       d.driver.car_plate?.toLowerCase().includes(q) ||
       d.driver.car_model?.toLowerCase().includes(q) ||
-      d.driver.pixKey?.toLowerCase().includes(q)
+      (d.driver.pixKey && d.driver.pixKey.toLowerCase().includes(q))
     );
   }) ?? [];
 
@@ -806,22 +814,22 @@ const RelatoriosPage = () => {
               {filteredPayroll.map((d) => (
                 <Card key={d.driver.id}>
                   <CardContent className="p-4">
-                    <div
-                      className="flex justify-between items-start cursor-pointer"
-                      onClick={() => setExpandedDriver(expandedDriver === d.driver.id ? null : d.driver.id)}
-                    >
-                      <div>
-                        <p className="font-bold">{d.driver.name}</p>
-                        <p className="text-xs text-muted-foreground">{d.driver.cpf} • {d.driver.car_plate}</p>
-                        {d.driver.pixKey && <p className="text-xs text-muted-foreground">PIX: {d.driver.pixKey}</p>}
+                      <div
+                        className="flex justify-between items-start cursor-pointer"
+                        onClick={() => setExpandedDriver(expandedDriver === d.driver.id ? null : d.driver.id)}
+                      >
+                        <div>
+                          <p className="font-bold">{d.driver?.name || "Motorista Desconhecido"}</p>
+                          <p className="text-xs text-muted-foreground">{d.driver?.cpf || "—"} • {d.driver?.car_plate || "—"}</p>
+                          {d.driver?.pixKey && <p className="text-xs text-muted-foreground">PIX: {d.driver.pixKey}</p>}
+                        </div>
+                        <p className="font-bold text-lg text-primary">{formatCurrency(d.totalValue || 0)}</p>
                       </div>
-                      <p className="font-bold text-lg text-primary">{formatCurrency(d.totalValue)}</p>
-                    </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
-                      <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.totalTbrs}</strong></div>
-                      <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns}</strong></div>
-                      <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked}</strong></div>
-                      <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed)}</strong></div>
+                      <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.totalTbrs || 0}</strong></div>
+                      <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns || 0}</strong></div>
+                      <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked || 0}</strong></div>
+                      <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed || 0)}</strong></div>
                       {(d.dnrDiscount ?? 0) > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount!)}</strong></div>}
                       {(d.bonus ?? 0) > 0 && <div><span className="text-primary">Bônus:</span> <strong className="text-primary">+{formatCurrency(d.bonus!)}</strong></div>}
                       {(d.reativoTotal ?? 0) > 0 && <div><span className="text-amber-600">Reativo:</span> <strong className="text-amber-600">+{formatCurrency(d.reativoTotal!)}</strong></div>}
