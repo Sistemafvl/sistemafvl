@@ -485,6 +485,8 @@ const RelatoriosPage = () => {
 
     const allAdditionalEntries = [...bonusEntries, ...reativoEntries];
 
+    // Temporarily disabled to improve performance/stability - too many parallel edge function calls
+    /*
     const pixByDriver = new Map<string, string>();
     await Promise.all(driverIds.map(async (did) => {
       try {
@@ -492,6 +494,8 @@ const RelatoriosPage = () => {
         if (data?.pix_key) pixByDriver.set(did, data.pix_key);
       } catch {}
     }));
+    */
+    const pixByDriver = new Map<string, string>();
 
     const result: DriverPayrollData[] = driverIds.map(driverId => {
       const driver = driverMap.get(driverId);
@@ -514,7 +518,7 @@ const RelatoriosPage = () => {
         const returnCodesForDay = new Set<string>();
         [...allPiso, ...allPs, ...allRto].forEach((p: any) => {
           if (p.ride_id && info.rideIds.includes(p.ride_id) && p.tbr_code) {
-            returnCodesForDay.add(p.tbr_code.toUpperCase());
+            returnCodesForDay.add(p.tbr_code.toString().toUpperCase());
           }
         });
 
@@ -526,13 +530,13 @@ const RelatoriosPage = () => {
         returnCodesForDay.forEach(codeUpper => {
           let lastRideId: string | null = null;
           for (const ride of sortedDayRides) {
-            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code.toUpperCase() === codeUpper)) {
+            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code && t.code.toString().toUpperCase() === codeUpper)) {
               lastRideId = ride.id;
             }
           }
           if (lastRideId) {
             const hasReturnInLast = [...allPiso, ...allPs, ...allRto].some(
-              (p: any) => p.ride_id === lastRideId && p.tbr_code.toUpperCase() === codeUpper
+              (p: any) => p.ride_id === lastRideId && p.tbr_code && p.tbr_code.toString().toUpperCase() === codeUpper
             );
             if (hasReturnInLast) netReturns.add(codeUpper);
           }
@@ -548,15 +552,17 @@ const RelatoriosPage = () => {
         return { date, login: info.login, tbrCount, returns, completed, value: fixedVal !== undefined ? fixedVal : completed * tbrVal };
       });
 
-      const totalTbrs = days.reduce((s, d) => s + d.tbrCount, 0);
-      const totalReturns = days.reduce((s, d) => s + d.returns, 0);
+      const totalTbrs = days.reduce((s, d) => s + (d.tbrCount || 0), 0);
+      const totalReturns = days.reduce((s, d) => s + (d.returns || 0), 0);
       const totalCompleted = totalTbrs - totalReturns;
       const loginsUsed = [...new Set(driverRides.map(r => r.login).filter(Boolean) as string[])];
-      const bestDay = days.length ? days.reduce((a, b) => a.tbrCount > b.tbrCount ? a : b) : null;
-      const worstDay = days.length ? days.reduce((a, b) => a.tbrCount < b.tbrCount ? a : b) : null;
+      const bestDay = days.length ? days.reduce((a, b) => (a.tbrCount || 0) > (b.tbrCount || 0) ? a : b) : null;
+      const worstDay = days.length ? days.reduce((a, b) => (a.tbrCount || 0) < (b.tbrCount || 0) ? a : b) : null;
       const dnrDiscount = dnrByDriver.get(driverId) ?? 0;
       const bonusAmount = bonusByDriver.get(driverId) ?? 0;
       const reativoTotal = reativoByDriver.get(driverId) ?? 0;
+
+      const totalValue = days.reduce((s, d) => s + (d.value || 0), 0) - dnrDiscount + bonusAmount + reativoTotal;
 
       return {
         driver: {
@@ -570,7 +576,7 @@ const RelatoriosPage = () => {
         },
         days, totalTbrs, totalReturns, totalCompleted,
         tbrValueUsed: tbrVal, bonus: bonusAmount, reativoTotal,
-        totalValue: days.reduce((s, d) => s + d.value, 0) - dnrDiscount + bonusAmount + reativoTotal,
+        totalValue: isNaN(totalValue) ? 0 : totalValue,
         dnrDiscount, daysWorked: days.length, loginsUsed,
         bestDay: bestDay ? { date: bestDay.date, tbrs: bestDay.tbrCount } : null,
         worstDay: worstDay ? { date: worstDay.date, tbrs: worstDay.tbrCount } : null,
@@ -593,6 +599,8 @@ const RelatoriosPage = () => {
       extraDrivers = extraD ?? [];
     }
     // Also fetch pix keys for missing drivers
+    // Temporarily disabled to improve performance/stability
+    /*
     await Promise.all(
       missingMinPkgIds.map(async (did) => {
         try {
@@ -603,6 +611,7 @@ const RelatoriosPage = () => {
         } catch {}
       }),
     );
+    */
 
     const minPkgDriversList: MinPackageDriver[] = minPkgDriverIds.map((did) => {
       const existingDriver = driverMap.get(did);
@@ -638,11 +647,11 @@ const RelatoriosPage = () => {
     if (!payrollSearch.trim()) return true;
     const q = payrollSearch.toLowerCase();
     return (
-      d.driver.name?.toLowerCase().includes(q) ||
-      d.driver.cpf?.toLowerCase().includes(q) ||
-      d.driver.car_plate?.toLowerCase().includes(q) ||
-      d.driver.car_model?.toLowerCase().includes(q) ||
-      (d.driver.pixKey && d.driver.pixKey.toLowerCase().includes(q))
+      d.driver?.name?.toLowerCase().includes(q) ||
+      d.driver?.cpf?.toLowerCase().includes(q) ||
+      d.driver?.car_plate?.toLowerCase().includes(q) ||
+      d.driver?.car_model?.toLowerCase().includes(q) ||
+      (d.driver?.pixKey && d.driver.pixKey.toLowerCase().includes(q))
     );
   }) ?? [];
 
@@ -793,19 +802,19 @@ const RelatoriosPage = () => {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Total TBRs</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalTbrs, 0)}</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0)}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Retornos</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalReturns, 0)}</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalReturns || 0), 0)}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Concluídos</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + d.totalCompleted, 0)}</p>
+                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalCompleted || 0), 0)}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Valor Total</p>
-                <p className="font-bold text-primary">{formatCurrency(payrollData.reduce((s, d) => s + d.totalValue, 0))}</p>
+                <p className="font-bold text-primary">{formatCurrency(payrollData.reduce((s, d) => s + (d.totalValue || 0), 0))}</p>
               </div>
             </div>
 

@@ -69,8 +69,18 @@ export const generatePDFFromContainer = async (
 export const formatCpf = (cpf: string) =>
   cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 
-export const formatDateBR = (dateStr: string) =>
-  format(new Date(dateStr + "T12:00:00"), "dd/MM", { locale: undefined });
+export const formatDateBR = (dateStr: string | null | undefined) => {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr + "T12:00:00");
+    if (isNaN(d.getTime())) return "—";
+    return format(d, "dd/MM", { locale: undefined });
+  } catch {
+    return "—";
+  }
+};
 
-export const formatCurrency = (val: number) =>
-  val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+export const formatCurrency = (val: number | null | undefined) => {
+  if (val === null || val === undefined || isNaN(val)) return "R$ 0,00";
+  return val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+};

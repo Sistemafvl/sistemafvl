@@ -87,10 +87,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
   ({ data, unitName, tbrValue, startDate, endDate, generatedBy, logoBase64 }, ref) => {
     const allDates = [...new Set(data.flatMap((d) => d.days.map((day) => day.date)))].sort();
 
-    const grandTotalTbrs = data.reduce((s, d) => s + d.totalTbrs, 0);
-    const grandTotalReturns = data.reduce((s, d) => s + d.totalReturns, 0);
-    const grandTotalCompleted = data.reduce((s, d) => s + d.totalCompleted, 0);
-    const grandTotalValue = data.reduce((s, d) => s + d.totalValue, 0);
+    const grandTotalTbrs = data.reduce((s, d) => s + (d.totalTbrs || 0), 0);
+    const grandTotalReturns = data.reduce((s, d) => s + (d.totalReturns || 0), 0);
+    const grandTotalCompleted = data.reduce((s, d) => s + (d.totalCompleted || 0), 0);
+    const grandTotalValue = data.reduce((s, d) => s + (d.totalValue || 0), 0);
     const grandTotalDnr = data.reduce((s, d) => s + (d.dnrDiscount ?? 0), 0);
     const grandTotalBonus = data.reduce((s, d) => s + (d.bonus ?? 0), 0);
     const grandTotalReativo = data.reduce((s, d) => s + (d.reativoTotal ?? 0), 0);
@@ -146,10 +146,11 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 {data.map((d, idx) => {
                   const tbrVal = d.tbrValueUsed ?? tbrValue;
                   const adicional = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
+                  const totalValue = d.totalValue || 0;
                   return (
                     <tr key={d.driver.id}>
                       <td style={compactCellStyle({ fontWeight: 600, textAlign: "left", background: altRowBg(idx) })}>
-                        {d.driver.name}
+                        {d.driver?.name || "Motorista"}
                       </td>
                       <td style={compactCellStyle({ background: altRowBg(idx) })}>{getVehicleType(tbrVal)}</td>
                       <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatCurrency(tbrVal)}</td>
@@ -169,7 +170,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                       <td style={compactCellStyle({ background: altRowBg(idx), color: adicional > 0 ? "#16a34a" : undefined })}>
                         {adicional > 0 ? `+${formatCurrency(adicional)}` : "—"}
                       </td>
-                      <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(d.totalValue)}</td>
+                      <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(totalValue)}</td>
                     </tr>
                   );
                 })}
@@ -281,7 +282,8 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
         {data.map((d) => {
           const tbrVal = d.tbrValueUsed ?? tbrValue;
           const adicional = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
-          const subtotal = d.totalCompleted * tbrVal;
+          const totalCompleted = d.totalCompleted || 0;
+          const subtotal = totalCompleted * tbrVal;
           const totalPagar = subtotal - (d.dnrDiscount ?? 0) + adicional;
 
           return (
@@ -308,12 +310,12 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   RESUMO DO MOTORISTA
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "10px" }}>
-                  <div><strong>Nome:</strong> {d.driver.name}</div>
-                  <div><strong>CPF:</strong> {formatCpf(d.driver.cpf)}</div>
+                  <div><strong>Nome:</strong> {d.driver?.name || "Motorista"}</div>
+                  <div><strong>CPF:</strong> {d.driver?.cpf ? formatCpf(d.driver.cpf) : "—"}</div>
                   <div><strong>Veículo:</strong> {getVehicleType(tbrVal)}</div>
-                  <div><strong>Placa:</strong> {d.driver.car_plate}</div>
-                  <div><strong>Modelo:</strong> {d.driver.car_model}{d.driver.car_color ? ` ${d.driver.car_color}` : ""}</div>
-                  <div><strong>Chave PIX:</strong> {d.driver.pixKey ?? "—"}</div>
+                  <div><strong>Placa:</strong> {d.driver?.car_plate || "—"}</div>
+                  <div><strong>Modelo:</strong> {d.driver?.car_model || "—"}{d.driver?.car_color ? ` ${d.driver.car_color}` : ""}</div>
+                  <div><strong>Chave PIX:</strong> {d.driver?.pixKey ?? "—"}</div>
                   <div><strong>Valor/Pacote:</strong> {formatCurrency(tbrVal)}</div>
                 </div>
               </div>
@@ -349,7 +351,13 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                         return (
                           <tr key={day.date}>
                             <td style={cellStyle({ textAlign: "left", background: altRowBg(idx) })}>
-                              {format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy")}
+                              {(() => {
+                                try {
+                                  return format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy");
+                                } catch {
+                                  return "—";
+                                }
+                              })()}
                             </td>
                             <td style={cellStyle({ background: altRowBg(idx) })}>{day.login || "—"}</td>
                             <td style={cellStyle({ background: altRowBg(idx) })}>{day.tbrCount}</td>
