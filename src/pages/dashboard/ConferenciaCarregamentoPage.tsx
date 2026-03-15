@@ -188,10 +188,12 @@ const ConferenciaCarregamentoPage = () => {
   const [lockedConferenteIds, setLockedConferenteIds] = useState<Set<string>>(new Set());
   const [driverNameFilter, setDriverNameFilter] = useState("");
   const [loginFilter, setLoginFilter] = useState("");
+  const [conferenteFilter, setConferenteFilter] = useState("");
   const [routeFilter, setRouteFilter] = useState("");
   const [routePopoverOpen, setRoutePopoverOpen] = useState(false);
-  const [unitLogins, setUnitLogins] = useState<{ login: string; password: string }[]>([]);
   const [loginPopoverOpen, setLoginPopoverOpen] = useState(false);
+  const [conferentePopoverOpen, setConferentePopoverOpen] = useState(false);
+  const [unitLogins, setUnitLogins] = useState<{ login: string; password: string }[]>([]);
   const [iniciarConfirmRideId, setIniciarConfirmRideId] = useState<string | null>(null);
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
@@ -1647,6 +1649,7 @@ const ConferenciaCarregamentoPage = () => {
   const displayRides = (isSearchActive ? searchRides : rides)
     .filter(r => !driverNameFilter || r.driver_name?.toLowerCase().includes(driverNameFilter.toLowerCase()))
     .filter(r => !loginFilter || r.login === loginFilter)
+    .filter(r => !conferenteFilter || r.conferente_id === conferenteFilter)
     .filter(r => !routeFilter || r.route === routeFilter);
 
   // Extract unique routes from today's rides for filter
@@ -1891,7 +1894,7 @@ const ConferenciaCarregamentoPage = () => {
       {/* Filters */}
       <div className="flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row gap-3">
-          <div className="relative sm:w-1/4">
+          <div className="relative sm:w-1/5">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-10"
@@ -1907,7 +1910,7 @@ const ConferenciaCarregamentoPage = () => {
             )}
           </div>
 
-          <div className="relative sm:w-1/4">
+          <div className="relative sm:w-1/5">
             <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               className="pl-9 h-10"
@@ -1924,7 +1927,7 @@ const ConferenciaCarregamentoPage = () => {
 
           <Popover open={loginPopoverOpen} onOpenChange={setLoginPopoverOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="sm:w-1/4 h-10 justify-start gap-2 font-normal">
+              <Button variant="outline" className="sm:w-1/5 h-10 justify-start gap-2 font-normal">
                 <KeyRound className="h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{loginFilter || "Login..."}</span>
                 {loginFilter && (
@@ -1961,10 +1964,49 @@ const ConferenciaCarregamentoPage = () => {
               </Command>
             </PopoverContent>
           </Popover>
+          <Popover open={conferentePopoverOpen} onOpenChange={setConferentePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="sm:w-1/5 h-10 justify-start gap-2 font-normal">
+                <UserCheck className="h-4 w-4 text-muted-foreground" />
+                <span className="truncate">{conferentes.find(c => c.id === conferenteFilter)?.name || "Conferente..."}</span>
+                {conferenteFilter && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setConferenteFilter(""); }}
+                    className="ml-auto"
+                  >
+                    <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                  </button>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-[220px] p-0" align="start">
+              <Command>
+                <CommandInput placeholder="Buscar conferente..." />
+                <CommandList>
+                  <CommandEmpty>Nenhum conferente encontrado.</CommandEmpty>
+                  <CommandGroup>
+                    {conferentes.map((c) => (
+                      <CommandItem
+                        key={c.id}
+                        value={c.name}
+                        onSelect={() => {
+                          setConferenteFilter(c.id);
+                          setConferentePopoverOpen(false);
+                        }}
+                      >
+                        {c.name}
+                        {conferenteFilter === c.id && <Check className="ml-auto h-4 w-4" />}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
+            </PopoverContent>
+          </Popover>
 
           <Popover open={routePopoverOpen} onOpenChange={setRoutePopoverOpen}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="sm:w-1/4 h-10 justify-start gap-2 font-normal">
+              <Button variant="outline" className="sm:w-1/5 h-10 justify-start gap-2 font-normal">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 <span className="truncate">{routeFilter || "Rota..."}</span>
                 {routeFilter && (
