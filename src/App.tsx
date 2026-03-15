@@ -26,6 +26,7 @@ import DriverDocuments from "./pages/driver/DriverDocuments";
 import DNRPage from "./pages/dashboard/DNRPage";
 import ReversaPage from "./pages/dashboard/ReversaPage";
 import ReativoPage from "./pages/dashboard/ReativoPage";
+import ContestacoesPage from "./pages/dashboard/ContestacoesPage";
 import UnitRescuePage from "./pages/dashboard/UnitRescuePage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
@@ -87,6 +88,7 @@ const App = () => (
             <Route path="reversa" element={<ReversaPage />} />
             <Route path="socorrendo" element={<UnitRescuePage />} />
             <Route path="reativo" element={<ReativoPage />} />
+            <Route path="contestacoes" element={<ContestacoesPage />} />
             <Route path="bi" element={<MatrizOverview />} />
             <Route path="bi/unidades" element={<MatrizUnidades />} />
             <Route path="bi/motoristas" element={<MatrizMotoristas />} />

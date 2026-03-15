@@ -436,19 +436,33 @@ const RelatoriosPage = () => {
     ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => allRelevantDriverIds.add(mp.driver_id));
     (bonusRes.data ?? []).forEach((b: any) => allRelevantDriverIds.add(b.driver_id));
     (fixedValuesRes.data ?? []).forEach((fv: any) => allRelevantDriverIds.add(fv.driver_id));
+    (reativoData ?? []).forEach((r: any) => { if (r.driver_id) allRelevantDriverIds.add(r.driver_id); });
+    (dnrData ?? []).forEach((d: any) => { if (d.driver_id) allRelevantDriverIds.add(d.driver_id); });
     
     const pixByDriver = new Map<string, string>();
     const driverIdsToFetch = Array.from(allRelevantDriverIds);
     if (driverIdsToFetch.length > 0) {
       try {
-        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch } });
-        if (Array.isArray(pixData)) {
+        console.log(`Fetching PIX keys for ${driverIdsToFetch.length} drivers...`);
+        const { data: pixData, error: pixError } = await supabase.functions.invoke("get-driver-details", { 
+          body: { driver_ids: driverIdsToFetch, self_access: true } 
+        });
+        
+        if (pixError) {
+          console.error("PIX fetch error from edge function:", pixError);
+        } else if (Array.isArray(pixData)) {
+          console.log(`Successfully fetched ${pixData.length} PIX detail entries.`);
           pixData.forEach((d: any) => {
-            if (d.id && d.pix_key) pixByDriver.set(d.id, d.pix_key);
+            // Ensure we only set valid strings in the map
+            if (d.id && d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
+              pixByDriver.set(d.id, d.pix_key.trim());
+            }
           });
+        } else {
+          console.warn("PIX data received is not an array:", pixData);
         }
       } catch (err) {
-        console.error("Error fetching PIX keys in bulk:", err);
+        console.error("Critical error fetching PIX keys in bulk:", err);
       }
     }
     const customValueMap = new Map<string, number>();

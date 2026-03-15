@@ -1084,6 +1084,74 @@ export type Database = {
           },
         ]
       }
+      ride_disputes: {
+        Row: {
+          id: string
+          ride_id: string
+          unit_id: string
+          driver_id: string
+          conferente_id: string | null
+          dispute_type: string
+          observation: string | null
+          status: string
+          created_at: string
+          resolved_at: string | null
+        }
+        Insert: {
+          id?: string
+          ride_id: string
+          unit_id: string
+          driver_id: string
+          conferente_id?: string | null
+          dispute_type: string
+          observation?: string | null
+          status?: string
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Update: {
+          id?: string
+          ride_id?: string
+          unit_id?: string
+          driver_id?: string
+          conferente_id?: string | null
+          dispute_type?: string
+          observation?: string | null
+          status?: string
+          created_at?: string
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ride_disputes_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "driver_rides"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_disputes_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_disputes_conferente_id_fkey"
+            columns: ["conferente_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ride_disputes_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       rto_entries: {
         Row: {
           cep: string | null

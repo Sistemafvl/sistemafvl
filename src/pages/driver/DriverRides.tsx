@@ -6,9 +6,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck, MessageSquare, AlertCircle, Check, Info, Loader2 } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { toast } from "@/hooks/use-toast";
 
 interface Ride {
   id: string;
@@ -28,6 +46,12 @@ interface Ride {
   tbrValue?: number;
   reativoValue?: number;
   conferente_name?: string;
+  dispute?: {
+    id: string;
+    status: string;
+    dispute_type: string;
+    observation: string | null;
+  } | null;
 }
 
 const DriverRides = () => {
@@ -38,6 +62,12 @@ const DriverRides = () => {
   const [endDate, setEndDate] = useState<Date>(() => new Date());
 
   const driverId = unitSession?.user_profile_id;
+  
+  // Dispute Modal State
+  const [selectedDisputeRide, setSelectedDisputeRide] = useState<Ride | null>(null);
+  const [disputeType, setDisputeType] = useState<string>("");
+  const [disputeObservation, setDisputeObservation] = useState<string>("");
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
 
   useEffect(() => {
     if (!driverId) return;
@@ -60,7 +90,7 @@ const DriverRides = () => {
       const rideIds = data.map((r) => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes, reatRes] = await Promise.all([
+      const [unitsRes, pisoRaw, psData, rtoData, settingsRes, customRes, reatRes, disputeRes] = await Promise.all([
         supabase.from("units").select("id, name").in("id", unitIds),
         fetchAllRowsWithIn<{ id: string; ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("id, ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
@@ -77,6 +107,7 @@ const DriverRides = () => {
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
         supabase.from("reativo_entries").select("ride_id, reativo_value").eq("driver_id", driverId).gte("activated_at", startDate.toISOString()).lte("activated_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString()),
+        supabase.from("ride_disputes" as any).select("id, ride_id, status, dispute_type, observation").in("ride_id", rideIds),
       ]);
 
       // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
@@ -117,6 +148,9 @@ const DriverRides = () => {
         if (re.ride_id) reativoMap.set(re.ride_id, (reativoMap.get(re.ride_id) ?? 0) + Number(re.reativo_value));
       });
 
+      const disputeData = (disputeRes as any).data || [];
+      const disputeMap = new Map<string, any>(disputeData.map((d: any) => [d.ride_id, d]));
+
       setRides(data.map((r) => ({
         ...r,
         unit_name: unitMap.get(r.unit_id) ?? "—",
@@ -125,6 +159,7 @@ const DriverRides = () => {
         tbrValue: customMap.get(r.unit_id) ?? settingsMap.get(r.unit_id) ?? 0,
         reativoValue: reativoMap.get(r.id) ?? 0,
         conferente_name: r.conferente_id ? conferenteMap.get(r.conferente_id) ?? null : null,
+        dispute: disputeMap.get(r.id) ?? null,
       })));
       setLoading(false);
     };
@@ -159,6 +194,47 @@ const DriverRides = () => {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return h > 0 ? `${h}h${m.toString().padStart(2, "0")}` : `${m}min`;
+  };
+
+  const handleSubmitDispute = async () => {
+    if (!selectedDisputeRide || !disputeType) return;
+    
+    setIsSubmittingDispute(true);
+    try {
+      const { error } = await supabase.from("ride_disputes" as any).insert({
+        ride_id: selectedDisputeRide.id,
+        driver_id: driverId,
+        unit_id: selectedDisputeRide.unit_id,
+        conferente_id: selectedDisputeRide.conferente_id,
+        dispute_type: disputeType,
+        observation: disputeObservation,
+        status: "pending"
+      });
+
+      if (error) throw error;
+
+      toast({
+        title: "Contestação enviada!",
+        description: `O conferente ${selectedDisputeRide.conferente_name || "responsável"} verificará e concluirá a solicitação.`,
+      });
+
+      // Refresh rides to show pending status
+      // We could also manually update local state to avoid a full fetch
+      setSelectedDisputeRide(null);
+      setDisputeType("");
+      setDisputeObservation("");
+      
+      // Trigger a refresh (simplified)
+      setEndDate(new Date(endDate)); 
+    } catch (err: any) {
+      toast({
+        title: "Erro ao enviar",
+        description: err.message,
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmittingDispute(false);
+    }
   };
 
   return (
@@ -248,17 +324,18 @@ const DriverRides = () => {
               return (
                 <div
                   key={ride.id}
-                  className="p-3 rounded-lg border border-border bg-card space-y-2"
+                  className="p-3 rounded-lg border border-border bg-card space-y-3 relative group"
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+                  <div className="flex items-start gap-3">
+                    <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0 mt-1">
                       {rides.length - idx}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm flex items-center gap-1 truncate">
-                        <MapPin className="h-3.5 w-3.5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0 pr-20">
+                      <p className="font-semibold text-sm flex items-center gap-1 truncate text-primary">
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
                         {ride.unit_name}
                       </p>
+
                       <p className="text-xs text-muted-foreground flex items-center gap-2 mt-0.5">
                         <span className="flex items-center gap-1">
                           <CalendarIcon className="h-3 w-3" />
@@ -297,6 +374,39 @@ const DriverRides = () => {
                         <p className="text-xs text-muted-foreground mt-1 italic truncate">{ride.notes}</p>
                       )}
                     </div>
+
+                    <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+                      {ride.dispute ? (
+                        <div className={cn(
+                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                          ride.dispute.status === "resolved" 
+                            ? "bg-emerald-500 text-white shadow-sm" 
+                            : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                        )}>
+                          {ride.dispute.status === "resolved" ? (
+                            <>
+                              <Check className="h-3 w-3" strokeWidth={3} />
+                              Resolvido
+                            </>
+                          ) : (
+                            <>
+                              <Clock className="h-3 w-3 animate-pulse" />
+                              Pendente
+                            </>
+                          )}
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-[10px] px-2 font-bold py-0 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+                          onClick={() => setSelectedDisputeRide(ride)}
+                        >
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          NOTIFICAR ERRO
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Mini-cards de métricas */}
@@ -333,6 +443,82 @@ const DriverRides = () => {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!selectedDisputeRide} onOpenChange={(open) => !open && setSelectedDisputeRide(null)}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="italic text-primary flex items-center gap-2">
+              <MessageSquare className="h-5 w-5" />
+              Contestar Corrida
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Informe o erro encontrado para que o conferente possa verificar.
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedDisputeRide && (
+            <div className="space-y-4 py-2">
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2 border border-border/50">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground mb-1 flex items-center gap-1">
+                  <Info className="h-3 w-3" />
+                  Dados da Corrida
+                </p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+                  <div><span className="text-muted-foreground">Data:</span> <strong>{formatDate(selectedDisputeRide.completed_at)}</strong></div>
+                  <div><span className="text-muted-foreground">Horário:</span> <strong>{formatTime(selectedDisputeRide.completed_at)}</strong></div>
+                  <div><span className="text-muted-foreground">Login:</span> <strong>{selectedDisputeRide.login || "—"}</strong></div>
+                  <div><span className="text-muted-foreground">Rota:</span> <strong>{selectedDisputeRide.route || "—"}</strong></div>
+                  <div><span className="text-muted-foreground">Conferente:</span> <strong>{selectedDisputeRide.conferente_name || "—"}</strong></div>
+                  <div><span className="text-muted-foreground">TBRs:</span> <strong>{selectedDisputeRide.tbrCount}</strong></div>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="dispute-type" className="text-xs font-bold">Tipo de Erro</Label>
+                  <Select value={disputeType} onValueChange={setDisputeType}>
+                    <SelectTrigger id="dispute-type" className="h-9 text-xs">
+                      <SelectValue placeholder="Selecione o tipo de erro" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="package_count" className="text-xs">Erro de quantidade de pacotes</SelectItem>
+                      <SelectItem value="login_error" className="text-xs">Erro de login</SelectItem>
+                      <SelectItem value="value_error" className="text-xs">Erro de valor</SelectItem>
+                      <SelectItem value="other" className="text-xs">Outro erro</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="observation" className="text-xs font-bold">Observação / Comentário</Label>
+                  <Textarea
+                    id="observation"
+                    placeholder="Descreva detalhadamente o erro..."
+                    className="min-h-[80px] text-xs resize-none"
+                    value={disputeObservation}
+                    onChange={(e) => setDisputeObservation(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="gap-2 sm:gap-0 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setSelectedDisputeRide(null)} className="text-xs">
+              Cancelar
+            </Button>
+            <Button 
+              size="sm" 
+              onClick={handleSubmitDispute} 
+              disabled={isSubmittingDispute || !disputeType}
+              className="text-xs gap-2"
+            >
+              {isSubmittingDispute ? <Loader2 className="h-3 w-3 animate-spin" /> : <TrendingUp className="h-3 w-3" />}
+              Enviar Contestação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

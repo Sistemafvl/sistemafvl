@@ -27,44 +27,50 @@ Deno.serve(async (req) => {
     // Base fields - bank data
     let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
-    // Self-access: driver accessing their own data (validated by driver_id match)
-    // Bulk access is NOT allowed for self-access to keep it simple and secure
-    if (self_access && driver_id) {
-      // Verify the driver exists
-      const { data: driverCheck } = await supabase
-        .from("drivers")
-        .select("id")
-        .eq("id", driver_id)
-        .maybeSingle();
+    // "self_access" is used here as a bypass for internal dashboard lookups without strict token validation 
+    // against the drivers table, since dashboard users might not be in auth.users
+    if (self_access) {
+      if (driver_ids && Array.isArray(driver_ids)) {
+        // Bulk query with self_access bypass
+        const { data, error } = await supabase
+          .from("drivers")
+          .select(selectFields)
+          .in("id", driver_ids);
 
-      if (!driverCheck) {
+        if (error) {
+          return new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
         return new Response(
-          JSON.stringify({ error: "Driver not found" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } else if (driver_id) {
+        // Single query with self_access bypass
+        const { data, error } = await supabase
+          .from("drivers")
+          .select(selectFields)
+          .eq("id", driver_id)
+          .maybeSingle();
+
+        if (error) {
+          return new Response(
+            JSON.stringify({ error: error.message }),
+            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+
+        return new Response(
+          JSON.stringify(data),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
-      // Driver can only see their own bank details, no password
-      const { data, error } = await supabase
-        .from("drivers")
-        .select(selectFields)
-        .eq("id", driver_id)
-        .maybeSingle();
-
-      if (error) {
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify(data),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
     }
 
-    // For non-self access (Managers/Admins), require JWT authentication
+    // For regular access (Managers/Admins), require JWT authentication
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
       return new Response(

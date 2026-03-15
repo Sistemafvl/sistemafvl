@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap, Crown, PieChart, Building2, Users2, Receipt, ShieldAlert, LifeBuoy } from "lucide-react";
+import { Truck, BarChart3, Settings, LogOut, UserCog, Eye, EyeOff, ClipboardCheck, Users, LayoutDashboard, AlertTriangle, RotateCcw, PackageX, Activity, MessageSquare, FileWarning, DollarSign, RefreshCw, UserCheck, PackageSearch, Zap, Crown, PieChart, Building2, Users2, Receipt, ShieldAlert, LifeBuoy, Scale } from "lucide-react";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { NavLink } from "@/components/NavLink";
 import { useAuthStore } from "@/stores/auth-store";
@@ -58,6 +58,7 @@ const menuItems = [
   { title: "Relatório Reversa", url: "/dashboard/reversa", icon: PackageSearch },
   { title: "Socorrendo", url: "/dashboard/socorrendo", icon: LifeBuoy },
   { title: "Reativo", url: "/dashboard/reativo", icon: Zap },
+  { title: "Contestações", url: "/dashboard/contestacoes", icon: Scale },
 ];
 
 const managerMenuItems = [
@@ -101,7 +102,9 @@ const DashboardSidebar = () => {
   const [conferentes, setConferentes] = useState<ConferenteOption[]>([]);
   const [conferenteSelectOpen, setConferenteSelectOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingDisputesCount, setPendingDisputesCount] = useState(0);
   const pendingFetchRef = useRef(false);
+  const pendingDisputesFetchRef = useRef(false);
 
   const isDirector = unitSession?.sessionType === "matriz";
   const showManagerMenu = isDirector || !!managerSession;
@@ -136,6 +139,37 @@ const DashboardSidebar = () => {
         table: "driver_rides",
         filter: `unit_id=eq.${unitSession.id}`,
       }, () => { fetchPending(); })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [unitSession?.id]);
+
+  // Fetch pending disputes count
+  useEffect(() => {
+    if (!unitSession?.id) return;
+    
+    const fetchPendingDisputes = async () => {
+      if (pendingDisputesFetchRef.current) return;
+      pendingDisputesFetchRef.current = true;
+      const { count } = await supabase
+        .from("ride_disputes" as any)
+        .select("id", { count: "exact", head: true })
+        .eq("unit_id", unitSession.id)
+        .eq("status", "pending");
+      setPendingDisputesCount(count ?? 0);
+      pendingDisputesFetchRef.current = false;
+    };
+
+    fetchPendingDisputes();
+
+    const channel = supabase
+      .channel(`pending-disputes-count-${unitSession.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "ride_disputes" as any,
+        filter: `unit_id=eq.${unitSession.id}`,
+      }, () => { fetchPendingDisputes(); })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };
@@ -279,6 +313,11 @@ const DashboardSidebar = () => {
                         {item.url === "/dashboard/conferencia" && pendingCount > 0 && (
                           <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
                             {pendingCount}
+                          </Badge>
+                        )}
+                        {item.url === "/dashboard/contestacoes" && pendingDisputesCount > 0 && (
+                          <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
+                            {pendingDisputesCount}
                           </Badge>
                         )}
                       </NavLink>
