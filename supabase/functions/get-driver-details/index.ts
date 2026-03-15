@@ -27,7 +27,6 @@ Deno.serve(async (req) => {
     // Base fields - bank data
     let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
-<<<<<<< HEAD
     // "self_access" is used here as a bypass for internal dashboard lookups without strict token validation 
     // against the drivers table, since dashboard users might not be in auth.users
     if (self_access) {
@@ -37,17 +36,6 @@ Deno.serve(async (req) => {
           .from("drivers")
           .select(selectFields)
           .in("id", driver_ids);
-=======
-    // Self-access: driver/unit accessing data without JWT auth
-    if (self_access) {
-      if (driver_id) {
-        // Single driver access
-        const { data, error } = await supabase
-          .from("drivers")
-          .select(selectFields)
-          .eq("id", driver_id)
-          .maybeSingle();
->>>>>>> 735ad088aaf771a023faf3328c4eb73bb241d954
 
         if (error) {
           return new Response(
@@ -55,20 +43,10 @@ Deno.serve(async (req) => {
             { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-<<<<<<< HEAD
-=======
-        if (!data) {
-          return new Response(
-            JSON.stringify({ error: "Driver not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
->>>>>>> 735ad088aaf771a023faf3328c4eb73bb241d954
 
         return new Response(
           JSON.stringify(data),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-<<<<<<< HEAD
         );
       } else if (driver_id) {
         // Single query with self_access bypass
@@ -85,26 +63,10 @@ Deno.serve(async (req) => {
           );
         }
 
-        return new Response(
-          JSON.stringify(data),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-=======
-        );
-      }
-
-      if (driver_ids && Array.isArray(driver_ids)) {
-        // Bulk access (bank data only, no password)
-        const { data, error } = await supabase
-          .from("drivers")
-          .select(selectFields)
-          .in("id", driver_ids);
-
-        if (error) {
+        if (!data) {
           return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            JSON.stringify({ error: "Driver not found" }),
+            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
 
@@ -118,7 +80,6 @@ Deno.serve(async (req) => {
         JSON.stringify({ error: "Missing driver_id or driver_ids for self_access" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
->>>>>>> 735ad088aaf771a023faf3328c4eb73bb241d954
     }
 
     // For regular access (Managers/Admins), require JWT authentication

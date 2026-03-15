@@ -400,7 +400,7 @@ const RelatoriosPage = () => {
     const rideIds = rides.map(r => r.id);
 
     const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes] = await Promise.all([
+    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes, dnrRes, reativoRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
         (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
@@ -420,7 +420,20 @@ const RelatoriosPage = () => {
       supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
       supabase.from("driver_fixed_values" as any).select("driver_id, target_date, fixed_value").eq("unit_id", unitId!)
         .gte("target_date", format(startDate, "yyyy-MM-dd")).lte("target_date", format(endDate, "yyyy-MM-dd")),
+      supabase.from("dnr_entries").select("id, driver_id, dnr_value")
+        .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
+        .is("reported_in_payroll_id" as any, null)
+        .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString()),
+      supabase.from("reativo_entries")
+        .select("id, driver_id, reativo_value, activated_at, tbr_code, observations")
+        .eq("unit_id", unitId!)
+        .eq("status", "active")
+        .gte("activated_at", startDate.toISOString())
+        .lte("activated_at", endDate.toISOString()),
     ]);
+
+    const dnrData = dnrRes.data ?? [];
+    const reativoData = reativoRes.data ?? [];
     const tbrsData = await fetchAllRowsWithIn<{ ride_id: string; code: string }>(
       (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id, code").in("ride_id", ids).order("id").range(from, to),
       rideIds
@@ -443,8 +456,6 @@ const RelatoriosPage = () => {
     const driverIdsToFetch = Array.from(allRelevantDriverIds);
     if (driverIdsToFetch.length > 0) {
       try {
-<<<<<<< HEAD
-        console.log(`Fetching PIX keys for ${driverIdsToFetch.length} drivers...`);
         const { data: pixData, error: pixError } = await supabase.functions.invoke("get-driver-details", { 
           body: { driver_ids: driverIdsToFetch, self_access: true } 
         });
@@ -452,11 +463,6 @@ const RelatoriosPage = () => {
         if (pixError) {
           console.error("PIX fetch error from edge function:", pixError);
         } else if (Array.isArray(pixData)) {
-          console.log(`Successfully fetched ${pixData.length} PIX detail entries.`);
-=======
-        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch, self_access: true } });
-        if (Array.isArray(pixData)) {
->>>>>>> 735ad088aaf771a023faf3328c4eb73bb241d954
           pixData.forEach((d: any) => {
             // Ensure we only set valid strings in the map
             if (d.id && d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
@@ -479,10 +485,6 @@ const RelatoriosPage = () => {
     const fixedValueMap = new Map<string, number>();
     ((fixedValuesRes as any)?.data ?? []).forEach((fv: any) => { fixedValueMap.set(`${fv.driver_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
-    const { data: dnrData } = await supabase.from("dnr_entries").select("id, driver_id, dnr_value")
-      .eq("unit_id", unitId!).eq("status", "closed").eq("discounted", true)
-      .is("reported_in_payroll_id" as any, null)
-      .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
     const dnrByDriver = new Map<string, number>();
     (dnrData ?? []).forEach((d: any) => { 
       if (d.driver_id) {
@@ -490,13 +492,6 @@ const RelatoriosPage = () => {
       }
     });
 
-    // Fetch reativo entries for the period
-    const { data: reativoData } = await supabase.from("reativo_entries")
-      .select("id, driver_id, reativo_value, activated_at, tbr_code, observations")
-      .eq("unit_id", unitId!)
-      .eq("status", "active")
-      .gte("activated_at", startDate.toISOString())
-      .lte("activated_at", endDate.toISOString());
     const reativoByDriver = new Map<string, number>();
     (reativoData ?? []).forEach((r: any) => {
       if (r.driver_id) {
