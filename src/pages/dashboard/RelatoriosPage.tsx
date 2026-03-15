@@ -441,7 +441,7 @@ const RelatoriosPage = () => {
     const driverIdsToFetch = Array.from(allRelevantDriverIds);
     if (driverIdsToFetch.length > 0) {
       try {
-        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch } });
+        const { data: pixData } = await supabase.functions.invoke("get-driver-details", { body: { driver_ids: driverIdsToFetch, self_access: true } });
         if (Array.isArray(pixData)) {
           pixData.forEach((d: any) => {
             if (d.id && d.pix_key) pixByDriver.set(d.id, d.pix_key);
