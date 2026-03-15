@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,9 @@ interface ActiveRide {
   password: string | null;
   sequence_number: number | null;
   loading_status: string | null;
-  queue_entry_id: string | null;
+  queue_entry_id?: string | null;
+  completed_at?: string | null;
+  unit_id?: string;
 }
 
 const formatElapsed = (totalSeconds: number) => {
