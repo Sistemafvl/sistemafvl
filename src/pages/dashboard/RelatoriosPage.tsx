@@ -42,6 +42,7 @@ const RelatoriosPage = () => {
   const [savingPayroll, setSavingPayroll] = useState(false);
   const [formatChoiceOpen, setFormatChoiceOpen] = useState(false);
   const [formatChoiceAction, setFormatChoiceAction] = useState<"espelho" | "gerar" | null>(null);
+  const [isProcessingModal, setIsProcessingModal] = useState(false);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -465,7 +466,7 @@ const RelatoriosPage = () => {
 
     const bonusEntries = (bonusRes.data ?? []).map((b: any) => ({
       id: b.id || Math.random().toString(),
-      date: b.period_start,
+      date: b.period_start.split("T")[0],
       driverId: b.driver_id,
       driverName: driverMap.get(b.driver_id)?.name ?? "Motorista",
       value: Number(b.amount),
@@ -475,7 +476,7 @@ const RelatoriosPage = () => {
 
     const reativoEntries = (reativoData ?? []).map((r: any) => ({
       id: r.id || Math.random().toString(),
-      date: r.activated_at,
+      date: r.activated_at?.split("T")[0] || format(new Date(), "yyyy-MM-dd"),
       driverId: r.driver_id,
       driverName: driverMap.get(r.driver_id)?.name ?? "Motorista",
       value: Number(r.reativo_value),
@@ -891,24 +892,32 @@ const RelatoriosPage = () => {
       {/* Format Choice Modal */}
       <FormatChoiceModal
         open={formatChoiceOpen}
-        onClose={() => { setFormatChoiceOpen(false); setFormatChoiceAction(null); }}
+        onClose={() => { if (!isProcessingModal) { setFormatChoiceOpen(false); setFormatChoiceAction(null); } }}
+        loading={isProcessingModal}
         onChoose={async (fmt) => {
-          setFormatChoiceOpen(false);
-          if (fmt === "excel" && payrollData) {
-            generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
-            toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
-            if (formatChoiceAction === "gerar") {
-              // Still save to DB + mark DNRs for "gerar" mode
-              await handleConfirmAndGenerateDB();
+          setIsProcessingModal(true);
+          try {
+            if (fmt === "excel" && payrollData) {
+              generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
+              toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
+              if (formatChoiceAction === "gerar") {
+                await handleConfirmAndGenerateDB();
+              }
+            } else {
+              if (formatChoiceAction === "espelho") {
+                await handleDownloadPDF();
+              } else if (formatChoiceAction === "gerar") {
+                await handleConfirmAndGenerate();
+              }
             }
-          } else {
-            if (formatChoiceAction === "espelho") {
-              await handleDownloadPDF();
-            } else if (formatChoiceAction === "gerar") {
-              await handleConfirmAndGenerate();
-            }
+          } catch (err) {
+            console.error(err);
+            toast({ title: "Erro", description: "Falha ao gerar o arquivo.", variant: "destructive" });
+          } finally {
+            setIsProcessingModal(false);
+            setFormatChoiceOpen(false);
+            setFormatChoiceAction(null);
           }
-          setFormatChoiceAction(null);
         }}
         title={formatChoiceAction === "gerar" ? "Formato da Folha" : "Formato do Espelho"}
       />

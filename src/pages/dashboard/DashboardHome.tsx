@@ -15,7 +15,6 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn, isValidTbrCode } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
-import SystemUpdates from "@/components/dashboard/SystemUpdates";
 import InfoButton from "@/components/dashboard/InfoButton";
 
 const MAX_TBR_LENGTH = 15;
@@ -603,8 +602,6 @@ const DashboardHome = () => {
       {/* Métricas e Gráficos BI */}
       <DashboardMetrics unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
       <DashboardInsights unitId={unitSession.id} startDate={filterStart} endDate={filterEnd} />
-
-      <SystemUpdates />
 
       {showTbrModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">

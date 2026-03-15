@@ -394,7 +394,7 @@ export function generatePayrollExcel(
   wsData.push([]);
 
   // ── SECTION 5: EXTRATO DE ADICIONAIS ──
-  const allAdditionals = data.flatMap(d => d.additionalEntries || []).sort((a, b) => new Date(a.date + "T12:00:00").getTime() - new Date(b.date + "T12:00:00").getTime());
+  const allAdditionals = data.flatMap(d => d.additionalEntries || []).sort((a, b) => new Date(a.date.split("T")[0] + "T12:00:00").getTime() - new Date(b.date.split("T")[0] + "T12:00:00").getTime());
   
   if (allAdditionals.length > 0) {
     rowTracker.adicionaisHeaderRow = wsData.length;
@@ -404,7 +404,7 @@ export function generatePayrollExcel(
     allAdditionals.forEach((add) => {
       rowTracker.adicionaisRows.push(wsData.length);
       wsData.push([
-        format(new Date(add.date + "T12:00:00"), "dd/MM/yyyy"),
+        format(new Date(add.date.split("T")[0] + "T12:00:00"), "dd/MM/yyyy"),
         add.driverName,
         add.description,
         add.value
