@@ -57,6 +57,26 @@ const ContestacoesPage = () => {
   useEffect(() => {
     if (!unitSession?.id) return;
     fetchSummaries();
+
+    // Subscription realtime: atualiza os cards quando nova contestação chegar
+    const channel = supabase
+      .channel(`contestacoes-summary-${unitSession.id}`)
+      .on("postgres_changes", {
+        event: "*",
+        schema: "public",
+        table: "ride_disputes" as any,
+        filter: `unit_id=eq.${unitSession.id}`,
+      }, () => {
+        fetchSummaries();
+        // Se estiver na view de detalhes, recarrega os detalhes também
+        if (selectedConferenteId) {
+          fetchDisputesForConferente(selectedConferenteId);
+        }
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unitSession?.id]);
 
   const fetchSummaries = async () => {
@@ -65,38 +85,46 @@ const ContestacoesPage = () => {
       // Fetch all disputes for the unit
       const { data: allDisputes, error } = await supabase
         .from("ride_disputes" as any)
-        .select(`
-          id, 
-          status,
-          conferente_id,
-          conferente:conferente_id(id, name)
-        `)
+        .select("id, status, conferente_id")
         .eq("unit_id", unitSession!.id);
 
       if (error) throw error;
 
-      // Group by conferente
-      const summaryMap = new Map<string, ConferenteSummary>();
-      
-      // Also fetch all unit conferentes to show empty ones if needed
+      // Fetch all unit conferentes
       const { data: allConferentes } = await supabase
         .from("user_profiles")
         .select("id, name")
         .eq("unit_id", unitSession!.id)
         .eq("active", true);
 
+      const summaryMap = new Map<string, ConferenteSummary>();
+
+      // Initialize all conferentes with 0 pending
       (allConferentes || []).forEach(c => {
         summaryMap.set(c.id, { id: c.id, name: c.name, pendingCount: 0 });
       });
 
+      // Add a special entry for disputes without conferente
+      const noConferenteId = "no-conferente";
+      summaryMap.set(noConferenteId, { id: noConferenteId, name: "Sem Conferente", pendingCount: 0 });
+
       (allDisputes || []).forEach((d: any) => {
-        if (d.conferente_id && d.status === "pending") {
-          const s = summaryMap.get(d.conferente_id);
+        if (d.status === "pending") {
+          const key = d.conferente_id || noConferenteId;
+          const s = summaryMap.get(key);
           if (s) {
             s.pendingCount += 1;
+          } else {
+            // conferente_id exists but is not in our map (inactive/deleted) — create entry
+            summaryMap.set(key, { id: key, name: "Conferente Inativo", pendingCount: 1 });
           }
         }
       });
+
+      // Only show "Sem Conferente" if it has pending disputes
+      if (summaryMap.get(noConferenteId)?.pendingCount === 0) {
+        summaryMap.delete(noConferenteId);
+      }
 
       setSummaries(Array.from(summaryMap.values()).sort((a, b) => b.pendingCount - a.pendingCount));
     } catch (err: any) {
@@ -110,12 +138,16 @@ const ContestacoesPage = () => {
     setLoading(true);
     try {
       // 1. Fetch disputes
-      const { data, error } = await supabase
+      const isNoConferente = conferenteId === "no-conferente";
+      const disputeQuery = supabase
         .from("ride_disputes" as any)
         .select("*")
         .eq("unit_id", unitSession!.id)
-        .eq("conferente_id", conferenteId)
         .order("created_at", { ascending: false });
+
+      const { data, error } = isNoConferente
+        ? await disputeQuery.is("conferente_id", null)
+        : await disputeQuery.eq("conferente_id", conferenteId);
 
       if (error) throw error;
 
@@ -132,7 +164,7 @@ const ContestacoesPage = () => {
         rideIds.length > 0
           ? supabase.from("driver_rides").select("id, completed_at, login, route, password").in("id", rideIds)
           : Promise.resolve({ data: [] }),
-        conferenteId
+        conferenteId && !isNoConferente
           ? supabase.from("user_profiles").select("id, name").eq("id", conferenteId).maybeSingle()
           : Promise.resolve({ data: null }),
         rideIds.length > 0
@@ -152,7 +184,7 @@ const ContestacoesPage = () => {
       const formatted = disputeList.map((d: any) => ({
         ...d,
         driver_name: driverMap.get(d.driver_id) || "Desconhecido",
-        conferente_name: (confsRes as any).data?.name || "Sem conferente",
+        conferente_name: isNoConferente ? "Sem conferente" : ((confsRes as any).data?.name || "Sem conferente"),
         ride_data: rideMap.has(d.ride_id)
           ? { ...rideMap.get(d.ride_id), tbrCount: tbrCountMap.get(d.ride_id) ?? 0 }
           : null,
