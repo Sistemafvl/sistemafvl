@@ -769,8 +769,23 @@ export function generatePayrollExcel(
   // ══════════════ CREATE INDIVIDUAL DRIVER SHEETS ══════════════
   const allDrivers = [...data, ...minPkgPayrollData.filter(mp => !data.some(d => d.driver.id === mp.driver.id))];
   
+  const usedSheetNames = new Set<string>();
+  usedSheetNames.add("fechamento");
+  usedSheetNames.add("indicadores");
+  
   allDrivers.forEach((d) => {
-    const sheetName = sanitizeSheetName(d.driver.name || "Motorista");
+    let baseName = sanitizeSheetName(d.driver.name || "Motorista");
+    if (!baseName) baseName = "Motorista";
+    
+    let sheetName = baseName;
+    let counter = 1;
+    while (usedSheetNames.has(sheetName.toLowerCase())) {
+      const suffix = ` (${counter})`;
+      sheetName = `${baseName.substring(0, 31 - suffix.length)}${suffix}`;
+      counter++;
+    }
+    usedSheetNames.add(sheetName.toLowerCase());
+    
     const driverWsData: (string | number)[][] = [];
     
     driverWsData.push(["RESUMO DO MOTORISTA"]);
@@ -943,11 +958,9 @@ export function generatePayrollExcel(
     applyCurrencyFormat(driverWs, 1, 6, 6);
     applyCurrencyFormat(driverWs, 1, finStartRow + 1, mediaPackRow - 1);
     
+    
     XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
   });
-
-  // Create Summary Indicators Sheet
-  createIndicadoresSheet(wb, data);
 
   // ══════════════ SAVE FILE ══════════════
   const fileName = `folha_pagamento_${unitName.replace(/\s+/g, "_")}_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.xlsx`;
