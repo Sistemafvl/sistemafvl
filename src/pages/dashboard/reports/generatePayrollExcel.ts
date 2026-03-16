@@ -215,7 +215,7 @@ export function generatePayrollExcel(
   };
 
   // ── SECTION 1: HEADER ──
-  wsData.push(["MOTORISTAS FIXOS POR PACOTES"]); // row 0
+  wsData.push(["MOTORISTAS FIXOS POR PACOTES - V2"]); // row 0
   wsData.push([]); // row 1
   wsData.push(["DADOS FINANCEIROS"]); // row 2
   wsData.push([
