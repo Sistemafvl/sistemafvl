@@ -215,7 +215,8 @@ export function generatePayrollExcel(
   };
 
   // ── SECTION 1: HEADER ──
-  wsData.push(["MOTORISTAS FIXOS POR PACOTES - V2"]); // row 0
+  wsData.push(["MOTORISTAS FIXOS POR PACOTES - V4_FINAL_FORMULA"]); // row 0
+  console.log("Executing generatePayrollExcel V4_FINAL_FORMULA", { numDrivers: data.length, numDates: allDates.length });
   wsData.push([]); // row 1
   wsData.push(["DADOS FINANCEIROS"]); // row 2
   wsData.push([
@@ -467,7 +468,6 @@ export function generatePayrollExcel(
       COL_TOTAL,
       `SUM(${dateStartCol}${excelRow}:${dateEndCol}${excelRow})`,
     );
-    setCellFormula(ws, r, COL_PACKAGES, `${colLetter(COL_TOTAL)}${excelRow}`);
     const packagesCell = `${colLetter(COL_PACKAGES)}${excelRow}`;
     const valueCell = `${colLetter(COL_VALUE)}${excelRow}`;
     const discountsCell = `${colLetter(COL_DISCOUNTS)}${excelRow}`;
@@ -535,7 +535,6 @@ export function generatePayrollExcel(
       COL_TOTAL,
       `SUM(${dateStartCol}${excelRow}:${dateEndCol}${excelRow})`,
     );
-    setCellFormula(ws, r, COL_PACKAGES, `${colLetter(COL_TOTAL)}${excelRow}`);
     const packagesCell = `${colLetter(COL_PACKAGES)}${excelRow}`;
     const valueCell = `${colLetter(COL_VALUE)}${excelRow}`;
     const discountsCell = `${colLetter(COL_DISCOUNTS)}${excelRow}`;
@@ -1010,7 +1009,7 @@ export function generatePayrollExcel(
     driverWsData.push(["RESUMO DO MOTORISTA"]);
     driverWsData.push([]);
     driverWsData.push(["Nome", d.driver.name]);
-    driverWsData.push(["CPF", formatCpfBR(d.driver.cpf)]);
+    driverWsData.push([]); // Removed CPF row
     const tbrVal = d.tbrValueUsed ?? 0;
     driverWsData.push(["Veículo", tbrVal <= 2.5 ? "MOTO" : "CARRO"]);
     driverWsData.push(["Chave PIX", d.driver.pixKey ?? ""]);

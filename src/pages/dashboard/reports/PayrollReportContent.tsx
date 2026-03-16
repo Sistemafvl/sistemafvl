@@ -314,7 +314,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 </div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: "16px", fontSize: "10px" }}>
                   <div><strong>Nome:</strong> {d.driver?.name || "Motorista"}</div>
-                  <div><strong>CPF:</strong> {d.driver?.cpf ? formatCpf(d.driver.cpf) : "—"}</div>
+                  {/* CPF removed as per request */}
                   <div><strong>Veículo:</strong> {getVehicleType(tbrVal)}</div>
                   <div><strong>Placa:</strong> {d.driver?.car_plate || "—"}</div>
                   <div><strong>Modelo:</strong> {d.driver?.car_model || "—"}{d.driver?.car_color ? ` ${d.driver.car_color}` : ""}</div>
