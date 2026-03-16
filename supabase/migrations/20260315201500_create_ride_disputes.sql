@@ -17,17 +17,17 @@ CREATE TABLE IF NOT EXISTS public.ride_disputes (
 -- Enable RLS
 ALTER TABLE public.ride_disputes ENABLE ROW LEVEL SECURITY;
 
--- Policies
-CREATE POLICY "Drivers can insert their own disputes" ON public.ride_disputes
-    FOR INSERT TO authenticated
-    WITH CHECK (auth.uid() = driver_id OR TRUE); -- In this system, drivers might use different auth or bypass. Let's stick to true for compatibility with current codebase pattern.
+-- Policies (sem restrição de role para compatibilidade com o sistema de auth customizado)
+CREATE POLICY "Anyone can insert disputes" ON public.ride_disputes
+    FOR INSERT
+    WITH CHECK (true);
 
-CREATE POLICY "Anyone authenticated can read disputes" ON public.ride_disputes
-    FOR SELECT TO authenticated
+CREATE POLICY "Anyone can read disputes" ON public.ride_disputes
+    FOR SELECT
     USING (true);
 
-CREATE POLICY "Anyone authenticated can update disputes" ON public.ride_disputes
-    FOR UPDATE TO authenticated
+CREATE POLICY "Anyone can update disputes" ON public.ride_disputes
+    FOR UPDATE
     USING (true)
     WITH CHECK (true);
 
