@@ -193,8 +193,8 @@ export function generatePayrollExcel(
     titleRow: 0,
     dataFinanceiraRow: 2,
     metaRow: 3,
-    headerRow: 4,
-    dataStartRow: 5,
+    headerRow: 6,
+    dataStartRow: 7,
     dataEndRow: 0,
     totalRow: 0,
     minTitleRow: -1,
@@ -215,20 +215,13 @@ export function generatePayrollExcel(
   };
 
   // ── SECTION 1: HEADER ──
-  wsData.push(["MOTORISTAS FIXOS POR PACOTES - V4_FINAL_FORMULA"]); // row 0
-  console.log("Executing generatePayrollExcel V4_FINAL_FORMULA", { numDrivers: data.length, numDates: allDates.length });
+  wsData.push(["MOTORISTAS FIXOS POR PACOTES"]); // row 0
   wsData.push([]); // row 1
   wsData.push(["DADOS FINANCEIROS"]); // row 2
-  wsData.push([
-    `Unidade: ${unitName}`,
-    "",
-    "",
-    `Período: ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`,
-    "",
-    "",
-    `Gerado por: ${generatedBy ?? "Sistema"}`,
-  ]); // row 3
-  wsData.push(headers); // row 4
+  wsData.push([`Unidade: ${unitName}`]); // row 3
+  wsData.push([`Período: ${format(startDate, "dd/MM/yyyy")} a ${format(endDate, "dd/MM/yyyy")}`]); // row 4
+  wsData.push([`Gerado por: ${generatedBy ?? "Sistema"}`]); // row 5
+  wsData.push(headers); // row 6
 
   // ── SECTION 1: MAIN DRIVER ROWS ──
   data.forEach((d) => {
@@ -712,10 +705,12 @@ export function generatePayrollExcel(
   });
   mergeRow(ws, rowTracker.dataFinanceiraRow, 0, lastCol);
 
-  applyStyleToRow(ws, rowTracker.metaRow, 0, lastCol, {
-    font: { bold: true, sz: 10 },
-    alignment: leftAlign,
-  });
+  for (let r = rowTracker.metaRow; r < rowTracker.headerRow; r++) {
+    applyStyleToRow(ws, r, 0, lastCol, {
+      font: { bold: true, sz: 10 },
+      alignment: leftAlign,
+    });
+  }
 
   applyStyleToRow(ws, rowTracker.headerRow, 0, lastCol, {
     font: boldFont,
