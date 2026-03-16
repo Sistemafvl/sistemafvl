@@ -109,25 +109,53 @@ const ContestacoesPage = () => {
   const fetchDisputesForConferente = async (conferenteId: string) => {
     setLoading(true);
     try {
+      // 1. Fetch disputes
       const { data, error } = await supabase
         .from("ride_disputes" as any)
-        .select(`
-          *,
-          driver:driver_id(name),
-          conferente:conferente_id(name),
-          ride:ride_id(completed_at, login, route, password, tbrCount:ride_tbrs(count))
-        `)
+        .select("*")
         .eq("unit_id", unitSession!.id)
         .eq("conferente_id", conferenteId)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
 
-      const formatted = (data || []).map((d: any) => ({
+      const disputeList = data || [];
+
+      // 2. Fetch driver names
+      const driverIds = [...new Set(disputeList.map((d: any) => d.driver_id).filter(Boolean))];
+      const rideIds = [...new Set(disputeList.map((d: any) => d.ride_id).filter(Boolean))];
+
+      const [driversRes, ridesRes, confsRes, tbrCountsRes] = await Promise.all([
+        driverIds.length > 0
+          ? supabase.from("drivers_public").select("id, name").in("id", driverIds)
+          : Promise.resolve({ data: [] }),
+        rideIds.length > 0
+          ? supabase.from("driver_rides").select("id, completed_at, login, route, password").in("id", rideIds)
+          : Promise.resolve({ data: [] }),
+        conferenteId
+          ? supabase.from("user_profiles").select("id, name").eq("id", conferenteId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        rideIds.length > 0
+          ? supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds)
+          : Promise.resolve({ data: [] }),
+      ]);
+
+      const driverMap = new Map((driversRes.data ?? []).map((d: any) => [d.id, d.name]));
+      const rideMap = new Map((ridesRes.data ?? []).map((r: any) => [r.id, r]));
+
+      // Count TBRs per ride
+      const tbrCountMap = new Map<string, number>();
+      (tbrCountsRes.data ?? []).forEach((t: any) => {
+        tbrCountMap.set(t.ride_id, (tbrCountMap.get(t.ride_id) ?? 0) + 1);
+      });
+
+      const formatted = disputeList.map((d: any) => ({
         ...d,
-        driver_name: d.driver?.name || "Desconhecido",
-        conferente_name: d.conferente?.name || "Sem conferente",
-        ride_data: d.ride
+        driver_name: driverMap.get(d.driver_id) || "Desconhecido",
+        conferente_name: (confsRes as any).data?.name || "Sem conferente",
+        ride_data: rideMap.has(d.ride_id)
+          ? { ...rideMap.get(d.ride_id), tbrCount: tbrCountMap.get(d.ride_id) ?? 0 }
+          : null,
       }));
 
       setDisputes(formatted);
@@ -316,10 +344,10 @@ const ContestacoesPage = () => {
                           Dados da Corrida (Histórico)
                         </p>
                         <div className="grid grid-cols-2 gap-x-4 gap-y-2 p-3 rounded-lg bg-primary/5 border border-primary/10 text-xs">
-                          <div><span className="text-muted-foreground">Original:</span> <strong>{d.ride_data ? format(new Date(d.ride_data.completed_at), "dd/MM/yyyy HH:mm") : "—"}</strong></div>
+                          <div><span className="text-muted-foreground">Original:</span> <strong>{d.ride_data?.completed_at ? (() => { try { return format(new Date(d.ride_data.completed_at), "dd/MM/yyyy HH:mm"); } catch { return "—"; } })() : "—"}</strong></div>
                           <div><span className="text-muted-foreground">Login:</span> <strong>{d.ride_data?.login || "—"}</strong></div>
                           <div><span className="text-muted-foreground">Rota:</span> <strong>{d.ride_data?.route || "—"}</strong></div>
-                          <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.ride_data?.tbrCount || 0}</strong></div>
+                          <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.ride_data?.tbrCount ?? 0}</strong></div>
                           {d.ride_data?.password && <div><span className="text-muted-foreground">Senha:</span> <strong>{d.ride_data.password}</strong></div>}
                         </div>
                     </div>
