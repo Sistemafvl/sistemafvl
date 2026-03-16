@@ -1759,13 +1759,13 @@ const ConferenciaCarregamentoPage = () => {
     setDriverModalOpen(true);
     setDriverModalLoading(true);
     setDriverModalData(null);
-    const { data: driver } = await supabase.from("drivers_public").select("*").eq("id", driverId).maybeSingle();
-    const { count: ridesCount } = await supabase.from("driver_rides").select("*", { count: "exact", head: true }).eq("driver_id", driverId);
+    const { data: driver } = await supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color, cpf, whatsapp").eq("id", driverId).maybeSingle();
+    const { count: ridesCount } = await supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("driver_id", driverId);
     const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
     let tbrsCount = 0;
     if (driverRides && driverRides.length > 0) {
       const rIds = driverRides.map(r => r.id);
-      const { count } = await supabase.from("ride_tbrs").select("*", { count: "exact", head: true }).in("ride_id", rIds);
+      const { count } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rIds);
       tbrsCount = count ?? 0;
     }
     setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
@@ -1788,6 +1788,14 @@ const ConferenciaCarregamentoPage = () => {
     fetchPisoCodes();
   }, [unitId]);
 
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const debouncedRealtimeFetch = useCallback(() => {
+    if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+    realtimeDebounceRef.current = setTimeout(() => {
+      fetchRides();
+    }, 20000); // 20s debounce
+  }, [fetchRides]);
+
   // Subscribe to driver_rides and ride_tbrs changes for REALTIME KPI UPDATES
   useEffect(() => {
     if (!unitId) return;
@@ -1795,20 +1803,23 @@ const ConferenciaCarregamentoPage = () => {
     const channel = supabase
       .channel("carregamento-realtime-" + unitId)
       .on("postgres_changes", { event: "*", schema: "public", table: "driver_rides", filter: `unit_id=eq.${unitId}` }, () => {
-        fetchRides();
+        debouncedRealtimeFetch();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "ride_tbrs" }, (payload: any) => {
         // Since ride_tbrs doesn't have unit_id directly, we check if the ride_id belongs to the current unit's rides
         if (payload.new && currentRideIdsRef.current.includes(payload.new.ride_id)) {
-          fetchRides();
+          debouncedRealtimeFetch();
         } else if (payload.old && currentRideIdsRef.current.includes(payload.old.ride_id)) {
-          fetchRides();
+          debouncedRealtimeFetch();
         }
       })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
-  }, [unitId, fetchRides]);
+    return () => {
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [unitId, debouncedRealtimeFetch]);
 
   // Cycle logic (same as CiclosPage) - Realtime as it depends on displayRides/displayTbrs
   const cycleMetrics = useMemo(() => {

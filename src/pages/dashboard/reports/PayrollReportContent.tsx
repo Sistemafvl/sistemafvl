@@ -132,13 +132,13 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <tr>
                   <th style={compactHeaderStyle({ textAlign: "left", minWidth: "100px" })}>Nome</th>
                   <th style={compactHeaderStyle({ minWidth: "40px" })}>Veíc.</th>
-                  <th style={compactHeaderStyle({ minWidth: "50px" })}>Valor</th>
                   {allDates.map((date) => (
                     <th key={date} style={compactHeaderStyle({ minWidth: "28px" })}>{formatDateBR(date)}</th>
                   ))}
                   <th style={compactHeaderStyle({ minWidth: "35px" })}>Total</th>
-                  <th style={compactHeaderStyle({ minWidth: "50px" })}>Desc.</th>
+                  <th style={compactHeaderStyle({ minWidth: "50px" })}>Valor</th>
                   <th style={compactHeaderStyle({ minWidth: "50px" })}>Adic.</th>
+                  <th style={compactHeaderStyle({ minWidth: "50px" })}>Desc.</th>
                   <th style={compactHeaderStyle({ minWidth: "60px" })}>Total R$</th>
                   <th style={compactHeaderStyle({ minWidth: "70px" })}>PIX</th>
                 </tr>
@@ -154,7 +154,6 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                         {d.driver?.name || "Motorista"}
                       </td>
                       <td style={compactCellStyle({ background: altRowBg(idx) })}>{getVehicleType(tbrVal)}</td>
-                      <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatCurrency(tbrVal)}</td>
                       {allDates.map((date) => {
                         const day = d.days.find((day) => day.date === date);
                         const val = day ? (day.completed ?? (day.tbrCount - day.returns)) : 0;
@@ -165,11 +164,12 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                         );
                       })}
                       <td style={compactCellStyle({ fontWeight: 700, background: COLORS.grayLight })}>{d.totalCompleted}</td>
-                      <td style={compactCellStyle({ background: altRowBg(idx), color: (d.dnrDiscount ?? 0) > 0 ? "#dc2626" : undefined })}>
-                        {(d.dnrDiscount ?? 0) > 0 ? `-${formatCurrency(d.dnrDiscount!)}` : "—"}
-                      </td>
+                      <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatCurrency(tbrVal)}</td>
                       <td style={compactCellStyle({ background: altRowBg(idx), color: adicional > 0 ? "#16a34a" : undefined })}>
                         {adicional > 0 ? `+${formatCurrency(adicional)}` : "—"}
+                      </td>
+                      <td style={compactCellStyle({ background: altRowBg(idx), color: (d.dnrDiscount ?? 0) > 0 ? "#dc2626" : undefined })}>
+                        {(d.dnrDiscount ?? 0) > 0 ? `-${formatCurrency(d.dnrDiscount!)}` : "—"}
                       </td>
                       <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(totalValue)}</td>
                       <td style={compactCellStyle({ textAlign: "left", fontSize: "6px", background: altRowBg(idx) })}>{d.driver.pixKey || "—"}</td>
@@ -178,7 +178,6 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 })}
                 <tr>
                   <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })} colSpan={2}>TOTAL</td>
-                  <td style={compactCellStyle({ fontWeight: 700, background: COLORS.tealLight })}></td>
                   {allDates.map((date) => {
                     const dayTotal = data.reduce((s, d) => {
                       const day = d.days.find((day) => day.date === date);
@@ -187,14 +186,15 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                     return <td key={date} style={compactCellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{dayTotal || "—"}</td>;
                   })}
                   <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{grandTotalCompleted}</td>
-                  <td style={compactCellStyle({ fontWeight: 700, background: "#fee2e2", color: "#dc2626" })}>
-                    {grandTotalDnr > 0 ? `-${formatCurrency(grandTotalDnr)}` : "—"}
-                  </td>
+                  <td style={compactCellStyle({ background: COLORS.tealLight })}></td> {/* Valor column */}
                   <td style={compactCellStyle({ fontWeight: 700, background: COLORS.green, color: "#16a34a" })}>
                     {(grandTotalBonus + grandTotalReativo) > 0 ? `+${formatCurrency(grandTotalBonus + grandTotalReativo)}` : "—"}
                   </td>
+                  <td style={compactCellStyle({ fontWeight: 700, background: "#fee2e2", color: "#dc2626" })}>
+                    {grandTotalDnr > 0 ? `-${formatCurrency(grandTotalDnr)}` : "—"}
+                  </td>
                   <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{formatCurrency(grandTotalValue)}</td>
-                  <td style={compactCellStyle({ background: COLORS.tealLight })}></td>
+                  <td style={compactCellStyle({ background: COLORS.tealLight })}></td> {/* PIX column */}
                 </tr>
               </tbody>
             </table>

@@ -61,11 +61,11 @@ const InsucessoBalloon = () => {
     fetchInsucessos();
   }, [fetchInsucessos]);
 
-  // Debounced refetch for Realtime events (15s debounce to reduce DB hits)
+  // Debounced refetch for Realtime events (30s debounce to reduce DB hits)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const debouncedFetch = useCallback(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => { fetchInsucessos(); }, 15000);
+    debounceRef.current = setTimeout(() => { fetchInsucessos(); }, 30000);
   }, [fetchInsucessos]);
 
   // Cleanup debounce on unmount

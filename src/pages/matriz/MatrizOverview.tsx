@@ -15,6 +15,8 @@ import {
 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { translateStatus } from "@/lib/status-labels";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 
 const COLORS = [
   "hsl(var(--primary))", "hsl(var(--destructive))", "hsl(var(--accent))",
@@ -29,87 +31,88 @@ const MatrizOverview = () => {
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [filterUnit, setFilterUnit] = useState("all");
 
-  const [domainUnits, setDomainUnits] = useState<{ id: string; name: string }[]>([]);
-  const [rides, setRides] = useState<any[]>([]);
-  const [tbrs, setTbrs] = useState<any[]>([]);
-  const [psEntries, setPsEntries] = useState<any[]>([]);
-  const [rtoEntries, setRtoEntries] = useState<any[]>([]);
-  const [dnrEntries, setDnrEntries] = useState<any[]>([]);
-  const [pisoEntries, setPisoEntries] = useState<any[]>([]);
-  const [reviews, setReviews] = useState<any[]>([]);
-  const [drivers, setDrivers] = useState<any[]>([]);
-  const [unitSettings, setUnitSettings] = useState<any[]>([]);
-  const [customValues, setCustomValues] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [minPackages, setMinPackages] = useState<any[]>([]);
+  const { data: domainUnits = [] } = useQuery({
+    queryKey: ["matriz-units", domainId],
+    queryFn: async () => {
+      if (!domainId) return [];
+      const { data } = await supabase.from("units_public").select("id, name").eq("domain_id", domainId).eq("active", true).order("name");
+      return (data as any[] || []).filter(u => u.name !== "MATRIZ ADMIN");
+    },
+    enabled: !!domainId,
+    staleTime: 300_000,
+  });
 
-  // Fetch domain units
-  useEffect(() => {
-    if (!domainId) return;
-    supabase.from("units_public").select("id, name").eq("domain_id", domainId).eq("active", true).order("name")
-      .then(({ data }) => { if (data) setDomainUnits(data as any); });
-  }, [domainId]);
+  const { data: overviewData, isLoading: loading } = useQuery({
+    queryKey: ["matriz-overview", filterUnit, domainUnits.map(u => u.id).join(","), dateStart, dateEnd],
+    queryFn: async () => {
+      if (!domainUnits.length) return null;
+      const unitIds = filterUnit === "all" ? domainUnits.map(u => u.id) : [filterUnit];
+      const start = startOfDay(new Date(dateStart)).toISOString();
+      const end = endOfDay(new Date(dateEnd)).toISOString();
 
-  // Fetch all data
-  useEffect(() => {
-    if (!domainUnits.length) return;
-    const unitIds = filterUnit === "all" ? domainUnits.map(u => u.id) : [filterUnit];
-    const start = startOfDay(new Date(dateStart)).toISOString();
-    const end = endOfDay(new Date(dateEnd)).toISOString();
-
-    setLoading(true);
-    import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
-      Promise.all([
+      const [ridesData, psData, rtoData, dnrData, pisoData, reviewsData, settingsData, customData, minPkgData] = await Promise.all([
         fetchAllRows<any>((from, to) => supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at, finished_at, loading_status").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("ps_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("rto_entries").select("id, unit_id, status, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, status, dnr_value, created_at, driver_name").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("piso_entries").select("id, unit_id, status, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
-        Promise.resolve([]), // drivers will be fetched after rides are loaded
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
-      ]).then(([ridesData, psData, rtoData, dnrData, pisoData, reviewsData, driversData, settingsData, customData, minPkgData]) => {
-        setRides(ridesData);
-        setPsEntries(psData);
-        setRtoEntries(rtoData);
-        setDnrEntries(dnrData);
-        setPisoEntries(pisoData);
-        setReviews(reviewsData);
-        setUnitSettings(settingsData);
-        setCustomValues(customData);
-        setMinPackages(minPkgData);
-        setLoading(false);
+      ]);
 
-        // Fetch drivers only for those with rides (instead of ALL drivers)
-        const driverIdsFromRides = [...new Set(ridesData.map((r: any) => r.driver_id))];
-        if (driverIdsFromRides.length > 0) {
-          import("@/lib/supabase-helpers").then(({ fetchAllRowsWithIn }) => {
-            fetchAllRowsWithIn<any>(
-              (ids) => (from, to) => supabase.from("drivers_public").select("id, name").in("id", ids).order("id").range(from, to),
-              driverIdsFromRides
-            ).then(data => setDrivers(data));
-          });
-        } else {
-          setDrivers([]);
-        }
+      // Fetch drivers only for those with rides
+      const driverIdsFromRides = [...new Set(ridesData.map((r: any) => r.driver_id))];
+      let driversData: any[] = [];
+      if (driverIdsFromRides.length > 0) {
+        driversData = await fetchAllRowsWithIn<any>(
+          (ids) => (from, to) => supabase.from("drivers_public").select("id, name").in("id", ids).order("id").range(from, to),
+          driverIdsFromRides
+        );
+      }
 
-        // Fetch TBRs with pagination (bypass 1000 limit)
-        const rideIds = ridesData.map((r: any) => r.id);
-        if (rideIds.length > 0) {
-          import("@/lib/supabase-helpers").then(({ fetchAllRowsWithIn }) => {
-            fetchAllRowsWithIn<{ id: string; ride_id: string }>((ids) => (from, to) =>
-              supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", ids).order("id").range(from, to),
-              rideIds
-            ).then(data => setTbrs(data));
-          });
-        } else {
-          setTbrs([]);
-        }
-      });
-    });
-  }, [domainUnits, filterUnit, dateStart, dateEnd]);
+      // Fetch TBRs with pagination
+      const rideIds = ridesData.map((r: any) => r.id);
+      let tbrsData: any[] = [];
+      if (rideIds.length > 0) {
+        tbrsData = await fetchAllRowsWithIn<{ ride_id: string }>((ids) => (from, to) =>
+          supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        );
+      }
+
+      return {
+        rides: ridesData,
+        psEntries: psData,
+        rtoEntries: rtoData,
+        dnrEntries: dnrData,
+        pisoEntries: pisoData,
+        reviews: reviewsData,
+        drivers: driversData,
+        unitSettings: settingsData,
+        customValues: customData,
+        minPackages: minPkgData,
+        tbrs: tbrsData
+      };
+    },
+    enabled: domainUnits.length > 0,
+    staleTime: 300_000,
+  });
+
+  const {
+    rides = [],
+    psEntries = [],
+    rtoEntries = [],
+    dnrEntries = [],
+    pisoEntries = [],
+    reviews = [],
+    drivers = [],
+    unitSettings = [],
+    customValues = [],
+    minPackages = [],
+    tbrs = []
+  } = overviewData || {};
 
   // Helper: calculate total paid for TBRs
   const calcTotalPaid = (ridesArr: any[], tbrsArr: any[]) => {

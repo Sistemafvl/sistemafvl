@@ -322,15 +322,13 @@ export function generatePayrollExcel(
   wsData.push([
     "TOTAL",
     "",
-    "",
-    0,
-    0,
-    0,
-    0,
-    "",
-    "",
     ...allDates.map(() => 0),
-    0,
+    0, // COL_TOTAL
+    "", // COL_VALUE (empty)
+    0, // COL_ADDITIONAL
+    0, // COL_DISCOUNTS
+    0, // COL_TOTAL_GERAL
+    "", // COL_PIX
   ]);
   rowTracker.minTotalRow = wsData.length - 1;
 

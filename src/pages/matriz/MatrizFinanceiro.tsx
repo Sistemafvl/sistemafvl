@@ -8,6 +8,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { DollarSign, TrendingUp, FileWarning, Package, Wallet, Zap } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { formatBRL } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { fetchAllRows } from "@/lib/supabase-helpers";
 
 const MatrizFinanceiro = () => {
   const { unitSession } = useAuthStore();
@@ -15,31 +17,26 @@ const MatrizFinanceiro = () => {
 
   const [dateStart, setDateStart] = useState(format(subDays(new Date(), 15), "yyyy-MM-dd"));
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [units, setUnits] = useState<any[]>([]);
-  const [rides, setRides] = useState<any[]>([]);
-  const [tbrs, setTbrs] = useState<any[]>([]);
-  const [dnrEntries, setDnrEntries] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any[]>([]);
-  const [customValues, setCustomValues] = useState<any[]>([]);
-  const [fixedValues, setFixedValues] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [minPackages, setMinPackages] = useState<any[]>([]);
-  const [reativoByUnit, setReativoByUnit] = useState<Map<string, number>>(new Map());
+  const { data: units = [] } = useQuery({
+    queryKey: ["matriz-units", domainId],
+    queryFn: async () => {
+      if (!domainId) return [];
+      const { data } = await supabase.from("units_public").select("id, name").eq("domain_id", domainId).eq("active", true).order("name");
+      return (data as any[] || []).filter(u => u.name !== "MATRIZ ADMIN");
+    },
+    enabled: !!domainId,
+    staleTime: 300_000,
+  });
 
-  useEffect(() => {
-    if (!domainId) return;
-    supabase.from("units_public").select("id, name").eq("domain_id", domainId).eq("active", true).order("name")
-      .then(({ data }) => { if (data) setUnits((data as any[]).filter(u => u.name !== "MATRIZ ADMIN")); });
-  }, [domainId]);
+  const { data: financialData, isLoading: queryLoading } = useQuery({
+    queryKey: ["matriz-financials", units.map(u => u.id).join(","), dateStart, dateEnd],
+    queryFn: async () => {
+      if (!units.length) return null;
+      const unitIds = units.map(u => u.id);
+      const start = startOfDay(new Date(dateStart)).toISOString();
+      const end = endOfDay(new Date(dateEnd)).toISOString();
 
-  useEffect(() => {
-    if (!units.length) return;
-    const unitIds = units.map(u => u.id);
-    const start = startOfDay(new Date(dateStart)).toISOString();
-    const end = endOfDay(new Date(dateEnd)).toISOString();
-    setLoading(true);
-    import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
-      Promise.all([
+      const [ridesData, dnrData, settingsData, customData, minPkgData, fixedData, reativoData] = await Promise.all([
         fetchAllRows<any>((from, to) =>
           supabase.from("driver_rides").select("id, unit_id, driver_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)
         ),
@@ -49,31 +46,48 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
-      ]).then(([ridesData, dnrData, settingsData, customData, minPkgData, fixedData, reativoData]) => {
-        setRides(ridesData);
-        setDnrEntries(dnrData);
-        setSettings(settingsData);
-        setCustomValues(customData);
-        setMinPackages(minPkgData);
-        setFixedValues(fixedData);
-        setLoading(false);
+      ]);
 
-        // Build reativo map by unit
-        const reativoByUnit = new Map<string, number>();
-        reativoData.forEach((r: any) => {
-          reativoByUnit.set(r.unit_id, (reativoByUnit.get(r.unit_id) ?? 0) + Number(r.reativo_value));
-        });
-        setReativoByUnit(reativoByUnit);
+      let tbrsData: any[] = [];
+      const rideIds = ridesData.map((r: any) => r.id);
+      if (rideIds.length > 0) {
+        tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
+          supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).order("id").range(from, to)
+        );
+      }
 
-        const rideIds = ridesData.map((r: any) => r.id);
-        if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
-        } else setTbrs([]);
+      const reativoByUnit = new Map<string, number>();
+      reativoData.forEach((r: any) => {
+        reativoByUnit.set(r.unit_id, (reativoByUnit.get(r.unit_id) ?? 0) + Number(r.reativo_value));
       });
-    });
-  }, [units, dateStart, dateEnd]);
+
+      return {
+        rides: ridesData,
+        dnrEntries: dnrData,
+        settings: settingsData,
+        customValues: customData,
+        minPackages: minPkgData,
+        fixedValues: fixedData,
+        reativoByUnit,
+        tbrs: tbrsData
+      };
+    },
+    enabled: units.length > 0,
+    staleTime: 300_000, // 5 minutes cache
+  });
+
+  const {
+    rides = [],
+    dnrEntries = [],
+    settings = [],
+    customValues = [],
+    minPackages = [],
+    fixedValues = [],
+    reativoByUnit = new Map<string, number>(),
+    tbrs = []
+  } = financialData || {};
+
+  const loading = queryLoading || !financialData;
 
   const unitFinancials = useMemo(() => {
     // Build fixed values map: "unitId_driverId_date" -> fixed_value
