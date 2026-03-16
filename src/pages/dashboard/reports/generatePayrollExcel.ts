@@ -264,7 +264,26 @@ export function generatePayrollExcel(
   ]);
   rowTracker.totalRow = wsData.length - 1;
 
-  wsData.push([]);
+  // Total Pacotes Amazon (Laranja) - Moved to follow first table
+  rowTracker.totalPacotesAmazonRow = wsData.length;
+  wsData.push([
+    "Total Pacotes Amazon",
+    "",
+    ...allDates.map(() => ""),
+    "",
+    ...Array(5).fill("")
+  ]);
+
+  // Diferença (Rosa) - Moved to follow first table
+  rowTracker.diferencaRow = wsData.length;
+  wsData.push([
+    "Diferença",
+    "",
+    ...allDates.map(() => 0),
+    0,
+    ...Array(5).fill("")
+  ]);
+
   wsData.push([]);
 
   // ── SECTION 2: MINIMUM PACKAGES — repeat ALL main drivers + 10 blank rows ──
@@ -359,29 +378,10 @@ export function generatePayrollExcel(
     ...emptyColsEndConsolidado
   ]);
 
+  // Sections 3: Total Pacotes calculation remains, but Amazon and Difference moved up
   rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
     "Total Pacotes",
-    "",
-    ...allDates.map(() => 0),
-    0,
-    ...emptyColsEndConsolidado
-  ]);
-
-  // Total Pacotes Amazon (blank for manual fill)
-  rowTracker.totalPacotesAmazonRow = wsData.length;
-  wsData.push([
-    "Total Pacotes Amazon",
-    "",
-    ...allDates.map(() => ""),
-    "",
-    ...emptyColsEndConsolidado
-  ]);
-
-  // Diferença = Total Pacotes - Total Pacotes Amazon
-  rowTracker.diferencaRow = wsData.length;
-  wsData.push([
-    "Diferença",
     "",
     ...allDates.map(() => 0),
     0,
