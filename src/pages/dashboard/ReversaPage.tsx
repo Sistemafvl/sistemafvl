@@ -105,6 +105,9 @@ const ReversaPage = () => {
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [downloadingBatchId, setDownloadingBatchId] = useState<string | null>(null);
 
+  // Confirm All modal
+  const [confirmAllOpen, setConfirmAllOpen] = useState(false);
+
   const fetchEntries = useCallback(async () => {
     if (!unitSession?.id) return;
     setLoading(true);
@@ -221,7 +224,7 @@ const ReversaPage = () => {
   }, [cameraOpen, processScan]);
 
   useEffect(() => {
-    if (!modalOpen) { stopCamera(); setScannedCodes(new Set()); setModalStep("scan"); }
+    if (!modalOpen) { stopCamera(); setModalStep("scan"); }
   }, [modalOpen, stopCamera]);
 
   const filtered = entries.filter(e => {
@@ -239,6 +242,7 @@ const ReversaPage = () => {
     setScannedCodes(new Set(allIds));
     playSuccessBeep();
     toast({ title: "Pronto!", description: "Todos os TBRs foram marcados como conferidos." });
+    setConfirmAllOpen(false);
   };
 
   // Finalize reversa — create batch + update ps_entries
@@ -274,6 +278,7 @@ const ReversaPage = () => {
     }
 
     toast({ title: "Reversa finalizada", description: `${scannedEntries.length} TBRs conferidos e removidos.` });
+    setScannedCodes(new Set());
     setModalOpen(false);
     fetchEntries();
   };
@@ -283,8 +288,8 @@ const ReversaPage = () => {
     setGeneratingPdf(true);
     try {
       // Fake batch data to attach the currently typed Lacre and VRID to the preview print
-      const tempBatch: Partial<ReversaBatch> = { lacre, vrid };
-      await buildReversaPdf(entries.map(e => ({ ...e, _status: "Pendente" })), 0, entries.length, `reversa_pendentes_${new Date().toISOString().slice(0, 10)}.pdf`, tempBatch as ReversaBatch);
+      const tempBatch = { lacre, vrid } as any;
+      await buildReversaPdf(entries.map(e => ({ ...e, _status: "Pendente" })), 0, entries.length, `reversa_pendentes_${new Date().toISOString().slice(0, 10)}.pdf`, tempBatch);
     } catch { toast({ title: "Erro ao gerar PDF", variant: "destructive" }); }
     setGeneratingPdf(false);
   };
@@ -593,7 +598,7 @@ const ReversaPage = () => {
                 <div className="flex items-end">
                   <Button 
                     variant="default" 
-                    onClick={handleConfirmAll} 
+                    onClick={() => setConfirmAllOpen(true)} 
                     disabled={entries.length === 0 || scannedCodes.size === entries.length}
                     className="w-full h-9 gap-1.5 bg-green-600 hover:bg-green-700 text-white"
                   >
@@ -736,6 +741,25 @@ const ReversaPage = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm All Modal */}
+      <Dialog open={confirmAllOpen} onOpenChange={setConfirmAllOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic text-green-700">Confirmar Todos?</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja marcar todos os <strong className="text-foreground">{entries.length}</strong> TBRs pendentes como conferidos?
+              Esta ação é irreversível e preencherá toda a lista.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" onClick={() => setConfirmAllOpen(false)}>Cancelar</Button>
+            <Button className="bg-green-600 hover:bg-green-700 text-white font-bold" onClick={handleConfirmAll}>
+              Sim, confirmar todos
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

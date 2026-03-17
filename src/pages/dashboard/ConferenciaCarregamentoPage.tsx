@@ -2859,6 +2859,34 @@ const ConferenciaCarregamentoPage = () => {
                           placeholder="Bipar ou digitar TBR para localizar..."
                           value={focusSearchInput}
                           onChange={e => setFocusSearchInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              const val = focusSearchInput.trim().toUpperCase();
+                              const found = focusedTbrs.find(t => t.code.toUpperCase() === val);
+                              if (found) {
+                                setSelectedTbrsForDelete(prev => {
+                                  const current = new Set(prev[ride.id] ?? []);
+                                  current.add(found.id);
+                                  return { ...prev, [ride.id]: current };
+                                });
+                                const listEl = tbrListRefs.current[`focus-${ride.id}`];
+                                if (listEl) {
+                                  // Find index in focusedTbrs to get the proper child index if unfiltered
+                                  // or just get the index from the visible subset.
+                                  // Since we filter the list based on focusSearchInput, it might be the only item.
+                                  const visibleFocus = focusSearchInput.trim().length > 0
+                                    ? focusedTbrs.filter(t => t.code.toUpperCase().includes(focusSearchInput.trim().toUpperCase()))
+                                    : focusedTbrs;
+                                  const idx = visibleFocus.findIndex(t => t.id === found.id);
+                                  if (idx >= 0 && listEl.children[idx]) {
+                                    const itemEl = listEl.children[idx] as HTMLElement;
+                                    itemEl?.scrollIntoView({ behavior: "smooth", block: "center" });
+                                  }
+                                }
+                                setFocusSearchInput("");
+                              }
+                            }
+                          }}
                           autoFocus
                         />
                       </div>
