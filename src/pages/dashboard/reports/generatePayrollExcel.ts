@@ -186,6 +186,10 @@ export function generatePayrollExcel(
     };
   });
 
+  // ── Sort data alphabetically ──
+  const sortedData = [...data].sort((a, b) => a.driver.name.localeCompare(b.driver.name));
+  const sortedMinPkgData = [...minPkgPayrollData].sort((a, b) => a.driver.name.localeCompare(b.driver.name));
+
   // ══════════════ BUILD MAIN WORKSHEET DATA ══════════════
   const wsData: (string | number)[][] = [];
 
@@ -224,7 +228,7 @@ export function generatePayrollExcel(
   wsData.push(headers); // row 6
 
   // ── SECTION 1: MAIN DRIVER ROWS ──
-  data.forEach((d) => {
+  sortedData.forEach((d) => {
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     const descontos = d.dnrDiscount ?? 0;
@@ -299,7 +303,7 @@ export function generatePayrollExcel(
   rowTracker.minDataStartRow = wsData.length;
 
   // Repeat ALL drivers from the main table with their info but empty date columns
-  data.forEach((d) => {
+  sortedData.forEach((d) => {
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     wsData.push([
@@ -413,7 +417,7 @@ export function generatePayrollExcel(
   wsData.push([]);
 
   // ── SECTION 5: EXTRATO DE ADICIONAIS ──
-  const allAdditionals = data
+  const allAdditionals = sortedData
     .flatMap((d) => d.additionalEntries || [])
     .sort(
       (a, b) =>

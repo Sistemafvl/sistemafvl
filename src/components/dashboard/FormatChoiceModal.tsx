@@ -8,12 +8,22 @@ import {
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 
+export type FormatOptionType = "pdf" | "excel" | "pdf_resumo";
+
+interface FormatOption {
+  id: FormatOptionType;
+  label: string;
+  icon: React.ReactNode;
+  colorClass: string;
+}
+
 interface FormatChoiceModalProps {
   open: boolean;
   onClose: () => void;
-  onChoose: (format: "pdf" | "excel") => void;
+  onChoose: (format: FormatOptionType) => void;
   title?: string;
   loading?: boolean;
+  options?: FormatOptionType[];
 }
 
 const FormatChoiceModal = ({
@@ -22,7 +32,14 @@ const FormatChoiceModal = ({
   onChoose,
   title = "Escolha o formato",
   loading = false,
+  options = ["pdf", "excel"],
 }: FormatChoiceModalProps) => {
+  const availableOptions: Record<FormatOptionType, FormatOption> = {
+    pdf: { id: "pdf", label: "PDF Completo", icon: <FileText className="h-6 w-6 text-destructive" />, colorClass: "text-destructive" },
+    pdf_resumo: { id: "pdf_resumo", label: "PDF Resumido", icon: <FileText className="h-6 w-6 text-orange-500" />, colorClass: "text-orange-500" },
+    excel: { id: "excel", label: "Excel", icon: <FileSpreadsheet className="h-6 w-6 text-green-600" />, colorClass: "text-green-600" }
+  };
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent className="sm:max-w-sm">
@@ -32,33 +49,27 @@ const FormatChoiceModal = ({
             Em qual formato deseja baixar o relatório?
           </DialogDescription>
         </DialogHeader>
-        <div className="flex gap-3 mt-2">
-          <Button
-            variant="outline"
-            className="flex-1 h-24 flex-col gap-2 relative"
-            onClick={() => onChoose("pdf")}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            ) : (
-              <FileText className="h-6 w-6 text-destructive" />
-            )}
-            <span className="font-semibold">PDF</span>
-          </Button>
-          <Button
-            variant="outline"
-            className="flex-1 h-24 flex-col gap-2 relative"
-            onClick={() => onChoose("excel")}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-            ) : (
-              <FileSpreadsheet className="h-6 w-6 text-green-600" />
-            )}
-            <span className="font-semibold">Excel</span>
-          </Button>
+        <div className="flex flex-wrap gap-3 mt-2">
+          {options.map((optId) => {
+            const opt = availableOptions[optId];
+            if (!opt) return null;
+            return (
+              <Button
+                key={opt.id}
+                variant="outline"
+                className="flex-1 min-w-[100px] h-24 flex-col gap-2 relative"
+                onClick={() => onChoose(opt.id)}
+                disabled={loading}
+              >
+                {loading ? (
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                ) : (
+                  opt.icon
+                )}
+                <span className="font-semibold text-xs text-center leading-tight sm:text-sm">{opt.label}</span>
+              </Button>
+            );
+          })}
         </div>
       </DialogContent>
     </Dialog>

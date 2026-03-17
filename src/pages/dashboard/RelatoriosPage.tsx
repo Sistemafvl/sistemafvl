@@ -20,7 +20,7 @@ import PayrollReportContent, { type DriverPayrollData } from "./reports/PayrollR
 import DailySummaryReportContent, { type DailySummaryRow } from "./reports/DailySummaryReportContent";
 import ReturnsReportContent, { type ReturnEntry } from "./reports/ReturnsReportContent";
 import RankingReportContent, { type RankingRow } from "./reports/RankingReportContent";
-import FormatChoiceModal from "@/components/dashboard/FormatChoiceModal";
+import FormatChoiceModal, { type FormatOptionType } from "@/components/dashboard/FormatChoiceModal";
 import { generatePayrollExcel, type MinPackageDriver } from "./reports/generatePayrollExcel";
 import {
   Table, TableHeader, TableBody, TableHead, TableRow, TableCell,
@@ -43,6 +43,7 @@ const RelatoriosPage = () => {
   const [formatChoiceOpen, setFormatChoiceOpen] = useState(false);
   const [formatChoiceAction, setFormatChoiceAction] = useState<"espelho" | "gerar" | null>(null);
   const [isProcessingModal, setIsProcessingModal] = useState(false);
+  const [summaryOnlyPdf, setSummaryOnlyPdf] = useState(false);
 
   // Payroll state
   const [payrollData, setPayrollData] = useState<DriverPayrollData[] | null>(null);
@@ -196,7 +197,11 @@ const RelatoriosPage = () => {
       // Generate PDF
       await new Promise((r) => setTimeout(r, 500));
       if (payrollRef.current) {
-        await generatePDFFromContainer(payrollRef.current, `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+        await generatePDFFromContainer(
+          payrollRef.current, 
+          `folha_pagamento_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`,
+          summaryOnlyPdf ? "l" : "p"
+        );
         toast({ title: "PDF gerado!", description: "Folha de pagamento salva e baixada com sucesso." });
       }
       setPayrollMode(null);
@@ -212,7 +217,11 @@ const RelatoriosPage = () => {
     try {
       await new Promise((r) => setTimeout(r, 500));
       if (payrollRef.current) {
-        await generatePDFFromContainer(payrollRef.current, `espelho_folha_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`);
+        await generatePDFFromContainer(
+          payrollRef.current, 
+          `espelho_folha_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.pdf`,
+          summaryOnlyPdf ? "l" : "p"
+        );
         toast({ title: "Espelho gerado!", description: "PDF de consulta baixado com sucesso." });
       }
     } catch {
@@ -804,7 +813,9 @@ const RelatoriosPage = () => {
       <div style={{ position: "fixed", left: "-9999px", top: 0, width: "1122px", zIndex: -1 }}>
         {payrollData && (
           <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
-            startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} />
+            startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} 
+            summaryOnly={summaryOnlyPdf}
+          />
         )}
         {dailyData && (
           <DailySummaryReportContent ref={dailyRef} data={dailyData} unitName={unitName}
@@ -959,6 +970,7 @@ const RelatoriosPage = () => {
         open={formatChoiceOpen}
         onClose={() => { if (!isProcessingModal) { setFormatChoiceOpen(false); setFormatChoiceAction(null); } }}
         loading={isProcessingModal}
+        options={formatChoiceAction === "espelho" ? ["pdf", "pdf_resumo", "excel"] : ["pdf", "excel"]}
         onChoose={async (fmt) => {
           setIsProcessingModal(true);
           try {
@@ -971,6 +983,13 @@ const RelatoriosPage = () => {
                 await handleConfirmAndGenerateDB();
               }
             } else {
+              if (fmt === "pdf_resumo") {
+                setSummaryOnlyPdf(true);
+              } else {
+                setSummaryOnlyPdf(false);
+              }
+              // Wait for re-render with new `summaryOnlyPdf` state to let layout settle
+              await new Promise((r) => setTimeout(r, 300));
               if (formatChoiceAction === "espelho") {
                 await handleDownloadPDF();
               } else if (formatChoiceAction === "gerar") {
@@ -984,6 +1003,7 @@ const RelatoriosPage = () => {
             setIsProcessingModal(false);
             setFormatChoiceOpen(false);
             setFormatChoiceAction(null);
+            setTimeout(() => setSummaryOnlyPdf(false), 500); // Reset later so next UI interaction is fresh
           }
         }}
         title={formatChoiceAction === "gerar" ? "Formato da Folha" : "Formato do Espelho"}

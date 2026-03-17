@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect } from "react";
-import { LifeBuoy, Package, ArrowRight, User, Loader2 } from "lucide-react";
+import { useState, useCallback, useEffect, useRef } from "react";
+import { LifeBuoy, Package, ArrowRight, User, Loader2, Search } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { toast } from "sonner";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 interface DriverRideInfo {
   rideId: string;
@@ -37,6 +39,10 @@ const UnitRescuePage = () => {
   const [loadingTbrs, setLoadingTbrs] = useState(false);
   const [selectedTbrIds, setSelectedTbrIds] = useState<Set<string>>(new Set());
   const [transferring, setTransferring] = useState(false);
+
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchInput, setSearchInput] = useState("");
+  const tbrRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   // Fetch today's active rides/drivers
   useEffect(() => {
@@ -271,9 +277,48 @@ const UnitRescuePage = () => {
               </CardTitle>
               <p className="text-xs text-muted-foreground">Pacotes atualmente carregados no motorista origem.</p>
             </div>
-            <Badge variant="secondary" className="font-bold">
-              {sourceTbrs.length} pacotes
-            </Badge>
+            <div className="flex gap-2 items-center">
+              {searchActive && (
+                <Input
+                  className="h-8 text-xs font-mono w-48 sm:w-64"
+                  placeholder="Bipar ou digitar TBR..."
+                  value={searchInput}
+                  onChange={e => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      const val = searchInput.trim().toUpperCase();
+                      const found = sourceTbrs.find(t => t.code.toUpperCase() === val);
+                      if (found) {
+                        setSelectedTbrIds(prev => {
+                          const current = new Set(prev);
+                          current.add(found.id);
+                          return current;
+                        });
+                        const rowEl = tbrRowRefs.current[found.id];
+                        if (rowEl) {
+                          rowEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                        setSearchInput("");
+                      }
+                    }
+                  }}
+                  autoFocus
+                />
+              )}
+              <button
+                onClick={() => {
+                  setSearchActive(prev => !prev);
+                  setSearchInput("");
+                }}
+                className={cn("h-8 w-8 flex items-center justify-center rounded transition-colors", searchActive ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80 text-muted-foreground")}
+                title="Buscar TBR"
+              >
+                <Search className="h-4 w-4" />
+              </button>
+              <Badge variant="secondary" className="font-bold h-8 flex items-center">
+                {sourceTbrs.length} pacotes
+              </Badge>
+            </div>
           </CardHeader>
           <CardContent>
             {loadingTbrs ? (
@@ -303,8 +348,14 @@ const UnitRescuePage = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {sourceTbrs.map((tbr) => (
-                        <TableRow key={tbr.id} className="hover:bg-muted/50 transition-colors">
+                      {sourceTbrs
+                        .filter(tbr => !searchActive || !searchInput.trim() || tbr.code.toUpperCase().includes(searchInput.trim().toUpperCase()))
+                        .map((tbr) => (
+                        <TableRow 
+                          key={tbr.id} 
+                          ref={(el) => { tbrRowRefs.current[tbr.id] = el; }}
+                          className={cn("transition-colors", selectedTbrIds.has(tbr.id) ? "bg-primary/5" : "hover:bg-muted/50")}
+                        >
                           <TableCell className="text-center">
                             <Checkbox
                               checked={selectedTbrIds.has(tbr.id)}

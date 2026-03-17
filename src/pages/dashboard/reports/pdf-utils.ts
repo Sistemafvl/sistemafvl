@@ -26,15 +26,16 @@ export const loadLogoBase64 = (): Promise<string> => {
 
 export const generatePDFFromContainer = async (
   container: HTMLDivElement,
-  fileName: string
+  fileName: string,
+  orientation: "p" | "l" = "p"
 ) => {
   // Container is already positioned off-screen by parent wrapper
   // Just ensure it's visible and wait for layout
   await new Promise((r) => setTimeout(r, 600));
 
-  const pdf = new jsPDF("l", "mm", "a4");
-  const pdfWidth = 297;
-  const pdfHeight = 210;
+  const pdf = new jsPDF(orientation, "mm", "a4");
+  const pdfWidth = orientation === "p" ? 210 : 297;
+  const pdfHeight = orientation === "p" ? 297 : 210;
   const margin = 6;
   const contentWidth = pdfWidth - margin * 2;
 

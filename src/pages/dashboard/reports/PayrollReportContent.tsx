@@ -57,6 +57,7 @@ interface Props {
   endDate: Date;
   generatedBy: string;
   logoBase64: string;
+  summaryOnly?: boolean;
 }
 
 // Compact cell styles for summary table
@@ -84,7 +85,7 @@ const compactCellStyle = (extra?: React.CSSProperties): React.CSSProperties => (
 });
 
 const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
-  ({ data, unitName, tbrValue, startDate, endDate, generatedBy, logoBase64 }, ref) => {
+  ({ data, unitName, tbrValue, startDate, endDate, generatedBy, logoBase64, summaryOnly }, ref) => {
     const allDates = [...new Set(data.flatMap((d) => d.days.map((day) => day.date)))].sort();
 
     const grandTotalTbrs = data.reduce((s, d) => s + (d.totalTbrs || 0), 0);
@@ -282,7 +283,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
         </div>
 
         {/* ══════════════ INDIVIDUAL DRIVER PAGES ══════════════ */}
-        {data.map((d) => {
+        {!summaryOnly && data.map((d) => {
           const tbrVal = d.tbrValueUsed ?? tbrValue;
           const adicional = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
           const totalCompleted = d.totalCompleted || 0;
