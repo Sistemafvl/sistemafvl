@@ -5,17 +5,49 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
-import { UserCheck, Crown } from "lucide-react";
+import { UserCheck, Crown, RotateCcw, Loader2 } from "lucide-react";
 import InsucessoBalloon from "./InsucessoBalloon";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
+import { toast } from "@/hooks/use-toast";
+import { Button } from "@/components/ui/button";
 
 const DashboardLayout = () => {
   const { unitSession, managerSession, conferenteSession, setConferenteSession } = useAuthStore();
   const { setTheme } = useTheme();
   const [conferentes, setConferentes] = useState<{ id: string; name: string }[]>([]);
   const { claimSession } = useConferenteSessionLock();
+  const [loadingCache, setLoadingCache] = useState(false);
+
+  const handleClearCache = async () => {
+    setLoadingCache(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const registration of registrations) {
+          await registration.unregister();
+        }
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        for (const key of keys) {
+          await caches.delete(key);
+        }
+      }
+      toast({ 
+        title: "Cache limpo!", 
+        description: "Enviando comando de sincronização... A página irá recarregar.",
+      });
+      setTimeout(() => {
+        window.location.reload();
+      }, 1200);
+    } catch (err) {
+      console.error("Cache purge failed:", err);
+      toast({ title: "Erro", description: "Falha ao sincronizar versão.", variant: "destructive" });
+      setLoadingCache(false);
+    }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem("theme_unit") || "light";
@@ -52,18 +84,32 @@ const DashboardLayout = () => {
               <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
                 Dashboard
               </span>
-              {isDirector && (
-                <span className="ml-auto text-xs text-amber-600 flex items-center gap-1 font-semibold">
-                  <Crown className="h-3.5 w-3.5" />
-                  {unitSession.name}
-                </span>
-              )}
-              {!isDirector && conferenteSession && (
-                <span className="ml-auto text-xs text-muted-foreground flex items-center gap-1">
-                  <UserCheck className="h-3.5 w-3.5" />
-                  {conferenteSession.name}
-                </span>
-              )}
+              
+              <div className="ml-auto flex items-center gap-4">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  className="gap-2 text-[10px] text-muted-foreground h-7 px-2 hover:bg-destructive/10 hover:text-destructive transition-colors hidden sm:flex shrink-0"
+                  onClick={handleClearCache}
+                  disabled={loadingCache}
+                >
+                  {loadingCache ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
+                  LIMPAR CACHE E SINCRONIZAR
+                </Button>
+
+                {isDirector && (
+                  <span className="text-xs text-amber-600 flex items-center gap-1 font-semibold shrink-0">
+                    <Crown className="h-3.5 w-3.5" />
+                    {unitSession.name}
+                  </span>
+                )}
+                {!isDirector && conferenteSession && (
+                  <span className="text-xs text-muted-foreground flex items-center gap-1 shrink-0">
+                    <UserCheck className="h-3.5 w-3.5" />
+                    {conferenteSession.name}
+                  </span>
+                )}
+              </div>
             </header>
             <div className="flex-1 p-4 sm:p-6 overflow-x-hidden">
               {hasAccess ? (
