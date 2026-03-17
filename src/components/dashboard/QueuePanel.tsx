@@ -94,6 +94,7 @@ const QueuePanel = () => {
   const [queueToasts, setQueueToasts] = useState<QueueToastItem[]>([]);
   const [queueSearch, setQueueSearch] = useState("");
   const [animating, setAnimating] = useState<{ idx: number; direction: "up" | "down" } | null>(null);
+  const [queueCountdown, setQueueCountdown] = useState(2);
 
   const [selectedEntry, setSelectedEntry] = useState<QueueEntry | null>(null);
   const [showProgramModal, setShowProgramModal] = useState(false);
@@ -183,6 +184,20 @@ const QueuePanel = () => {
   }, [unitId]);
 
   useEffect(() => { fetchQueue(); }, [fetchQueue]);
+
+  // 2-second countdown timer: refreshes only the queue when it hits 0
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setQueueCountdown(prev => {
+        if (prev <= 1) {
+          fetchQueue();
+          return 2;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [fetchQueue]);
 
   useEffect(() => {
     if (!unitId) return;
@@ -463,6 +478,12 @@ const QueuePanel = () => {
               {count > 0 && (
                 <Badge variant="default" className="ml-auto">{count} na fila</Badge>
               )}
+              <span
+                title="Atualiza a fila automaticamente"
+                className="ml-auto flex items-center justify-center w-7 h-7 rounded-md border border-border bg-muted text-muted-foreground text-xs font-mono font-bold tabular-nums shrink-0"
+              >
+                {queueCountdown}s
+              </span>
             </SheetTitle>
           </SheetHeader>
 

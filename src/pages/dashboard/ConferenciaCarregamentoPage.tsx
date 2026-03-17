@@ -294,6 +294,8 @@ const ConferenciaCarregamentoPage = () => {
   // Driver historical average TBRs/day (30 days)
   const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
 
+  // 2-second countdown for cards auto-refresh
+  const [cardsCountdown, setCardsCountdown] = useState(2);
 
 
   const playSuccessBeep = () => {
@@ -671,6 +673,23 @@ const ConferenciaCarregamentoPage = () => {
   }, [fetchRides, fetchOpenRtos]);
 
   useEffect(() => { fetchRides(); }, [fetchRides]);
+
+  // 2-second countdown timer: refreshes only cards (fetchRides) when it hits 0
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCardsCountdown(prev => {
+        if (prev <= 1) {
+          // Only auto-refresh if realtime lock is not active
+          if (Date.now() > realtimeLockUntil.current) {
+            fetchRidesRef.current();
+          }
+          return 2;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
 
   // Fetch unit logins for the dropdown filter
@@ -2200,6 +2219,13 @@ const ConferenciaCarregamentoPage = () => {
               <div className="flex items-center gap-1">
                 <span className="inline-block w-3 h-3 rounded-sm bg-red-200 border border-red-300" />
                 <span>Duplicado</span>
+                <span
+                  title="Atualiza os cards automaticamente"
+                  className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded border border-border bg-muted text-muted-foreground font-mono font-bold tabular-nums shrink-0"
+                  style={{ fontSize: 'inherit' }}
+                >
+                  {cardsCountdown}s
+                </span>
               </div>
             </div>
           </div>
