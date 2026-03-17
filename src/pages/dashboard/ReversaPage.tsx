@@ -40,8 +40,6 @@ interface ReversaBatch {
   conferente_name: string | null;
   total_scanned: number;
   total_pending: number;
-  lacre: string | null;
-  vrid: string | null;
   created_at: string;
 }
 
@@ -129,7 +127,7 @@ const ReversaPage = () => {
     setLoadingBatches(true);
     const { data } = await (supabase
       .from("reversa_batches" as any)
-      .select("id, conferente_name, total_scanned, total_pending, lacre, vrid, created_at")
+      .select("id, conferente_name, total_scanned, total_pending, created_at")
       .eq("unit_id", unitSession.id)
       .order("created_at", { ascending: false })
       .limit(500) as any);
@@ -248,18 +246,20 @@ const ReversaPage = () => {
     if (scannedEntries.length === 0) return;
 
     // Create batch record
-    const { data: batch } = await (supabase
+    const { data: batch, error: batchError } = await (supabase
       .from("reversa_batches" as any)
       .insert({
         unit_id: unitSession!.id,
         conferente_name: conferenteSession?.name ?? null,
         total_scanned: scannedEntries.length,
         total_pending: pendingEntries.length,
-        lacre: lacre.trim() || null,
-        vrid: vrid.trim() || null,
       })
       .select("id")
       .single() as any);
+
+    if (batchError) {
+      console.error("Erro ao criar batch de reversa:", batchError);
+    }
 
     const batchId = batch?.id;
     const now = new Date().toISOString();
@@ -312,7 +312,7 @@ const ReversaPage = () => {
     scanned: number,
     pending: number,
     fileName: string,
-    batch?: ReversaBatch,
+    batch?: ReversaBatch & { lacre?: string | null; vrid?: string | null },
   ) => {
     const logo = await loadLogoBase64();
     const pdf = new jsPDF("p", "mm", "a4");
