@@ -975,6 +975,14 @@ const ConferenciaCarregamentoPage = () => {
       return;
     }
 
+    // Auto-excluir Reativos para TBRs que voltaram como insucesso (pacotes não entregues)
+    const insucessoCodes = selectedTbrItems.map(t => t.code);
+    for (const code of insucessoCodes) {
+      await supabase.from("reativo_entries").delete()
+        .ilike("tbr_code", code)
+        .eq("unit_id", unitId!);
+    }
+
     setSelectedTbrsForDelete(prev => ({ ...prev, [batchInsucessoRideId!]: new Set() }));
     setShowBatchInsucessoModal(false);
     setBatchInsucessoLoading(false);

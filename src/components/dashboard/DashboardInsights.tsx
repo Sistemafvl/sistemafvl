@@ -59,6 +59,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
       .from("driver_rides")
       .select("driver_id, id, started_at, finished_at")
       .eq("unit_id", unitId)
+      .neq("loading_status", "cancelled")
       .gte("completed_at", since);
     if (until) ridesQuery = ridesQuery.lte("completed_at", until);
 
@@ -169,7 +170,7 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const until = getUntil();
 
     const confRides = await fetchAllRows<{ conferente_id: string | null }>((from, to) => {
-      let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).gte("completed_at", since).not("conferente_id", "is", null);
+      let q = supabase.from("driver_rides").select("conferente_id").eq("unit_id", unitId).neq("loading_status", "cancelled").gte("completed_at", since).not("conferente_id", "is", null);
       if (until) q = q.lte("completed_at", until);
       return q.order("id").range(from, to);
     });

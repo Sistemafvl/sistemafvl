@@ -79,6 +79,7 @@ const DriverRides = () => {
         .select("id, driver_id, unit_id, conferente_id, completed_at, started_at, finished_at, notes, route, login, password")
         .eq("driver_id", driverId)
         .eq("unit_id", unitId!)
+        .neq("loading_status", "cancelled")
         .gte("completed_at", startDate.toISOString())
         .lte("completed_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString())
         .order("completed_at", { ascending: false });

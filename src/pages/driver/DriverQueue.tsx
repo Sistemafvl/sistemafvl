@@ -27,6 +27,8 @@ interface ActiveRide {
   queue_entry_id?: string | null;
   completed_at?: string | null;
   unit_id?: string;
+  conferente_id?: string | null;
+  conferente_name?: string | null;
 }
 
 const formatElapsed = (totalSeconds: number) => {
@@ -51,6 +53,7 @@ const DriverQueue = () => {
   const [tbrCount, setTbrCount] = useState(0);
   const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
+  const [activeConferente, setActiveConferente] = useState<string | null>(null);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -91,7 +94,7 @@ const DriverQueue = () => {
 
     const { data } = await supabase
       .from("driver_rides")
-      .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id, queue_entry_id")
+      .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id, queue_entry_id, conferente_id")
       .eq("driver_id", driverId)
       .in("loading_status", ["pending", "loading"])
       .gte("completed_at", today.toISOString())
@@ -101,18 +104,42 @@ const DriverQueue = () => {
     const ride = data && data.length > 0 ? data[0] : null;
     setActiveRide(ride as ActiveRide | null);
 
+    // Buscar nome do conferente do carregamento ativo
+    if (ride?.conferente_id) {
+      const { data: confData } = await supabase
+        .from("user_profiles")
+        .select("name")
+        .eq("id", ride.conferente_id)
+        .maybeSingle();
+      setActiveConferente(confData?.name ?? null);
+    } else {
+      setActiveConferente(null);
+    }
+
     // Fetch last completed ride if no active ride
     if (!ride) {
       const { data: lastData } = await supabase
         .from("driver_rides")
-        .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id")
+        .select("id, route, login, password, sequence_number, loading_status, completed_at, unit_id, conferente_id")
         .eq("driver_id", driverId)
-        .eq("loading_status", "completed")
+        .eq("loading_status", "finished")
         .order("completed_at", { ascending: false })
         .limit(1);
 
       if (lastData && lastData.length > 0) {
-        setLastCompletedRide(lastData[0] as ActiveRide);
+        const lastRide = lastData[0] as ActiveRide;
+
+        // Buscar nome do conferente do último carregamento
+        if (lastRide.conferente_id) {
+          const { data: lastConfData } = await supabase
+            .from("user_profiles")
+            .select("name")
+            .eq("id", lastRide.conferente_id)
+            .maybeSingle();
+          lastRide.conferente_name = lastConfData?.name ?? null;
+        }
+
+        setLastCompletedRide(lastRide);
         
         // Fetch TBR count for last ride
         const { count: lastCount } = await supabase
@@ -295,6 +322,15 @@ const DriverQueue = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4 px-4">
+            {/* Banner do conferente bipando */}
+            {activeRide.loading_status === "loading" && activeConferente && (
+              <div className="flex items-center gap-2 rounded-md bg-primary/10 border border-primary/20 px-3 py-2">
+                <ScanBarcode className="h-4 w-4 text-primary flex-shrink-0" />
+                <p className="text-sm font-semibold text-primary">
+                  Conferente <span className="font-bold">{activeConferente}</span> está bipando você
+                </p>
+              </div>
+            )}
             {activeRide.sequence_number && (
               <div className="flex items-center gap-3">
                 <Hash className="h-5 w-5 text-muted-foreground flex-shrink-0" />
@@ -514,6 +550,15 @@ const DriverQueue = () => {
                 <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Rota</p>
                   <p className="text-base font-semibold break-words">{lastCompletedRide.route}</p>
+                </div>
+              </div>
+            )}
+            {lastCompletedRide.conferente_name && (
+              <div className="flex items-center gap-3">
+                <ScanBarcode className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm text-muted-foreground">Conferente</p>
+                  <p className="text-base font-semibold break-words">{lastCompletedRide.conferente_name}</p>
                 </div>
               </div>
             )}

@@ -402,6 +402,11 @@ const RetornoPisoPage = () => {
         .ilike("code", tbrCode);
     }
 
+    // Auto-excluir Reativo se TBR foi para insucesso (pacote não entregue)
+    await supabase.from("reativo_entries").delete()
+      .ilike("tbr_code", tbrCode)
+      .eq("unit_id", unitSession!.id);
+
     toast({ title: "Retorno Piso registrado" });
     setModalOpen(false);
     setTrackInfo(null);
