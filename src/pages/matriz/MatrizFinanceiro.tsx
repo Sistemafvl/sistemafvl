@@ -70,7 +70,7 @@ const MatrizFinanceiro = () => {
         minPackages: minPkgData,
         fixedValues: fixedData,
         reativoByUnit,
-        tbrs: tbrsData
+        tbrCountsMap
       };
     },
     enabled: units.length > 0,
