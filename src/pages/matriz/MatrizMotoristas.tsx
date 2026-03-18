@@ -76,10 +76,12 @@ const MatrizMotoristas = () => {
 
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
-        } else setTbrs([]);
+          supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds }).then(({ data: tbrCounts }) => {
+            const countsMap: Record<string, number> = {};
+            if (tbrCounts) tbrCounts.forEach((r: any) => { countsMap[r.ride_id] = Number(r.tbr_count); });
+            setTbrs(countsMap);
+          });
+        } else setTbrs({});
       });
     });
   }, [units, dateStart, dateEnd, filterUnit]);

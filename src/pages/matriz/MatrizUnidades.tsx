@@ -67,7 +67,7 @@ const MatrizUnidades = () => {
     return units.map(u => {
       const uRides = rides.filter(r => r.unit_id === u.id);
       const uDrivers = new Set(uRides.map(r => r.driver_id)).size;
-      const uTbrs = tbrs.filter(t => uRides.some(r => r.id === t.ride_id)).length;
+      const uTbrs = uRides.reduce((sum, r) => sum + (tbrs[r.id] || 0), 0);
       const uPs = psEntries.filter(p => p.unit_id === u.id).length;
       const uRto = rtoEntries.filter(r => r.unit_id === u.id).length;
       const uPiso = pisoEntries.filter(p => p.unit_id === u.id).length;
