@@ -21,7 +21,7 @@ const MatrizMotoristas = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [tbrs, setTbrs] = useState<any[]>([]);
+  const [tbrs, setTbrs] = useState<Record<string, number>>({});
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [psEntries, setPsEntries] = useState<any[]>([]);
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
@@ -76,10 +76,12 @@ const MatrizMotoristas = () => {
 
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
-        } else setTbrs([]);
+          supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds }).then(({ data: tbrCounts }) => {
+            const countsMap: Record<string, number> = {};
+            if (tbrCounts) tbrCounts.forEach((r: any) => { countsMap[r.ride_id] = Number(r.tbr_count); });
+            setTbrs(countsMap);
+          });
+        } else setTbrs({});
       });
     });
   }, [units, dateStart, dateEnd, filterUnit]);
@@ -96,7 +98,7 @@ const MatrizMotoristas = () => {
 
     return Object.entries(driverMap).map(([driverId, stats]) => {
       const driver = drivers.find(d => d.id === driverId);
-      const driverTbrs = tbrs.filter(t => stats.rideIds.includes(t.ride_id)).length;
+      const driverTbrs = stats.rideIds.reduce((sum, id) => sum + (tbrs[id] || 0), 0);
       const driverDnr = dnrEntries.filter(d => d.driver_id === driverId);
       const dnrValue = driverDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
       const unitNames = [...stats.unitIds].map(uid => units.find(u => u.id === uid)?.name || "").filter(Boolean);
@@ -108,7 +110,7 @@ const MatrizMotoristas = () => {
       stats.rideDetails.forEach(ride => {
         const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
         const key = `${ride.unit_id}_${day}`;
-        const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
+        const rideTbrCount = tbrs[ride.id] || 0;
         const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
         const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
         const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
