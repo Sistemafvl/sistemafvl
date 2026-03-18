@@ -402,7 +402,7 @@ const RelatoriosPage = () => {
       const ranking: RankingRow[] = driverIds.map(did => {
         const driverRides = rides.filter(r => r.driver_id === did);
         const driverRideIds = driverRides.map(r => r.id);
-        const tbrs = allTbrs.filter(t => driverRideIds.includes(t.ride_id)).length;
+        const tbrs = driverRideIds.reduce((sum, id) => sum + (tbrCountsByRide[id] || 0), 0);
         const returnTbrSet = new Set<string>();
         allReturns.forEach((r: any) => { if (r.ride_id && driverRideIds.includes(r.ride_id) && r.tbr_code) returnTbrSet.add(r.tbr_code); });
         const returns = returnTbrSet.size;
