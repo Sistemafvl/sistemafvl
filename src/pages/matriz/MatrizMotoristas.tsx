@@ -21,7 +21,7 @@ const MatrizMotoristas = () => {
   const [units, setUnits] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
-  const [tbrs, setTbrs] = useState<any[]>([]);
+  const [tbrs, setTbrs] = useState<Record<string, number>>({});
   const [dnrEntries, setDnrEntries] = useState<any[]>([]);
   const [psEntries, setPsEntries] = useState<any[]>([]);
   const [unitSettings, setUnitSettings] = useState<any[]>([]);
