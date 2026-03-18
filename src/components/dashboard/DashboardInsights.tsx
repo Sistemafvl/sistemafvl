@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
+import { fetchAllRows } from "@/lib/supabase-helpers";
 import { OPERATIONAL_PISO_REASONS } from "@/lib/status-labels";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
