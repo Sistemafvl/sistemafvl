@@ -82,11 +82,12 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
       if (best) setBestDay(dayNames[Number(best[0])]);
 
       const rideIds = rides30.map(r => r.id);
-      const allTbrs = await fetchAllRowsWithIn<{ id: string }>(
-        (chunk) => (from, to) => supabase.from("ride_tbrs").select("id").in("ride_id", chunk).range(from, to),
-        rideIds
-      );
-      setAvgTbrs(allTbrs.length ? Math.round((allTbrs.length / rides30.length) * 10) / 10 : 0);
+      let totalTbrCount = 0;
+      if (rideIds.length > 0) {
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) totalTbrCount = tbrCounts.reduce((sum: number, r: any) => sum + Number(r.tbr_count), 0);
+      }
+      setAvgTbrs(totalTbrCount ? Math.round((totalTbrCount / rides30.length) * 10) / 10 : 0);
     }
 
     // Return rate
