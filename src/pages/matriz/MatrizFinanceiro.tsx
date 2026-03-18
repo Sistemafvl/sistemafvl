@@ -142,7 +142,7 @@ const MatrizFinanceiro = () => {
         reativoTotal,
       };
     }).sort((a, b) => b.totalPaid - a.totalPaid);
-  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
+  }, [units, rides, tbrCountsMap, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
   
 
   const totals = useMemo(() => ({
