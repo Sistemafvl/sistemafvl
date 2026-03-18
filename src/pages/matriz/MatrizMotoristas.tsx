@@ -98,7 +98,7 @@ const MatrizMotoristas = () => {
 
     return Object.entries(driverMap).map(([driverId, stats]) => {
       const driver = drivers.find(d => d.id === driverId);
-      const driverTbrs = tbrs.filter(t => stats.rideIds.includes(t.ride_id)).length;
+      const driverTbrs = stats.rideIds.reduce((sum, id) => sum + (tbrs[id] || 0), 0);
       const driverDnr = dnrEntries.filter(d => d.driver_id === driverId);
       const dnrValue = driverDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
       const unitNames = [...stats.unitIds].map(uid => units.find(u => u.id === uid)?.name || "").filter(Boolean);
