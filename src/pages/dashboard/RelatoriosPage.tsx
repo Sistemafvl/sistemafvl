@@ -278,9 +278,10 @@ const RelatoriosPage = () => {
 
       const rideToDay = new Map<string, string>();
       rides.forEach(r => rideToDay.set(r.id, format(new Date(r.completed_at), "yyyy-MM-dd")));
-      allTbrs.forEach(t => {
-        const day = rideToDay.get(t.ride_id);
-        if (day && dayMap.has(day)) dayMap.get(day)!.tbrs++;
+      // Distribute TBR counts to days
+      rides.forEach(r => {
+        const day = format(new Date(r.completed_at), "yyyy-MM-dd");
+        if (dayMap.has(day)) dayMap.get(day)!.tbrs += (tbrCountsByRide[r.id] || 0);
       });
 
       piso.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.piso++; });
