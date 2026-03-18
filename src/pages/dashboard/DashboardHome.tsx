@@ -1,7 +1,7 @@
 import { useAuthStore } from "@/stores/auth-store";
 import { translateStatus } from "@/lib/status-labels";
 import { Clock, Search, Loader2, X, Star, MessageSquare, CalendarIcon, FileWarning, CheckCircle, AlertTriangle, DollarSign, Eye, Zap, LifeBuoy, Play, Flag } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { cn, isValidTbrCode } from "@/lib/utils";
+import { cn, isValidTbrCode, getBrazilFortnightRange } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 import InfoButton from "@/components/dashboard/InfoButton";
@@ -57,8 +57,9 @@ const DashboardHome = () => {
   const { unitSession } = useAuthStore();
   const navigate = useNavigate();
   const [dateTime, setDateTime] = useState(new Date());
-  const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
-  const [filterEnd, setFilterEnd] = useState<Date | undefined>(undefined);
+  const initialFortnight = useMemo(() => getBrazilFortnightRange(), []);
+  const [filterStart, setFilterStart] = useState<Date | undefined>(initialFortnight.start);
+  const [filterEnd, setFilterEnd] = useState<Date | undefined>(initialFortnight.end);
   const [tbrSearch, setTbrSearch] = useState("");
   const [feedbackAvg, setFeedbackAvg] = useState<number | null>(null);
   const [feedbackTotal, setFeedbackTotal] = useState<number | null>(null);
@@ -559,8 +560,8 @@ const DashboardHome = () => {
             <Calendar mode="single" selected={filterEnd} onSelect={setFilterEnd} locale={ptBR} className={cn("p-3 pointer-events-auto")} />
           </PopoverContent>
         </Popover>
-        {(filterStart || filterEnd) && (
-          <Button variant="ghost" size="sm" onClick={() => { setFilterStart(undefined); setFilterEnd(undefined); }}>
+        {(filterStart?.getTime() !== initialFortnight.start.getTime() || filterEnd?.getTime() !== initialFortnight.end.getTime()) && (
+          <Button variant="ghost" size="sm" onClick={() => { setFilterStart(initialFortnight.start); setFilterEnd(initialFortnight.end); }}>
             <X className="h-4 w-4 mr-1" /> Limpar
           </Button>
         )}

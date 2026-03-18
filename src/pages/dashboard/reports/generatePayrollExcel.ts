@@ -130,6 +130,7 @@ export function generatePayrollExcel(
   
   const headers = [
     "NOME COMPLETO",
+    "CPF",
     "Veículo",
     ...dateHeaders,
     "TOTAL",
@@ -145,8 +146,9 @@ export function generatePayrollExcel(
   const numDates = allDates.length;
 
   const COL_NAME = 0;
-  const COL_VEHICLE = 1;
-  const COL_DATES_START = 2;
+  const COL_CPF = 1;
+  const COL_VEHICLE = 2;
+  const COL_DATES_START = 3;
   const COL_TOTAL = COL_DATES_START + numDates;
   const COL_VALUE = COL_TOTAL + 1;
   const COL_ADDITIONAL = COL_TOTAL + 2;
@@ -242,6 +244,7 @@ export function generatePayrollExcel(
 
     wsData.push([
       d.driver.name,
+      d.driver.cpf || "",
       vehicleType,
       ...dailyValues,
       0, // COL_TOTAL
@@ -258,6 +261,7 @@ export function generatePayrollExcel(
   wsData.push([
     "TOTAL",
     "",
+    "",
     ...allDates.map(() => 0),
     0, // COL_TOTAL
     "", // COL_VALUE
@@ -273,6 +277,7 @@ export function generatePayrollExcel(
   wsData.push([
     "Total Pacotes Amazon",
     "",
+    "",
     ...allDates.map(() => ""),
     "",
     ...Array(5).fill("")
@@ -282,6 +287,7 @@ export function generatePayrollExcel(
   rowTracker.diferencaRow = wsData.length;
   wsData.push([
     "Diferença",
+    "",
     "",
     ...allDates.map(() => 0),
     0,
@@ -308,6 +314,7 @@ export function generatePayrollExcel(
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     wsData.push([
       d.driver.name,
+      d.driver.cpf || "",
       vehicleType,
       ...allDates.map(() => ""), // EMPTY for manual fill
       0, // COL_TOTAL formula placeholder
@@ -324,6 +331,7 @@ export function generatePayrollExcel(
     wsData.push([
       "",
       "",
+      "",
       ...allDates.map(() => ""),
       0,
       0,
@@ -338,6 +346,7 @@ export function generatePayrollExcel(
   // Min packages total row
   wsData.push([
     "TOTAL",
+    "",
     "",
     ...allDates.map(() => 0),
     0, // COL_TOTAL
@@ -359,6 +368,7 @@ export function generatePayrollExcel(
   wsData.push([
     "CONSOLIDADO",
     "",
+    "",
     ...dateHeaders,
     "TOTAL",
     ...emptyColsEndConsolidado
@@ -367,6 +377,7 @@ export function generatePayrollExcel(
   rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
     "MOTORISTAS POR PACOTES",
+    "",
     "",
     ...allDates.map(() => 0),
     0,
@@ -377,6 +388,7 @@ export function generatePayrollExcel(
   wsData.push([
     "MOTORISTAS - MÍNIMO DE 60 PACOTES",
     "",
+    "",
     ...allDates.map(() => 0),
     0,
     ...emptyColsEndConsolidado
@@ -386,6 +398,7 @@ export function generatePayrollExcel(
   rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
     "Total Pacotes",
+    "",
     "",
     ...allDates.map(() => 0),
     0,
@@ -681,6 +694,7 @@ export function generatePayrollExcel(
   // Set column widths
   const colWidths = [
     { wch: 35 }, // NOME COMPLETO
+    { wch: 15 }, // CPF
     { wch: 10 }, // Veículo
     ...allDates.map(() => ({ wch: 8 })), // Dates
     { wch: 10 }, // TOTAL

@@ -59,3 +59,23 @@ export function toBrazilDateStr(iso: string): string {
   const dd = String(br.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
+/** Get current fortnight range (1-15 or 16-last) in Brazil timezone */
+export function getBrazilFortnightRange(): { start: Date; end: Date } {
+  const br = getBrazilNow();
+  const day = br.getDate();
+  const month = br.getMonth();
+  const year = br.getFullYear();
+  
+  if (day <= 15) {
+    return {
+      start: new Date(year, month, 1),
+      end: new Date(year, month, 15, 23, 59, 59, 999)
+    };
+  } else {
+    // 16 to last day of month
+    return {
+      start: new Date(year, month, 16),
+      end: new Date(year, month + 1, 0, 23, 59, 59, 999)
+    };
+  }
+}

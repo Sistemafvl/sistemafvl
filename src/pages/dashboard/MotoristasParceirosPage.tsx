@@ -441,6 +441,8 @@ const MotoristasParceirosPage = () => {
               )}
               <div><span className="font-semibold text-muted-foreground">Última Operação:</span> {viewDriver.lastOperation ? new Date(viewDriver.lastOperation).toLocaleDateString("pt-BR") : "Sem registros"}</div>
 
+              <div><span className="font-semibold text-muted-foreground">Cadastrado em:</span> {new Date(viewDriver.created_at).toLocaleString("pt-BR")}</div>
+
               {hasBankData && (
                 <div className="pt-2 border-t space-y-1">
                   <p className="font-bold text-xs uppercase text-muted-foreground">Dados Bancários</p>
@@ -454,8 +456,6 @@ const MotoristasParceirosPage = () => {
                   </div>
                 </div>
               )}
-
-              <div><span className="font-semibold text-muted-foreground">Cadastrado em:</span> {new Date(viewDriver.created_at).toLocaleString("pt-BR")}</div>
 
               <Button
                 variant="outline"

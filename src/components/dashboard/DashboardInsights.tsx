@@ -250,9 +250,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos) no período." />
-        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO) no período." />
-        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} infoText="Conferentes que mais escanearam TBRs no período." />
+        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
+        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
+        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} infoText="Conferentes que mais escanearam TBRs. Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
