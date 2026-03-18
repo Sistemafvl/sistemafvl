@@ -387,14 +387,15 @@ const RelatoriosPage = () => {
           rideIds
         ),
       ]);
-      const tbrsData = await fetchAllRowsWithIn<{ ride_id: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-        rideIds
-      );
+      // Use RPC for TBR counts instead of fetching all rows
+      let tbrCountsByRide: Record<string, number> = {};
+      if (rideIds.length > 0) {
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) tbrCounts.forEach((r: any) => { tbrCountsByRide[r.ride_id] = Number(r.tbr_count); });
+      }
 
       const drivers = driversRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d.name]));
-      const allTbrs = tbrsData;
       const pisoRankData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       const allReturns = [...pisoRankData, ...psRankData, ...rtoRankData];
 

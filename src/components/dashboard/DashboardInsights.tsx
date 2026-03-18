@@ -106,15 +106,12 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
     const allReturnTbrs = new Set<string>();
     [...filteredPisoAll, ...rtoAll, ...psAll].forEach(e => { if (e.tbr_code) allReturnTbrs.add(e.tbr_code); });
     
-    // Get total TBRs for this unit in the period (ride_tbrs via rides)
+    // Get total TBRs for this unit in the period via RPC
     const rideIds = (rides30 ?? []).map(r => r.id);
     let totalTbrsInPeriod = 0;
     if (rideIds.length > 0) {
-      const tbList = await fetchAllRowsWithIn<{ id: string }>(
-        (chunk) => (from, to) => supabase.from("ride_tbrs").select("id").in("ride_id", chunk).range(from, to),
-        rideIds
-      );
-      totalTbrsInPeriod = tbList.length;
+      const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+      if (tbrCounts) totalTbrsInPeriod = tbrCounts.reduce((sum: number, r: any) => sum + Number(r.tbr_count), 0);
     }
     const totalOriginal = totalTbrsInPeriod + allReturnTbrs.size;
     if (totalOriginal > 0) {
