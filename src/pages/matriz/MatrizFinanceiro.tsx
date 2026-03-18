@@ -48,12 +48,13 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
       ]);
 
-      let tbrsData: any[] = [];
+      let tbrCountsMap: Record<string, number> = {};
       const rideIds = ridesData.map((r: any) => r.id);
       if (rideIds.length > 0) {
-        tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).order("id").range(from, to)
-        );
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) {
+          tbrCounts.forEach((r: any) => { tbrCountsMap[r.ride_id] = Number(r.tbr_count); });
+        }
       }
 
       const reativoByUnit = new Map<string, number>();
