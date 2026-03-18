@@ -260,11 +260,11 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const allTbrs = rideIds.length > 0
-        ? await fetchAllRowsWithIn<{ ride_id: string }>(
-            (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-            rideIds)
-        : [];
+      let tbrCountsByRide: Record<string, number> = {};
+      if (rideIds.length > 0) {
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) tbrCounts.forEach((r: any) => { tbrCountsByRide[r.ride_id] = Number(r.tbr_count); });
+      }
       const piso = pisoData;
       const ps = psData;
       const rto = rtoData;
