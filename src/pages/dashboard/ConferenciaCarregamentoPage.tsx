@@ -414,8 +414,10 @@ const ConferenciaCarregamentoPage = () => {
   const [searchRides, setSearchRides] = useState<RideWithDriver[]>([]);
   const [searchTbrs, setSearchTbrs] = useState<Record<string, Tbr[]>>({});
 
-  const fetchRides = useCallback(async () => {
+  const fetchRides = useCallback(async (showLoading = true) => {
     if (!unitId) return;
+
+    if (showLoading) setIsLoading(true);
 
     // Concurrency control: only apply results from the latest request
     const thisRequestId = ++requestIdRef.current;
@@ -683,7 +685,7 @@ const ConferenciaCarregamentoPage = () => {
         if (prev <= 1) {
           // Only auto-refresh if realtime lock is not active
           if (Date.now() > realtimeLockUntil.current) {
-            fetchRidesRef.current();
+            fetchRidesRef.current(false);
           }
           return 30;
         }
@@ -1351,7 +1353,7 @@ const ConferenciaCarregamentoPage = () => {
 
     processingQueueRef.current[rideId] = false;
     // Sync with DB only once after all queued items are processed
-    fetchRidesRef.current();
+    fetchRidesRef.current(false);
     fetchOpenRtosRef.current();
   }, []);
 
@@ -1821,7 +1823,7 @@ const ConferenciaCarregamentoPage = () => {
   const debouncedRealtimeFetch = useCallback(() => {
     if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
     realtimeDebounceRef.current = setTimeout(() => {
-      fetchRides();
+      fetchRides(false);
     }, 20000); // 20s debounce
   }, [fetchRides]);
 
