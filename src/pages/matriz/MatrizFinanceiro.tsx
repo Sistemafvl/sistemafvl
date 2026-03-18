@@ -85,7 +85,7 @@ const MatrizFinanceiro = () => {
     minPackages = [],
     fixedValues = [],
     reativoByUnit = new Map<string, number>(),
-    tbrs = []
+    tbrCountsMap = {} as Record<string, number>
   } = financialData || {};
 
   const loading = queryLoading || !financialData;
