@@ -294,8 +294,8 @@ const ConferenciaCarregamentoPage = () => {
   // Driver historical average TBRs/day (30 days)
   const [driverAvgMap, setDriverAvgMap] = useState<Map<string, number>>(new Map());
 
-  // 2-second countdown for cards auto-refresh
-  const [cardsCountdown, setCardsCountdown] = useState(2);
+  // 30-second countdown for cards auto-refresh
+  const [cardsCountdown, setCardsCountdown] = useState(30);
 
 
   const playSuccessBeep = () => {
@@ -420,8 +420,7 @@ const ConferenciaCarregamentoPage = () => {
     // Concurrency control: only apply results from the latest request
     const thisRequestId = ++requestIdRef.current;
 
-
-    const { data } = await supabase
+    const { data: rawRides } = await supabase
       .from("driver_rides")
       .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, completed_at, queue_entry_id")
       .eq("unit_id", unitId)
@@ -433,20 +432,45 @@ const ConferenciaCarregamentoPage = () => {
     // Stale response check
     if (thisRequestId !== requestIdRef.current) return;
 
-    if (!data) { setRides([]); setIsLoading(false); return; }
+    if (!rawRides) { 
+      setRides([]); 
+      setTbrs({});
+      processedCodesRef.current = {};
+      setIsLoading(false); 
+      return; 
+    }
 
-    const driverIds = [...new Set(data.map((r) => r.driver_id))];
-    const { data: drivers } = await supabase
-      .from("drivers_public")
-      .select("id, name, avatar_url, car_model, car_plate, car_color")
-      .in("id", driverIds);
+    const driverIds = [...new Set(rawRides.map((r) => r.driver_id))];
+    const rideIds = rawRides.map((r) => r.id);
+
+    // Fetch drivers and TBR data in parallel
+    const [driversResult, tbrsResult] = await Promise.all([
+      supabase
+        .from("drivers_public")
+        .select("id, name, avatar_url, car_model, car_plate, car_color")
+        .in("id", driverIds),
+      rideIds.length > 0 
+        ? (async () => {
+            const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
+            return fetchAllRowsWithIn<any>(
+              (ids) => (from, to) =>
+                supabase.from("ride_tbrs").select("id, code, scanned_at, trip_number, highlight, ride_id")
+                  .in("ride_id", ids)
+                  .order("id")
+                  .range(from, to),
+              rideIds
+            );
+          })()
+        : Promise.resolve([])
+    ]);
 
     // Stale response check
     if (thisRequestId !== requestIdRef.current) return;
 
-    const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
-
-    const mapped = data.map((r) => {
+    const driverMap = new Map((driversResult.data ?? []).map((d) => [d.id, d]));
+    
+    // Process rides
+    const mappedRides = rawRides.map((r) => {
       const d = driverMap.get(r.driver_id);
       return {
         ...r,
@@ -461,60 +485,38 @@ const ConferenciaCarregamentoPage = () => {
       };
     });
 
-    setRides(mapped);
-    // Update ref for realtime filtering
-    currentRideIdsRef.current = mapped.map(r => r.id);
+    // Process TBRs
+    const groupedTbrs: Record<string, Tbr[]> = {};
+    const newProcessed: Record<string, Set<string>> = {};
+    
+    (tbrsResult ?? []).forEach((t: any) => {
+      if (deletingRef.current.has(t.id)) return;
+      if (!groupedTbrs[t.ride_id]) {
+        groupedTbrs[t.ride_id] = [];
+        newProcessed[t.ride_id] = new Set();
+      }
+      const tbrObj = {
+        ...t,
+        trip_number: t.trip_number ?? 1,
+        _yellowHighlight: t.highlight === "yellow",
+      };
+      groupedTbrs[t.ride_id].push(tbrObj);
+      newProcessed[t.ride_id].add(t.code.toUpperCase());
+    });
+
+    // Atomic update of all relevant states
+    setRides(mappedRides);
+    setTbrs(groupedTbrs);
+    processedCodesRef.current = newProcessed;
+    currentRideIdsRef.current = mappedRides.map(r => r.id);
 
     setLockedConferenteIds(prev => {
       const next = new Set(prev);
-      mapped.forEach(r => { if (r.conferente_id) next.add(r.id); });
+      mappedRides.forEach(r => { if (r.conferente_id) next.add(r.id); });
       return next;
     });
 
-    const rideIds = mapped.map((r) => r.id);
-    if (rideIds.length > 0) {
-      // Use pagination + chunking to fetch ALL TBRs (bypass 1000 row limit and large .in() lists)
-      const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const tbrData = await fetchAllRowsWithIn<any>(
-        (ids) => (from, to) =>
-          supabase.from("ride_tbrs").select("id, code, scanned_at, trip_number, highlight, ride_id")
-            .in("ride_id", ids)
-            .order("id")
-            .range(from, to),
-        rideIds
-      );
-
-      // Stale response check
-      if (thisRequestId !== requestIdRef.current) return;
-
-      const grouped: Record<string, Tbr[]> = {};
-      (tbrData).forEach((t: any) => {
-        // Filter out TBRs currently being deleted
-        if (deletingRef.current.has(t.id)) return;
-        if (!grouped[t.ride_id]) grouped[t.ride_id] = [];
-        grouped[t.ride_id].push(t);
-      });
-      const result: Record<string, Tbr[]> = {};
-      for (const [rideId, list] of Object.entries(grouped)) {
-        result[rideId] = list.map((t: any) => ({
-          ...t,
-          trip_number: t.trip_number ?? 1,
-          _yellowHighlight: t.highlight === "yellow",
-        }));
-      }
-      setTbrs(result);
-      // Sync processedCodesRef with loaded data
-      const newProcessed: Record<string, Set<string>> = {};
-      for (const [rideId, tbrList] of Object.entries(result)) {
-        newProcessed[rideId] = new Set(tbrList.map(t => t.code.toUpperCase()));
-      }
-      processedCodesRef.current = newProcessed;
-    } else {
-      setTbrs({});
-      processedCodesRef.current = {};
-    }
     setIsLoading(false);
-
   }, [unitId, startDate, endDate]);
 
   // Stable driver IDs key - only changes when the set of drivers changes, not on every TBR scan
@@ -683,7 +685,7 @@ const ConferenciaCarregamentoPage = () => {
           if (Date.now() > realtimeLockUntil.current) {
             fetchRidesRef.current();
           }
-          return 2;
+          return 30;
         }
         return prev - 1;
       });
