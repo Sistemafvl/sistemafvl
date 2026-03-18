@@ -110,7 +110,7 @@ const MatrizMotoristas = () => {
       stats.rideDetails.forEach(ride => {
         const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
         const key = `${ride.unit_id}_${day}`;
-        const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
+        const rideTbrCount = tbrs[ride.id] || 0;
         const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
         const unitVal = unitSettings.find(s => s.unit_id === ride.unit_id)?.tbr_value || 0;
         const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
