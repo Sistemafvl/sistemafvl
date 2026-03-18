@@ -44,7 +44,7 @@ const MatrizUnidades = () => {
         fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, status, dnr_value").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("piso_entries").select("id, unit_id, status").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
-      ]).then(([ridesData, psData, rtoData, dnrData, pisoData, reviewsData]) => {
+      ]).then(async ([ridesData, psData, rtoData, dnrData, pisoData, reviewsData]) => {
         setRides(ridesData);
         setPsEntries(psData);
         setRtoEntries(rtoData);
@@ -54,10 +54,11 @@ const MatrizUnidades = () => {
         setLoading(false);
         const rideIds = ridesData.map((r: any) => r.id);
         if (rideIds.length > 0) {
-          fetchAllRows<{ id: string; ride_id: string }>((from, to) =>
-            supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-          ).then(data => setTbrs(data));
-        } else setTbrs([]);
+          const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+          const countsMap: Record<string, number> = {};
+          if (tbrCounts) tbrCounts.forEach((r: any) => { countsMap[r.ride_id] = Number(r.tbr_count); });
+          setTbrs(countsMap);
+        } else setTbrs({});
       });
     });
   }, [units, dateStart, dateEnd]);
