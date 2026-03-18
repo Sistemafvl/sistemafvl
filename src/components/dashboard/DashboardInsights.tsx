@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Trophy, TrendingDown, UserCheck, BarChart3, Percent, Clock, CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
 import InfoButton from "@/components/dashboard/InfoButton";
-import { getBrazilDayRange } from "@/lib/utils";
+import { getBrazilDayRange, getBrazilFortnightRange } from "@/lib/utils";
 
 interface Props {
   unitId: string;
@@ -42,13 +42,12 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
 
   const getSince = useCallback(() => {
     if (startDate) return startDate.toISOString();
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString();
+    return getBrazilFortnightRange().start.toISOString();
   }, [startDate]);
 
   const getUntil = useCallback(() => {
-    return endDate ? endDate.toISOString() : undefined;
+    if (endDate) return endDate.toISOString();
+    return getBrazilFortnightRange().end.toISOString();
   }, [endDate]);
 
   const fetchInsights = useCallback(async () => {
@@ -250,9 +249,9 @@ const DashboardInsights = ({ unitId, startDate, endDate }: Props) => {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
-        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setReturnPage} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
-        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} infoText="Conferentes que mais escanearam TBRs. Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês)." />
+        <PaginatedRankingCard title="Top Motoristas (Entregas)" icon={Trophy} data={topDrivers} color="text-yellow-500" page={driverPage} setPage={setDriverPage} infoText="Ranking dos motoristas com mais entregas (TBRs concluídos). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês) ou o período selecionado no filtro." />
+        <PaginatedRankingCard title="Maiores Ofensores de Retorno TBRs" icon={TrendingDown} data={topReturns} color="text-destructive" page={returnPage} setPage={setDriverPage} infoText="Motoristas com mais TBRs retornados (Piso, PS, RTO). Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês) ou o período selecionado no filtro." />
+        <PaginatedRankingCard title="Conferentes mais ativos" icon={UserCheck} data={topConferentes} color="text-primary" page={confPage} setPage={setConfPage} infoText="Conferentes que mais escanearam TBRs. Por padrão, exibe a Quinzena atual (01 a 15 ou 16 ao fim do mês) ou o período selecionado no filtro." />
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">

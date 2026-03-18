@@ -82,7 +82,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const todayDate = new Date(todayStr);
 
     const effectiveEnd = endDate ? endDate : todayDate;
-    const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 6));
+    const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 29));
 
     const days: string[] = [];
     const cursor = new Date(effectiveStart);
@@ -197,8 +197,8 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     : "hoje";
 
   const INFO_TEXTS: Record<string, string> = {
-    "Carregamentos": "Total de carregamentos realizados no período. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
-    "TBRs escaneados": "Total de pacotes originalmente bipados na conferência. Cada TBR é contado apenas uma vez, mesmo que tenha retornado como insucesso, PS ou RTO.",
+    "Carregamentos": "Total de carregamentos realizados no período. Por padrão, mostra os dados de hoje. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
+    "TBRs escaneados": "Total de pacotes originalmente bipados na conferência. Por padrão, mostra os dados de hoje. Cada TBR é contado apenas uma vez.",
     "PS abertos": "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolução manual.",
     "RTO abertos": "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuição.",
     "Insucessos abertos": "Pacotes que retornaram ao piso da unidade sem serem entregues.",
@@ -283,7 +283,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
             <CardTitle className="text-sm font-bold italic flex items-center gap-1">
               <Users className="h-4 w-4 text-primary" />
               Média diária por motorista
-              <InfoButton text="Clique para ver detalhes. Média de TBRs finalizados por dia por motorista no período selecionado." />
+              <InfoButton text="Clique para ver detalhes. Média de TBRs finalizados por dia por motorista. Por padrão, considera os últimos 30 dias ou o período selecionado." />
             </CardTitle>
           </CardHeader>
           <CardContent>
