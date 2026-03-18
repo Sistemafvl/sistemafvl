@@ -98,7 +98,7 @@ const MatrizFinanceiro = () => {
     return units.map(u => {
       const uRides = rides.filter(r => r.unit_id === u.id);
       const uRideIds = uRides.map(r => r.id);
-      const uTbrs = tbrs.filter(t => uRideIds.includes(t.ride_id)).length;
+      const uTbrs = uRideIds.reduce((sum, id) => sum + (tbrCountsMap[id] || 0), 0);
       const uDnr = dnrEntries.filter(d => d.unit_id === u.id);
       const dnrTotal = uDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
 
