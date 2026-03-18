@@ -331,8 +331,8 @@ const DriverRides = () => {
                     <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0 mt-1">
                       {rides.length - idx}
                     </div>
-                    <div className="flex-1 min-w-0 pr-20">
-                      <p className="font-semibold text-sm flex items-center gap-1 truncate text-primary">
+                    <div className="flex-1 min-w-0 pr-2 pb-1 md:pr-20">
+                      <p className="font-semibold text-sm flex items-center gap-1 truncate text-primary pr-14 md:pr-0">
                         <MapPin className="h-3.5 w-3.5 shrink-0" />
                         {ride.unit_name}
                       </p>
@@ -376,7 +376,7 @@ const DriverRides = () => {
                       )}
                     </div>
 
-                    <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5">
+                    <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-10">
                       {ride.dispute ? (
                         <div className={cn(
                           "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
@@ -400,7 +400,7 @@ const DriverRides = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-7 text-[10px] px-2 font-bold py-0 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors"
+                          className="h-7 text-[10px] px-2 font-bold py-0 hover:bg-destructive hover:text-destructive-foreground hover:border-destructive transition-colors bg-background/80 backdrop-blur-sm shadow-sm"
                           onClick={() => setSelectedDisputeRide(ride)}
                         >
                           <AlertCircle className="h-3 w-3 mr-1" />
@@ -410,8 +410,8 @@ const DriverRides = () => {
                     </div>
                   </div>
 
-                  {/* Mini-cards de métricas */}
-                    <div className="grid grid-cols-5 gap-1.5">
+                  {/* Mini-cards de métricas responsivos */}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-1.5">
                      <div className="flex flex-col items-center p-1.5 rounded-md bg-emerald-500/10 border border-emerald-500/20">
                        <DollarSign className="h-3 w-3 text-emerald-600 mb-0.5" />
                        <span className="text-[10px] text-muted-foreground leading-none">Total</span>

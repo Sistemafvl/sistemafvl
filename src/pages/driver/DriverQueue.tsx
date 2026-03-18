@@ -278,7 +278,7 @@ const DriverQueue = () => {
 
   if (activeRide) {
     return (
-      <div className="space-y-4 px-1">
+      <div className="space-y-4 px-0">
         <div className="flex items-center gap-3">
           <Truck className="h-6 w-6 text-primary flex-shrink-0" />
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-foreground">Em Carregamento</h1>
