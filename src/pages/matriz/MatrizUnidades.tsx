@@ -16,7 +16,7 @@ const MatrizUnidades = () => {
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
   const [units, setUnits] = useState<any[]>([]);
   const [rides, setRides] = useState<any[]>([]);
-  const [tbrs, setTbrs] = useState<any[]>([]);
+  const [tbrs, setTbrs] = useState<Record<string, number>>({});
   const [psEntries, setPsEntries] = useState<any[]>([]);
   const [rtoEntries, setRtoEntries] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
