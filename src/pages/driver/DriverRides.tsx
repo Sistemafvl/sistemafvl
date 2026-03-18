@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck, MessageSquare, AlertCircle, Check, Info, Loader2 } from "lucide-react";
+import { Car, MapPin, Clock, Calendar as CalendarIcon, User, KeyRound, Route, DollarSign, TrendingUp, Zap, Package, AlertTriangle, CheckCircle2, UserCheck, MessageSquare, AlertCircle, Check, Info, Loader2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { format, subDays } from "date-fns";
 import { cn } from "@/lib/utils";
 import {
@@ -51,6 +51,7 @@ interface Ride {
     status: string;
     dispute_type: string;
     observation: string | null;
+    feedback: string | null;
   } | null;
 }
 
@@ -108,7 +109,7 @@ const DriverRides = () => {
         supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
         supabase.from("driver_custom_values").select("unit_id, custom_tbr_value").eq("driver_id", driverId),
         supabase.from("reativo_entries").select("ride_id, reativo_value").eq("driver_id", driverId).gte("activated_at", startDate.toISOString()).lte("activated_at", new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate(), 23, 59, 59, 999).toISOString()),
-        supabase.from("ride_disputes" as any).select("id, ride_id, status, dispute_type, observation").in("ride_id", rideIds),
+        supabase.from("ride_disputes" as any).select("id, ride_id, status, dispute_type, observation, feedback").in("ride_id", rideIds),
       ]);
 
       // Fetch TBRs with pagination + chunking (bypass 1000 limit and large .in() lists)
@@ -235,6 +236,38 @@ const DriverRides = () => {
       });
     } finally {
       setIsSubmittingDispute(false);
+    }
+  };
+
+  const handleFeedback = async (disputeId: string, feedback: "positive" | "negative") => {
+    try {
+      const { error } = await supabase
+        .from("ride_disputes" as any)
+        .update({ 
+          feedback, 
+          feedback_at: new Date().toISOString() 
+        })
+        .eq("id", disputeId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Feedback enviado!",
+        description: feedback === "positive" ? "Ficamos felizes que foi resolvido!" : "Sentimos muito. Vamos analisar o que ocorreu.",
+      });
+
+      // Update local state
+      setRides(prev => prev.map(r => 
+        r.dispute?.id === disputeId 
+          ? { ...r, dispute: { ...r.dispute, feedback } } 
+          : r
+      ));
+    } catch (err: any) {
+      toast({
+        title: "Erro ao enviar feedback",
+        description: err.message,
+        variant: "destructive"
+      });
     }
   };
 
@@ -378,22 +411,69 @@ const DriverRides = () => {
 
                     <div className="absolute top-3 right-3 flex flex-col items-end gap-1.5 z-10">
                       {ride.dispute ? (
-                        <div className={cn(
-                          "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
-                          ride.dispute.status === "resolved" 
-                            ? "bg-emerald-500 text-white shadow-sm" 
-                            : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
-                        )}>
-                          {ride.dispute.status === "resolved" ? (
-                            <>
-                              <Check className="h-3 w-3" strokeWidth={3} />
-                              Resolvido
-                            </>
-                          ) : (
-                            <>
-                              <Clock className="h-3 w-3 animate-pulse" />
-                              Pendente
-                            </>
+                        <div className="flex flex-col items-end gap-1.5">
+                          <div className={cn(
+                            "flex items-center gap-1.5 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider",
+                            ride.dispute.status === "resolved" 
+                              ? "bg-emerald-500 text-white shadow-sm" 
+                              : "bg-amber-500/10 text-amber-600 border border-amber-500/20"
+                          )}>
+                            {ride.dispute.status === "resolved" ? (
+                              <>
+                                <Check className="h-3 w-3" strokeWidth={3} />
+                                Resolvido
+                              </>
+                            ) : (
+                              <>
+                                <Clock className="h-3 w-3 animate-pulse" />
+                                Pendente
+                              </>
+                            )}
+                          </div>
+                          
+                          {ride.dispute.status === "resolved" && (
+                            <div className="flex flex-col items-end gap-1">
+                              {!ride.dispute.feedback ? (
+                                <>
+                                  <span className="text-[9px] font-bold text-muted-foreground italic">Bem resolvido?</span>
+                                  <div className="flex gap-1">
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-6 w-6 rounded-full hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200"
+                                      onClick={() => handleFeedback(ride.dispute!.id, "positive")}
+                                    >
+                                      <ThumbsUp className="h-3 w-3" />
+                                    </Button>
+                                    <Button 
+                                      variant="outline" 
+                                      size="icon" 
+                                      className="h-6 w-6 rounded-full hover:bg-destructive/5 hover:text-destructive hover:border-destructive/20"
+                                      onClick={() => handleFeedback(ride.dispute!.id, "negative")}
+                                    >
+                                      <ThumbsDown className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </>
+                              ) : (
+                                <div className={cn(
+                                  "flex items-center gap-1 text-[10px] font-bold",
+                                  ride.dispute.feedback === "positive" ? "text-emerald-600" : "text-destructive"
+                                )}>
+                                  {ride.dispute.feedback === "positive" ? (
+                                    <>
+                                      <ThumbsUp className="h-3 w-3" />
+                                      Positivo
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ThumbsDown className="h-3 w-3" />
+                                      Negativo
+                                    </>
+                                  )}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                       ) : (

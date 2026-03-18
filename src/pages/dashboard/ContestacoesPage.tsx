@@ -18,7 +18,9 @@ import {
   Package,
   Route,
   KeyRound,
-  Info
+  Info,
+  ThumbsUp,
+  ThumbsDown
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -38,6 +40,7 @@ interface Dispute {
   driver_name: string;
   conferente_name: string;
   ride_data: any;
+  feedback: string | null;
 }
 
 interface ConferenteSummary {
@@ -339,9 +342,27 @@ const ContestacoesPage = () => {
                         FEITO
                       </Button>
                     ) : (
-                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold uppercase tracking-widest text-[10px]">
-                        Resolvido
-                      </Badge>
+                      <div className="flex items-center gap-3">
+                        {d.feedback && (
+                          <div className={cn(
+                            "flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border animate-in fade-in slide-in-from-right-2 duration-500",
+                            d.feedback === "positive" 
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200" 
+                              : "bg-destructive/10 text-destructive border-destructive/20"
+                          )}>
+                            <span>Motorista {d.driver_name} avaliou como</span>
+                            {d.feedback === "positive" ? (
+                              <ThumbsUp className="h-3.5 w-3.5" />
+                            ) : (
+                              <ThumbsDown className="h-3.5 w-3.5" />
+                            )}
+                            <span>a sua resposta.</span>
+                          </div>
+                        )}
+                        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 font-bold uppercase tracking-widest text-[10px]">
+                          Resolvido
+                        </Badge>
+                      </div>
                     )}
                   </div>
                 </CardHeader>

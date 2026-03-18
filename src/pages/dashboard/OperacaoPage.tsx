@@ -209,12 +209,14 @@ const OperacaoPage = () => {
     setLoading(false);
   };
 
-  const totalCarregamentos = cards.length;
-  const totalTbrsAtual = cards.reduce((s, c) => s + c.total_tbrs, 0);
-  const totalAllReturns = cards.reduce((s, c) => s + c.all_returns, 0);
-  const totalPisoReturns = cards.reduce((s, c) => s + c.piso_only_returns, 0);
-  const totalLidos = totalTbrsAtual + totalAllReturns; // Total original bipado (ride_tbrs + retornos removidos)
-  const performanceRate = totalLidos > 0 ? ((totalTbrsAtual / totalLidos) * 100).toFixed(1) : "100";
+  const activeCards = cards.filter(c => c.loading_status !== "cancelled");
+  const totalCarregamentos = activeCards.length;
+  const totalTbrsAtual = activeCards.reduce((s, c) => s + c.total_tbrs, 0);
+  const totalAllReturns = activeCards.reduce((s, c) => s + c.all_returns, 0);
+  const totalPisoReturns = activeCards.reduce((s, c) => s + c.piso_only_returns, 0);
+  const totalLidos = totalTbrsAtual; // Mantém a lógica da conferência: conta somente o carregado
+  const totalBipadosParaPerformance = totalTbrsAtual + totalAllReturns;
+  const performanceRate = totalBipadosParaPerformance > 0 ? ((totalTbrsAtual / totalBipadosParaPerformance) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
     ? cards.filter((c) =>

@@ -1858,8 +1858,8 @@ const ConferenciaCarregamentoPage = () => {
     const cycle1Cutoff = `${date}T11:30:00.000Z`; // 08:30 BRT
     const cycle2Cutoff = `${date}T12:30:00.000Z`; // 09:30 BRT
 
-    const ridesInC1 = displayRides.filter(r => r.completed_at && r.completed_at <= cycle1Cutoff);
-    const ridesInC2 = displayRides.filter(r => r.completed_at && r.completed_at <= cycle2Cutoff);
+    const ridesInC1 = displayRides.filter(r => r.loading_status !== "cancelled" && r.completed_at && r.completed_at <= cycle1Cutoff);
+    const ridesInC2 = displayRides.filter(r => r.loading_status !== "cancelled" && r.completed_at && r.completed_at <= cycle2Cutoff);
     const ridesInC3 = displayRides.filter(r => r.loading_status !== "cancelled");
 
     const tbrsInC1 = ridesInC1.reduce((acc, r) => acc + (displayTbrs[r.id]?.length || 0), 0);
@@ -2128,7 +2128,7 @@ const ConferenciaCarregamentoPage = () => {
               <div className="flex flex-col">
                 <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground leading-none">TBRs</span>
                 <span className="text-sm font-bold leading-none">
-                  {Object.values(displayTbrs).reduce((acc, current) => acc + current.length, 0)}
+                  {displayRides.filter(r => r.loading_status !== "cancelled").reduce((acc, r) => acc + (displayTbrs[r.id]?.length || 0), 0)}
                 </span>
               </div>
             </div>

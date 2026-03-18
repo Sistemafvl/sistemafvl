@@ -108,10 +108,12 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     // Bar chart - rides per day (all rides including cancelled)
     const ridesByDay: Record<string, number> = {};
     days.forEach(d => ridesByDay[d] = 0);
-    allRidesInRange.forEach(r => {
-      const d = toBrazilDateStr(r.completed_at);
-      if (ridesByDay[d] !== undefined) ridesByDay[d]++;
-    });
+    allRidesInRange
+      .filter(r => r.loading_status !== "cancelled")
+      .forEach(r => {
+        const d = toBrazilDateStr(r.completed_at);
+        if (ridesByDay[d] !== undefined) ridesByDay[d]++;
+      });
     setBarData(days.map(d => ({ day: d.slice(8, 10) + "/" + d.slice(5, 7), count: ridesByDay[d] })));
 
     const allRIds = allRidesInRange.map(r => r.id);
