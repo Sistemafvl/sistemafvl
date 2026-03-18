@@ -48,12 +48,13 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
       ]);
 
-      let tbrsData: any[] = [];
+      let tbrCountsMap: Record<string, number> = {};
       const rideIds = ridesData.map((r: any) => r.id);
       if (rideIds.length > 0) {
-        tbrsData = await fetchAllRows<{ ride_id: string }>((from, to) =>
-          supabase.from("ride_tbrs").select("ride_id").in("ride_id", rideIds).order("id").range(from, to)
-        );
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) {
+          tbrCounts.forEach((r: any) => { tbrCountsMap[r.ride_id] = Number(r.tbr_count); });
+        }
       }
 
       const reativoByUnit = new Map<string, number>();
@@ -69,7 +70,7 @@ const MatrizFinanceiro = () => {
         minPackages: minPkgData,
         fixedValues: fixedData,
         reativoByUnit,
-        tbrs: tbrsData
+        tbrCountsMap
       };
     },
     enabled: units.length > 0,
@@ -84,7 +85,7 @@ const MatrizFinanceiro = () => {
     minPackages = [],
     fixedValues = [],
     reativoByUnit = new Map<string, number>(),
-    tbrs = []
+    tbrCountsMap = {} as Record<string, number>
   } = financialData || {};
 
   const loading = queryLoading || !financialData;
@@ -97,7 +98,7 @@ const MatrizFinanceiro = () => {
     return units.map(u => {
       const uRides = rides.filter(r => r.unit_id === u.id);
       const uRideIds = uRides.map(r => r.id);
-      const uTbrs = tbrs.filter(t => uRideIds.includes(t.ride_id)).length;
+      const uTbrs = uRideIds.reduce((sum, id) => sum + (tbrCountsMap[id] || 0), 0);
       const uDnr = dnrEntries.filter(d => d.unit_id === u.id);
       const dnrTotal = uDnr.reduce((a, d) => a + Number(d.dnr_value || 0), 0);
 
@@ -108,7 +109,7 @@ const MatrizFinanceiro = () => {
       uRides.forEach(ride => {
         const day = format(new Date(ride.completed_at), "yyyy-MM-dd");
         const key = `${ride.driver_id}_${day}`;
-        const rideTbrCount = tbrs.filter(t => t.ride_id === ride.id).length;
+        const rideTbrCount = tbrCountsMap[ride.id] || 0;
         const cv = customValues.find(c => c.driver_id === ride.driver_id && c.unit_id === ride.unit_id);
         const unitVal = settings.find(s => s.unit_id === u.id)?.tbr_value || 0;
         const tbrVal = cv ? Number(cv.custom_tbr_value) : Number(unitVal);
@@ -141,7 +142,7 @@ const MatrizFinanceiro = () => {
         reativoTotal,
       };
     }).sort((a, b) => b.totalPaid - a.totalPaid);
-  }, [units, rides, tbrs, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
+  }, [units, rides, tbrCountsMap, dnrEntries, settings, customValues, minPackages, fixedValues, reativoByUnit]);
   
 
   const totals = useMemo(() => ({

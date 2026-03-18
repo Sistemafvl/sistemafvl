@@ -260,11 +260,11 @@ const RelatoriosPage = () => {
       const rideIds = rides.map(r => r.id);
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-      const allTbrs = rideIds.length > 0
-        ? await fetchAllRowsWithIn<{ ride_id: string }>(
-            (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-            rideIds)
-        : [];
+      let tbrCountsByRide: Record<string, number> = {};
+      if (rideIds.length > 0) {
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) tbrCounts.forEach((r: any) => { tbrCountsByRide[r.ride_id] = Number(r.tbr_count); });
+      }
       const piso = pisoData;
       const ps = psData;
       const rto = rtoData;
@@ -278,9 +278,10 @@ const RelatoriosPage = () => {
 
       const rideToDay = new Map<string, string>();
       rides.forEach(r => rideToDay.set(r.id, format(new Date(r.completed_at), "yyyy-MM-dd")));
-      allTbrs.forEach(t => {
-        const day = rideToDay.get(t.ride_id);
-        if (day && dayMap.has(day)) dayMap.get(day)!.tbrs++;
+      // Distribute TBR counts to days
+      rides.forEach(r => {
+        const day = format(new Date(r.completed_at), "yyyy-MM-dd");
+        if (dayMap.has(day)) dayMap.get(day)!.tbrs += (tbrCountsByRide[r.id] || 0);
       });
 
       piso.forEach(p => { const day = format(new Date(p.created_at), "yyyy-MM-dd"); if (dayMap.has(day)) dayMap.get(day)!.piso++; });
@@ -386,21 +387,22 @@ const RelatoriosPage = () => {
           rideIds
         ),
       ]);
-      const tbrsData = await fetchAllRowsWithIn<{ ride_id: string }>(
-        (ids) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", ids).order("id").range(from, to),
-        rideIds
-      );
+      // Use RPC for TBR counts instead of fetching all rows
+      let tbrCountsByRide: Record<string, number> = {};
+      if (rideIds.length > 0) {
+        const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+        if (tbrCounts) tbrCounts.forEach((r: any) => { tbrCountsByRide[r.ride_id] = Number(r.tbr_count); });
+      }
 
       const drivers = driversRes.data ?? [];
       const driverMap = new Map(drivers.map(d => [d.id, d.name]));
-      const allTbrs = tbrsData;
       const pisoRankData = pisoRaw.filter(p => !OPERATIONAL_PISO_REASONS.includes(p.reason ?? ""));
       const allReturns = [...pisoRankData, ...psRankData, ...rtoRankData];
 
       const ranking: RankingRow[] = driverIds.map(did => {
         const driverRides = rides.filter(r => r.driver_id === did);
         const driverRideIds = driverRides.map(r => r.id);
-        const tbrs = allTbrs.filter(t => driverRideIds.includes(t.ride_id)).length;
+        const tbrs = driverRideIds.reduce((sum, id) => sum + (tbrCountsByRide[id] || 0), 0);
         const returnTbrSet = new Set<string>();
         allReturns.forEach((r: any) => { if (r.ride_id && driverRideIds.includes(r.ride_id) && r.tbr_code) returnTbrSet.add(r.tbr_code); });
         const returns = returnTbrSet.size;
