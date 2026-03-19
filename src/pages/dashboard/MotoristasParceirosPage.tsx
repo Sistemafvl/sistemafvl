@@ -142,6 +142,17 @@ const MotoristasParceirosPage = () => {
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
 
+    // Fetch ALL last operations (since driver count is small)
+    const { data: lastOps } = await supabase
+      .from("driver_rides")
+      .select("driver_id, completed_at")
+      .order("completed_at", { ascending: false });
+
+    const lastOpMap = new Map<string, string>();
+    (lastOps ?? []).forEach(r => {
+      if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
+    });
+
     setAllDrivers(driversData.map(d => ({
       ...d,
       id: d.id!,
@@ -151,7 +162,7 @@ const MotoristasParceirosPage = () => {
       car_plate: d.car_plate!,
       active: d.active!,
       created_at: d.created_at!,
-      lastOperation: null, // Will be loaded on demand/per page
+      lastOperation: lastOpMap.get(d.id!) || null,
     })));
     setLoading(false);
   };
@@ -220,33 +231,6 @@ const MotoristasParceirosPage = () => {
   const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
   const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  // Fetch last operation for the current page only
-  useEffect(() => {
-    if (paginated.length === 0) return;
-    const fetchLastOps = async () => {
-      const driverIds = paginated.map(d => d.id);
-      // We only need the latest ride for each driver in the current page
-      // Still needs to fetch and group, but only for those 50 IDs
-      const { data: rides } = await supabase
-        .from("driver_rides")
-        .select("driver_id, completed_at")
-        .in("driver_id", driverIds)
-        .order("completed_at", { ascending: false });
-
-      const lastOpMap = new Map<string, string>();
-      (rides ?? []).forEach(r => {
-        if (!lastOpMap.has(r.driver_id)) lastOpMap.set(r.driver_id, r.completed_at);
-      });
-
-      setAllDrivers(prev => prev.map(d => {
-        if (lastOpMap.has(d.id)) {
-          return { ...d, lastOperation: lastOpMap.get(d.id)! };
-        }
-        return d;
-      }));
-    };
-    fetchLastOps();
-  }, [page, paginated.length]); // Re-run when page changes or results change
 
   // Reset page when filters change
   useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep, filterUnit, unitDriverIds]);
