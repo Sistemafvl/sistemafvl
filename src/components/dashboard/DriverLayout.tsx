@@ -6,6 +6,7 @@ import { useTheme } from "next-themes";
 import DriverSidebar from "./DriverSidebar";
 import DriverCallAlert from "./DriverCallAlert";
 import DriverDailyNotices from "./DriverDailyNotices";
+import DriverInvoicePendingModal from "./DriverInvoicePendingModal";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
@@ -37,6 +38,7 @@ const DriverLayout = () => {
       </div>
       <DriverCallAlert />
       <DriverDailyNotices />
+      <DriverInvoicePendingModal />
     </SidebarProvider>
   );
 };
