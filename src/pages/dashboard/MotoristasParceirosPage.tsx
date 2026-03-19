@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Truck, Eye, Search, Download, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Truck, Eye, Search, Download, Loader2, ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -17,6 +17,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import { toast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface DriverGlobal {
   id: string;
@@ -98,6 +99,8 @@ const MotoristasParceirosPage = () => {
   const [driverDocs, setDriverDocs] = useState<DriverDoc[]>([]);
   const [downloadingZip, setDownloadingZip] = useState(false);
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
+  const [sortConfig, setSortConfig] = useState<{ key: keyof DriverGlobal; direction: "asc" | "desc" } | null>({ key: "name", direction: "asc" });
 
   useEffect(() => {
     if (unitSession) {
@@ -225,15 +228,54 @@ const MotoristasParceirosPage = () => {
     if (filterNeighborhood && d.neighborhood !== filterNeighborhood) return false;
     if (filterCep && !(d.cep ?? "").includes(filterCep.replace(/\D/g, ""))) return false;
     if (unitDriverIds && !unitDriverIds.has(d.id)) return false;
+
+    // Metric card filters
+    const fifteenDaysAgo = new Date();
+    fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+    const isActive = d.lastOperation && new Date(d.lastOperation) >= fifteenDaysAgo;
+
+    if (statusFilter === "active" && !isActive) return false;
+    if (statusFilter === "inactive" && isActive) return false;
+
     return true;
   });
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-  const paginated = filtered.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const sorted = [...filtered].sort((a, b) => {
+    if (!sortConfig) return 0;
+    const { key, direction } = sortConfig;
+    let aVal = a[key] ?? "";
+    let bVal = b[key] ?? "";
+
+    if (typeof aVal === "string" && typeof bVal === "string") {
+      aVal = aVal.toLowerCase();
+      bVal = bVal.toLowerCase();
+    }
+
+    if (aVal < bVal) return direction === "asc" ? -1 : 1;
+    if (aVal > bVal) return direction === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.ceil(sorted.length / ITEMS_PER_PAGE);
+  const paginated = sorted.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
 
   // Reset page when filters change
-  useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep, filterUnit, unitDriverIds]);
+  useEffect(() => { setPage(1); }, [search, filterState, filterCity, filterNeighborhood, filterCep, filterUnit, unitDriverIds, statusFilter, sortConfig]);
+
+  const onSort = (key: keyof DriverGlobal) => {
+    setSortConfig(prev => {
+      if (prev?.key === key) {
+        return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  };
+
+  const SortIcon = ({ column }: { column: keyof DriverGlobal }) => {
+    if (sortConfig?.key !== column) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-30" />;
+    return sortConfig.direction === "asc" ? <ArrowUp className="h-3 w-3 ml-1 text-primary" /> : <ArrowDown className="h-3 w-3 ml-1 text-primary" />;
+  };
 
   const hasBankData = bankData && (bankData.bank_name || bankData.pix_key);
 
@@ -249,21 +291,30 @@ const MotoristasParceirosPage = () => {
     <div className="space-y-4">
       {/* Indicator Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
+        <Card 
+          className={cn("cursor-pointer transition-all hover:border-primary/50", statusFilter === "all" && "border-primary bg-primary/5 shadow-sm")} 
+          onClick={() => setStatusFilter("all")}
+        >
           <CardContent className="p-4 text-center space-y-1">
             <Truck className="h-4 w-4 mx-auto text-primary" />
             <p className="text-2xl font-bold">{totalDrivers}</p>
             <p className="text-[10px] text-muted-foreground">Total Cadastrados</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={cn("cursor-pointer transition-all hover:border-green-600/50", statusFilter === "active" && "border-green-600 bg-green-50 shadow-sm")} 
+          onClick={() => setStatusFilter("active")}
+        >
           <CardContent className="p-4 text-center space-y-1">
             <Eye className="h-4 w-4 mx-auto text-green-600" />
             <p className="text-2xl font-bold text-green-600">{activeDrivers}</p>
             <p className="text-[10px] text-muted-foreground">Ativos (15d)</p>
           </CardContent>
         </Card>
-        <Card>
+        <Card 
+          className={cn("cursor-pointer transition-all hover:border-muted-foreground/50", statusFilter === "inactive" && "border-muted-foreground bg-muted shadow-sm")} 
+          onClick={() => setStatusFilter("inactive")}
+        >
           <CardContent className="p-4 text-center space-y-1">
             <Truck className="h-4 w-4 mx-auto text-muted-foreground" />
             <p className="text-2xl font-bold text-muted-foreground">{inactiveDrivers}</p>
@@ -335,12 +386,24 @@ const MotoristasParceirosPage = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="font-bold">Nome</TableHead>
-                      <TableHead className="font-bold">CPF</TableHead>
-                      <TableHead className="font-bold">Placa</TableHead>
-                      <TableHead className="font-bold">Cidade</TableHead>
-                      <TableHead className="font-bold">UF</TableHead>
-                      <TableHead className="font-bold">Última Operação</TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("name")}>
+                        <div className="flex items-center">Nome <SortIcon column="name" /></div>
+                      </TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("cpf")}>
+                        <div className="flex items-center">CPF <SortIcon column="cpf" /></div>
+                      </TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("car_plate")}>
+                        <div className="flex items-center">Placa <SortIcon column="car_plate" /></div>
+                      </TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("city")}>
+                        <div className="flex items-center">Cidade <SortIcon column="city" /></div>
+                      </TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("state")}>
+                        <div className="flex items-center">UF <SortIcon column="state" /></div>
+                      </TableHead>
+                      <TableHead className="font-bold cursor-pointer hover:bg-muted/50 transition-colors" onClick={() => onSort("lastOperation")}>
+                        <div className="flex items-center">Última Operação <SortIcon column="lastOperation" /></div>
+                      </TableHead>
                       <TableHead className="font-bold text-center">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
