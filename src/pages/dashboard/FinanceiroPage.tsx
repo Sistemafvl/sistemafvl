@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import JSZip from "jszip";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +43,7 @@ const FinanceiroPage = () => {
   const [deleteReportId, setDeleteReportId] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [zipLoading, setZipLoading] = useState(false);
 
   const unitId = unitSession?.id;
 
@@ -117,6 +119,74 @@ const FinanceiroPage = () => {
       toast({ title: "Erro", description: "Erro ao baixar arquivo.", variant: "destructive" });
     }
     setDownloading(null);
+  };
+
+  const handleDownloadAllZip = async () => {
+    if (!selectedReport) return;
+    setZipLoading(true);
+    
+    try {
+      const zip = new JSZip();
+      const driverEntries = selectedReport.report_data as any[];
+      let addedFilesCount = 0;
+      
+      const downloadPromises = driverEntries.map(async (d) => {
+        const inv = invoices[d.driver?.id];
+        if (!inv) return;
+
+        let storagePath = inv.file_url;
+        if (storagePath.startsWith("http")) {
+          const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
+          if (match) {
+            storagePath = decodeURIComponent(match[1]);
+          } else {
+            return;
+          }
+        }
+
+        const { data, error } = await supabase.functions.invoke("get-signed-url", {
+          body: { bucket: "driver-documents", path: storagePath, driver_id: d.driver?.id },
+        });
+
+        if (data?.signedUrl) {
+          try {
+            const response = await fetch(data.signedUrl);
+            if (!response.ok) throw new Error("Fetch failed");
+            const blob = await response.blob();
+            const cleanName = d.driver?.name?.replace(/[^a-z0-9]/gi, '_') || "motorista";
+            const fileName = `${cleanName}_${inv.file_name}`;
+            zip.file(fileName, blob);
+            addedFilesCount++;
+          } catch (fetchErr) {
+            console.error(`Failed to fetch invoice for ${d.driver?.name}:`, fetchErr);
+          }
+        }
+      });
+
+      await Promise.all(downloadPromises);
+
+      if (addedFilesCount === 0) {
+        toast({ title: "Aviso", description: "Nenhuma NF encontrada para baixar.", variant: "destructive" });
+        setZipLoading(false);
+        return;
+      }
+
+      const content = await zip.generateAsync({ type: "blob" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(content);
+      const reportDate = format(new Date(selectedReport.period_start + "T12:00:00"), "dd-MM-yyyy");
+      link.download = `NFs_Relatorio_${reportDate}.zip`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({ title: "Sucesso", description: `${addedFilesCount} NFs comprimidas e prontas para o download.` });
+    } catch (err) {
+        console.error("ZIP download error:", err);
+        toast({ title: "Erro", description: "Erro ao gerar arquivo ZIP.", variant: "destructive" });
+    } finally {
+        setZipLoading(false);
+    }
   };
 
   const handleDeleteReport = async () => {
@@ -218,6 +288,16 @@ const FinanceiroPage = () => {
           <h1 className="text-xl font-bold italic flex-1">
             Relatório {format(new Date(selectedReport.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(selectedReport.period_end + "T12:00:00"), "dd/MM/yyyy")}
           </h1>
+          <Button
+            variant="outline"
+            size="sm"
+            className="border-primary/30 hover:bg-primary/10 gap-2"
+            onClick={handleDownloadAllZip}
+            disabled={zipLoading || Object.values(invoices).filter(Boolean).length === 0}
+          >
+            {zipLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Baixar todas NFs (ZIP)
+          </Button>
           <Button
             variant="outline"
             size="sm"
