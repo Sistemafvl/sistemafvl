@@ -21,6 +21,11 @@ const DriverInvoicePendingModal = () => {
 
     const checkPendingInvoices = async () => {
         try {
+            // Frequency limit: Once per day
+            const lastShown = localStorage.getItem("last_invoice_modal_shown");
+            const today = new Date().toISOString().slice(0, 10);
+            if (lastShown === today) return;
+
             // Fetch reports for this unit
             const { data: reports, error: reportsError } = await supabase
                 .from("payroll_reports")
@@ -48,6 +53,7 @@ const DriverInvoicePendingModal = () => {
 
             if (hasPending) {
                 setIsOpen(true);
+                localStorage.setItem("last_invoice_modal_shown", today);
             }
         } catch (err) {
             console.error("Error checking pending invoices:", err);
