@@ -194,9 +194,9 @@ const MotoristasParceirosPage = () => {
   };
 
   // Get unique values for filters
-  const states = [...new Set(allDrivers.map(d => d.state).filter(Boolean) as string[])].sort();
-  const cities = [...new Set(allDrivers.filter(d => !filterState || d.state === filterState).map(d => d.city).filter(Boolean) as string[])].sort();
-  const neighborhoods = [...new Set(allDrivers.filter(d => (!filterState || d.state === filterState) && (!filterCity || d.city === filterCity)).map(d => d.neighborhood).filter(Boolean) as string[])].sort();
+  const states = [...new Set(allDrivers.map(d => d.state?.toUpperCase()).filter(Boolean) as string[])].sort();
+  const cities = [...new Set(allDrivers.filter(d => !filterState || d.state?.toUpperCase() === filterState.toUpperCase()).map(d => d.city).filter(Boolean) as string[])].sort();
+  const neighborhoods = [...new Set(allDrivers.filter(d => (!filterState || d.state?.toUpperCase() === filterState.toUpperCase()) && (!filterCity || d.city === filterCity)).map(d => d.neighborhood).filter(Boolean) as string[])].sort();
 
   const filtered = allDrivers.filter(d => {
     if (search) {
@@ -209,7 +209,7 @@ const MotoristasParceirosPage = () => {
 
       if (!(matchName || matchPlat || matchCpf)) return false;
     }
-    if (filterState && d.state !== filterState) return false;
+    if (filterState && d.state?.toUpperCase() !== filterState.toUpperCase()) return false;
     if (filterCity && d.city !== filterCity) return false;
     if (filterNeighborhood && d.neighborhood !== filterNeighborhood) return false;
     if (filterCep && !(d.cep ?? "").includes(filterCep.replace(/\D/g, ""))) return false;
@@ -255,9 +255,9 @@ const MotoristasParceirosPage = () => {
 
   // Card metrics
   const totalDrivers = allDrivers.length;
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  const activeDrivers = allDrivers.filter(d => d.lastOperation && new Date(d.lastOperation) >= thirtyDaysAgo).length;
+  const fifteenDaysAgo = new Date();
+  fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+  const activeDrivers = allDrivers.filter(d => d.lastOperation && new Date(d.lastOperation) >= fifteenDaysAgo).length;
   const inactiveDrivers = totalDrivers - activeDrivers;
   const uniqueStates = states.length;
 
@@ -276,14 +276,14 @@ const MotoristasParceirosPage = () => {
           <CardContent className="p-4 text-center space-y-1">
             <Eye className="h-4 w-4 mx-auto text-green-600" />
             <p className="text-2xl font-bold text-green-600">{activeDrivers}</p>
-            <p className="text-[10px] text-muted-foreground">Ativos (30d)</p>
+            <p className="text-[10px] text-muted-foreground">Ativos (15d)</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center space-y-1">
             <Truck className="h-4 w-4 mx-auto text-muted-foreground" />
             <p className="text-2xl font-bold text-muted-foreground">{inactiveDrivers}</p>
-            <p className="text-[10px] text-muted-foreground">Inativos (30d)</p>
+            <p className="text-[10px] text-muted-foreground">Inativos (15d)</p>
           </CardContent>
         </Card>
         <Card>
@@ -374,7 +374,7 @@ const MotoristasParceirosPage = () => {
                           <TableCell className="text-xs">{maskCPF(d.cpf)}</TableCell>
                           <TableCell className="uppercase">{maskPlate(d.car_plate)}</TableCell>
                           <TableCell>{d.city ?? "-"}</TableCell>
-                          <TableCell>{d.state ?? "-"}</TableCell>
+                          <TableCell>{d.state?.toUpperCase() ?? "-"}</TableCell>
                           <TableCell className="text-xs">
                             {d.lastOperation ? new Date(d.lastOperation).toLocaleDateString("pt-BR") : "—"}
                           </TableCell>
