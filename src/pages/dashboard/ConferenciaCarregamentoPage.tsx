@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import { useDisputeStore } from "@/stores/use-dispute-store";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -165,6 +166,7 @@ const maskCPF = (v: string) => {
 
 const ConferenciaCarregamentoPage = () => {
   const { unitSession, managerSession, conferenteSession } = useAuthStore();
+  const { setNeedsCheck, setShowDisputeModal } = useDisputeStore();
   const [rides, setRides] = useState<RideWithDriver[]>([]);
   const [conferentes, setConferentes] = useState<Conferente[]>([]);
   const [tbrs, setTbrs] = useState<Record<string, Tbr[]>>({});
@@ -757,6 +759,9 @@ const ConferenciaCarregamentoPage = () => {
     setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "finished", finished_at: new Date().toISOString() } : r));
     await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
     fetchRides();
+    
+    // Trigger dispute modal check after finishing a ride
+    setNeedsCheck(true);
   };
 
   const handleRetornar = async (rideId: string, e?: React.MouseEvent) => {

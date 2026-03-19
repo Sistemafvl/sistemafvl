@@ -12,9 +12,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
 import { toast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
+import { useDisputeStore } from "@/stores/use-dispute-store";
+import DisputeNotificationModal from "./DisputeNotificationModal";
 
 const DashboardLayout = () => {
   const { unitSession, managerSession, conferenteSession, setConferenteSession } = useAuthStore();
+  const { setNeedsCheck } = useDisputeStore();
   const { setTheme } = useTheme();
   const [conferentes, setConferentes] = useState<{ id: string; name: string }[]>([]);
   const { claimSession } = useConferenteSessionLock();
@@ -63,6 +66,12 @@ const DashboardLayout = () => {
       .eq("active", true)
       .then(({ data }) => { if (data) setConferentes(data); });
   }, [unitSession?.id]);
+
+  useEffect(() => {
+    if (unitSession?.id) {
+      setNeedsCheck(true);
+    }
+  }, [unitSession?.id, conferenteSession?.id, setNeedsCheck]);
 
   if (!unitSession) return <Navigate to="/" replace />;
 
@@ -148,6 +157,7 @@ const DashboardLayout = () => {
       </div>
       <InsucessoBalloon />
       <QueuePanel />
+      <DisputeNotificationModal />
     </SidebarProvider>
   );
 };
