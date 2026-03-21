@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap, Monitor } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -221,23 +221,38 @@ const QueuePanel = () => {
 
   const fetchPredefinedDrivers = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase.from("unit_predefined_drivers").select("driver_id, suggested_route, unit_login_id").eq("unit_id", unitId);
-    if (!data || data.length === 0) { setPredefinedDrivers([]); return; }
-    const driverIds = data.map(d => d.driver_id);
-    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
-    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    try {
+      const { data, error } = await supabase.from("unit_predefined_drivers" as any).select("driver_id, suggested_route, unit_login_id" as any).eq("unit_id", unitId);
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        console.log("QueuePanel: No predefined drivers found for unit", unitId);
+        setPredefinedDrivers([]);
+        return;
+      }
 
-    const loginIds = data.map(d => d.unit_login_id).filter(Boolean);
-    const { data: logins } = loginIds.length ? await supabase.from("unit_logins").select("id, login").in("id", loginIds) : { data: [] };
-    const loginMap = new Map((logins ?? []).map(l => [l.id, l.login]));
+      const driverIds = data.map((d: any) => d.driver_id);
+      const { data: drivers, error: dError } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+      if (dError) throw dError;
+      
+      const nameMap = new Map((drivers ?? []).map((d: any) => [d.id, d.name]));
 
-    setPredefinedDrivers(data.map(d => ({
-      driver_id: d.driver_id,
-      driver_name: nameMap.get(d.driver_id) ?? "—",
-      suggested_route: d.suggested_route,
-      unit_login_id: d.unit_login_id,
-      login_name: loginMap.get(d.unit_login_id) ?? null
-    })));
+      const loginIds = data.map((d: any) => d.unit_login_id).filter(Boolean);
+      const { data: logins, error: lError } = loginIds.length ? await supabase.from("unit_logins").select("id, login").in("id", loginIds) : { data: [], error: null };
+      if (lError) throw lError;
+      
+      const loginMap = new Map((logins ?? []).map((l: any) => [l.id, l.login]));
+
+      setPredefinedDrivers(data.map((d: any) => ({
+        driver_id: d.driver_id,
+        driver_name: nameMap.get(d.driver_id) ?? "—",
+        suggested_route: d.suggested_route,
+        unit_login_id: d.unit_login_id,
+        login_name: loginMap.get(d.unit_login_id) ?? null
+      })));
+    } catch (error) {
+      console.error("QueuePanel: Error fetching predefined drivers:", error);
+    }
   }, [unitId]);
 
   useEffect(() => { fetchPredefinedDrivers(); }, [fetchPredefinedDrivers]);
@@ -583,13 +598,25 @@ const QueuePanel = () => {
                 <Plus className="h-4 w-4" />
               </Button>
               <Button
-                size="icon"
                 variant="outline"
-                className="h-7 w-7 ml-1 text-amber-500 border-amber-200 hover:bg-amber-50"
-                onClick={() => { setShowBatchModal(true); }}
+                size="icon"
+                className="h-8 w-8 text-amber-500 border-amber-200 hover:bg-amber-50 hover:text-amber-600"
                 title="Programação Pré-definida (Carga em Lote)"
+                onClick={() => {
+                  fetchPredefinedDrivers();
+                  setShowBatchModal(true);
+                }}
               >
-                 <Zap className="h-4 w-4" />
+                <Zap className={`${predefinedDrivers.length > 0 ? "fill-amber-500" : ""} h-4 w-4`} />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8 text-blue-500 border-blue-200 hover:bg-blue-50 hover:text-blue-600 ml-1"
+                title="Abrir Painel de Chamada"
+                onClick={() => window.open(`/dashboard/calling-panel?unit_id=${unitId}`, '_blank')}
+              >
+                <Monitor className="h-4 w-4" />
               </Button>
               {count > 0 && (
                 <Badge variant="default" className="ml-auto">{count} na fila</Badge>

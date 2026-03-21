@@ -45,6 +45,7 @@ import DirectorsPage from "./pages/admin/DirectorsPage";
 import AdminDriversPage from "./pages/admin/AdminDriversPage";
 import DatabasePage from "./pages/admin/DatabasePage";
 import SecurityPage from "./pages/admin/SecurityPage";
+import CallingPanelPage from "./pages/dashboard/CallingPanelPage";
 import NotFound from "./pages/NotFound";
 import InstallPage from "./pages/InstallPage";
 import OfflineIndicator from "./components/OfflineIndicator";
@@ -123,6 +124,7 @@ const App = () => (
             <Route path="banco" element={<DatabasePage />} />
             <Route path="seguranca" element={<SecurityPage />} />
           </Route>
+          <Route path="/dashboard/calling-panel" element={<CallingPanelPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

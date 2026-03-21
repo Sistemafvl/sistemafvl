@@ -763,8 +763,10 @@ const ConfiguracoesPage = () => {
               {minPackages.map(mp => (
                 <div key={mp.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
                   <div className="flex-1">
-                    <span className="font-semibold">{mp.driver_name}</span>
-                    {mp.target_date && <p className="text-xs text-muted-foreground">Data: {formatDateFullBR(mp.target_date)}</p>}
+                    <span className="font-semibold">
+                      {mp.driver_name}
+                      {mp.target_date && ` - ${formatDateFullBR(mp.target_date)}`}
+                    </span>
                   </div>
                   <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>

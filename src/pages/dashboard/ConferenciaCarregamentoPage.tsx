@@ -197,6 +197,9 @@ const ConferenciaCarregamentoPage = () => {
   const [conferentePopoverOpen, setConferentePopoverOpen] = useState(false);
   const [unitLogins, setUnitLogins] = useState<{ login: string; password: string }[]>([]);
   const [iniciarConfirmRideId, setIniciarConfirmRideId] = useState<string | null>(null);
+  const [parkingModalOpen, setParkingModalOpen] = useState(false);
+  const [selectedQueueIdForCall, setSelectedQueueIdForCall] = useState<string | null>(null);
+  const [parkingSpotInput, setParkingSpotInput] = useState("");
   const unitId = unitSession?.id;
   const [openRtos, setOpenRtos] = useState<OpenRto[]>([]);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -1155,7 +1158,10 @@ const ConferenciaCarregamentoPage = () => {
           scanCountsRef.current[rideId][code.toUpperCase()] = 0;
           playErrorBeep();
 
-          const errorMsg = (rpcRes as any)?.error || rpcError?.message;
+          let errorMsg = (rpcRes as any)?.error || rpcError?.message;
+          if (errorMsg === "TBR already exists in another active loading") {
+            errorMsg = "Este TBR já foi bipado em outro carregamento ativo.";
+          }
           const { toast } = await import("@/hooks/use-toast");
           toast({ title: "Erro ao salvar TBR", description: errorMsg, variant: "destructive" });
           return;
@@ -1413,6 +1419,28 @@ const ConferenciaCarregamentoPage = () => {
   };
 
   // Cancel loading
+  const handleConfirmCall = async () => {
+    if (!selectedQueueIdForCall) return;
+    const callerName = conferenteSession?.name || managerSession?.name || "Conferente";
+    
+    setCallingDriverId(selectedQueueIdForCall);
+    
+    await supabase.from("queue_entries").update({ 
+      called_at: new Date().toISOString(), 
+      called_by_name: callerName,
+      parking_spot: parkingSpotInput.trim()
+    } as any).eq("id", selectedQueueIdForCall);
+    
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: "Motorista chamado!", description: `Vaga ${parkingSpotInput} informada ao painel.` });
+    
+    setParkingModalOpen(false);
+    setSelectedQueueIdForCall(null);
+    setParkingSpotInput("");
+    
+    setTimeout(() => setCallingDriverId(null), 2000);
+  };
+
   const handleOpenCancelModal = (rideId: string) => {
     setCancelRideId(rideId);
     setCancelPassword("");
@@ -2292,13 +2320,10 @@ const ConferenciaCarregamentoPage = () => {
                           </Badge>
                           {ride.queue_entry_id && !isCancelled && !isFinished && (
                             <button
-                              onClick={async () => {
-                                setCallingDriverId(ride.queue_entry_id!);
-                                const callerName = conferenteSession?.name || managerSession?.name || "Conferente";
-                                await supabase.from("queue_entries").update({ called_at: new Date().toISOString(), called_by_name: callerName } as any).eq("id", ride.queue_entry_id!);
-                                const { toast } = await import("@/hooks/use-toast");
-                                toast({ title: "Motorista chamado!", description: "O motorista foi notificado." });
-                                setTimeout(() => setCallingDriverId(null), 2000);
+                              onClick={() => {
+                                setSelectedQueueIdForCall(ride.queue_entry_id!);
+                                setParkingModalOpen(true);
+                                setParkingSpotInput("");
                               }}
                               className={cn("h-6 w-6 flex items-center justify-center rounded-full transition-colors", callingDriverId === ride.queue_entry_id ? "bg-yellow-400 text-yellow-900 animate-pulse" : "bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground")}
                               title="Chamar motorista"
@@ -2867,7 +2892,33 @@ const ConferenciaCarregamentoPage = () => {
                           className="h-7 text-xs font-mono flex-1"
                           placeholder="Bipar ou digitar TBR para localizar..."
                           value={focusSearchInput}
-                          onChange={e => setFocusSearchInput(e.target.value)}
+                          onChange={e => {
+                            const val = e.target.value;
+                            setFocusSearchInput(val);
+                            if (val.trim().length >= 3) {
+                              const upper = val.trim().toUpperCase();
+                              const found = focusedTbrs.find(t => t.code.toUpperCase() === upper);
+                              if (found) {
+                                setSelectedTbrsForDelete(prev => {
+                                  const current = new Set(prev[ride.id] ?? []);
+                                  current.add(found.id);
+                                  return { ...prev, [ride.id]: current };
+                                });
+                                // Scroll into view
+                                const listEl = tbrListRefs.current[`focus-${ride.id}`];
+                                if (listEl) {
+                                  const visibleFocus = val.trim().length > 0
+                                    ? focusedTbrs.filter(t => t.code.toUpperCase().includes(val.trim().toUpperCase()))
+                                    : focusedTbrs;
+                                  const idx = visibleFocus.findIndex(t => t.id === found.id);
+                                  if (idx >= 0 && listEl.children[idx]) {
+                                    (listEl.children[idx] as HTMLElement).scrollIntoView({ behavior: "smooth", block: "center" });
+                                  }
+                                }
+                                setTimeout(() => setFocusSearchInput(""), 300);
+                              }
+                            }
+                          }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter") {
                               const val = focusSearchInput.trim().toUpperCase();
@@ -3530,6 +3581,40 @@ const ConferenciaCarregamentoPage = () => {
             >
               <X className="h-5 w-5" />
             </button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={parkingModalOpen} onOpenChange={setParkingModalOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-primary" />
+              Chamar para Vaga
+            </DialogTitle>
+            <DialogDescription>
+              Informe o número da vaga onde o motorista deve estacionar.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="parking_spot" className="text-right">Vaga</Label>
+              <Input
+                id="parking_spot"
+                className="col-span-3 text-2xl font-black text-center"
+                placeholder="Ex: 10"
+                value={parkingSpotInput}
+                onChange={(e) => setParkingSpotInput(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => { if (e.key === "Enter") handleConfirmCall(); }}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-3">
+            <Button variant="outline" onClick={() => setParkingModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleConfirmCall} disabled={!parkingSpotInput.trim()}>
+              Confirmar Chamada
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
