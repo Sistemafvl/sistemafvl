@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap } from "lucide-react";
 
 interface QueueEntry {
   id: string;
@@ -117,6 +117,11 @@ const QueuePanel = () => {
   const [nameSearchLoading, setNameSearchLoading] = useState(false);
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Predefined Batch states
+  const [predefinedDrivers, setPredefinedDrivers] = useState<{ driver_id: string; driver_name: string; suggested_route: string | null }[]>([]);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
+
   const unitId = unitSession?.id;
 
   // Auto-dismiss toasts after 5s
@@ -208,6 +213,22 @@ const QueuePanel = () => {
     return () => { supabase.removeChannel(channel); };
   }, [unitId, fetchQueue]);
 
+  const fetchPredefinedDrivers = useCallback(async () => {
+    if (!unitId) return;
+    const { data } = await supabase.from("unit_predefined_drivers").select("driver_id, suggested_route").eq("unit_id", unitId);
+    if (!data || data.length === 0) { setPredefinedDrivers([]); return; }
+    const driverIds = data.map(d => d.driver_id);
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setPredefinedDrivers(data.map(d => ({
+      driver_id: d.driver_id,
+      driver_name: nameMap.get(d.driver_id) ?? "—",
+      suggested_route: d.suggested_route
+    })));
+  }, [unitId]);
+
+  useEffect(() => { fetchPredefinedDrivers(); }, [fetchPredefinedDrivers]);
+
 
   const formatTime = (iso: string) => {
     const d = new Date(iso);
@@ -290,6 +311,67 @@ const QueuePanel = () => {
       fetchQueue();
     } finally {
       setDefiningRide(false);
+    }
+  };
+
+  const handleBatchDefine = async () => {
+    if (!unitId || predefinedDrivers.length === 0) return;
+    setBatchProcessing(true);
+    try {
+      // Get current unit logins to suggest one if possible
+      const { data: unitLogins } = await supabase.from("unit_logins").select("id, login").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
+      const availableLogins = unitLogins ?? [];
+
+      // Get used logins today to filter
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const { data: ridesData } = await supabase.from("driver_rides").select("login").eq("unit_id", unitId).gte("completed_at", today.toISOString()).not("login", "is", null);
+      const usedLogins = new Set<string>((ridesData ?? []).map((r: any) => r.login).filter(Boolean));
+
+      for (const pd of predefinedDrivers) {
+        // 1. Check if driver is already in a ride
+        const { data: activeRide } = await supabase.from("driver_rides").select("id").eq("driver_id", pd.driver_id).eq("status", "in_progress").maybeSingle();
+        if (activeRide) continue;
+
+        // 2. Find or create queue entry
+        let qeId = "";
+        const existingEntry = entries.find(e => e.driver_id === pd.driver_id);
+        if (existingEntry) {
+          qeId = existingEntry.id;
+        } else {
+          const { data: newQe } = await supabase.from("queue_entries").insert({
+            unit_id: unitId,
+            driver_id: pd.driver_id,
+            status: "approved"
+          } as any).select("id").single();
+          if (newQe) qeId = newQe.id;
+        }
+
+        if (!qeId) continue;
+
+        // 3. Pick a login that hasn't been used (if any available)
+        const nextLogin = availableLogins.find(al => !usedLogins.has(al.login));
+        if (nextLogin) usedLogins.add(nextLogin.login);
+
+        // 4. Create ride
+        await supabase.functions.invoke("create-ride-with-login", {
+          body: {
+            driver_id: pd.driver_id,
+            unit_id: unitId,
+            queue_entry_id: qeId,
+            route: pd.suggested_route || "",
+            unit_login_id: nextLogin?.id || null,
+          },
+        });
+
+        // Small delay to prevent race conditions or overloading
+        await new Promise(r => setTimeout(r, 500));
+      }
+
+      setShowBatchModal(false);
+      fetchQueue();
+    } finally {
+      setBatchProcessing(false);
     }
   };
 
@@ -474,6 +556,15 @@ const QueuePanel = () => {
                 title="Adicionar motorista na fila"
               >
                 <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-7 w-7 ml-1 text-amber-500 border-amber-200 hover:bg-amber-50"
+                onClick={() => { setShowBatchModal(true); }}
+                title="Programação Pré-definida (Carga em Lote)"
+              >
+                 <Zap className="h-4 w-4" />
               </Button>
               {count > 0 && (
                 <Badge variant="default" className="ml-auto">{count} na fila</Badge>
@@ -741,6 +832,42 @@ const QueuePanel = () => {
                 </Button>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+      {/* Modal de Confirmação em Lote */}
+      <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-amber-600">
+               <Zap className="h-5 w-5 fill-amber-500" />
+               Programação Pré-definida
+            </DialogTitle>
+            <DialogDescription>
+              Deseja carregar os motoristas abaixo em sequência? Eles serão movidos para carregamento com suas rotas sugeridas.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="max-h-60 overflow-y-auto space-y-2 border rounded-md p-2 bg-muted/20">
+              {predefinedDrivers.length === 0 ? (
+                <p className="text-sm text-muted-foreground italic text-center py-4">Nenhum motorista configurado nas configurações.</p>
+              ) : (
+                predefinedDrivers.map(pd => (
+                  <div key={pd.driver_id} className="flex items-center justify-between p-2 rounded border bg-card text-xs">
+                    <span className="font-bold">{pd.driver_name}</span>
+                    <span className="text-muted-foreground">{pd.suggested_route || "Sem rota"}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => setShowBatchModal(false)} disabled={batchProcessing}>
+                Cancelar
+              </Button>
+              <Button className="flex-1 font-bold italic bg-amber-600 hover:bg-amber-700 text-white" onClick={handleBatchDefine} disabled={batchProcessing || predefinedDrivers.length === 0}>
+                {batchProcessing ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Processando...</> : "Confirmar e Iniciar"}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

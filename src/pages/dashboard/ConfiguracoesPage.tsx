@@ -40,6 +40,13 @@ interface FixedValue {
   fixed_value: number;
 }
 
+interface PredefinedDriver {
+  id: string;
+  driver_id: string;
+  driver_name: string;
+  suggested_route: string | null;
+}
+
 interface DriverOption {
   id: string;
   name: string;
@@ -102,6 +109,14 @@ const ConfiguracoesPage = () => {
   const [fvValue, setFvValue] = useState("");
   const [fvSaving, setFvSaving] = useState(false);
 
+  // Predefined Drivers
+  const [predefinedDrivers, setPredefinedDrivers] = useState<PredefinedDriver[]>([]);
+  const [pdDriverSearch, setPdDriverSearch] = useState("");
+  const [pdDriverResults, setPdDriverResults] = useState<DriverOption[]>([]);
+  const [pdSelectedDriver, setPdSelectedDriver] = useState<DriverOption | null>(null);
+  const [pdRoute, setPdRoute] = useState("");
+  const [pdSaving, setPdSaving] = useState(false);
+
   const fetchLogins = useCallback(async () => {
     if (!unitId) return;
     const { data } = await supabase.from("unit_logins").select("id, login, password").eq("unit_id", unitId).eq("active", true).order("created_at", { ascending: true });
@@ -156,7 +171,23 @@ const ConfiguracoesPage = () => {
     setFixedValues(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? d.driver_name ?? "—", target_date: d.target_date, fixed_value: Number(d.fixed_value) })));
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues]);
+  const fetchPredefinedDrivers = useCallback(async () => {
+    if (!unitId) return;
+    const { fetchAllRows } = await import("@/lib/supabase-helpers");
+    const data = await fetchAllRows<any>((from, to) => supabase.from("unit_predefined_drivers" as any).select("id, driver_id, suggested_route").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    if (!data.length) { setPredefinedDrivers([]); return; }
+    const driverIds = data.map((d: any) => d.driver_id);
+    const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
+    const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+    setPredefinedDrivers(data.map((d: any) => ({
+      id: d.id,
+      driver_id: d.driver_id,
+      driver_name: nameMap.get(d.driver_id) ?? "—",
+      suggested_route: d.suggested_route
+    })));
+  }, [unitId]);
+
+  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); fetchPredefinedDrivers(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues, fetchPredefinedDrivers]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
@@ -174,6 +205,7 @@ const ConfiguracoesPage = () => {
   useEffect(() => { const t = setTimeout(() => searchDrivers(bonusDriverSearch, setBonusDriverResults), 300); return () => clearTimeout(t); }, [bonusDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(mpDriverSearch, setMpDriverResults), 300); return () => clearTimeout(t); }, [mpDriverSearch]);
   useEffect(() => { const t = setTimeout(() => searchDrivers(fvDriverSearch, setFvDriverResults), 300); return () => clearTimeout(t); }, [fvDriverSearch]);
+  useEffect(() => { const t = setTimeout(() => searchDrivers(pdDriverSearch, setPdDriverResults), 300); return () => clearTimeout(t); }, [pdDriverSearch]);
 
   const handleAddLogin = async () => {
     if (!unitId || !newLogin.trim() || !newPassword.trim()) return;
@@ -326,6 +358,25 @@ const ConfiguracoesPage = () => {
   const handleDeleteFixedValue = async (id: string) => {
     await supabase.from("driver_fixed_values" as any).delete().eq("id", id);
     await fetchFixedValues();
+  };
+
+  const handleAddPredefinedDriver = async () => {
+    if (!unitId || !pdSelectedDriver) return;
+    setPdSaving(true);
+    await supabase.from("unit_predefined_drivers" as any).upsert({
+      unit_id: unitId,
+      driver_id: pdSelectedDriver.id,
+      suggested_route: pdRoute || null,
+    } as any, { onConflict: "unit_id,driver_id" });
+    setPdSelectedDriver(null); setPdDriverSearch(""); setPdRoute(""); setPdDriverResults([]);
+    await fetchPredefinedDrivers();
+    setPdSaving(false);
+    toast({ title: "Motorista adicionado à programação!" });
+  };
+
+  const handleDeletePredefinedDriver = async (id: string) => {
+    await supabase.from("unit_predefined_drivers" as any).delete().eq("id", id);
+    await fetchPredefinedDrivers();
   };
 
   if (!unitId) return null;
@@ -689,6 +740,73 @@ const ConfiguracoesPage = () => {
                   </div>
                   <span className="text-primary font-mono font-bold">R$ {formatCurrency(fv.fixed_value)}</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteFixedValue(fv.id)}>
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Programação Pré-definida */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 font-bold italic text-lg">
+            <Users className="h-5 w-5 text-primary" />
+            Programação Pré-definida
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Configure motoristas para carregamento rápido. Ao usar o botão na fila, esses motoristas serão processados em sequência com as rotas pré-definidas.
+          </p>
+          <div className="space-y-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={pdSelectedDriver ? pdSelectedDriver.name : pdDriverSearch}
+                onChange={(e) => { setPdDriverSearch(e.target.value); setPdSelectedDriver(null); }}
+                placeholder="Buscar motorista por nome ou CPF..."
+                className="pl-9"
+              />
+              {pdSelectedDriver && (
+                <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => { setPdSelectedDriver(null); setPdDriverSearch(""); }}>
+                  <X className="h-4 w-4 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            {pdDriverResults.length > 0 && !pdSelectedDriver && (
+              <div className="border rounded-md max-h-32 overflow-y-auto">
+                {pdDriverResults.map(d => (
+                  <button key={d.id} className="w-full text-left px-3 py-2 hover:bg-muted text-sm" onClick={() => { setPdSelectedDriver(d); setPdDriverResults([]); }}>
+                    {d.name} — {d.cpf}
+                  </button>
+                ))}
+              </div>
+            )}
+            {pdSelectedDriver && (
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Rota Sugerida (Opcional)</label>
+                  <Input value={pdRoute} onChange={(e) => setPdRoute(e.target.value)} placeholder="Ex: ROTA 01" />
+                </div>
+                <Button onClick={handleAddPredefinedDriver} disabled={pdSaving} size="sm" className="w-full">
+                  {pdSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
+                  Adicionar à Programação
+                </Button>
+              </div>
+            )}
+          </div>
+          {predefinedDrivers.length > 0 && (
+            <div className="space-y-2">
+              {predefinedDrivers.map(pd => (
+                <div key={pd.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
+                  <div className="flex-1">
+                    <span className="font-semibold">{pd.driver_name}</span>
+                    {pd.suggested_route && <p className="text-xs text-muted-foreground">Rota: {pd.suggested_route}</p>}
+                  </div>
+                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeletePredefinedDriver(pd.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
