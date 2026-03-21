@@ -118,7 +118,13 @@ const QueuePanel = () => {
   const nameDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Predefined Batch states
-  const [predefinedDrivers, setPredefinedDrivers] = useState<{ driver_id: string; driver_name: string; suggested_route: string | null }[]>([]);
+  const [predefinedDrivers, setPredefinedDrivers] = useState<{ 
+    driver_id: string; 
+    driver_name: string; 
+    suggested_route: string | null;
+    unit_login_id: string | null;
+    login_name: string | null;
+  }[]>([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchProcessing, setBatchProcessing] = useState(false);
 
@@ -215,15 +221,22 @@ const QueuePanel = () => {
 
   const fetchPredefinedDrivers = useCallback(async () => {
     if (!unitId) return;
-    const { data } = await supabase.from("unit_predefined_drivers").select("driver_id, suggested_route").eq("unit_id", unitId);
+    const { data } = await supabase.from("unit_predefined_drivers").select("driver_id, suggested_route, unit_login_id").eq("unit_id", unitId);
     if (!data || data.length === 0) { setPredefinedDrivers([]); return; }
     const driverIds = data.map(d => d.driver_id);
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
     const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+
+    const loginIds = data.map(d => d.unit_login_id).filter(Boolean);
+    const { data: logins } = loginIds.length ? await supabase.from("unit_logins").select("id, login").in("id", loginIds) : { data: [] };
+    const loginMap = new Map((logins ?? []).map(l => [l.id, l.login]));
+
     setPredefinedDrivers(data.map(d => ({
       driver_id: d.driver_id,
       driver_name: nameMap.get(d.driver_id) ?? "—",
-      suggested_route: d.suggested_route
+      suggested_route: d.suggested_route,
+      unit_login_id: d.unit_login_id,
+      login_name: loginMap.get(d.unit_login_id) ?? null
     })));
   }, [unitId]);
 
@@ -348,10 +361,22 @@ const QueuePanel = () => {
         }
 
         if (!qeId) continue;
-
-        // 3. Pick a login that hasn't been used (if any available)
-        const nextLogin = availableLogins.find(al => !usedLogins.has(al.login));
-        if (nextLogin) usedLogins.add(nextLogin.login);
+        
+        // 3. Simple Login selection logic:
+        // Prioritize predefined login, otherwise pick first available
+        let finalLoginId = pd.unit_login_id;
+        
+        if (!finalLoginId) {
+          const nextLogin = availableLogins.find(al => !usedLogins.has(al.login));
+          if (nextLogin) {
+            finalLoginId = nextLogin.id;
+            usedLogins.add(nextLogin.login);
+          }
+        } else {
+          // If using predefined login, mark it as used
+          const pdLogin = availableLogins.find(al => al.id === finalLoginId);
+          if (pdLogin) usedLogins.add(pdLogin.login);
+        }
 
         // 4. Create ride
         await supabase.functions.invoke("create-ride-with-login", {
@@ -360,7 +385,7 @@ const QueuePanel = () => {
             unit_id: unitId,
             queue_entry_id: qeId,
             route: pd.suggested_route || "",
-            unit_login_id: nextLogin?.id || null,
+            unit_login_id: finalLoginId || null,
           },
         });
 
@@ -853,9 +878,15 @@ const QueuePanel = () => {
                 <p className="text-sm text-muted-foreground italic text-center py-4">Nenhum motorista configurado nas configurações.</p>
               ) : (
                 predefinedDrivers.map(pd => (
-                  <div key={pd.driver_id} className="flex items-center justify-between p-2 rounded border bg-card text-xs">
-                    <span className="font-bold">{pd.driver_name}</span>
-                    <span className="text-muted-foreground">{pd.suggested_route || "Sem rota"}</span>
+                  <div key={pd.driver_id} className="p-2 rounded border bg-card text-[11px] space-y-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-xs">{pd.driver_name}</span>
+                      <Badge variant="outline" className="text-[9px] h-4">{pd.login_name || "Auto login"}</Badge>
+                    </div>
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Zap className="h-3 w-3 text-amber-500 shrink-0" />
+                      <span className="truncate">{pd.suggested_route || "Sem rota definida"}</span>
+                    </div>
                   </div>
                 ))
               )}

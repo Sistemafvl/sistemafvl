@@ -30,6 +30,7 @@ interface MinPackage {
   driver_id: string;
   driver_name: string;
   min_packages: number;
+  target_date: string | null;
 }
 
 interface FixedValue {
@@ -115,6 +116,7 @@ const ConfiguracoesPage = () => {
   const [pdDriverResults, setPdDriverResults] = useState<DriverOption[]>([]);
   const [pdSelectedDriver, setPdSelectedDriver] = useState<DriverOption | null>(null);
   const [pdRoute, setPdRoute] = useState("");
+  const [pdLoginId, setPdLoginId] = useState("");
   const [pdSaving, setPdSaving] = useState(false);
 
   const fetchLogins = useCallback(async () => {
@@ -157,7 +159,13 @@ const ConfiguracoesPage = () => {
     if (!driverIds.length) { setMinPackages([]); return; }
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
     const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
-    setMinPackages(data.map((d: any) => ({ id: d.id, driver_id: d.driver_id, driver_name: nameMap.get(d.driver_id) ?? "—", min_packages: d.min_packages })));
+    setMinPackages(data.map((d: any) => ({
+      id: d.id,
+      driver_id: d.driver_id,
+      driver_name: nameMap.get(d.driver_id) ?? "—",
+      min_packages: d.min_packages,
+      target_date: d.target_date
+    })));
   }, [unitId]);
 
   const fetchFixedValues = useCallback(async () => {
@@ -179,11 +187,18 @@ const ConfiguracoesPage = () => {
     const driverIds = data.map((d: any) => d.driver_id);
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
     const nameMap = new Map((drivers ?? []).map(d => [d.id, d.name]));
+
+    const loginIds = data.map((d: any) => d.unit_login_id).filter(Boolean);
+    const { data: logins } = loginIds.length ? await supabase.from("unit_logins").select("id, login").in("id", loginIds) : { data: [] };
+    const loginMap = new Map((logins ?? []).map(l => [l.id, l.login]));
+
     setPredefinedDrivers(data.map((d: any) => ({
       id: d.id,
       driver_id: d.driver_id,
       driver_name: nameMap.get(d.driver_id) ?? "—",
-      suggested_route: d.suggested_route
+      suggested_route: d.suggested_route,
+      unit_login_id: d.unit_login_id,
+      login_name: loginMap.get(d.unit_login_id) ?? null
     })));
   }, [unitId]);
 
@@ -314,8 +329,13 @@ const ConfiguracoesPage = () => {
     setMpSaving(true);
     const num = parseInt(mpValue, 10);
     if (isNaN(num) || num <= 0) { setMpSaving(false); return; }
-    await supabase.from("driver_minimum_packages" as any).upsert({ unit_id: unitId, driver_id: mpSelectedDriver.id, min_packages: num } as any, { onConflict: "unit_id,driver_id" });
-    setMpSelectedDriver(null); setMpDriverSearch(""); setMpValue(""); setMpDriverResults([]);
+    await supabase.from("driver_minimum_packages" as any).upsert({
+      unit_id: unitId,
+      driver_id: mpSelectedDriver.id,
+      min_packages: num,
+      target_date: mpDate || null
+    } as any, { onConflict: "unit_id,driver_id,target_date" });
+    setMpSelectedDriver(null); setMpDriverSearch(""); setMpValue(""); setMpDate(""); setMpDriverResults([]);
     await fetchMinPackages();
     setMpSaving(false);
     toast({ title: "Pacote mínimo salvo!" });
@@ -367,8 +387,9 @@ const ConfiguracoesPage = () => {
       unit_id: unitId,
       driver_id: pdSelectedDriver.id,
       suggested_route: pdRoute || null,
+      unit_login_id: pdLoginId || null,
     } as any, { onConflict: "unit_id,driver_id" });
-    setPdSelectedDriver(null); setPdDriverSearch(""); setPdRoute(""); setPdDriverResults([]);
+    setPdSelectedDriver(null); setPdDriverSearch(""); setPdRoute(""); setPdLoginId(""); setPdDriverResults([]);
     await fetchPredefinedDrivers();
     setPdSaving(false);
     toast({ title: "Motorista adicionado à programação!" });
@@ -645,19 +666,25 @@ const ConfiguracoesPage = () => {
               </div>
             )}
             {mpSelectedDriver && (
-              <div className="flex gap-2 items-center">
-                <Input
-                  type="number"
-                  value={mpValue}
-                  onChange={(e) => setMpValue(e.target.value)}
-                  placeholder="Mínimo de pacotes"
-                  className="max-w-[180px]"
-                  min={1}
-                />
-                <Button onClick={handleAddMinPackage} disabled={mpSaving || !mpValue} size="sm">
-                  {mpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
-                  Salvar
-                </Button>
+              <div className="space-y-2">
+                <div>
+                  <label className="text-xs text-muted-foreground">Data (Opcional - Em branco fica fixo)</label>
+                  <Input type="date" value={mpDate} onChange={(e) => setMpDate(e.target.value)} />
+                </div>
+                <div className="flex gap-2 items-center">
+                  <Input
+                    type="number"
+                    value={mpValue}
+                    onChange={(e) => setMpValue(e.target.value)}
+                    placeholder="Mínimo de pacotes"
+                    className="max-w-[180px]"
+                    min={1}
+                  />
+                  <Button onClick={handleAddMinPackage} disabled={mpSaving || !mpValue} size="sm">
+                    {mpSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+                    Salvar
+                  </Button>
+                </div>
               </div>
             )}
           </div>
@@ -665,7 +692,10 @@ const ConfiguracoesPage = () => {
             <div className="space-y-2">
               {minPackages.map(mp => (
                 <div key={mp.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
-                  <span className="font-semibold flex-1">{mp.driver_name}</span>
+                  <div className="flex-1">
+                    <span className="font-semibold">{mp.driver_name}</span>
+                    {mp.target_date && <p className="text-xs text-muted-foreground">Data: {formatDateFullBR(mp.target_date)}</p>}
+                  </div>
                   <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
@@ -791,6 +821,19 @@ const ConfiguracoesPage = () => {
                   <label className="text-xs text-muted-foreground">Rota Sugerida (Opcional)</label>
                   <Input value={pdRoute} onChange={(e) => setPdRoute(e.target.value)} placeholder="Ex: ROTA 01" />
                 </div>
+                <div>
+                  <label className="text-xs text-muted-foreground">Login Sugerido (Opcional)</label>
+                  <select 
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm"
+                    value={pdLoginId}
+                    onChange={(e) => setPdLoginId(e.target.value)}
+                  >
+                    <option value="">Nenhum</option>
+                    {logins.map(l => (
+                      <option key={l.id} value={l.id}>{l.login}</option>
+                    ))}
+                  </select>
+                </div>
                 <Button onClick={handleAddPredefinedDriver} disabled={pdSaving} size="sm" className="w-full">
                   {pdSaving ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Plus className="h-4 w-4 mr-1" />}
                   Adicionar à Programação
@@ -804,7 +847,10 @@ const ConfiguracoesPage = () => {
                 <div key={pd.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
                   <div className="flex-1">
                     <span className="font-semibold">{pd.driver_name}</span>
-                    {pd.suggested_route && <p className="text-xs text-muted-foreground">Rota: {pd.suggested_route}</p>}
+                    <div className="flex gap-2">
+                      {pd.suggested_route && <p className="text-xs text-muted-foreground">Rota: {pd.suggested_route}</p>}
+                      {pd.login_name && <p className="text-xs text-muted-foreground font-semibold text-primary">Login: {pd.login_name}</p>}
+                    </div>
                   </div>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeletePredefinedDriver(pd.id)}>
                     <Trash2 className="h-3.5 w-3.5" />
