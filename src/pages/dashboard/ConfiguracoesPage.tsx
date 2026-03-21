@@ -46,6 +46,8 @@ interface PredefinedDriver {
   driver_id: string;
   driver_name: string;
   suggested_route: string | null;
+  unit_login_id: string | null;
+  login_name: string | null;
 }
 
 interface DriverOption {
@@ -99,6 +101,7 @@ const ConfiguracoesPage = () => {
   const [mpDriverResults, setMpDriverResults] = useState<DriverOption[]>([]);
   const [mpSelectedDriver, setMpSelectedDriver] = useState<DriverOption | null>(null);
   const [mpValue, setMpValue] = useState("");
+  const [mpDate, setMpDate] = useState("");
   const [mpSaving, setMpSaving] = useState(false);
 
   // Fixed values
@@ -182,7 +185,13 @@ const ConfiguracoesPage = () => {
   const fetchPredefinedDrivers = useCallback(async () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const data = await fetchAllRows<any>((from, to) => supabase.from("unit_predefined_drivers" as any).select("id, driver_id, suggested_route").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    const data = await fetchAllRows<any>((from, to) => 
+      supabase.from("unit_predefined_drivers" as any)
+        .select("id, driver_id, suggested_route, unit_login_id")
+        .eq("unit_id", unitId)
+        .order("created_at", { ascending: false })
+        .range(from, to)
+    );
     if (!data.length) { setPredefinedDrivers([]); return; }
     const driverIds = data.map((d: any) => d.driver_id);
     const { data: drivers } = await supabase.from("drivers_public").select("id, name").in("id", driverIds);
@@ -327,23 +336,56 @@ const ConfiguracoesPage = () => {
   const handleAddMinPackage = async () => {
     if (!unitId || !mpSelectedDriver || !mpValue) return;
     setMpSaving(true);
-    const num = parseInt(mpValue, 10);
-    if (isNaN(num) || num <= 0) { setMpSaving(false); return; }
-    await supabase.from("driver_minimum_packages" as any).upsert({
-      unit_id: unitId,
-      driver_id: mpSelectedDriver.id,
-      min_packages: num,
-      target_date: mpDate || null
-    } as any, { onConflict: "unit_id,driver_id,target_date" });
-    setMpSelectedDriver(null); setMpDriverSearch(""); setMpValue(""); setMpDate(""); setMpDriverResults([]);
-    await fetchMinPackages();
-    setMpSaving(false);
-    toast({ title: "Pacote mínimo salvo!" });
+    try {
+      const num = parseInt(mpValue, 10);
+      if (isNaN(num) || num <= 0) {
+        toast({ title: "Valor inválido", variant: "destructive" });
+        setMpSaving(false);
+        return;
+      }
+      
+      const { error } = await supabase.from("driver_minimum_packages" as any).upsert({
+        unit_id: unitId,
+        driver_id: mpSelectedDriver.id,
+        min_packages: num,
+        target_date: mpDate || null
+      } as any, { onConflict: "unit_id,driver_id,target_date" });
+
+      if (error) throw error;
+
+      setMpSelectedDriver(null); 
+      setMpDriverSearch(""); 
+      setMpValue(""); 
+      setMpDate(""); 
+      setMpDriverResults([]);
+      await fetchMinPackages();
+      toast({ title: "Pacote mínimo salvo!" });
+    } catch (error: any) {
+      console.error("Error saving min package:", error);
+      toast({ 
+        title: "Erro ao salvar", 
+        description: error.message || "Ocorreu um erro inesperado",
+        variant: "destructive" 
+      });
+    } finally {
+      setMpSaving(false);
+    }
   };
 
   const handleDeleteMinPackage = async (id: string) => {
-    await supabase.from("driver_minimum_packages" as any).delete().eq("id", id);
-    await fetchMinPackages();
+    try {
+      const { error } = await supabase.from("driver_minimum_packages" as any).delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "Configuração removida" });
+      await fetchMinPackages();
+    } catch (error: any) {
+      console.error("Error deleting min package:", error);
+      toast({ 
+        title: "Erro ao remover", 
+        description: error.message || "Ocorreu um erro inesperado",
+        variant: "destructive" 
+      });
+    }
   };
 
   const handleBonusAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -383,21 +425,49 @@ const ConfiguracoesPage = () => {
   const handleAddPredefinedDriver = async () => {
     if (!unitId || !pdSelectedDriver) return;
     setPdSaving(true);
-    await supabase.from("unit_predefined_drivers" as any).upsert({
-      unit_id: unitId,
-      driver_id: pdSelectedDriver.id,
-      suggested_route: pdRoute || null,
-      unit_login_id: pdLoginId || null,
-    } as any, { onConflict: "unit_id,driver_id" });
-    setPdSelectedDriver(null); setPdDriverSearch(""); setPdRoute(""); setPdLoginId(""); setPdDriverResults([]);
-    await fetchPredefinedDrivers();
-    setPdSaving(false);
-    toast({ title: "Motorista adicionado à programação!" });
+    try {
+      const { error } = await supabase.from("unit_predefined_drivers" as any).upsert({
+        unit_id: unitId,
+        driver_id: pdSelectedDriver.id,
+        suggested_route: pdRoute || null,
+        unit_login_id: pdLoginId || null,
+      } as any, { onConflict: "unit_id,driver_id" });
+
+      if (error) throw error;
+
+      setPdSelectedDriver(null); 
+      setPdDriverSearch(""); 
+      setPdRoute(""); 
+      setPdLoginId(""); 
+      setPdDriverResults([]);
+      await fetchPredefinedDrivers();
+      toast({ title: "Motorista adicionado à programação!" });
+    } catch (error: any) {
+      console.error("Error saving predefined driver:", error);
+      toast({ 
+        title: "Erro ao salvar", 
+        description: error.message || "Ocorreu um erro inesperado",
+        variant: "destructive" 
+      });
+    } finally {
+      setPdSaving(false);
+    }
   };
 
   const handleDeletePredefinedDriver = async (id: string) => {
-    await supabase.from("unit_predefined_drivers" as any).delete().eq("id", id);
-    await fetchPredefinedDrivers();
+    try {
+      const { error } = await supabase.from("unit_predefined_drivers" as any).delete().eq("id", id);
+      if (error) throw error;
+      toast({ title: "Motorista removido da programação" });
+      await fetchPredefinedDrivers();
+    } catch (error: any) {
+      console.error("Error deleting predefined driver:", error);
+      toast({ 
+        title: "Erro ao remover", 
+        description: error.message || "Ocorreu um erro inesperado",
+        variant: "destructive" 
+      });
+    }
   };
 
   if (!unitId) return null;
