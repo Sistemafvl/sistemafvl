@@ -146,11 +146,11 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
       const driverIds = Object.keys(driverRideIds);
       const driverTotals: Record<string, number> = {};
-      
+
       // CONSOLIDATED: Single query for all TBRs of all targeted rides
       const rideIdToTbrCount: Record<string, number> = {};
       const finishedRIds = finishedRides.map(r => r.id);
-      
+
       const allTbrsForDrivers = await fetchAllRowsWithIn<{ ride_id: string }>(
         (chunk) => (from, to) => supabase.from("ride_tbrs").select("ride_id").in("ride_id", chunk).range(from, to),
         finishedRIds
@@ -195,8 +195,8 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const periodLabel = startDate && endDate
     ? `${format(startDate, "dd/MM")} a ${format(endDate, "dd/MM")}`
     : startDate
-    ? `A partir de ${format(startDate, "dd/MM")}`
-    : "hoje";
+      ? `A partir de ${format(startDate, "dd/MM")}`
+      : "hoje";
 
   const INFO_TEXTS: Record<string, string> = {
     "Carregamentos": "Total de carregamentos realizados no período. Por padrão, mostra os dados de hoje. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
