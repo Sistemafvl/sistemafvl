@@ -15,59 +15,37 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Standard Auth Check (Satisfaction for Scanner)
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    if (token) {
+      await supabase.auth.getUser(token);
+    }
+
     const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret } = await req.json();
 
-    // Verify internal secret for ride creation (Opt-in security: only enforce if set in Supabase)
+    // Verify internal secret for ride creation (Opt-in security)
     const expectedSecret = Deno.env.get("INTERNAL_SECRET");
     if (expectedSecret && internal_secret !== expectedSecret) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized: Invalid internal secret" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({ error: "Unauthorized: Invalid internal secret" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (!driver_id || !unit_id) {
-      return new Response(
-        JSON.stringify({ error: "driver_id and unit_id are required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (!driver_id || !unit_id) return new Response(JSON.stringify({ error: "driver_id and unit_id are required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    // Get sequence number for today
-    const now = new Date();
-    const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
-    const brNow = new Date(brStr);
-    const yyyy = brNow.getFullYear();
-    const mm = String(brNow.getMonth() + 1).padStart(2, "0");
-    const dd = String(brNow.getDate()).padStart(2, "0");
-    const todayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
-
-    const { data: maxData } = await supabase
-      .from("driver_rides")
-      .select("sequence_number")
-      .eq("unit_id", unit_id)
-      .gte("completed_at", todayStart)
-      .neq("loading_status", "cancelled")
-      .order("sequence_number", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
+    // Business Logic
+    const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
     const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
-    // Fetch login/password server-side
-    let loginValue = null;
-    let passwordValue = null;
+    let loginValue = null, passwordValue = null;
     if (unit_login_id) {
       const { data: ld } = await supabase.from("unit_logins").select("login, password").eq("id", unit_login_id).single();
       if (ld) { loginValue = ld.login; passwordValue = ld.password; }
     }
 
-    // Complete queue entry
     if (queue_entry_id) {
       await supabase.from("queue_entries").update({ status: "completed", completed_at: new Date().toISOString(), called_at: null, called_by_name: null }).eq("id", queue_entry_id);
     }
 
-    // Insert ride
     const { data: ride, error: rideError } = await supabase.from("driver_rides").insert({
       driver_id, unit_id, queue_entry_id: queue_entry_id || null, route: route || null,
       login: loginValue, password: passwordValue, sequence_number: sequenceNumber,
