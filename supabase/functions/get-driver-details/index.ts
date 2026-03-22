@@ -15,13 +15,6 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Standard Auth Check (Satisfaction for Scanner)
-    const authHeader = req.headers.get("Authorization");
-    const token = authHeader?.replace("Bearer ", "");
-    if (token) {
-      await supabase.auth.getUser(token);
-    }
-
     const { driver_id, driver_ids, include_password, self_access, bypass_key } = await req.json();
 
     // Verify bypass key (Opt-in security)
@@ -36,6 +29,7 @@ Deno.serve(async (req) => {
 
     let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
+    // 1. Check for bypass access (Dashboard/Internal)
     if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {
       const q = supabase.from("drivers").select(selectFields);
       const { data, error } = driver_ids ? await q.in("id", driver_ids) : await q.eq("id", driver_id).maybeSingle();
@@ -43,8 +37,16 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token!);
-    if (userError || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // 2. Fallback to JWT Auth for regular requests
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader?.replace("Bearer ", "");
+    
+    if (!token) {
+        return new Response(JSON.stringify({ error: "Unauthorized: Missing token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) return new Response(JSON.stringify({ error: "Unauthorized: Invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
     if (include_password) {
       const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
