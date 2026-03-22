@@ -15,7 +15,18 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { driver_id, driver_ids, include_password, self_access } = await req.json();
+    const { driver_id, driver_ids, include_password, self_access, bypass_key } = await req.json();
+
+    // Check for internal bypass key if self_access is requested
+    const internalBypassKey = Deno.env.get("INTERNAL_BYPASS_KEY");
+    const isAuthorizedBypass = self_access && internalBypassKey && bypass_key === internalBypassKey;
+
+    if (self_access && !isAuthorizedBypass) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized bypass attempt" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!driver_id && (!driver_ids || !Array.isArray(driver_ids))) {
       return new Response(
@@ -27,11 +38,8 @@ Deno.serve(async (req) => {
     // Base fields - bank data
     let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
-    // "self_access" is used here as a bypass for internal dashboard lookups without strict token validation 
-    // against the drivers table, since dashboard users might not be in auth.users
-    if (self_access) {
+    if (isAuthorizedBypass) {
       if (driver_ids && Array.isArray(driver_ids)) {
-        // Bulk query with self_access bypass
         const { data, error } = await supabase
           .from("drivers")
           .select(selectFields)
@@ -49,7 +57,6 @@ Deno.serve(async (req) => {
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } else if (driver_id) {
-        // Single query with self_access bypass
         const { data, error } = await supabase
           .from("drivers")
           .select(selectFields)
@@ -77,7 +84,7 @@ Deno.serve(async (req) => {
       }
 
       return new Response(
-        JSON.stringify({ error: "Missing driver_id or driver_ids for self_access" }),
+        JSON.stringify({ error: "Missing driver_id or driver_ids for authorized bypass" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -119,7 +126,6 @@ Deno.serve(async (req) => {
     }
 
     if (driver_ids && Array.isArray(driver_ids)) {
-      // Bulk query
       const { data, error } = await supabase
         .from("drivers")
         .select(selectFields)
@@ -137,7 +143,6 @@ Deno.serve(async (req) => {
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     } else {
-      // Single query
       const { data, error } = await supabase
         .from("drivers")
         .select(selectFields)
