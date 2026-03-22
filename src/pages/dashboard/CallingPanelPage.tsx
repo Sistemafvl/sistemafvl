@@ -127,7 +127,7 @@ const CallingPanelPage = () => {
 
     setCurrentCall(formatted);
     setShowCall(true);
-    
+
     // Play sound
     if (audioRef.current) {
       audioRef.current.currentTime = 0;
@@ -160,7 +160,7 @@ const CallingPanelPage = () => {
             >
               <div className="relative">
                 {/* Sequence Badge (Red Circle) */}
-                <motion.div 
+                <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.3 }}
@@ -181,7 +181,7 @@ const CallingPanelPage = () => {
               </div>
 
               <div className="space-y-4">
-                <motion.h1 
+                <motion.h1
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.2 }}
@@ -191,7 +191,7 @@ const CallingPanelPage = () => {
                 </motion.h1>
 
                 <div className="space-y-2">
-                  <motion.p 
+                  <motion.p
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.4 }}
@@ -199,7 +199,7 @@ const CallingPanelPage = () => {
                   >
                     {currentCall.driver_name}
                   </motion.p>
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ delay: 0.5 }}

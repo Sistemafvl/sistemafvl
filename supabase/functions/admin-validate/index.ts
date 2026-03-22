@@ -15,8 +15,11 @@ Deno.serve(async (req) => {
   try {
     const { email, password } = await req.json();
 
-    // Hardcoded master admin credentials
-    if (email === "admin@fvl.com" && password === "admin123") {
+    // Get master admin credentials from environment variables
+    const masterEmail = Deno.env.get("MASTER_ADMIN_EMAIL") || "admin@fvl.com";
+    const masterPassword = Deno.env.get("MASTER_ADMIN_PASSWORD") || "admin123";
+
+    if (email === masterEmail && password === masterPassword) {
       return new Response(JSON.stringify({ valid: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
