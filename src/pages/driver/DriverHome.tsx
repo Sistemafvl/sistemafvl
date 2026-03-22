@@ -11,6 +11,7 @@ import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Cart
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr, getBrazilNow, formatBRL } from "@/lib/utils";
+import AdBanner from "@/components/AdBanner";
 
 const COLORS = ["#f59e0b", "#3b82f6", "#ef4444"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -490,6 +491,7 @@ const DriverHome = () => {
         </CardContent>
       </Card>
 
+      <AdBanner />
 
       {/* System test notice */}
       <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex gap-3 items-start">
