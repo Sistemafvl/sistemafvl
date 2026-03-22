@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, Users, ChevronLeft, ChevronRight, Trophy, TrendingUp, BarChart3, Target } from "lucide-react";
+import { Truck, ScanBarcode, AlertTriangle, RotateCcw, PackageX, Loader2, Users, ChevronLeft, ChevronRight, Trophy, TrendingUp, BarChart3, Target, Scale } from "lucide-react";
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import InfoButton from "@/components/dashboard/InfoButton";
 import { format } from "date-fns";
@@ -27,7 +27,7 @@ interface DriverAvg {
 const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
   const [loading, setLoading] = useState(true);
   const [metrics, setMetrics] = useState({
-    todayRides: 0, todayTbrs: 0, openPs: 0, openRto: 0, openPiso: 0, activeLoading: 0,
+    todayRides: 0, todayTbrs: 0, openPs: 0, pendingDisputes: 0, openPiso: 0, activeLoading: 0,
   });
   const [barData, setBarData] = useState<{ day: string; count: number }[]>([]);
   const [lineData, setLineData] = useState<{ day: string; count: number }[]>([]);
@@ -45,10 +45,10 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       : getBrazilDayRange();
     const effectiveTodayEnd = globalEnd ? getBrazilDayRange(globalEnd).end : todayEnd;
 
-    const [ridesRes, psRes, rtoRes, pisoRes, loadingRes] = await Promise.all([
+    const [ridesRes, psRes, disputesRes, pisoRes, loadingRes] = await Promise.all([
       supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).gte("completed_at", todayStart).lte("completed_at", effectiveTodayEnd).neq("loading_status", "cancelled"),
       supabase.from("ps_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
-      supabase.from("rto_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
+      supabase.from("ride_disputes" as any).select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "pending"),
       supabase.from("piso_entries").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("status", "open"),
       supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("unit_id", unitId).eq("loading_status", "loading"),
     ]);
@@ -68,7 +68,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
       todayRides: ridesRes.count ?? 0,
       todayTbrs: todayTbrCount,
       openPs: psRes.count ?? 0,
-      openRto: rtoRes.count ?? 0,
+      pendingDisputes: disputesRes.count ?? 0,
       openPiso: pisoRes.count ?? 0,
       activeLoading: loadingRes.count ?? 0,
     });
@@ -202,7 +202,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     "Carregamentos": "Total de carregamentos realizados no período. Por padrão, mostra os dados de hoje. Cada carregamento representa uma viagem de entrega iniciada por um motorista.",
     "TBRs escaneados": "Total de pacotes originalmente bipados na conferência. Por padrão, mostra os dados de hoje. Cada TBR é contado apenas uma vez.",
     "PS abertos": "PS (Problem Solve) abertos. Pacotes com problemas que precisam de resolução manual.",
-    "RTO abertos": "RTO (Return to Origin) abertos. Pacotes que precisam ser devolvidos ao centro de distribuição.",
+    "Contestações pendentes": "Contestações abertas pelos motoristas que ainda não foram resolvidas pela unidade.",
     "Insucessos abertos": "Pacotes que retornaram ao piso da unidade sem serem entregues.",
     "Carregando agora": "Motoristas com carregamento em andamento neste momento.",
   };
@@ -211,7 +211,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     { label: `Carregamentos (${periodLabel})`, value: metrics.todayRides, icon: Truck, color: "text-primary", infoKey: "Carregamentos" },
     { label: `TBRs escaneados (${periodLabel})`, value: metrics.todayTbrs, icon: ScanBarcode, color: "text-blue-500", infoKey: "TBRs escaneados" },
     { label: "PS abertos", value: metrics.openPs, icon: AlertTriangle, color: "text-destructive", infoKey: "PS abertos" },
-    { label: "RTO abertos", value: metrics.openRto, icon: RotateCcw, color: "text-orange-500", infoKey: "RTO abertos" },
+    { label: "Contestações pendentes", value: metrics.pendingDisputes, icon: Scale, color: "text-orange-500", infoKey: "Contestações pendentes" },
     { label: "Insucessos abertos", value: metrics.openPiso, icon: PackageX, color: "text-yellow-600", infoKey: "Insucessos abertos" },
     { label: "Carregando agora", value: metrics.activeLoading, icon: Loader2, color: "text-green-500", infoKey: "Carregando agora" },
   ];
