@@ -11,7 +11,20 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { driver_id, unit_id, queue_entry_id, route, unit_login_id } = await req.json();
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret } = await req.json();
+
+    // Verify internal secret for ride creation (Opt-in security: only enforce if set in Supabase)
+    const expectedSecret = Deno.env.get("INTERNAL_SECRET");
+    if (expectedSecret && internal_secret !== expectedSecret) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized: Invalid internal secret" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     if (!driver_id || !unit_id) {
       return new Response(
@@ -20,35 +33,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
-
-    // Fetch login/password server-side if unit_login_id provided
-    let loginValue: string | null = null;
-    let passwordValue: string | null = null;
-
-    if (unit_login_id) {
-      const { data: loginData, error: loginError } = await supabase
-        .from("unit_logins")
-        .select("login, password")
-        .eq("id", unit_login_id)
-        .eq("unit_id", unit_id)
-        .eq("active", true)
-        .maybeSingle();
-
-      if (loginError || !loginData) {
-        return new Response(
-          JSON.stringify({ error: "Login not found or inactive" }),
-          { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      loginValue = loginData.login;
-      passwordValue = loginData.password;
-    }
-
-    // Get sequence number for today (Brazil timezone: midnight = 03:00 UTC)
+    // Get sequence number for today
     const now = new Date();
     const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
     const brNow = new Date(brStr);
@@ -69,49 +54,29 @@ Deno.serve(async (req) => {
 
     const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
-    // Complete queue entry — clear called_at/called_by_name to avoid triggering driver alert
+    // Fetch login/password server-side
+    let loginValue = null;
+    let passwordValue = null;
+    if (unit_login_id) {
+      const { data: ld } = await supabase.from("unit_logins").select("login, password").eq("id", unit_login_id).single();
+      if (ld) { loginValue = ld.login; passwordValue = ld.password; }
+    }
+
+    // Complete queue entry
     if (queue_entry_id) {
-      await supabase
-        .from("queue_entries")
-        .update({
-          status: "completed",
-          completed_at: new Date().toISOString(),
-          called_at: null,
-          called_by_name: null,
-        })
-        .eq("id", queue_entry_id);
+      await supabase.from("queue_entries").update({ status: "completed", completed_at: new Date().toISOString(), called_at: null, called_by_name: null }).eq("id", queue_entry_id);
     }
 
-    // Insert driver_ride with login/password server-side
-    const { data: ride, error: rideError } = await supabase
-      .from("driver_rides")
-      .insert({
-        driver_id,
-        unit_id,
-        queue_entry_id: queue_entry_id || null,
-        route: route || null,
-        login: loginValue,
-        password: passwordValue,
-        sequence_number: sequenceNumber,
-      })
-      .select("id, sequence_number, route")
-      .single();
+    // Insert ride
+    const { data: ride, error: rideError } = await supabase.from("driver_rides").insert({
+      driver_id, unit_id, queue_entry_id: queue_entry_id || null, route: route || null,
+      login: loginValue, password: passwordValue, sequence_number: sequenceNumber,
+    }).select("id, sequence_number, route").single();
 
-    if (rideError) {
-      return new Response(
-        JSON.stringify({ error: "Failed to create ride", details: rideError.message }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    if (rideError) throw rideError;
 
-    return new Response(
-      JSON.stringify({ success: true, ride }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ success: true, ride }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error", details: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });

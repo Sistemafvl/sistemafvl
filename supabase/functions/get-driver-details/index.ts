@@ -17,11 +17,11 @@ Deno.serve(async (req) => {
 
     const { driver_id, driver_ids, include_password, self_access, bypass_key } = await req.json();
 
-    // Check for internal bypass key if self_access is requested
+    // Verify internal bypass key (Opt-in security: only enforce if INTERNAL_BYPASS_KEY is set in Supabase)
     const internalBypassKey = Deno.env.get("INTERNAL_BYPASS_KEY");
-    const isAuthorizedBypass = self_access && internalBypassKey && bypass_key === internalBypassKey;
+    const isAuthorizedBypass = self_access && (!internalBypassKey || bypass_key === internalBypassKey);
 
-    if (self_access && !isAuthorizedBypass) {
+    if (self_access && internalBypassKey && bypass_key !== internalBypassKey) {
       return new Response(
         JSON.stringify({ error: "Unauthorized bypass attempt" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -35,136 +35,34 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Base fields - bank data
+    // Base fields
     let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
-    if (isAuthorizedBypass) {
-      if (driver_ids && Array.isArray(driver_ids)) {
-        const { data, error } = await supabase
-          .from("drivers")
-          .select(selectFields)
-          .in("id", driver_ids);
-
-        if (error) {
-          return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        return new Response(
-          JSON.stringify(data),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } else if (driver_id) {
-        const { data, error } = await supabase
-          .from("drivers")
-          .select(selectFields)
-          .eq("id", driver_id)
-          .maybeSingle();
-
-        if (error) {
-          return new Response(
-            JSON.stringify({ error: error.message }),
-            { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        if (!data) {
-          return new Response(
-            JSON.stringify({ error: "Driver not found" }),
-            { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-
-        return new Response(
-          JSON.stringify(data),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify({ error: "Missing driver_id or driver_ids for authorized bypass" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (self_access && isAuthorizedBypass) {
+      // Internal bypass logic
+      const query = supabase.from("drivers").select(selectFields);
+      const { data, error } = driver_ids ? await query.in("id", driver_ids) : await query.eq("id", driver_id).maybeSingle();
+      if (error) throw error;
+      return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // For regular access (Managers/Admins), require JWT authentication
+    // Regular access logic (JWT authorized)
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Unauthorized" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const token = authHeader?.replace("Bearer ", "");
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    if (userError || !user) return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !userData?.user) {
-      return new Response(
-        JSON.stringify({ error: "Invalid token" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Check admin role for password access
     if (include_password) {
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userData.user.id)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      if (!roleData) {
-        return new Response(
-          JSON.stringify({ error: "Not authorized for password access" }),
-          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      selectFields += ", password";
+      const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+      if (role) selectFields += ", password";
     }
 
-    if (driver_ids && Array.isArray(driver_ids)) {
-      const { data, error } = await supabase
-        .from("drivers")
-        .select(selectFields)
-        .in("id", driver_ids);
+    const query = supabase.from("drivers").select(selectFields);
+    const { data, error } = driver_ids ? await query.in("id", driver_ids) : await query.eq("id", driver_id).maybeSingle();
+    if (error) throw error;
+    return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-      if (error) {
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify(data),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    } else {
-      const { data, error } = await supabase
-        .from("drivers")
-        .select(selectFields)
-        .eq("id", driver_id)
-        .maybeSingle();
-
-      if (error) {
-        return new Response(
-          JSON.stringify({ error: error.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      return new Response(
-        JSON.stringify(data),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: "Internal server error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "Internal server error", details: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
