@@ -55,12 +55,20 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
 
     // Use RPC for accurate TBR count (no 1000 limit)
     let todayTbrCount = 0;
-    const { data: rpcCount } = await supabase.rpc("get_unit_tbr_count", {
-      p_unit_id: unitId,
-      p_start: todayStart,
-      p_end: effectiveTodayEnd,
-    });
-    todayTbrCount = Number(rpcCount ?? 0);
+    try {
+      const { data: rpcCount, error: rpcError } = await (supabase.rpc as any)("get_unit_tbr_count", {
+        p_unit_id: unitId,
+        p_start: todayStart,
+        p_end: effectiveTodayEnd,
+      });
+      if (rpcError) {
+        console.warn("RPC get_unit_tbr_count failed, falling back to 0:", rpcError);
+      } else {
+        todayTbrCount = Number(rpcCount ?? 0);
+      }
+    } catch (e) {
+      console.error("Error during RPC get_unit_tbr_count:", e);
+    }
 
     // RPC already includes returns (piso+ps+rto) linked to same rides
 

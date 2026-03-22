@@ -18,7 +18,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico", "pwa-192x192.png", "pwa-512x512.png"],
+      includeAssets: ["favicon.ico"], // Only include essentials
       manifest: {
         name: "Sistema FVL",
         short_name: "FVL",
@@ -39,18 +39,16 @@ export default defineConfig(({ mode }) => ({
             sizes: "512x512",
             type: "image/png",
           },
-          {
-            src: "pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-            purpose: "any maskable",
-          },
         ],
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
-        navigateFallbackDenylist: [/^\/~oauth/],
-        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        globPatterns: ["**/*.{js,css,html,svg,woff,woff2}"], // Removed ico, png from auto-glob to reduce manifest size
+        navigateFallbackDenylist: [
+          /^\/~oauth/,
+          /^\/_lovable/, // Exclude lovable internal paths
+          /^\/dev-server/, // Exclude dev-server
+        ],
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         skipWaiting: true,
         clientsClaim: true,
       },

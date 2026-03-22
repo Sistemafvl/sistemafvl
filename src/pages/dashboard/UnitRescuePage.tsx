@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+import { cn, getBrazilDayRange } from "@/lib/utils";
 
 interface DriverRideInfo {
   rideId: string;
@@ -45,51 +45,65 @@ const UnitRescuePage = () => {
   const tbrRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
 
   // Fetch today's active rides/drivers
-  useEffect(() => {
+  const fetchDrivers = useCallback(async () => {
     if (!unitId) return;
-    const fetchDrivers = async () => {
-      setLoadingDrivers(true);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    setLoadingDrivers(true);
+    const { start: todayStart } = getBrazilDayRange();
 
-      const { data: rides } = await supabase
-        .from("driver_rides")
-        .select(`
-          id, driver_id, loading_status,
-          drivers_public(name)
-        `)
-        .eq("unit_id", unitId)
-        .gte("completed_at", today.toISOString())
-        .neq("loading_status", "cancelled")
-        .order("completed_at", { ascending: false });
+    const { data: rides, error } = await supabase
+      .from("driver_rides")
+      .select(`
+        id, driver_id, loading_status, completed_at,
+        drivers_public(name)
+      `)
+      .eq("unit_id", unitId)
+      .gte("completed_at", todayStart)
+      .neq("loading_status", "cancelled")
+      .order("completed_at", { ascending: false });
 
-      if (rides) {
-        const driverMap = new Map<string, DriverRideInfo>();
-        const activeFirst = (a: any, b: any) => {
-          // Prioritize loading/pending over finished
-          const isAActive = ["loading", "pending"].includes(a.loading_status);
-          const isBActive = ["loading", "pending"].includes(b.loading_status);
-          if (isAActive && !isBActive) return -1;
-          if (!isAActive && isBActive) return 1;
-          return new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime();
-        };
-
-        rides.sort(activeFirst).forEach((r: any) => {
-          if (!driverMap.has(r.driver_id)) {
-            driverMap.set(r.driver_id, {
-              rideId: r.id,
-              driverId: r.driver_id,
-              driverName: r.drivers_public?.name ?? "Desconhecido",
-              loadingStatus: r.loading_status,
-            });
-          }
-        });
-        setActiveRides(Array.from(driverMap.values()));
-      }
+    if (error) {
+      console.error("Error fetching drivers:", error);
       setLoadingDrivers(false);
-    };
-    fetchDrivers();
+      return;
+    }
+
+    if (rides) {
+      const driverMap = new Map<string, DriverRideInfo>();
+      const activeFirst = (a: any, b: any) => {
+        // Prioritize loading/pending over finished
+        const isAActive = ["loading", "pending"].includes(a.loading_status);
+        const isBActive = ["loading", "pending"].includes(b.loading_status);
+        if (isAActive && !isBActive) return -1;
+        if (!isAActive && isBActive) return 1;
+        return new Date(b.completed_at).getTime() - new Date(a.completed_at).getTime();
+      };
+
+      [...rides].sort(activeFirst).forEach((r: any) => {
+        if (!driverMap.has(r.driver_id)) {
+          driverMap.set(r.driver_id, {
+            rideId: r.id,
+            driverId: r.driver_id,
+            driverName: r.drivers_public?.name ?? "Desconhecido",
+            loadingStatus: r.loading_status,
+          });
+        }
+      });
+      setActiveRides(Array.from(driverMap.values()));
+    }
+    setLoadingDrivers(false);
   }, [unitId]);
+
+  useEffect(() => {
+    fetchDrivers();
+  }, [fetchDrivers]);
+
+  // Auto-refresh drivers list every 30 seconds to avoid stale rideIds
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetchDrivers();
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [fetchDrivers]);
 
   // Fetch TBRs for source driver
   useEffect(() => {
@@ -141,26 +155,33 @@ const UnitRescuePage = () => {
 
     const sourceInfo = activeRides.find(r => r.driverId === sourceDriverId);
     const targetInfo = activeRides.find(r => r.driverId === targetDriverId);
-    if (!sourceInfo || !targetInfo) return;
+    if (!sourceInfo || !targetInfo) {
+      toast.error("Erro ao identificar os carregamentos dos motoristas.");
+      return;
+    }
 
     setTransferring(true);
     try {
       const selectedTbrsData = sourceTbrs.filter(t => selectedTbrIds.has(t.id));
       const tbrIds = selectedTbrsData.map(t => t.id);
 
-      // 1. Delete from source
-      await supabase.from("ride_tbrs").delete().in("id", tbrIds);
+      // ATOMIC UPDATE: Move TBRs to target ride and mark as rescue
+      // This preserves metadata like scanned_at and avoids data loss risks from delete+insert
+      console.log(`[Socorrendo] Moving ${tbrIds.length} TBRs from ride ${sourceInfo.rideId} to ${targetInfo.rideId}`);
+      
+      const { error: moveError } = await supabase
+        .from("ride_tbrs")
+        .update({ 
+          ride_id: targetInfo.rideId,
+          is_rescue: true,
+          // Optional: we could update scanned_at to now() to reflect transfer time
+          // scanned_at: new Date().toISOString() 
+        })
+        .in("id", tbrIds);
 
-      // 2. Insert into target
-      const newRideTbrs = selectedTbrsData.map(t => ({
-        ride_id: targetInfo.rideId,
-        code: t.code,
-        trip_number: t.tripNumber,
-        is_rescue: true,
-      }));
-      await supabase.from("ride_tbrs").insert(newRideTbrs);
+      if (moveError) throw moveError;
 
-      // 3. Log into rescue_entries
+      // 2. Log into rescue_entries
       const rescueLogs = selectedTbrsData.map(t => ({
         unit_id: unitId,
         rescuer_driver_id: targetInfo.driverId,
@@ -169,9 +190,14 @@ const UnitRescuePage = () => {
         rescuer_ride_id: targetInfo.rideId,
         tbr_code: t.code,
       }));
-      await supabase.from("rescue_entries").insert(rescueLogs);
+      
+      const { error: logError } = await supabase.from("rescue_entries").insert(rescueLogs);
+      if (logError) {
+        console.warn("Rescue logged but entry failed:", logError);
+        // We don't throw here because packages are already moved
+      }
 
-      // 4. Update target ride to "loading" if it was "pending", so the car turns black on UI
+      // 3. Update target ride to "loading" if it was "pending"
       if (targetInfo.loadingStatus === "pending") {
         const updateData: any = { 
           loading_status: "loading",
@@ -180,17 +206,19 @@ const UnitRescuePage = () => {
         if (conferenteSession?.id) {
           updateData.conferente_id = conferenteSession.id;
         }
-        await supabase.from("driver_rides").update(updateData).eq("id", targetInfo.rideId);
+        const { error: rideError } = await supabase.from("driver_rides").update(updateData).eq("id", targetInfo.rideId);
+        if (rideError) console.warn("Failed to update target ride status:", rideError);
       }
 
       toast.success(`${selectedTbrIds.size} TBR(s) transferido(s) com sucesso!`);
-      // Remove transferred TBRs from local state to reflect UI instantly
+      // Update local state and refresh to ensure consistency
       setSourceTbrs(prev => prev.filter(t => !selectedTbrIds.has(t.id)));
       setSelectedTbrIds(new Set());
+      fetchDrivers(); // Refresh drivers list to get latest status
       
-    } catch (error) {
-      console.error(error);
-      toast.error("Erro ao transferir os pacotes.");
+    } catch (err: any) {
+      console.error("[Socorrendo] Transfer error:", err);
+      toast.error(`Erro ao transferir os pacotes: ${err.message || "Erro desconhecido"}`);
     } finally {
       setTransferring(false);
     }
