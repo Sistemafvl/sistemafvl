@@ -1,10 +1,8 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { motion, AnimatePresence } from "framer-motion";
-import { useDebounce } from "@/hooks/use-debounce";
 
 interface CallData {
   id: string;
@@ -17,44 +15,62 @@ interface CallData {
   parking_spot?: string;
 }
 
+// --------------- Web Audio API Siren (6 seconds) ---------------
+const playSiren = (): (() => void) => {
+  try {
+    const ctx = new AudioContext();
+    if (ctx.state === "suspended") ctx.resume();
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = 800;
+    gain.gain.value = 0.7;
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    const interval = setInterval(() => {
+      osc.frequency.value = osc.frequency.value === 800 ? 1200 : 800;
+    }, 400);
+
+    osc.start();
+
+    // Auto-stop after 6 seconds
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+      try { osc.stop(); } catch {}
+      try { osc.disconnect(); gain.disconnect(); ctx.close(); } catch {}
+    }, 6000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+      try { osc.stop(); } catch {}
+      try { osc.disconnect(); gain.disconnect(); ctx.close(); } catch {}
+    };
+  } catch {
+    return () => {};
+  }
+};
+
 const CallingPanelPage = () => {
   const [searchParams] = useSearchParams();
   const unitId = searchParams.get("unit_id");
   const [currentCall, setCurrentCall] = useState<CallData | null>(null);
   const [showCall, setShowCall] = useState(false);
-  const lastCallId = useRef<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  // Logos paths
-  const logos = [
-    "/logos/favela_llog.png",
-    "/logos/cufa.png",
-    "/logos/fvl.png"
-  ];
-
-  const [logoIndex, setLogoIndex] = useState(0);
-
-  // Idle logo rotation
-  useEffect(() => {
-    if (showCall) return;
-    const interval = setInterval(() => {
-      setLogoIndex((prev) => (prev + 1) % logos.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [showCall]);
+  const stopSirenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!unitId) return;
 
-    // Initial fetch for the most recent call in the last minute
     const fetchRecentCall = async () => {
-      const oneMinuteAgo = new Date(Date.now() - 60000).toISOString();
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("queue_entries")
         .select(`
           id,
           called_at,
           called_by_name,
+          parking_spot,
           driver:driver_id (name, avatar_url),
           rides:driver_rides (sequence_number, route)
         `)
@@ -64,8 +80,7 @@ const CallingPanelPage = () => {
         .limit(1);
 
       if (data && data.length > 0) {
-        const entry = data[0];
-        // Only show if it's very fresh
+        const entry = data[0] as any;
         if (new Date(entry.called_at!).getTime() > Date.now() - 10000) {
           triggerCall(entry);
         }
@@ -74,7 +89,6 @@ const CallingPanelPage = () => {
 
     fetchRecentCall();
 
-    // Subscribe to real-time changes
     const channel = supabase
       .channel("calling-panel")
       .on(
@@ -86,9 +100,8 @@ const CallingPanelPage = () => {
           filter: `unit_id=eq.${unitId}`,
         },
         async (payload) => {
-          const newEntry = payload.new;
-          if (newEntry.called_at && newEntry.called_at !== payload.old.called_at) {
-            // Fetch full data for the call
+          const newEntry = payload.new as any;
+          if (newEntry.called_at && newEntry.called_at !== (payload.old as any).called_at) {
             const { data } = await supabase
               .from("queue_entries")
               .select(`
@@ -102,7 +115,7 @@ const CallingPanelPage = () => {
               .eq("id", newEntry.id)
               .single();
 
-            if (data) triggerCall(data);
+            if (data) triggerCall(data as any);
           }
         }
       )
@@ -113,7 +126,7 @@ const CallingPanelPage = () => {
     };
   }, [unitId]);
 
-  const triggerCall = (data: any) => {
+  const triggerCall = useCallback((data: any) => {
     const formatted: CallData = {
       id: data.id,
       driver_name: data.driver?.name || "Motorista",
@@ -128,25 +141,23 @@ const CallingPanelPage = () => {
     setCurrentCall(formatted);
     setShowCall(true);
 
-    // Play sound
-    if (audioRef.current) {
-      audioRef.current.currentTime = 0;
-      audioRef.current.play().catch(e => console.log("Audio play blocked", e));
-    }
+    // Stop previous siren if any
+    if (stopSirenRef.current) stopSirenRef.current();
+    stopSirenRef.current = playSiren();
 
     // Hide after 7 seconds
-    const timer = setTimeout(() => {
-      setShowCall(false);
-    }, 7000);
+    setTimeout(() => setShowCall(false), 7000);
+  }, []);
 
-    return () => clearTimeout(timer);
-  };
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (stopSirenRef.current) stopSirenRef.current();
+    };
+  }, []);
 
   return (
     <div className="fixed inset-0 bg-[#001529] text-white flex overflow-hidden font-sans select-none">
-      <audio ref={audioRef} src="/sounds/bell.mp3" preload="auto" />
-
-      {/* Main Content */}
       <div className="flex-1 relative flex items-center justify-center p-12">
         <AnimatePresence mode="wait">
           {showCall && currentCall ? (
@@ -159,7 +170,6 @@ const CallingPanelPage = () => {
               className="w-full max-w-4xl flex flex-col items-center text-center gap-8"
             >
               <div className="relative">
-                {/* Sequence Badge (Red Circle) */}
                 <motion.div
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -169,7 +179,6 @@ const CallingPanelPage = () => {
                   {currentCall.sequence_number || "—"}
                 </motion.div>
 
-                {/* Driver Photo */}
                 <div className="w-64 h-64 rounded-full border-8 border-[#0095ff] p-2 shadow-[0_0_50px_rgba(0,149,255,0.3)] bg-[#001529]">
                   <Avatar className="w-full h-full">
                     {currentCall.driver_avatar && <AvatarImage src={currentCall.driver_avatar} className="object-cover" />}
@@ -206,7 +215,7 @@ const CallingPanelPage = () => {
                     className="flex flex-col gap-1 text-2xl text-[#0095ff] font-medium uppercase tracking-widest"
                   >
                     <span>CONFERENTE: {currentCall.called_by_name || "—"}</span>
-                    <span>VAGA: {currentCall.sequence_number || "—"}</span>
+                    <span>VAGA: {currentCall.parking_spot || currentCall.sequence_number || "—"}</span>
                     <span className="text-white bg-[#0095ff]/20 px-4 py-1 rounded-lg self-center mt-2 border border-[#0095ff]/30">
                       ROTA: {currentCall.route || "NAO DEFINIDA"}
                     </span>
@@ -222,23 +231,18 @@ const CallingPanelPage = () => {
               exit={{ opacity: 0 }}
               className="flex items-center justify-center"
             >
-              <AnimatePresence mode="wait">
-                <motion.img
-                  key={logoIndex}
-                  src={logos[logoIndex]}
-                  initial={{ opacity: 0, scale: 0.9 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 1.1 }}
-                  transition={{ duration: 1 }}
-                  className="max-h-[60vh] max-w-[80vw] object-contain filter drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
-                />
-              </AnimatePresence>
+              <motion.img
+                src="/logos/fvl_panel_bg.png"
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 1 }}
+                className="max-h-[70vh] max-w-[85vw] object-contain filter drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
+              />
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
-      {/* Background Pulse Animation when call is active */}
       <AnimatePresence>
         {showCall && (
           <motion.div
