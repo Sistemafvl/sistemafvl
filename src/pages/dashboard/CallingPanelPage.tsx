@@ -121,6 +121,7 @@ const CallingPanelPage = () => {
   const [unitName, setUnitName] = useState("");
   const [queueList, setQueueList] = useState<QueueDriver[]>([]);
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
+  const [reviewStats, setReviewStats] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
 
   // Fullscreen
   const [isFullscreen, setIsFullscreen] = useState(false);
