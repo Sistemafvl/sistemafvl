@@ -60,6 +60,22 @@ const CallingPanelPage = () => {
   const [showCall, setShowCall] = useState(false);
   const stopSirenRef = useRef<(() => void) | null>(null);
 
+  const logos = [
+    "/logos/favela_llog.png",
+    "/logos/cufa.png",
+    "/logos/fvl.png"
+  ];
+  const [logoIndex, setLogoIndex] = useState(0);
+
+  // Idle logo rotation
+  useEffect(() => {
+    if (showCall) return;
+    const interval = setInterval(() => {
+      setLogoIndex((prev) => (prev + 1) % logos.length);
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [showCall]);
+
   useEffect(() => {
     if (!unitId) return;
 
