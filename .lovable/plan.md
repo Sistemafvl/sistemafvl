@@ -1,28 +1,18 @@
 
 
-# Exibir Cards de Ciclos (C1/C2/C3) na Sidebar do Painel de Chamada
+# Correção da inconsistência nos dados de ciclos após chamada
 
-## O que muda
+## Problema
 
-Na sidebar esquerda do Painel de Chamada, substituir a seção atual "Ciclos do Dia" (que mostra abertura, início/término descarregamento, pacotes) por **3 cards empilhados verticalmente** — C1, C2, C3 — iguais aos da página de Carregamento, seguidos das métricas (Saídas, Na Fila) logo abaixo.
+Após uma chamada de motorista (10s), os valores de TBRs nos cards de ciclo mudam de forma inconsistente (ex: 2050 → 1976). Causa: quando o call overlay termina (linha 353), apenas `fetchRightData()` é chamado — o `fetchSidebarData()` NÃO é re-executado. Os dados dos ciclos ficam congelados no valor do último poll (30s), e quando o próximo poll ocorre, pode retornar valores diferentes se houve mudança nos dados durante esse intervalo.
 
-## Implementação
+## Correção
 
 ### Arquivo: `src/pages/dashboard/CallingPanelPage.tsx`
 
-1. **Adicionar fetch de dados para ciclos**: Buscar `driver_rides` do dia (com `completed_at`) e `ride_tbrs` para calcular quantas saídas e TBRs em cada ciclo, usando os mesmos cutoffs:
-   - C1: até 08:30 BRT (`T11:30:00.000Z`)
-   - C2: até 09:30 BRT (`T12:30:00.000Z`)
-   - C3: total do dia
+1. **Chamar `fetchSidebarData()` ao fim da chamada**: No `setTimeout` da linha 353, adicionar `fetchSidebarData()` junto com `fetchRightData()` para que os ciclos sejam atualizados imediatamente após o overlay fechar.
 
-2. **Novo estado**: `cycleMetrics` com `{ c1: { rides, tbrs }, c2: { rides, tbrs }, c3: { rides, tbrs } }`
+2. **Evitar re-fetch durante o overlay**: Adicionar um guard `showCall` no `fetchSidebarData` para não rodar o poll enquanto o overlay está ativo, evitando que dados parciais de uma chamada em andamento contaminem os contadores.
 
-3. **Render na sidebar**: 3 mini-cards verticais (adaptados ao fundo escuro `#001529`) com:
-   - Titulo: "C1 (até 08:30)", "C2 (até 09:30)", "C3 (total)"
-   - Numero de saídas e TBRs
-   - Estilo: fundo `rgba(255,255,255,0.05)`, bordas sutis, texto claro
-
-4. **Mover métricas para baixo**: "Saídas" e "Na Fila" ficam após os cards de ciclos
-
-5. **Manter dados do cycle_records** (abertura galpão, pacotes) visíveis abaixo dos cards de ciclo ou integrados nos cards
+Correção mínima e cirúrgica — apenas adicionar a chamada `fetchSidebarData()` no callback de fim do timer.
 
