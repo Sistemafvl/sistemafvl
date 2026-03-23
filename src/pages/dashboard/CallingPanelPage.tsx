@@ -360,7 +360,7 @@ const CallingPanelPage = () => {
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5" /> Métricas do Dia
           </h3>
-          <MetricRow icon={<Package className="w-4 h-4 text-sky-400" />} label="TBRs Bipados" value={tbrCount} />
+          
           <MetricRow icon={<TruckIcon className="w-4 h-4 text-emerald-400" />} label="Saídas" value={ridesFinished} />
           <MetricRow icon={<Users className="w-4 h-4 text-amber-400" />} label="Na Fila" value={queueCount} />
         </div>
