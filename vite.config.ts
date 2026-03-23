@@ -16,9 +16,9 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    VitePWA({
+    /* VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.ico"], // Only include essentials
+      includeAssets: [], // Removed favicon.ico due to large size
       manifest: {
         name: "Sistema FVL",
         short_name: "FVL",
@@ -28,31 +28,20 @@ export default defineConfig(({ mode }) => ({
         display: "standalone",
         orientation: "portrait",
         start_url: "/",
-        icons: [
-          {
-            src: "pwa-192x192.png",
-            sizes: "192x192",
-            type: "image/png",
-          },
-          {
-            src: "pwa-512x512.png",
-            sizes: "512x512",
-            type: "image/png",
-          },
-        ],
+        icons: [], // Removed large icons
       },
       workbox: {
-        globPatterns: ["**/*.{js,css,html,svg,woff,woff2}"], // Removed ico, png from auto-glob to reduce manifest size
+        globPatterns: ["**/*.{js,css,html,svg,woff,woff2}"],
         navigateFallbackDenylist: [
           /^\/~oauth/,
-          /^\/_lovable/, // Exclude lovable internal paths
-          /^\/dev-server/, // Exclude dev-server
+          /^\/_lovable/,
+          /^\/dev-server/,
         ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         skipWaiting: true,
         clientsClaim: true,
       },
-    }),
+    }), */
   ].filter(Boolean),
   define: {
     __BUILD_VERSION__: JSON.stringify(Date.now().toString()),
