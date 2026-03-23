@@ -231,13 +231,17 @@ const CallingPanelPage = () => {
               exit={{ opacity: 0 }}
               className="flex items-center justify-center"
             >
-              <motion.img
-                src="/logos/fvl_panel_bg.png"
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ duration: 1 }}
-                className="max-h-[70vh] max-w-[85vw] object-contain filter drop-shadow-[0_0_30px_rgba(255,255,255,0.1)]"
-              />
+              <AnimatePresence mode="wait">
+                <motion.img
+                  key={logoIndex}
+                  src={logos[logoIndex]}
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 1.1 }}
+                  transition={{ duration: 1 }}
+                  className="max-h-[60vh] max-w-[80vw] object-contain"
+                />
+              </AnimatePresence>
             </motion.div>
           )}
         </AnimatePresence>
