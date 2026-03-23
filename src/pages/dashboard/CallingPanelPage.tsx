@@ -419,12 +419,34 @@ const CallingPanelPage = () => {
         </div>
 
         {/* Métricas */}
-        <div className="p-4 space-y-2 border-b border-white/10 flex-1">
+        <div className="p-4 space-y-2 border-b border-white/10">
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5" /> Métricas do Dia
           </h3>
           <MetricRow icon={<TruckIcon className="w-4 h-4 text-emerald-400" />} label="Saídas" value={ridesFinished} />
           <MetricRow icon={<Users className="w-4 h-4 text-amber-400" />} label="Na Fila" value={queueCount} />
+        </div>
+
+        {/* Avaliação da Unidade */}
+        <div className="p-4 space-y-2 border-b border-white/10 flex-1">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
+            <Star className="w-3.5 h-3.5" /> Avaliação
+          </h3>
+          {reviewStats.count > 0 ? (
+            <div className="rounded-lg p-3" style={{ background: "rgba(255,255,255,0.05)" }}>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-amber-400">{reviewStats.avg.toFixed(1)}</span>
+                <div className="flex gap-0.5">
+                  {[1, 2, 3, 4, 5].map((i) => (
+                    <Star key={i} className={`w-4 h-4 ${i <= Math.round(reviewStats.avg) ? "text-amber-400 fill-amber-400" : "text-white/20"}`} />
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] text-white/50 mt-1">{reviewStats.count} avaliação{reviewStats.count > 1 ? "ões" : ""}</p>
+            </div>
+          ) : (
+            <p className="text-[11px] text-white/40 italic">Sem avaliações</p>
+          )}
         </div>
 
         {/* Logos parceiros */}
