@@ -387,11 +387,11 @@ const CallingPanelPage = () => {
       doc.text("Horário válido: " + hours, 105, 48, { align: "center" });
       doc.text("Unidade: " + (unitName || "—"), 105, 58, { align: "center" });
       doc.text("Data: " + today.split("-").reverse().join("/"), 105, 68, { align: "center" });
-      doc.addImage(qrDataUrl, "PNG", 27.5, 80, 155, 155);
+      doc.addImage(qrDataUrl, "PNG", 42.5, 80, 120, 120);
       doc.setFontSize(11);
       doc.setTextColor(120, 120, 120);
-      doc.text("Escaneie este QR Code com a câmera do celular para entrar na fila.", 105, 250, { align: "center" });
-      doc.text("Este QR é válido somente para a data e horário indicados acima.", 105, 258, { align: "center" });
+      doc.text("Escaneie este QR Code com a câmera do celular para entrar na fila.", 105, 215, { align: "center" });
+      doc.text("Este QR é válido somente para a data e horário indicados acima.", 105, 223, { align: "center" });
       doc.save("qr_fila_" + turno + "_" + today + ".pdf");
     } catch (e) {
       console.error("Erro ao gerar QR PDF:", e);
