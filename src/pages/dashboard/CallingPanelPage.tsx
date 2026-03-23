@@ -152,12 +152,12 @@ const CallingPanelPage = () => {
 
     // Cycle
     const { data: cycle } = await supabase
-      .from("cycle_records")
+      .from("cycle_records" as any)
       .select("abertura_galpao, hora_inicio_descarregamento, hora_termino_descarregamento, qtd_pacotes, qtd_pacotes_informado")
       .eq("unit_id", unitId)
       .eq("record_date", today)
       .maybeSingle();
-    setCycleData(cycle as CycleData | null);
+    setCycleData((cycle as any) as CycleData | null);
 
     // TBR count via RPC
     const { data: tbrData } = await supabase.rpc("get_unit_tbr_count", {
