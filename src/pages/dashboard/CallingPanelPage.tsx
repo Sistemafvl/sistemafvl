@@ -65,16 +65,16 @@ const playDingDong = (): (() => void) => {
     };
 
     const now = ctx.currentTime;
-    // 3 ding-dong sequences
-    for (let i = 0; i < 3; i++) {
-      const offset = i * 1.3;
+    // 8 ding-dong sequences (~10s total)
+    for (let i = 0; i < 8; i++) {
+      const offset = i * 1.25;
       playNote(523.25, now + offset, 0.5);       // C5 (ding)
       playNote(659.25, now + offset + 0.35, 0.7); // E5 (dong)
     }
 
     const timeout = setTimeout(() => {
       try { ctx.close(); } catch {}
-    }, 5000);
+    }, 11000);
 
     return () => {
       clearTimeout(timeout);
@@ -103,7 +103,9 @@ const CallingPanelPage = () => {
   // Call state
   const [currentCall, setCurrentCall] = useState<CallData | null>(null);
   const [showCall, setShowCall] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const stopSoundRef = useRef<(() => void) | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Sidebar data
   const [cycleData, setCycleData] = useState<CycleData | null>(null);
@@ -297,12 +299,25 @@ const CallingPanelPage = () => {
     };
     setCurrentCall(formatted);
     setShowCall(true);
+    setCountdown(10);
     if (stopSoundRef.current) stopSoundRef.current();
+    if (countdownRef.current) clearInterval(countdownRef.current);
     stopSoundRef.current = playDingDong();
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     setTimeout(() => {
       setShowCall(false);
-      fetchRightData(); // refresh recent calls
-    }, 7000);
+      setCountdown(0);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      fetchRightData();
+    }, 10000);
   }, [fetchRightData]);
 
   useEffect(() => {
@@ -390,14 +405,32 @@ const CallingPanelPage = () => {
                 </div>
               </div>
 
-              <motion.h1
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="text-7xl font-black italic tracking-tighter text-white"
+                className="flex flex-col items-center gap-2"
               >
-                SUA VEZ!
-              </motion.h1>
+                <h1 className="text-7xl font-black italic tracking-tighter text-white">
+                  SUA VEZ!
+                </h1>
+                {countdown > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold border-2" style={{ borderColor: "#0095ff", color: "#7dd3fc", background: "rgba(0,149,255,0.15)" }}>
+                      {countdown}
+                    </div>
+                    <div className="h-1.5 w-32 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: "#0095ff" }}
+                        initial={{ width: "100%" }}
+                        animate={{ width: "0%" }}
+                        transition={{ duration: 10, ease: "linear" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </motion.div>
 
               <motion.p
                 initial={{ opacity: 0 }}
