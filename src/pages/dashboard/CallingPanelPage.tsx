@@ -103,7 +103,9 @@ const CallingPanelPage = () => {
   // Call state
   const [currentCall, setCurrentCall] = useState<CallData | null>(null);
   const [showCall, setShowCall] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const stopSoundRef = useRef<(() => void) | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Sidebar data
   const [cycleData, setCycleData] = useState<CycleData | null>(null);
