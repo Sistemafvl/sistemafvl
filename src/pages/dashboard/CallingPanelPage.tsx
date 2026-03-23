@@ -622,6 +622,21 @@ const CallingPanelPage = () => {
 
 /* ───────── Small sub-components ───────── */
 
+const CycleCard = ({ label, subtitle, rides, tbrs, color }: { label: string; subtitle: string; rides: number; tbrs: number; color: string }) => (
+  <div className="rounded-lg px-3 py-2 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-black shrink-0" style={{ background: `${color}22`, color }}>
+      {label}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-[10px] uppercase text-white/40">{subtitle}</p>
+      <div className="flex gap-3 text-sm">
+        <span className="text-white font-bold">{rides} <span className="text-[10px] text-white/50 font-normal">saídas</span></span>
+        <span style={{ color }} className="font-bold">{tbrs} <span className="text-[10px] opacity-60 font-normal">TBRs</span></span>
+      </div>
+    </div>
+  </div>
+);
+
 const CycleRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex justify-between items-center">
     <span className="text-white/60 text-xs">{label}</span>
