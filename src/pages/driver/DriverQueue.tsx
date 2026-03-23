@@ -1,14 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, QrCode } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, QrCode, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import TbrScanner from "@/components/ui/TbrScanner";
+import QrViewfinder from "@/components/ui/QrViewfinder";
 
 interface QueueEntry {
   id: string;
@@ -43,6 +42,88 @@ const formatElapsed = (totalSeconds: number) => {
 };
 
 
+const QrCameraOverlay = ({ onDetect, onClose }: { onDetect: (code: string) => void; onClose: () => void }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detectedRef = useRef(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const start = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+
+        await new Promise(r => setTimeout(r, 100));
+        if (videoRef.current && streamRef.current) {
+          videoRef.current.srcObject = streamRef.current;
+          await videoRef.current.play();
+        }
+
+        if (!("BarcodeDetector" in window)) return;
+
+        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+
+        scanIntervalRef.current = setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2 || detectedRef.current) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length === 0) return;
+
+            const vw = videoRef.current.videoWidth;
+            const vh = videoRef.current.videoHeight;
+            const inset = 0.2;
+
+            const inside = barcodes.filter((b: any) => {
+              const bb = b.boundingBox;
+              if (!bb) return false;
+              return bb.x >= vw * inset && bb.y >= vh * inset &&
+                bb.x + bb.width <= vw * (1 - inset) && bb.y + bb.height <= vh * (1 - inset);
+            });
+
+            if (inside.length > 0 && inside[0].rawValue) {
+              detectedRef.current = true;
+              onDetect(inside[0].rawValue.trim());
+            }
+          } catch {}
+        }, 150);
+      } catch {
+        onClose();
+      }
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+  }, [onDetect, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-black/80 z-10">
+        <span className="text-white font-semibold text-sm">Escanear QR Code da Fila</span>
+        <button onClick={onClose} className="text-white/80 hover:text-white p-1">
+          <X className="h-6 w-6" />
+        </button>
+      </div>
+      {/* Camera */}
+      <div className="flex-1 relative overflow-hidden">
+        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
+        <QrViewfinder />
+      </div>
+    </div>
+  );
+};
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
@@ -640,23 +721,16 @@ const DriverQueue = () => {
       )}
     </div>
 
-      {/* QR Scanner Dialog */}
-      <Dialog open={showQrScanner} onOpenChange={setShowQrScanner}>
-        <DialogContent className="max-w-md p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="text-base">Escanear QR Code da Fila</DialogTitle>
-          </DialogHeader>
-          <div className="w-full aspect-square">
-            <TbrScanner
-              onScan={async (code) => {
-                setShowQrScanner(false);
-                validateQrAndJoin(code);
-                return true;
-              }}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* QR Scanner Fullscreen Overlay */}
+      {showQrScanner && (
+        <QrCameraOverlay
+          onDetect={(code) => {
+            setShowQrScanner(false);
+            validateQrAndJoin(code);
+          }}
+          onClose={() => setShowQrScanner(false)}
+        />
+      )}
     </>
   );
 };
