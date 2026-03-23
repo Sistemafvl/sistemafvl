@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { getBrazilTodayStr, getBrazilDayRange } from "@/lib/utils";
-import { Clock, Users, Package, TruckIcon, Bell, MapPin, User } from "lucide-react";
+import { Clock, Users, Package, TruckIcon, Bell, MapPin, User, Maximize2, Minimize2 } from "lucide-react";
 
 /* ───────── Types ───────── */
 
