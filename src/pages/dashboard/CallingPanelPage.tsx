@@ -112,6 +112,9 @@ const CallingPanelPage = () => {
   const [tbrCount, setTbrCount] = useState(0);
   const [ridesFinished, setRidesFinished] = useState(0);
   const [queueCount, setQueueCount] = useState(0);
+  const [cycleMetrics, setCycleMetrics] = useState<{ c1: { rides: number; tbrs: number }; c2: { rides: number; tbrs: number }; c3: { rides: number; tbrs: number } }>({
+    c1: { rides: 0, tbrs: 0 }, c2: { rides: 0, tbrs: 0 }, c3: { rides: 0, tbrs: 0 },
+  });
 
   // Right column
   const [clock, setClock] = useState(new Date());
