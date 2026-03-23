@@ -157,7 +157,7 @@ const CallingPanelPage = () => {
   }, []);
 
   return (
-    <div className="fixed inset-0 bg-[#001529] text-white flex overflow-hidden font-sans select-none">
+    <div className="fixed inset-0 bg-white text-white flex overflow-hidden font-sans select-none">
       <div className="flex-1 relative flex items-center justify-center p-12">
         <AnimatePresence mode="wait">
           {showCall && currentCall ? (
