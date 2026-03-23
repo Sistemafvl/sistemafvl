@@ -385,7 +385,7 @@ const CallingPanelPage = () => {
 
         {/* Logos parceiros */}
         <div className="p-4 flex items-center justify-center gap-4">
-          <img src="/logos/cufa.png" alt="CUFA" className="h-8 object-contain opacity-60" />
+          <img src="/logos/cufa.png" alt="CUFA" className="h-8 object-contain opacity-60" style={{ filter: "brightness(0) invert(1)" }} />
           <img src="/logos/fvl.png" alt="FVL" className="h-8 object-contain opacity-60" />
         </div>
       </div>
