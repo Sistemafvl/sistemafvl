@@ -119,6 +119,9 @@ const CallingPanelPage = () => {
   const [queueList, setQueueList] = useState<QueueDriver[]>([]);
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
 
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   // Idle logos
   const logos = ["/logos/favela_llog.png", "/logos/cufa.png", "/logos/fvl.png"];
   const [logoIndex, setLogoIndex] = useState(0);
