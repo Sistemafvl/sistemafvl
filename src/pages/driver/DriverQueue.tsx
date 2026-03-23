@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, QrCode } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TbrScanner from "@/components/ui/TbrScanner";
 
 interface QueueEntry {
   id: string;
@@ -42,6 +46,7 @@ const formatElapsed = (totalSeconds: number) => {
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [myEntry, setMyEntry] = useState<QueueEntry | null>(null);
@@ -54,6 +59,8 @@ const DriverQueue = () => {
   const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [activeConferente, setActiveConferente] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const qrProcessedRef = useRef(false);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -263,6 +270,40 @@ const DriverQueue = () => {
     fetchQueue();
   };
 
+  const validateQrAndJoin = useCallback((qrUrl: string) => {
+    try {
+      const url = new URL(qrUrl);
+      const turno = url.searchParams.get("qr_turno");
+      const qrUnit = url.searchParams.get("qr_unit");
+      const qrDate = url.searchParams.get("qr_date");
+      if (!turno || !qrUnit || !qrDate) { toast.error("QR Code inválido"); return; }
+      const now = new Date();
+      const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+      const todayStr = brt.toISOString().slice(0, 10);
+      if (qrDate !== todayStr) { toast.error("QR Code expirado"); return; }
+      if (qrUnit !== unitId) { toast.error("QR Code de outra unidade"); return; }
+      const totalMin = brt.getUTCHours() * 60 + brt.getUTCMinutes();
+      if (turno === "madrugada" && totalMin > 300) { toast.error("QR Madrugada válido somente de 00:00 às 05:00"); return; }
+      if (turno === "diurno" && totalMin <= 300) { toast.error("QR Diurno válido somente a partir das 05:01"); return; }
+      if (myEntry) { toast.info("Você já está na fila!"); return; }
+      toast.success("QR válido! Entrando na fila...");
+      joinQueue();
+    } catch { toast.error("QR Code inválido"); }
+  }, [unitId, myEntry, joinQueue]);
+
+  useEffect(() => {
+    if (qrProcessedRef.current) return;
+    const turno = searchParams.get("qr_turno");
+    if (!turno || !unitId || !driverId) return;
+    qrProcessedRef.current = true;
+    const fullUrl = window.location.href;
+    searchParams.delete("qr_turno");
+    searchParams.delete("qr_unit");
+    searchParams.delete("qr_date");
+    setSearchParams(searchParams, { replace: true });
+    setTimeout(() => validateQrAndJoin(fullUrl), 1500);
+  }, [searchParams, unitId, driverId, validateQrAndJoin, setSearchParams]);
+
   const leaveQueue = async () => {
     if (!myEntry) return;
     setLoading(true);
@@ -401,6 +442,7 @@ const DriverQueue = () => {
   }
 
   return (
+    <>
     <div className="space-y-6">
       <div className="flex items-center gap-3">
         <Users className="h-7 w-7 text-primary" />
@@ -456,6 +498,16 @@ const DriverQueue = () => {
             size="lg"
           >
             {loading ? "Entrando..." : "ENTRAR NA FILA"}
+          </Button>
+          <Button
+            onClick={() => setShowQrScanner(true)}
+            disabled={loading}
+            variant="outline"
+            className="w-full h-12 text-base font-semibold gap-2"
+            size="lg"
+          >
+            <QrCode className="h-5 w-5" />
+            ENTRAR VIA QR CODE
           </Button>
         </>
       ) : !isApproved ? (
@@ -587,6 +639,25 @@ const DriverQueue = () => {
         </Card>
       )}
     </div>
+
+      {/* QR Scanner Dialog */}
+      <Dialog open={showQrScanner} onOpenChange={setShowQrScanner}>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2">
+            <DialogTitle className="text-base">Escanear QR Code da Fila</DialogTitle>
+          </DialogHeader>
+          <div className="w-full aspect-square">
+            <TbrScanner
+              onScan={async (code) => {
+                setShowQrScanner(false);
+                validateQrAndJoin(code);
+                return true;
+              }}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 

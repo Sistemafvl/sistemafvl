@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { getBrazilTodayStr, getBrazilDayRange } from "@/lib/utils";
 import { Clock, Users, Package, TruckIcon, Bell, MapPin, User, Maximize2, Minimize2, Star } from "lucide-react";
+import QRCode from "qrcode";
+import jsPDF from "jspdf";
 
 /* ───────── Types ───────── */
 
@@ -368,6 +370,34 @@ const CallingPanelPage = () => {
     }, 10000);
   }, [fetchRightData, fetchSidebarData]);
 
+  const generateQrPdf = useCallback(async (turno: "madrugada" | "diurno") => {
+    if (!unitId) return;
+    const today = getBrazilTodayStr();
+    const url = `${window.location.origin}/driver/queue?qr_turno=${turno}&qr_unit=${unitId}&qr_date=${today}`;
+    try {
+      const qrDataUrl = await QRCode.toDataURL(url, { width: 600, margin: 2 });
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const title = turno === "madrugada" ? "FILA — TURNO MADRUGADA" : "FILA — TURNO DIURNO";
+      const hours = turno === "madrugada" ? "00:00 às 05:00" : "05:01 às 23:59";
+      doc.setFontSize(28);
+      doc.setFont("helvetica", "bold");
+      doc.text(title, 105, 35, { align: "center" });
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text("Horário válido: " + hours, 105, 48, { align: "center" });
+      doc.text("Unidade: " + (unitName || "—"), 105, 58, { align: "center" });
+      doc.text("Data: " + today.split("-").reverse().join("/"), 105, 68, { align: "center" });
+      doc.addImage(qrDataUrl, "PNG", 27.5, 80, 155, 155);
+      doc.setFontSize(11);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Escaneie este QR Code com a câmera do celular para entrar na fila.", 105, 250, { align: "center" });
+      doc.text("Este QR é válido somente para a data e horário indicados acima.", 105, 258, { align: "center" });
+      doc.save("qr_fila_" + turno + "_" + today + ".pdf");
+    } catch (e) {
+      console.error("Erro ao gerar QR PDF:", e);
+    }
+  }, [unitId, unitName]);
+
   useEffect(() => {
     return () => { if (stopSoundRef.current) stopSoundRef.current(); };
   }, []);
@@ -447,6 +477,25 @@ const CallingPanelPage = () => {
           ) : (
             <p className="text-[11px] text-white/40 italic">Sem avaliações</p>
           )}
+        </div>
+
+        {/* QR Code buttons */}
+        <div className="px-4 pb-3 flex flex-col gap-2">
+          <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">QR Fila</p>
+          <button
+            onClick={() => generateQrPdf("madrugada")}
+            className="w-full text-xs font-semibold py-2 px-3 rounded-md transition-colors"
+            style={{ background: "rgba(255,255,255,0.08)", color: "#7dd3fc", border: "1px solid rgba(125,211,252,0.2)" }}
+          >
+            🌙 Madrugada (00–05h)
+          </button>
+          <button
+            onClick={() => generateQrPdf("diurno")}
+            className="w-full text-xs font-semibold py-2 px-3 rounded-md transition-colors"
+            style={{ background: "rgba(255,255,255,0.08)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.2)" }}
+          >
+            ☀️ Diurno (05–24h)
+          </button>
         </div>
 
         {/* Logos parceiros */}
