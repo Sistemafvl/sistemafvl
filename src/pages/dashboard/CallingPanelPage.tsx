@@ -405,14 +405,32 @@ const CallingPanelPage = () => {
                 </div>
               </div>
 
-              <motion.h1
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.15 }}
-                className="text-7xl font-black italic tracking-tighter text-white"
+                className="flex flex-col items-center gap-2"
               >
-                SUA VEZ!
-              </motion.h1>
+                <h1 className="text-7xl font-black italic tracking-tighter text-white">
+                  SUA VEZ!
+                </h1>
+                {countdown > 0 && (
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-xl font-bold border-2" style={{ borderColor: "#0095ff", color: "#7dd3fc", background: "rgba(0,149,255,0.15)" }}>
+                      {countdown}
+                    </div>
+                    <div className="h-1.5 w-32 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
+                      <motion.div
+                        className="h-full rounded-full"
+                        style={{ background: "#0095ff" }}
+                        initial={{ width: "100%" }}
+                        animate={{ width: "0%" }}
+                        transition={{ duration: 10, ease: "linear" }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </motion.div>
 
               <motion.p
                 initial={{ opacity: 0 }}
