@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { getBrazilTodayStr, getBrazilDayRange } from "@/lib/utils";
-import { Clock, Users, Package, TruckIcon, Bell, MapPin, User } from "lucide-react";
+import { Clock, Users, Package, TruckIcon, Bell, MapPin, User, Maximize2, Minimize2 } from "lucide-react";
 
 /* ───────── Types ───────── */
 
@@ -118,6 +118,9 @@ const CallingPanelPage = () => {
   const [unitName, setUnitName] = useState("");
   const [queueList, setQueueList] = useState<QueueDriver[]>([]);
   const [recentCalls, setRecentCalls] = useState<RecentCall[]>([]);
+
+  // Fullscreen
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Idle logos
   const logos = ["/logos/favela_llog.png", "/logos/cufa.png", "/logos/fvl.png"];
@@ -324,6 +327,21 @@ const CallingPanelPage = () => {
     return () => { if (stopSoundRef.current) stopSoundRef.current(); };
   }, []);
 
+  // Fullscreen handlers
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  };
+
   const clockStr = clock.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit", timeZone: "America/Sao_Paulo" });
 
   /* ═══════════════ RENDER ═══════════════ */
@@ -367,13 +385,22 @@ const CallingPanelPage = () => {
 
         {/* Logos parceiros */}
         <div className="p-4 flex items-center justify-center gap-4">
-          <img src="/logos/cufa.png" alt="CUFA" className="h-8 object-contain opacity-60" />
+          <img src="/logos/cufa.png" alt="CUFA" className="h-8 object-contain opacity-60" style={{ filter: "brightness(0) invert(1)" }} />
           <img src="/logos/fvl.png" alt="FVL" className="h-8 object-contain opacity-60" />
         </div>
       </div>
 
       {/* ── ÁREA CENTRAL ── */}
       <div className="flex-1 relative flex items-center justify-center" style={{ background: showCall ? "#001529" : "#ffffff" }}>
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-3 right-3 z-50 p-2 rounded-lg transition-colors hover:bg-black/10"
+          style={{ color: showCall ? "#7dd3fc" : "#64748b" }}
+          title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+        >
+          {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+        </button>
         <AnimatePresence mode="wait">
           {showCall && currentCall ? (
             <motion.div
