@@ -878,6 +878,7 @@ export type Database = {
           driver_id: string
           id: string
           joined_at: string
+          parking_spot: string | null
           status: string
           unit_id: string
         }
@@ -888,6 +889,7 @@ export type Database = {
           driver_id: string
           id?: string
           joined_at?: string
+          parking_spot?: string | null
           status?: string
           unit_id: string
         }
@@ -898,6 +900,7 @@ export type Database = {
           driver_id?: string
           id?: string
           joined_at?: string
+          parking_spot?: string | null
           status?: string
           unit_id?: string
         }
