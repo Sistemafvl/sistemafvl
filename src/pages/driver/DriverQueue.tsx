@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from "react";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, QrCode } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
+import { toast } from "sonner";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import TbrScanner from "@/components/ui/TbrScanner";
 
 interface QueueEntry {
   id: string;
