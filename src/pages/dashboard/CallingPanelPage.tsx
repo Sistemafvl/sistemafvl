@@ -112,6 +112,9 @@ const CallingPanelPage = () => {
   const [tbrCount, setTbrCount] = useState(0);
   const [ridesFinished, setRidesFinished] = useState(0);
   const [queueCount, setQueueCount] = useState(0);
+  const [cycleMetrics, setCycleMetrics] = useState<{ c1: { rides: number; tbrs: number }; c2: { rides: number; tbrs: number }; c3: { rides: number; tbrs: number } }>({
+    c1: { rides: 0, tbrs: 0 }, c2: { rides: 0, tbrs: 0 }, c3: { rides: 0, tbrs: 0 },
+  });
 
   // Right column
   const [clock, setClock] = useState(new Date());
@@ -153,7 +156,7 @@ const CallingPanelPage = () => {
     const today = getBrazilTodayStr();
     const { start, end } = getBrazilDayRange(today);
 
-    // Cycle
+    // Cycle record
     const { data: cycle } = await supabase
       .from("cycle_records" as any)
       .select("abertura_galpao, hora_inicio_descarregamento, hora_termino_descarregamento, qtd_pacotes, qtd_pacotes_informado")
@@ -168,15 +171,43 @@ const CallingPanelPage = () => {
     });
     setTbrCount(typeof tbrData === "number" ? tbrData : 0);
 
-    // Rides finished today
-    const { count: finCount } = await supabase
+    // Rides finished today (for metrics + cycle calc)
+    const { data: ridesData } = await supabase
       .from("driver_rides")
-      .select("id", { count: "exact", head: true })
+      .select("id, completed_at")
       .eq("unit_id", unitId)
       .eq("loading_status", "finished")
       .gte("completed_at", start)
       .lte("completed_at", end);
-    setRidesFinished(finCount ?? 0);
+    const rides = ridesData || [];
+    setRidesFinished(rides.length);
+
+    // Cycle metrics (C1/C2/C3) based on completed_at BRT cutoffs
+    const datePrefix = today; // YYYY-MM-DD
+    const c1Cut = new Date(`${datePrefix}T11:30:00.000Z`); // 08:30 BRT
+    const c2Cut = new Date(`${datePrefix}T12:30:00.000Z`); // 09:30 BRT
+
+    const c1Rides = rides.filter(r => new Date(r.completed_at) <= c1Cut);
+    const c2Rides = rides.filter(r => new Date(r.completed_at) <= c2Cut);
+
+    // Get TBR counts per ride via RPC
+    const rideIds = rides.map(r => r.id);
+    let tbrMap: Record<string, number> = {};
+    if (rideIds.length > 0) {
+      const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+      if (tbrCounts) {
+        for (const row of tbrCounts) {
+          tbrMap[row.ride_id] = Number(row.tbr_count);
+        }
+      }
+    }
+
+    const sumTbrs = (rideList: typeof rides) => rideList.reduce((acc, r) => acc + (tbrMap[r.id] || 0), 0);
+    setCycleMetrics({
+      c1: { rides: c1Rides.length, tbrs: sumTbrs(c1Rides) },
+      c2: { rides: c2Rides.length, tbrs: sumTbrs(c2Rides) },
+      c3: { rides: rides.length, tbrs: sumTbrs(rides) },
+    });
 
     // Queue count
     const { count: qc } = await supabase
@@ -355,21 +386,21 @@ const CallingPanelPage = () => {
           <img src="/logos/favela_llog.png" alt="FavelaLLog" className="h-14 object-contain" />
         </div>
 
-        {/* Ciclos */}
-        <div className="p-4 space-y-3 border-b border-white/10">
+        {/* Ciclos C1/C2/C3 */}
+        <div className="p-4 space-y-2 border-b border-white/10">
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Ciclos do Dia
           </h3>
-          {cycleData ? (
-            <div className="space-y-2 text-sm">
+          <CycleCard label="C1" subtitle="até 08:30" rides={cycleMetrics.c1.rides} tbrs={cycleMetrics.c1.tbrs} color="#22d3ee" />
+          <CycleCard label="C2" subtitle="até 09:30" rides={cycleMetrics.c2.rides} tbrs={cycleMetrics.c2.tbrs} color="#38bdf8" />
+          <CycleCard label="C3" subtitle="total" rides={cycleMetrics.c3.rides} tbrs={cycleMetrics.c3.tbrs} color="#818cf8" />
+          {cycleData && (
+            <div className="mt-2 space-y-1 text-[11px]">
               <CycleRow label="Abertura" value={fmtTime(cycleData.abertura_galpao)} />
               <CycleRow label="Início Desc." value={fmtTime(cycleData.hora_inicio_descarregamento)} />
               <CycleRow label="Término Desc." value={fmtTime(cycleData.hora_termino_descarregamento)} />
               <CycleRow label="Pacotes Info." value={cycleData.qtd_pacotes_informado?.toString() ?? "—"} />
-              <CycleRow label="Pacotes Bip." value={cycleData.qtd_pacotes?.toString() ?? "—"} />
             </div>
-          ) : (
-            <p className="text-white/40 text-xs italic">Nenhum ciclo registrado</p>
           )}
         </div>
 
@@ -378,7 +409,6 @@ const CallingPanelPage = () => {
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5" /> Métricas do Dia
           </h3>
-          
           <MetricRow icon={<TruckIcon className="w-4 h-4 text-emerald-400" />} label="Saídas" value={ridesFinished} />
           <MetricRow icon={<Users className="w-4 h-4 text-amber-400" />} label="Na Fila" value={queueCount} />
         </div>
@@ -591,6 +621,21 @@ const CallingPanelPage = () => {
 };
 
 /* ───────── Small sub-components ───────── */
+
+const CycleCard = ({ label, subtitle, rides, tbrs, color }: { label: string; subtitle: string; rides: number; tbrs: number; color: string }) => (
+  <div className="rounded-lg px-3 py-2 flex items-center gap-3" style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}>
+    <div className="w-10 h-10 rounded-lg flex items-center justify-center text-sm font-black shrink-0" style={{ background: `${color}22`, color }}>
+      {label}
+    </div>
+    <div className="flex-1 min-w-0">
+      <p className="text-[10px] uppercase text-white/40">{subtitle}</p>
+      <div className="flex gap-3 text-sm">
+        <span className="text-white font-bold">{rides} <span className="text-[10px] text-white/50 font-normal">saídas</span></span>
+        <span style={{ color }} className="font-bold">{tbrs} <span className="text-[10px] opacity-60 font-normal">TBRs</span></span>
+      </div>
+    </div>
+  </div>
+);
 
 const CycleRow = ({ label, value }: { label: string; value: string }) => (
   <div className="flex justify-between items-center">
