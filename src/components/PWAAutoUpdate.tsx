@@ -1,5 +1,4 @@
-import { useRegisterSW } from "virtual:pwa-register/react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 
 declare const __BUILD_VERSION__: string;
@@ -10,8 +9,10 @@ const RELOAD_FLAG = "app_version_reloaded";
 
 const PWAAutoUpdate = () => {
   const hasReloaded = useRef(false);
+  const [needRefresh, setNeedRefresh] = useState(false);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
 
-  // Build version check — forces reload once when a new bundle is loaded
+  // Build version check
   useEffect(() => {
     const current = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
     if (!current) return;
@@ -30,33 +31,55 @@ const PWAAutoUpdate = () => {
     sessionStorage.removeItem(RELOAD_FLAG);
   }, []);
 
-  const {
-    needRefresh: [needRefresh],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegisteredSW(_swUrl, registration) {
-      if (registration) {
-        // Immediate check on registration
+  // Register SW using vanilla API
+  useEffect(() => {
+    if (!("serviceWorker" in navigator)) return;
+
+    const registerSW = async () => {
+      try {
+        const registration = await navigator.serviceWorker.register("/sw.js", { type: "classic" });
+        registrationRef.current = registration;
+
+        // Check for updates immediately
         registration.update();
 
         // Periodic checks
-        setInterval(() => {
+        const interval = setInterval(() => {
           registration.update();
         }, UPDATE_INTERVAL);
-      }
-    },
-    onRegisterError(error) {
-      console.error("SW registration error:", error);
-    },
-  });
 
+        // Listen for new SW waiting
+        registration.addEventListener("updatefound", () => {
+          const newSW = registration.installing;
+          if (!newSW) return;
+          newSW.addEventListener("statechange", () => {
+            if (newSW.state === "installed" && navigator.serviceWorker.controller) {
+              setNeedRefresh(true);
+            }
+          });
+        });
+
+        return () => clearInterval(interval);
+      } catch (error) {
+        console.error("SW registration error:", error);
+      }
+    };
+
+    registerSW();
+  }, []);
+
+  // Auto-update when refresh needed
   useEffect(() => {
     if (needRefresh && !hasReloaded.current) {
       hasReloaded.current = true;
       toast.info("Atualizando sistema...");
-      updateServiceWorker(true);
+      const waiting = registrationRef.current?.waiting;
+      if (waiting) {
+        waiting.postMessage({ type: "SKIP_WAITING" });
+      }
+      setTimeout(() => window.location.reload(), 1000);
     }
-  }, [needRefresh, updateServiceWorker]);
+  }, [needRefresh]);
 
   return null;
 };
