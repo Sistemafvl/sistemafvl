@@ -639,23 +639,16 @@ const DriverQueue = () => {
       )}
     </div>
 
-      {/* QR Scanner Dialog */}
-      <Dialog open={showQrScanner} onOpenChange={setShowQrScanner}>
-        <DialogContent className="max-w-md p-0 overflow-hidden">
-          <DialogHeader className="px-4 pt-4 pb-2">
-            <DialogTitle className="text-base">Escanear QR Code da Fila</DialogTitle>
-          </DialogHeader>
-          <div className="w-full aspect-square">
-            <TbrScanner
-              onScan={async (code) => {
-                setShowQrScanner(false);
-                validateQrAndJoin(code);
-                return true;
-              }}
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* QR Scanner Fullscreen Overlay */}
+      {showQrScanner && (
+        <QrCameraOverlay
+          onDetect={(code) => {
+            setShowQrScanner(false);
+            validateQrAndJoin(code);
+          }}
+          onClose={() => setShowQrScanner(false)}
+        />
+      )}
     </>
   );
 };
