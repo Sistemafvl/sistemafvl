@@ -1429,7 +1429,7 @@ const ConferenciaCarregamentoPage = () => {
       called_at: new Date().toISOString(), 
       called_by_name: callerName,
       parking_spot: parkingSpotInput.trim()
-    } as any).eq("id", selectedQueueIdForCall);
+    }).eq("id", selectedQueueIdForCall);
     
     const { toast } = await import("@/hooks/use-toast");
     toast({ title: "Motorista chamado!", description: `Vaga ${parkingSpotInput} informada ao painel.` });
