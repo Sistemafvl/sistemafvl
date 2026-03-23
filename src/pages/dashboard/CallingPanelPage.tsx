@@ -5,6 +5,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { motion, AnimatePresence } from "framer-motion";
 import { getBrazilTodayStr, getBrazilDayRange } from "@/lib/utils";
 import { Clock, Users, Package, TruckIcon, Bell, MapPin, User, Maximize2, Minimize2, Star } from "lucide-react";
+import QRCode from "qrcode";
+import jsPDF from "jspdf";
 
 /* ───────── Types ───────── */
 
