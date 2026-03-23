@@ -1,28 +1,44 @@
 
 
-# Corrigir Modal QR Code na Visão do Motorista
+# Correção do Módulo "Socorrendo" — TBRs não são inseridos no carregamento do socorrista
 
-## Problema
-O modal de QR Code está usando o componente `TbrScanner` (feito para bipar TBRs), que inclui campo de texto manual, histórico de leituras e layout inadequado. Para entrada na fila via QR, o modal deve ser apenas a câmera com viewfinder, sem input manual. Além disso, o layout está quebrando em dispositivos móveis.
+## Problema Raiz
+
+A tabela `ride_tbrs` tem uma política RLS de INSERT que **só permite inserir TBRs em rides com `loading_status` = 'pending' ou 'loading'**:
+
+```sql
+WITH CHECK: EXISTS (
+  SELECT 1 FROM driver_rides 
+  WHERE driver_rides.id = ride_tbrs.ride_id 
+  AND driver_rides.loading_status = ANY (ARRAY['pending', 'loading'])
+)
+```
+
+No código de resgate (`DriverRescue.tsx`, linha 126-129), o sistema tenta inserir no ride do socorrista com fallback para `finished`:
+
+```typescript
+const activeRide =
+  rescuerRides.find((r) => r.loading_status === "loading") ??
+  rescuerRides.find((r) => r.loading_status === "finished") ?? // ← BLOQUEADO PELA RLS
+  rescuerRides[0];
+```
+
+Quando o socorrista já finalizou seu carregamento (status `finished`), a inserção no `ride_tbrs` é **silenciosamente rejeitada** pela RLS. O `rescue_entries` é criado normalmente, mas o TBR nunca aparece no carregamento do motorista.
 
 ## Solução
 
-### Arquivo: `src/pages/driver/DriverQueue.tsx`
+### 1. Criar RPC `process_rescue_tbr` (migration SQL)
+Função `SECURITY DEFINER` que bypassa a RLS para inserções de resgate:
+- Recebe: `p_code`, `p_original_tbr_id`, `p_rescuer_ride_id`, `p_trip_number`
+- Deleta o TBR original
+- Insere no ride do socorrista com `is_rescue = true` (sem restrição de `loading_status`)
+- Retorna sucesso/erro
 
-Substituir o uso do `TbrScanner` dentro do Dialog por um scanner dedicado apenas com câmera:
-
-1. **Remover TbrScanner do modal** — não usar o componente de bipar TBR
-2. **Implementar câmera direta no modal** usando `BarcodeDetector` API (mesmo padrão do TbrScanner mas simplificado):
-   - Abrir câmera traseira ao montar
-   - Renderizar `<video>` com `QrViewfinder` por cima
-   - Detectar QR codes dentro do viewfinder
-   - Ao detectar, chamar `validateQrAndJoin(code)` e fechar o modal
-3. **Layout responsivo do modal**:
-   - Usar `Drawer` (vaul) em mobile e `Dialog` em desktop (padrão já usado no projeto)
-   - Ou simplesmente usar `Dialog` com classes responsivas: `max-w-[95vw] sm:max-w-md`, altura do vídeo `aspect-[3/4] max-h-[70vh]`
-   - Padding e espaçamento ajustados para telas pequenas
-4. **Cleanup**: parar câmera ao fechar o modal
+### 2. Atualizar `DriverRescue.tsx`
+- Substituir as chamadas manuais de `delete` + `insert` na `ride_tbrs` pela RPC `process_rescue_tbr`
+- Manter o restante da lógica (inserção em `rescue_entries`, feedback visual)
 
 ### Arquivos alterados
-- `src/pages/driver/DriverQueue.tsx` — substituir TbrScanner por câmera direta com QrViewfinder, layout responsivo
+- **Migration SQL** — nova RPC `process_rescue_tbr`
+- **`src/pages/driver/DriverRescue.tsx`** — usar a RPC em vez de operações diretas
 
