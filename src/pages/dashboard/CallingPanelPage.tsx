@@ -351,8 +351,9 @@ const CallingPanelPage = () => {
       setCountdown(0);
       if (countdownRef.current) clearInterval(countdownRef.current);
       fetchRightData();
+      fetchSidebarData();
     }, 10000);
-  }, [fetchRightData]);
+  }, [fetchRightData, fetchSidebarData]);
 
   useEffect(() => {
     return () => { if (stopSoundRef.current) stopSoundRef.current(); };
