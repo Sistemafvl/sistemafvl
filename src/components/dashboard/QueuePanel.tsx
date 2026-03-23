@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import QRCode from "qrcode";
+import jsPDF from "jspdf";
+import { getBrazilTodayStr } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
