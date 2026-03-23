@@ -128,14 +128,18 @@ const DriverRescue = () => {
       rescuerRides.find((r) => r.loading_status === "finished") ??
       rescuerRides[0];
 
-    await supabase.from("ride_tbrs").delete().eq("id", originalTbr.id);
-
-    await supabase.from("ride_tbrs").insert({
-      ride_id: activeRide.id,
-      code: originalTbr.code,
-      trip_number: originalTbr.trip_number,
-      is_rescue: true,
+    const { data: rpcResult, error: rpcError } = await supabase.rpc("process_rescue_tbr", {
+      p_original_tbr_id: originalTbr.id,
+      p_code: originalTbr.code,
+      p_rescuer_ride_id: activeRide.id,
+      p_trip_number: originalTbr.trip_number,
     });
+
+    if (rpcError || (rpcResult && !(rpcResult as any).success)) {
+      const errMsg = rpcError?.message || (rpcResult as any)?.error || "Erro desconhecido";
+      toast.error(`Falha ao transferir TBR: ${errMsg}`);
+      return false;
+    }
 
     await supabase.from("rescue_entries").insert({
       unit_id: unitId,

@@ -1811,6 +1811,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      process_rescue_tbr: {
+        Args: {
+          p_code: string
+          p_original_tbr_id: string
+          p_rescuer_ride_id: string
+          p_trip_number: number
+        }
+        Returns: Json
+      }
       process_tbr_scan: {
         Args: { p_code: string; p_ride_id: string; p_unit_id: string }
         Returns: Json
