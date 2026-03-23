@@ -156,7 +156,7 @@ const CallingPanelPage = () => {
     const today = getBrazilTodayStr();
     const { start, end } = getBrazilDayRange(today);
 
-    // Cycle
+    // Cycle record
     const { data: cycle } = await supabase
       .from("cycle_records" as any)
       .select("abertura_galpao, hora_inicio_descarregamento, hora_termino_descarregamento, qtd_pacotes, qtd_pacotes_informado")
@@ -171,15 +171,43 @@ const CallingPanelPage = () => {
     });
     setTbrCount(typeof tbrData === "number" ? tbrData : 0);
 
-    // Rides finished today
-    const { count: finCount } = await supabase
+    // Rides finished today (for metrics + cycle calc)
+    const { data: ridesData } = await supabase
       .from("driver_rides")
-      .select("id", { count: "exact", head: true })
+      .select("id, completed_at")
       .eq("unit_id", unitId)
       .eq("loading_status", "finished")
       .gte("completed_at", start)
       .lte("completed_at", end);
-    setRidesFinished(finCount ?? 0);
+    const rides = ridesData || [];
+    setRidesFinished(rides.length);
+
+    // Cycle metrics (C1/C2/C3) based on completed_at BRT cutoffs
+    const datePrefix = today; // YYYY-MM-DD
+    const c1Cut = new Date(`${datePrefix}T11:30:00.000Z`); // 08:30 BRT
+    const c2Cut = new Date(`${datePrefix}T12:30:00.000Z`); // 09:30 BRT
+
+    const c1Rides = rides.filter(r => new Date(r.completed_at) <= c1Cut);
+    const c2Rides = rides.filter(r => new Date(r.completed_at) <= c2Cut);
+
+    // Get TBR counts per ride via RPC
+    const rideIds = rides.map(r => r.id);
+    let tbrMap: Record<string, number> = {};
+    if (rideIds.length > 0) {
+      const { data: tbrCounts } = await supabase.rpc("get_ride_tbr_counts", { p_ride_ids: rideIds });
+      if (tbrCounts) {
+        for (const row of tbrCounts) {
+          tbrMap[row.ride_id] = Number(row.tbr_count);
+        }
+      }
+    }
+
+    const sumTbrs = (rideList: typeof rides) => rideList.reduce((acc, r) => acc + (tbrMap[r.id] || 0), 0);
+    setCycleMetrics({
+      c1: { rides: c1Rides.length, tbrs: sumTbrs(c1Rides) },
+      c2: { rides: c2Rides.length, tbrs: sumTbrs(c2Rides) },
+      c3: { rides: rides.length, tbrs: sumTbrs(rides) },
+    });
 
     // Queue count
     const { count: qc } = await supabase
