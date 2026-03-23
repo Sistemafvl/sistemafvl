@@ -392,6 +392,15 @@ const CallingPanelPage = () => {
 
       {/* ── ÁREA CENTRAL ── */}
       <div className="flex-1 relative flex items-center justify-center" style={{ background: showCall ? "#001529" : "#ffffff" }}>
+        {/* Fullscreen toggle */}
+        <button
+          onClick={toggleFullscreen}
+          className="absolute top-3 right-3 z-50 p-2 rounded-lg transition-colors hover:bg-black/10"
+          style={{ color: showCall ? "#7dd3fc" : "#64748b" }}
+          title={isFullscreen ? "Sair da tela cheia" : "Tela cheia"}
+        >
+          {isFullscreen ? <Minimize2 className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+        </button>
         <AnimatePresence mode="wait">
           {showCall && currentCall ? (
             <motion.div
