@@ -217,6 +217,18 @@ const CallingPanelPage = () => {
       .eq("unit_id", unitId)
       .in("status", ["waiting", "approved"]);
     setQueueCount(qc ?? 0);
+
+    // Review stats
+    const { data: reviews } = await supabase
+      .from("unit_reviews")
+      .select("rating")
+      .eq("unit_id", unitId);
+    if (reviews && reviews.length > 0) {
+      const avg = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+      setReviewStats({ avg, count: reviews.length });
+    } else {
+      setReviewStats({ avg: 0, count: 0 });
+    }
   }, [unitId]);
 
   useEffect(() => {
