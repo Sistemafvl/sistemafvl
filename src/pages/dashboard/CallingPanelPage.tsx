@@ -386,21 +386,21 @@ const CallingPanelPage = () => {
           <img src="/logos/favela_llog.png" alt="FavelaLLog" className="h-14 object-contain" />
         </div>
 
-        {/* Ciclos */}
-        <div className="p-4 space-y-3 border-b border-white/10">
+        {/* Ciclos C1/C2/C3 */}
+        <div className="p-4 space-y-2 border-b border-white/10">
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Clock className="w-3.5 h-3.5" /> Ciclos do Dia
           </h3>
-          {cycleData ? (
-            <div className="space-y-2 text-sm">
+          <CycleCard label="C1" subtitle="até 08:30" rides={cycleMetrics.c1.rides} tbrs={cycleMetrics.c1.tbrs} color="#22d3ee" />
+          <CycleCard label="C2" subtitle="até 09:30" rides={cycleMetrics.c2.rides} tbrs={cycleMetrics.c2.tbrs} color="#38bdf8" />
+          <CycleCard label="C3" subtitle="total" rides={cycleMetrics.c3.rides} tbrs={cycleMetrics.c3.tbrs} color="#818cf8" />
+          {cycleData && (
+            <div className="mt-2 space-y-1 text-[11px]">
               <CycleRow label="Abertura" value={fmtTime(cycleData.abertura_galpao)} />
               <CycleRow label="Início Desc." value={fmtTime(cycleData.hora_inicio_descarregamento)} />
               <CycleRow label="Término Desc." value={fmtTime(cycleData.hora_termino_descarregamento)} />
               <CycleRow label="Pacotes Info." value={cycleData.qtd_pacotes_informado?.toString() ?? "—"} />
-              <CycleRow label="Pacotes Bip." value={cycleData.qtd_pacotes?.toString() ?? "—"} />
             </div>
-          ) : (
-            <p className="text-white/40 text-xs italic">Nenhum ciclo registrado</p>
           )}
         </div>
 
@@ -409,7 +409,6 @@ const CallingPanelPage = () => {
           <h3 className="text-xs font-bold uppercase tracking-widest text-sky-400 flex items-center gap-1.5">
             <Package className="w-3.5 h-3.5" /> Métricas do Dia
           </h3>
-          
           <MetricRow icon={<TruckIcon className="w-4 h-4 text-emerald-400" />} label="Saídas" value={ridesFinished} />
           <MetricRow icon={<Users className="w-4 h-4 text-amber-400" />} label="Na Fila" value={queueCount} />
         </div>
