@@ -299,12 +299,25 @@ const CallingPanelPage = () => {
     };
     setCurrentCall(formatted);
     setShowCall(true);
+    setCountdown(10);
     if (stopSoundRef.current) stopSoundRef.current();
+    if (countdownRef.current) clearInterval(countdownRef.current);
     stopSoundRef.current = playDingDong();
+    countdownRef.current = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
     setTimeout(() => {
       setShowCall(false);
-      fetchRightData(); // refresh recent calls
-    }, 7000);
+      setCountdown(0);
+      if (countdownRef.current) clearInterval(countdownRef.current);
+      fetchRightData();
+    }, 10000);
   }, [fetchRightData]);
 
   useEffect(() => {
