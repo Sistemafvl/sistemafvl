@@ -648,9 +648,10 @@ const DriverQueue = () => {
           </DialogHeader>
           <div className="w-full aspect-square">
             <TbrScanner
-              onScan={(code) => {
+              onScan={async (code) => {
                 setShowQrScanner(false);
                 validateQrAndJoin(code);
+                return true;
               }}
               onClose={() => setShowQrScanner(false)}
             />
