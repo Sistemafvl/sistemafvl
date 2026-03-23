@@ -65,16 +65,16 @@ const playDingDong = (): (() => void) => {
     };
 
     const now = ctx.currentTime;
-    // 3 ding-dong sequences
-    for (let i = 0; i < 3; i++) {
-      const offset = i * 1.3;
+    // 8 ding-dong sequences (~10s total)
+    for (let i = 0; i < 8; i++) {
+      const offset = i * 1.25;
       playNote(523.25, now + offset, 0.5);       // C5 (ding)
       playNote(659.25, now + offset + 0.35, 0.7); // E5 (dong)
     }
 
     const timeout = setTimeout(() => {
       try { ctx.close(); } catch {}
-    }, 5000);
+    }, 11000);
 
     return () => {
       clearTimeout(timeout);
