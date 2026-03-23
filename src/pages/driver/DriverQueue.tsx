@@ -125,8 +125,7 @@ const QrCameraOverlay = ({ onDetect, onClose }: { onDetect: (code: string) => vo
   );
 };
 
-
-  const { unitSession } = useAuthStore();
+const DriverQueue = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
