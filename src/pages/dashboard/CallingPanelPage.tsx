@@ -458,24 +458,6 @@ const CallingPanelPage = () => {
         </div>
 
 
-        {/* QR Code buttons */}
-        <div className="px-4 pb-3 flex flex-col gap-2">
-          <p className="text-[11px] font-semibold text-white/60 uppercase tracking-wider">QR Fila</p>
-          <button
-            onClick={() => generateQrPdf("madrugada")}
-            className="w-full text-xs font-semibold py-2 px-3 rounded-md transition-colors"
-            style={{ background: "rgba(255,255,255,0.08)", color: "#7dd3fc", border: "1px solid rgba(125,211,252,0.2)" }}
-          >
-            🌙 Madrugada (00–05h)
-          </button>
-          <button
-            onClick={() => generateQrPdf("diurno")}
-            className="w-full text-xs font-semibold py-2 px-3 rounded-md transition-colors"
-            style={{ background: "rgba(255,255,255,0.08)", color: "#fbbf24", border: "1px solid rgba(251,191,36,0.2)" }}
-          >
-            ☀️ Diurno (05–24h)
-          </button>
-        </div>
 
         {/* Logos parceiros */}
         <div className="p-4 flex items-center justify-center gap-4">
