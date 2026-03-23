@@ -653,7 +653,6 @@ const DriverQueue = () => {
                 validateQrAndJoin(code);
                 return true;
               }}
-              onClose={() => setShowQrScanner(false)}
             />
           </div>
         </DialogContent>
