@@ -270,6 +270,40 @@ const DriverQueue = () => {
     fetchQueue();
   };
 
+  const validateQrAndJoin = useCallback((qrUrl: string) => {
+    try {
+      const url = new URL(qrUrl);
+      const turno = url.searchParams.get("qr_turno");
+      const qrUnit = url.searchParams.get("qr_unit");
+      const qrDate = url.searchParams.get("qr_date");
+      if (!turno || !qrUnit || !qrDate) { toast.error("QR Code inválido"); return; }
+      const now = new Date();
+      const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+      const todayStr = brt.toISOString().slice(0, 10);
+      if (qrDate !== todayStr) { toast.error("QR Code expirado"); return; }
+      if (qrUnit !== unitId) { toast.error("QR Code de outra unidade"); return; }
+      const totalMin = brt.getUTCHours() * 60 + brt.getUTCMinutes();
+      if (turno === "madrugada" && totalMin > 300) { toast.error("QR Madrugada válido somente de 00:00 às 05:00"); return; }
+      if (turno === "diurno" && totalMin <= 300) { toast.error("QR Diurno válido somente a partir das 05:01"); return; }
+      if (myEntry) { toast.info("Você já está na fila!"); return; }
+      toast.success("QR válido! Entrando na fila...");
+      joinQueue();
+    } catch { toast.error("QR Code inválido"); }
+  }, [unitId, myEntry, joinQueue]);
+
+  useEffect(() => {
+    if (qrProcessedRef.current) return;
+    const turno = searchParams.get("qr_turno");
+    if (!turno || !unitId || !driverId) return;
+    qrProcessedRef.current = true;
+    const fullUrl = window.location.href;
+    searchParams.delete("qr_turno");
+    searchParams.delete("qr_unit");
+    searchParams.delete("qr_date");
+    setSearchParams(searchParams, { replace: true });
+    setTimeout(() => validateQrAndJoin(fullUrl), 1500);
+  }, [searchParams, unitId, driverId, validateQrAndJoin, setSearchParams]);
+
   const leaveQueue = async () => {
     if (!myEntry) return;
     setLoading(true);
