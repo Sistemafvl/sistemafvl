@@ -42,8 +42,90 @@ const formatElapsed = (totalSeconds: number) => {
 };
 
 
+const QrCameraOverlay = ({ onDetect, onClose }: { onDetect: (code: string) => void; onClose: () => void }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const detectedRef = useRef(false);
 
-const DriverQueue = () => {
+  useEffect(() => {
+    let cancelled = false;
+
+    const start = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
+        streamRef.current = stream;
+
+        await new Promise(r => setTimeout(r, 100));
+        if (videoRef.current && streamRef.current) {
+          videoRef.current.srcObject = streamRef.current;
+          await videoRef.current.play();
+        }
+
+        if (!("BarcodeDetector" in window)) return;
+
+        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
+
+        scanIntervalRef.current = setInterval(async () => {
+          if (!videoRef.current || videoRef.current.readyState < 2 || detectedRef.current) return;
+          try {
+            const barcodes = await detector.detect(videoRef.current);
+            if (barcodes.length === 0) return;
+
+            const vw = videoRef.current.videoWidth;
+            const vh = videoRef.current.videoHeight;
+            const inset = 0.2;
+
+            const inside = barcodes.filter((b: any) => {
+              const bb = b.boundingBox;
+              if (!bb) return false;
+              return bb.x >= vw * inset && bb.y >= vh * inset &&
+                bb.x + bb.width <= vw * (1 - inset) && bb.y + bb.height <= vh * (1 - inset);
+            });
+
+            if (inside.length > 0 && inside[0].rawValue) {
+              detectedRef.current = true;
+              onDetect(inside[0].rawValue.trim());
+            }
+          } catch {}
+        }, 150);
+      } catch {
+        onClose();
+      }
+    };
+
+    start();
+
+    return () => {
+      cancelled = true;
+      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+    };
+  }, [onDetect, onClose]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black flex flex-col">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-black/80 z-10">
+        <span className="text-white font-semibold text-sm">Escanear QR Code da Fila</span>
+        <button onClick={onClose} className="text-white/80 hover:text-white p-1">
+          <X className="h-6 w-6" />
+        </button>
+      </div>
+      {/* Camera */}
+      <div className="flex-1 relative overflow-hidden">
+        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
+        <QrViewfinder />
+      </div>
+    </div>
+  );
+};
+
+
   const { unitSession } = useAuthStore();
   const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
