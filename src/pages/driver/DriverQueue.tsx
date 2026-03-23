@@ -498,6 +498,16 @@ const DriverQueue = () => {
           >
             {loading ? "Entrando..." : "ENTRAR NA FILA"}
           </Button>
+          <Button
+            onClick={() => setShowQrScanner(true)}
+            disabled={loading}
+            variant="outline"
+            className="w-full h-12 text-base font-semibold gap-2"
+            size="lg"
+          >
+            <QrCode className="h-5 w-5" />
+            ENTRAR VIA QR CODE
+          </Button>
         </>
       ) : !isApproved ? (
         <>
