@@ -46,6 +46,7 @@ const formatElapsed = (totalSeconds: number) => {
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [queueCount, setQueueCount] = useState(0);
   const [myEntry, setMyEntry] = useState<QueueEntry | null>(null);
@@ -58,6 +59,8 @@ const DriverQueue = () => {
   const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [activeConferente, setActiveConferente] = useState<string | null>(null);
+  const [showQrScanner, setShowQrScanner] = useState(false);
+  const qrProcessedRef = useRef(false);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
