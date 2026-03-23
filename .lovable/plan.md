@@ -1,19 +1,57 @@
 
 
-# Ajustes no Painel de Chamada
+# Redesign Profissional do Painel de Chamada
 
-## Mudanças
+## Layout (3 colunas)
 
-### 1. Fundo com logo FVL
-- Copiar a imagem enviada (`user-uploads://image-625.png`) para `public/logos/fvl_panel_bg.png`
-- No estado idle, exibir esta imagem como logo principal (substituindo a rotação de logos ou adicionando como fundo)
+```text
+┌──────────────┬──────────────────────────────┬──────────────────┐
+│  SIDEBAR     │       AREA CENTRAL           │  COLUNA DIREITA  │
+│  ESQUERDA    │                              │                  │
+│  (~250px)    │   (idle) Logos rotacionando   │  Relogio digital │
+│  bg #001529  │   (call) Card motorista      │  Nome unidade    │
+│              │                              │                  │
+│  Logo FVL    │                              │  Lista da fila   │
+│  ─────────   │                              │  (pos, nome,     │
+│  CICLOS      │                              │   status)        │
+│  C1/C2/C3    │                              │                  │
+│  horarios    │                              │ ┌──────────────┐ │
+│              │                              │ │ ULTIMAS      │ │
+│  Metricas:   │                              │ │ CHAMADAS     │ │
+│  TBRs dia    │                              │ │ motorista    │ │
+│  Motoristas  │                              │ │ conferente   │ │
+│  Na fila     │                              │ │ vaga, rota   │ │
+│              │                              │ └──────────────┘ │
+│  Logos       │                              │                  │
+│  parceiros   │                              │                  │
+└──────────────┴──────────────────────────────┴──────────────────┘
+```
 
-### 2. Som de alerta alto (~6 segundos)
-- Substituir o `<audio>` do bell.mp3 por um alerta gerado via Web Audio API (igual ao `DriverCallAlert`)
-- Gerar um tom alto (square wave) alternando frequências (800Hz ↔ 1200Hz) com volume máximo (gain 0.7)
-- Tocar por exatamente 6 segundos e parar automaticamente
-- Isso garante som alto e compatível sem depender de arquivo MP3 externo
+## Mudancas
 
-### Arquivos alterados
-- `src/pages/dashboard/CallingPanelPage.tsx` — substituir audio ref por Web Audio API siren de 6s, usar logo FVL como idle
+### 1. Sidebar esquerda (fundo `#001529`, texto branco)
+- Logo FavelaLLog no topo (`/logos/favela_llog.png`)
+- Secao "Ciclos" com dados do dia (query `cycle_records` por `unit_id` e `record_date = today`)
+  - Exibir horarios de abertura, inicio/termino descarregamento, qtd pacotes
+- Metricas rapidas: total TBRs (via RPC `get_unit_tbr_count`), motoristas na fila (count `queue_entries` waiting/approved), saidas do dia (count `driver_rides` finished)
+- Rodape: logos parceiros (CUFA, FVL) em miniatura
+
+### 2. Area central (fundo branco, flex-1)
+- Idle: rotacao de logos como ja esta (mantido)
+- Chamada: card com avatar, nome, "SUA VEZ!", vaga, rota, conferente (mantido, com fundo `#001529` durante chamada)
+
+### 3. Coluna direita (~280px, fundo `#f0f4f8`)
+- Relogio digital grande (atualizado a cada segundo)
+- Nome da unidade (query `units` por `unit_id`)
+- Lista da fila atual: posicao, nome do motorista, status — query `queue_entries` where status in (waiting, approved) ordered by joined_at
+- **Quadro "Ultimas Chamadas"** (canto inferior): ultimas 5 chamadas do dia, mostrando motorista, conferente, vaga, rota, horario — query `queue_entries` where `called_at` is not null, ordered desc, limit 5
+
+### 4. Som de alerta suave (substituir sirene)
+- Trocar square wave por **sine wave** (tom suave)
+- Frequencia: sequencia de 3 "ding-dong" (523Hz -> 659Hz) com fade-in/fade-out via gain envelope
+- Duracao total: ~4 segundos
+- Volume: gain 0.4 (moderado, nao agressivo)
+
+### Arquivo alterado
+- `src/pages/dashboard/CallingPanelPage.tsx` — reescrita completa com layout 3 colunas, queries para ciclos/fila/ultimas chamadas, som suave
 
