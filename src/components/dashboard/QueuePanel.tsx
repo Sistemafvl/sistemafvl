@@ -662,7 +662,22 @@ const QueuePanel = () => {
             </SheetTitle>
           </SheetHeader>
 
-          {/* Search filter */}
+          {/* QR Code buttons */}
+          <div className="px-3 pt-2 flex gap-2">
+            <button
+              onClick={() => generateQrPdf("madrugada")}
+              className="flex-1 text-xs font-semibold py-1.5 px-2 rounded-md border border-sky-300/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
+            >
+              🌙 Madrugada
+            </button>
+            <button
+              onClick={() => generateQrPdf("diurno")}
+              className="flex-1 text-xs font-semibold py-1.5 px-2 rounded-md border border-amber-400/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              ☀️ Diurno
+            </button>
+          </div>
+
           <div className="px-3 pt-3 pb-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
