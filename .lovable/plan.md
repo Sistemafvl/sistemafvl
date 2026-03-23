@@ -1,29 +1,32 @@
 
 
-# Correção dos Erros de Build
+# Correção do Painel de Chamada e Notificação do Motorista
 
-## Problemas identificados
+## Problema identificado
 
-1. **`vite-plugin-pwa` v1.2.0 incompatível com Vite 5** — A v1.x do plugin requer Vite 6+. O projeto usa Vite 5.4.19, então precisa usar v0.21.x (última compatível com Vite 5). Além disso, está em `dependencies` quando deveria estar em `devDependencies`.
+A coluna `parking_spot` **não existe** na tabela `queue_entries`. Quando o conferente clica no sino, o código tenta fazer um UPDATE incluindo `parking_spot` junto com `called_at` e `called_by_name`. O PostgREST **rejeita a operação inteira** porque a coluna não existe — resultado: `called_at` nunca é gravado, e nem o painel nem o celular do motorista recebem a notificação.
 
-2. **`framer-motion` não instalado** — `CallingPanelPage.tsx` importa `framer-motion` mas o pacote não está no `package.json`.
+## Plano de correção
 
-3. **TS2589 em `QueuePanel.tsx` linha 361** — Type instantiation excessivamente profunda na chain de query do Supabase (`.select().eq().eq().maybeSingle()`). Resolvido com cast `as any`.
+### Opção 1: Criar a coluna `parking_spot` (recomendado)
+- Adicionar coluna `parking_spot TEXT` na tabela `queue_entries` via migration
+- Assim o fluxo completo funciona como projetado (vaga informada ao painel)
 
-## Plano de implementação
+### Opção 2: Remover `parking_spot` do update
+- Remover a referência a `parking_spot` no `handleConfirmCall` e no modal
+- Perda de funcionalidade da vaga
 
-### 1. Corrigir versão do `vite-plugin-pwa`
-- Mover de `dependencies` para `devDependencies`
-- Alterar versão de `^1.2.0` para `^0.21.1` (última compatível com Vite 5)
+### Correção adicional: Replica Identity
+- Alterar `queue_entries` para `REPLICA IDENTITY FULL` para que o Realtime envie o registro antigo completo no `payload.old`, garantindo comparação correta de `called_at` no CallingPanelPage
 
-### 2. Adicionar `framer-motion` ao `package.json`
-- Adicionar `"framer-motion": "^11.18.0"` em `dependencies`
+## Implementação (Opção 1)
 
-### 3. Corrigir TS2589 em `QueuePanel.tsx`
-- Adicionar cast `as any` na query da linha 361 para evitar inferência de tipo excessivamente profunda
+1. **Migration SQL**: `ALTER TABLE queue_entries ADD COLUMN parking_spot TEXT;`  
+   + `ALTER TABLE queue_entries REPLICA IDENTITY FULL;`
 
-### Detalhes técnicos
-- Arquivo alterado: `package.json` (mover vite-plugin-pwa, adicionar framer-motion)
-- Arquivo alterado: `src/components/dashboard/QueuePanel.tsx` (cast na linha 361)
-- Nenhum fluxo operacional será afetado — são apenas correções de build
+2. **CallingPanelPage.tsx**: Remover o `as any` do select (agora `parking_spot` existe) e garantir que o campo é exibido corretamente
+
+3. **ConferenciaCarregamentoPage.tsx**: Remover o `as any` do update (agora a coluna existe)
+
+Nenhum fluxo existente será afetado — apenas adiciona uma coluna nullable e corrige o Realtime.
 
