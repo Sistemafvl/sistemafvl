@@ -405,6 +405,7 @@ export type Database = {
           driver_id: string
           id: string
           min_packages: number
+          target_date: string | null
           unit_id: string
         }
         Insert: {
@@ -412,6 +413,7 @@ export type Database = {
           driver_id: string
           id?: string
           min_packages?: number
+          target_date?: string | null
           unit_id: string
         }
         Update: {
@@ -419,6 +421,7 @@ export type Database = {
           driver_id?: string
           id?: string
           min_packages?: number
+          target_date?: string | null
           unit_id?: string
         }
         Relationships: []
@@ -1052,6 +1055,8 @@ export type Database = {
           created_at: string
           dispute_type: string
           driver_id: string
+          feedback: string | null
+          feedback_at: string | null
           id: string
           observation: string | null
           resolved_at: string | null
@@ -1064,6 +1069,8 @@ export type Database = {
           created_at?: string
           dispute_type: string
           driver_id: string
+          feedback?: string | null
+          feedback_at?: string | null
           id?: string
           observation?: string | null
           resolved_at?: string | null
@@ -1076,6 +1083,8 @@ export type Database = {
           created_at?: string
           dispute_type?: string
           driver_id?: string
+          feedback?: string | null
+          feedback_at?: string | null
           id?: string
           observation?: string | null
           resolved_at?: string | null
@@ -1293,6 +1302,76 @@ export type Database = {
           unit_id?: string
         }
         Relationships: []
+      }
+      unit_predefined_drivers: {
+        Row: {
+          created_at: string | null
+          driver_id: string | null
+          id: string
+          suggested_route: string | null
+          unit_id: string | null
+          unit_login_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          driver_id?: string | null
+          id?: string
+          suggested_route?: string | null
+          unit_id?: string | null
+          unit_login_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          driver_id?: string | null
+          id?: string
+          suggested_route?: string | null
+          unit_id?: string | null
+          unit_login_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_predefined_drivers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_login_id_fkey"
+            columns: ["unit_login_id"]
+            isOneToOne: false
+            referencedRelation: "unit_logins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_login_id_fkey"
+            columns: ["unit_login_id"]
+            isOneToOne: false
+            referencedRelation: "unit_logins_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unit_reviews: {
         Row: {

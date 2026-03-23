@@ -358,7 +358,7 @@ const QueuePanel = () => {
 
       for (const pd of predefinedDrivers) {
         // 1. Check if driver is already in a ride
-        const { data: activeRide } = await supabase.from("driver_rides").select("id").eq("driver_id", pd.driver_id).eq("status", "in_progress").maybeSingle();
+        const { data: activeRide } = await (supabase.from("driver_rides").select("id").eq("driver_id", pd.driver_id) as any).eq("status", "in_progress").maybeSingle();
         if (activeRide) continue;
 
         // 2. Find or create queue entry
