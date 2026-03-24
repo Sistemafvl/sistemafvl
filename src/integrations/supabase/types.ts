@@ -1820,6 +1820,10 @@ export type Database = {
         }
         Returns: Json
       }
+      process_rescue_tbr_batch: {
+        Args: { p_target_ride_id: string; p_tbr_ids: string[] }
+        Returns: Json
+      }
       process_tbr_scan: {
         Args: { p_code: string; p_ride_id: string; p_unit_id: string }
         Returns: Json
