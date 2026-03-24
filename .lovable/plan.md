@@ -1,24 +1,23 @@
 
 
-# Mover Botões QR Code para o Painel de Fila
+# Corrigir Tamanho do AdBanner e Configuração do AdSense
 
-## O que muda
+## Problemas Identificados
 
-1. **Remover** os 2 botões QR e o texto "QR Fila" da sidebar do Painel de Chamada (`CallingPanelPage.tsx`, linhas 461-478)
-2. **Adicionar** os 2 botões no `QueuePanel.tsx`, entre o header (título "Fila de Motoristas") e o campo de busca — na área marcada na imagem
+### 1. Tamanho inconsistente entre dispositivos
+O `AdBanner` usa `min-h-[100px]` sem altura máxima. Quando o AdSense não carrega (comum em desenvolvimento/localhost), o `<ins>` pode expandir indefinidamente em alguns dispositivos. Em outros, fica compacto porque o navegador colapsa o elemento vazio.
 
-## Implementação
+### 2. Configuração do AdSense
+O script do AdSense está corretamente incluído no `index.html` com o `client=ca-pub-6544232309154364`. O componente `AdBanner` tem `adClient` e `adSlot` corretos. **Porém**, os anúncios do AdSense só aparecem em domínios aprovados pela Google. O domínio `sistemafvl.lovable.app` (ou o domínio publicado) precisa estar verificado e aprovado no painel do AdSense. Em localhost/preview, nunca aparecerá anúncio real — isso é comportamento esperado do Google.
 
-### `src/components/dashboard/QueuePanel.tsx`
-- Inserir entre o `</SheetHeader>` (linha 631) e o `<div className="px-3 pt-3 pb-1">` (linha 634) dois botões lado a lado (flex row, gap-2, px-3 pt-2)
-- Mover a lógica `generateQrPdf` para o QueuePanel (precisa do `unitId` que já está disponível)
-- Importar `QRCode` e `jsPDF`
-- Botões compactos: ícone 🌙 / ☀️ + texto curto, estilo outline pequeno
+## Solução
 
-### `src/pages/dashboard/CallingPanelPage.tsx`
-- Remover linhas 461-478 (seção QR Code buttons inteira)
+### Arquivo: `src/components/AdBanner.tsx`
+- Fixar altura consistente: `h-[100px]` (ou `min-h-[90px] max-h-[120px]`) para que fique igual em todos os dispositivos
+- Remover `min-h-[100px]` que permite expansão ilimitada
+- Manter o texto "Anúncio" centralizado como placeholder visual enquanto o ad não carrega
+- Adicionar `overflow-hidden` com altura fixa para garantir que o espaço nunca fique "gigante"
 
-### Arquivos alterados
-- `src/components/dashboard/QueuePanel.tsx` — adicionar botões QR + lógica de geração PDF
-- `src/pages/dashboard/CallingPanelPage.tsx` — remover seção QR Code
+### Resultado
+O banner terá tamanho fixo (~100px) em todos os dispositivos, exatamente como no print. Quando o AdSense aprovar o domínio e começar a servir anúncios, eles preencherão esse espaço automaticamente.
 
