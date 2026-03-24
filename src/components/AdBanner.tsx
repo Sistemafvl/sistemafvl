@@ -21,7 +21,7 @@ const AdBanner = ({ adClient = "ca-pub-6544232309154364", adSlot = "8290648709",
   }, []);
 
   return (
-    <div className={`ad-container my-4 overflow-hidden border border-border/10 rounded-xl bg-white/5 flex flex-col items-center justify-center p-2 min-h-[100px] shadow-sm ${className}`}>
+    <div className={`ad-container my-4 overflow-hidden border border-border/10 rounded-xl bg-white/5 flex flex-col items-center justify-center p-2 h-[100px] max-h-[100px] shadow-sm ${className}`}>
       <span className="text-[10px] text-muted-foreground/30 uppercase tracking-widest mb-1">Anúncio</span>
       <ins
         className="adsbygoogle"
