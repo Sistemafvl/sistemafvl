@@ -491,7 +491,6 @@ const DriverHome = () => {
         </CardContent>
       </Card>
 
-      <AdBanner />
 
       {/* System test notice */}
       <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 p-3 flex gap-3 items-start">
