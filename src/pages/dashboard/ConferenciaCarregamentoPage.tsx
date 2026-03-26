@@ -880,8 +880,8 @@ const ConferenciaCarregamentoPage = () => {
   const confirmDeleteTbrWithPassword = async () => {
     if (!deleteTbrPending || !unitId) return;
     setDeleteTbrLoading(true);
-    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
-    const valid = (managers ?? []).some(m => m.manager_password === deleteTbrPassword);
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid } = await validateManagerPassword(unitId, deleteTbrPassword);
     if (!valid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", variant: "destructive" });
@@ -914,8 +914,8 @@ const ConferenciaCarregamentoPage = () => {
   const confirmBatchDelete = async () => {
     if (!batchDeleteRideId || !unitId) return;
     setBatchDeleteLoading(true);
-    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
-    const valid = (managers ?? []).some(m => m.manager_password === batchDeletePassword);
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid } = await validateManagerPassword(unitId, batchDeletePassword);
     if (!valid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", variant: "destructive" });
@@ -1451,14 +1451,9 @@ const ConferenciaCarregamentoPage = () => {
     if (!cancelRideId || !unitId) return;
     setCancelLoading(true);
 
-    // Validate manager password against all managers of this unit
-    const { data: managers } = await supabase
-      .from("managers")
-      .select("manager_password")
-      .eq("unit_id", unitId)
-      .eq("active", true);
-
-    const passwordValid = (managers ?? []).some(m => m.manager_password === cancelPassword);
+    // Validate manager password server-side
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid: passwordValid } = await validateManagerPassword(unitId, cancelPassword);
     if (!passwordValid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", description: "A senha do gerente está incorreta.", variant: "destructive" });
@@ -1508,14 +1503,9 @@ const ConferenciaCarregamentoPage = () => {
     if (!deleteRideId || !unitId) return;
     setDeleteLoading(true);
 
-    // Validate manager password
-    const { data: managers } = await supabase
-      .from("managers")
-      .select("manager_password")
-      .eq("unit_id", unitId)
-      .eq("active", true);
-
-    const passwordValid = (managers ?? []).some(m => m.manager_password === deletePassword);
+    // Validate manager password server-side
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid: passwordValid } = await validateManagerPassword(unitId, deletePassword);
     if (!passwordValid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", description: "A senha do gerente está incorreta.", variant: "destructive" });
@@ -3206,8 +3196,8 @@ const ConferenciaCarregamentoPage = () => {
                 onChange={(e) => setSwapPasswordInput(e.target.value)}
                 onKeyDown={async (e) => {
                   if (e.key === "Enter" && swapPasswordInput) {
-                    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId!).eq("active", true);
-                    const valid = (managers ?? []).some(m => m.manager_password === swapPasswordInput);
+                    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+                    const { valid } = await validateManagerPassword(unitId!, swapPasswordInput);
                     if (valid && swapPasswordRideId) {
                       setShowSwapPasswordModal(false);
                       openSwapModalDirect(swapPasswordRideId);
@@ -3223,8 +3213,8 @@ const ConferenciaCarregamentoPage = () => {
             </div>
             <Button
               onClick={async () => {
-                const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId!).eq("active", true);
-                const valid = (managers ?? []).some(m => m.manager_password === swapPasswordInput);
+                const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+                const { valid } = await validateManagerPassword(unitId!, swapPasswordInput);
                 if (valid && swapPasswordRideId) {
                   setShowSwapPasswordModal(false);
                   openSwapModalDirect(swapPasswordRideId);

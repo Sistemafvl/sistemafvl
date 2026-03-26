@@ -56,13 +56,13 @@ const DriverDocuments = () => {
     if (!driverId) return;
     const fetchData = async () => {
       setLoading(true);
-      const [docsRes, driverRes] = await Promise.all([
+      const [docsRes, bankRes] = await Promise.all([
         supabase.from("driver_documents").select("id, doc_type, file_url, file_name, created_at").eq("driver_id", driverId).order("created_at", { ascending: false }),
-        supabase.from("drivers").select("bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type").eq("id", driverId).maybeSingle(),
+        supabase.functions.invoke("get-driver-bank-details", { body: { driver_id: driverId } }),
       ]);
       setDocs((docsRes.data as any) ?? []);
-      if (driverRes.data) {
-        const d = driverRes.data as any;
+      if (bankRes.data?.data) {
+        const d = bankRes.data.data;
         setBankName(d.bank_name ?? "");
         setBankAgency(d.bank_agency ?? "");
         setBankAccount(d.bank_account ?? "");
@@ -138,14 +138,18 @@ const DriverDocuments = () => {
   const handleSaveBank = async () => {
     if (!driverId) return;
     setSavingBank(true);
-    await supabase.from("drivers").update({
-      bank_name: bankName || null,
-      bank_agency: bankAgency || null,
-      bank_account: bankAccount || null,
-      pix_key: pixKey || null,
-      pix_key_name: pixKeyName || null,
-      pix_key_type: pixKeyType || null,
-    } as any).eq("id", driverId);
+    await supabase.functions.invoke("get-driver-bank-details", {
+      body: {
+        driver_id: driverId,
+        action: "update",
+        bank_name: bankName || null,
+        bank_agency: bankAgency || null,
+        bank_account: bankAccount || null,
+        pix_key: pixKey || null,
+        pix_key_name: pixKeyName || null,
+        pix_key_type: pixKeyType || null,
+      },
+    });
     setSavingBank(false);
     setBankSaved(true);
     setTimeout(() => setBankSaved(false), 2000);

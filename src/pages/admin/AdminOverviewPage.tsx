@@ -11,7 +11,7 @@ const AdminOverviewPage = () => {
       supabase.from("domains").select("id", { count: "exact", head: true }),
       supabase.from("units").select("id", { count: "exact", head: true }).eq("is_matriz", false),
       supabase.from("managers").select("id", { count: "exact", head: true }),
-      supabase.from("drivers").select("id", { count: "exact", head: true }),
+      supabase.from("drivers_public").select("id", { count: "exact", head: true }),
     ]).then(([d, u, m, dr]) => {
       setStats({
         domains: d.count ?? 0,

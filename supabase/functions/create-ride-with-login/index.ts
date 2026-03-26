@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
       await supabase.auth.getUser(token);
     }
 
-    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret } = await req.json();
+    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret, session_token } = await req.json();
 
     // Verify internal secret for ride creation (Opt-in security)
     const expectedSecret = Deno.env.get("INTERNAL_SECRET");
@@ -31,6 +31,19 @@ Deno.serve(async (req) => {
     }
 
     if (!driver_id || !unit_id) return new Response(JSON.stringify({ error: "driver_id and unit_id are required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+
+    // Validate conferente session if provided
+    if (session_token) {
+      const { data: sessionData } = await supabase
+        .from("conferente_sessions")
+        .select("id")
+        .eq("session_token", session_token)
+        .eq("unit_id", unit_id)
+        .maybeSingle();
+      if (!sessionData) {
+        return new Response(JSON.stringify({ error: "Invalid or expired conferente session" }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
 
     // Business Logic
     const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).order("sequence_number", { ascending: false }).limit(1).maybeSingle();

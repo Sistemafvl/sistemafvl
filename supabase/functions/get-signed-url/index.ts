@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // For anon/unauthenticated access, verify the driver exists
+      // For anon/unauthenticated access, verify the driver exists and has active session context
       if (!isAuthenticated) {
         const { data: driverData, error: driverError } = await supabase
           .from("drivers")
