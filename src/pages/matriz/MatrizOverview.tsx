@@ -59,7 +59,7 @@ const MatrizOverview = () => {
         fetchAllRows<any>((from, to) => supabase.from("unit_reviews").select("id, unit_id, rating, created_at").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages, period_start, period_end").in("unit_id", unitIds).order("id").range(from, to)),
       ]);
 
       // Fetch drivers only for those with rides
