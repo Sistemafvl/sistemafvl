@@ -90,7 +90,7 @@ const DashboardMetrics = ({ unitId, startDate, endDate }: Props) => {
     const todayDate = new Date(todayStr);
 
     const effectiveEnd = endDate ? endDate : todayDate;
-    const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 29));
+    const effectiveStart = startDate ? startDate : new Date(new Date(effectiveEnd).setDate(effectiveEnd.getDate() - 14));
 
     const days: string[] = [];
     const cursor = new Date(effectiveStart);
