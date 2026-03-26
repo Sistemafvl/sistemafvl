@@ -457,7 +457,7 @@ const RelatoriosPage = () => {
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
-      supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
+      supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages, period_start, period_end").eq("unit_id", unitId!),
       supabase.from("driver_fixed_values" as any).select("driver_id, target_date, fixed_value").eq("unit_id", unitId!)
         .gte("target_date", format(startDate, "yyyy-MM-dd")).lte("target_date", format(endDate, "yyyy-MM-dd")),
       supabase.from("dnr_entries").select("id, driver_id, dnr_value")
