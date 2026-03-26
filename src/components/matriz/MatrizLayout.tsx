@@ -1,46 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import MatrizSidebar from "./MatrizSidebar";
-import { RotateCcw, Loader2 } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
+import VersionSyncControl from "@/components/VersionSyncControl";
 
 const MatrizLayout = () => {
   const { unitSession } = useAuthStore();
   const { setTheme } = useTheme();
-  const [loadingCache, setLoadingCache] = useState(false);
-
-  const handleClearCache = async () => {
-    setLoadingCache(true);
-    try {
-      if ("serviceWorker" in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const registration of registrations) {
-          await registration.unregister();
-        }
-      }
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        for (const key of keys) {
-          await caches.delete(key);
-        }
-      }
-      toast({ 
-        title: "Cache limpo!", 
-        description: "Enviando comando de sincronização... A página irá recarregar.",
-      });
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
-    } catch (err) {
-      console.error("Cache purge failed:", err);
-      toast({ title: "Erro", description: "Falha ao sincronizar versão.", variant: "destructive" });
-      setLoadingCache(false);
-    }
-  };
 
   useEffect(() => {
     const saved = localStorage.getItem("theme_unit") || "light";
@@ -61,16 +29,7 @@ const MatrizLayout = () => {
               Diretoria — {unitSession.domain_name}
             </span>
             <div className="ml-auto flex items-center">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="gap-2 text-[10px] text-muted-foreground h-7 px-2 hover:bg-destructive/10 hover:text-destructive transition-colors hidden sm:flex shrink-0"
-                onClick={handleClearCache}
-                disabled={loadingCache}
-              >
-                {loadingCache ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                LIMPAR CACHE E SINCRONIZAR
-              </Button>
+              <VersionSyncControl />
             </div>
           </header>
           <div className="flex-1 p-4 sm:p-6 overflow-x-hidden">
