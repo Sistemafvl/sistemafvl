@@ -620,13 +620,29 @@ const RelatoriosPage = () => {
         });
 
         let tbrCount = rTbrs.length;
+        const actualTbrCount = tbrCount;
         const returns = netReturns.size;
         const minPkg = minPkgMap.get(driverId) ?? 0;
-        if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
+        let minPkgApplied = false;
+        
+        if (minPkg > 0 && tbrCount < minPkg) {
+          tbrCount = minPkg;
+          minPkgApplied = true;
+        }
+        
         const completed = tbrCount - returns;
         const fixedKey = `${driverId}_${date}`;
         const fixedVal = fixedValueMap.get(fixedKey);
-        return { date, login: info.login, tbrCount, returns, completed, value: fixedVal !== undefined ? fixedVal : completed * tbrVal };
+        return { 
+          date, 
+          login: info.login, 
+          tbrCount, 
+          actualTbrCount, 
+          returns, 
+          completed, 
+          minPkgApplied,
+          value: fixedVal !== undefined ? fixedVal : completed * tbrVal 
+        };
       });
 
       const totalTbrs = days.reduce((s, d) => s + (d.tbrCount || 0), 0);

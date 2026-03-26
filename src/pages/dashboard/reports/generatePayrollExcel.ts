@@ -238,7 +238,7 @@ export function generatePayrollExcel(
 
     const dailyValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
-      if (!day) return "";
+      if (!day || day.minPkgApplied) return "";
       return day.completed ?? day.tbrCount - day.returns;
     });
 
@@ -308,15 +308,22 @@ export function generatePayrollExcel(
 
   rowTracker.minDataStartRow = wsData.length;
 
-  // Repeat ALL drivers from the main table with their info but empty date columns
+  // Repeat ALL drivers from the main table with their info but only triggered minimums
   sortedData.forEach((d) => {
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
+    
+    const minPkgValues = allDates.map((date) => {
+      const day = d.days.find((day) => day.date === date);
+      if (day?.minPkgApplied) return day.completed;
+      return "";
+    });
+
     wsData.push([
       d.driver.name,
       d.driver.cpf || "",
       vehicleType,
-      ...allDates.map(() => ""), // EMPTY for manual fill
+      ...minPkgValues,
       0, // COL_TOTAL formula placeholder
       tbrVal, // COL_VALUE
       "", // COL_ADDITIONAL

@@ -32,6 +32,8 @@ export interface DriverPayrollData {
     returns: number;
     completed: number;
     value: number;
+    minPkgApplied?: boolean;
+    actualTbrCount?: number;
   }[];
   totalTbrs: number;
   totalReturns: number;
@@ -98,6 +100,18 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
 
     const getVehicleType = (tbrVal: number) => (tbrVal <= 2.5 ? "MOTO" : "CARRO");
 
+    const standardPackages = data.reduce((sum, d) => sum + d.days.filter(day => !day.minPkgApplied).reduce((a, b) => a + (b.completed || 0), 0), 0);
+    const minPackagesCount = data.reduce((sum, d) => sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => a + (b.completed || 0), 0), 0);
+    
+    const standardValue = data.reduce((sum, d) => {
+      const tbrVal = d.tbrValueUsed ?? tbrValue;
+      return sum + d.days.filter(day => !day.minPkgApplied).reduce((a, b) => a + ((b.completed || 0) * tbrVal), 0);
+    }, 0);
+    const minPackagesValue = data.reduce((sum, d) => {
+      const tbrVal = d.tbrValueUsed ?? tbrValue;
+      return sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => a + ((b.completed || 0) * tbrVal), 0);
+    }, 0);
+
     return (
       <div
         ref={ref}
@@ -157,14 +171,16 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                       <td style={compactCellStyle({ background: altRowBg(idx) })}>{getVehicleType(tbrVal)}</td>
                       {allDates.map((date) => {
                         const day = d.days.find((day) => day.date === date);
-                        const val = day ? (day.completed ?? (day.tbrCount - day.returns)) : 0;
+                        const val = day && !day.minPkgApplied ? (day.completed ?? (day.tbrCount - day.returns)) : 0;
                         return (
                           <td key={date} style={compactCellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>
                             {val || "—"}
                           </td>
                         );
                       })}
-                      <td style={compactCellStyle({ fontWeight: 700, background: COLORS.grayLight })}>{d.totalCompleted}</td>
+                      <td style={compactCellStyle({ fontWeight: 700, background: COLORS.grayLight })}>
+                        {d.days.filter(day => !day.minPkgApplied).reduce((sum, day) => sum + (day.completed || 0), 0)}
+                      </td>
                       <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatCurrency(tbrVal)}</td>
                       <td style={compactCellStyle({ background: altRowBg(idx), color: adicional > 0 ? "#16a34a" : undefined })}>
                         {adicional > 0 ? `+${formatCurrency(adicional)}` : "—"}
@@ -182,11 +198,13 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                   {allDates.map((date) => {
                     const dayTotal = data.reduce((s, d) => {
                       const day = d.days.find((day) => day.date === date);
-                      return s + (day ? (day.completed ?? (day.tbrCount - day.returns)) : 0);
+                      return s + (day && !day.minPkgApplied ? (day.completed ?? (day.tbrCount - day.returns)) : 0);
                     }, 0);
                     return <td key={date} style={compactCellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{dayTotal || "—"}</td>;
                   })}
-                  <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{grandTotalCompleted}</td>
+                  <td style={compactCellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>
+                    {data.reduce((sum, d) => sum + d.days.filter(day => !day.minPkgApplied).reduce((a, b) => a + (b.completed || 0), 0), 0)}
+                  </td>
                   <td style={compactCellStyle({ background: COLORS.tealLight })}></td> {/* Valor column */}
                   <td style={compactCellStyle({ fontWeight: 700, background: COLORS.green, color: "#16a34a" })}>
                     {(grandTotalBonus + grandTotalReativo) > 0 ? `+${formatCurrency(grandTotalBonus + grandTotalReativo)}` : "—"}
@@ -200,6 +218,96 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
               </tbody>
             </table>
           </div>
+
+          {/* Table for Minimum Packages (Table 2) */}
+          {(() => {
+            const hasMinPkg = data.some(d => d.days.some(day => day.minPkgApplied));
+            if (!hasMinPkg) return null;
+            return (
+              <div style={{ marginBottom: "12px", marginTop: "12px" }}>
+                <div
+                  style={{
+                    background: `linear-gradient(135deg, ${COLORS.green}, #15803d)`,
+                    color: COLORS.white,
+                    padding: "4px 10px",
+                    borderRadius: "4px 4px 0 0",
+                    fontSize: "10px",
+                    fontWeight: 700,
+                  }}
+                >
+                  MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr>
+                      <th style={compactHeaderStyle({ textAlign: "left", minWidth: "100px" })}>Nome</th>
+                      <th style={compactHeaderStyle({ minWidth: "40px" })}>Veíc.</th>
+                      {allDates.map((date) => (
+                        <th key={date} style={compactHeaderStyle({ minWidth: "28px" })}>{formatDateBR(date)}</th>
+                      ))}
+                      <th style={compactHeaderStyle({ minWidth: "35px" })}>Total</th>
+                      <th style={compactHeaderStyle({ minWidth: "50px" })}>Valor</th>
+                      <th style={compactHeaderStyle({ minWidth: "50px" })}>Adic.</th>
+                      <th style={compactHeaderStyle({ minWidth: "50px" })}>Desc.</th>
+                      <th style={compactHeaderStyle({ minWidth: "60px" })}>Total R$</th>
+                      <th style={compactHeaderStyle({ minWidth: "70px" })}>PIX</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.map((d, idx) => {
+                      const tbrVal = d.tbrValueUsed ?? tbrValue;
+                      const dayValues = allDates.map(date => {
+                        const day = d.days.find(day => day.date === date);
+                        return day?.minPkgApplied ? day.completed : 0;
+                      });
+                      const rowTotalMin = dayValues.reduce((a, b) => a + b, 0);
+                      if (rowTotalMin === 0) return null;
+
+                      const rowTotalValue = rowTotalMin * tbrVal;
+
+                      return (
+                        <tr key={d.driver.id}>
+                          <td style={compactCellStyle({ fontWeight: 600, textAlign: "left", background: altRowBg(idx) })}>
+                            {d.driver?.name || "Motorista"}
+                          </td>
+                          <td style={compactCellStyle({ background: altRowBg(idx) })}>{getVehicleType(tbrVal)}</td>
+                          {allDates.map((date) => {
+                            const day = d.days.find((day) => day.date === date);
+                            const val = day?.minPkgApplied ? day.completed : 0;
+                            return (
+                              <td key={date} style={compactCellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>
+                                {val || "—"}
+                              </td>
+                            );
+                          })}
+                          <td style={compactCellStyle({ fontWeight: 700, background: COLORS.grayLight })}>{rowTotalMin}</td>
+                          <td style={compactCellStyle({ background: altRowBg(idx) })}>{formatCurrency(tbrVal)}</td>
+                          <td style={compactCellStyle({ background: altRowBg(idx) })}>—</td>
+                          <td style={compactCellStyle({ background: altRowBg(idx) })}>—</td>
+                          <td style={compactCellStyle({ fontWeight: 700, background: altRowBg(idx) })}>{formatCurrency(rowTotalValue)}</td>
+                          <td style={compactCellStyle({ textAlign: "left", fontSize: "6px", background: altRowBg(idx) })}>{d.driver.pixKey || "—"}</td>
+                        </tr>
+                      );
+                    })}
+                    <tr style={{ background: COLORS.green, color: COLORS.white }}>
+                      <td style={compactCellStyle({ fontWeight: 800, background: "#15803d", color: COLORS.white })} colSpan={2}>TOTAL MÍNIMOS</td>
+                      {allDates.map((date) => {
+                        const dayTotal = data.reduce((s, d) => {
+                          const day = d.days.find((day) => day.date === date);
+                          return s + (day?.minPkgApplied ? day.completed : 0);
+                        }, 0);
+                        return <td key={date} style={compactCellStyle({ fontWeight: 700, background: "#dcfce7", color: "#15803d" })}>{dayTotal || "—"}</td>;
+                      })}
+                      <td style={compactCellStyle({ fontWeight: 800, background: "#15803d", color: COLORS.white })}>
+                        {data.reduce((s, d) => s + d.days.reduce((a, day) => a + (day.minPkgApplied ? day.completed : 0), 0), 0)}
+                      </td>
+                      <td colSpan={5} style={compactCellStyle({ background: "#dcfce7" })}></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
           {/* Resumo consolidado */}
           <div style={{ display: "flex", gap: "16px", marginTop: "auto" }}>
@@ -219,9 +327,21 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <tbody>
                   <tr>
                     <td style={compactCellStyle({ textAlign: "left", fontWeight: 600 })}>Motoristas por Pacotes</td>
-                    <td style={compactCellStyle()}>{grandTotalCompleted}</td>
-                    <td style={compactCellStyle()}>{formatCurrency(grandTotalValue)}</td>
-                    <td style={compactCellStyle()}>{grandTotalCompleted > 0 ? formatCurrency(grandTotalValue / grandTotalCompleted) : "—"}</td>
+                    <td style={compactCellStyle()}>{standardPackages}</td>
+                    <td style={compactCellStyle()}>{formatCurrency(standardValue)}</td>
+                    <td style={compactCellStyle()}>{standardPackages > 0 ? formatCurrency(standardValue / standardPackages) : "—"}</td>
+                  </tr>
+                  <tr>
+                    <td style={compactCellStyle({ textAlign: "left", fontWeight: 600 })}>Motoristas - Mínimo de 60 Pacotes</td>
+                    <td style={compactCellStyle()}>{minPackagesCount}</td>
+                    <td style={compactCellStyle()}>{formatCurrency(minPackagesValue)}</td>
+                    <td style={compactCellStyle()}>{minPackagesCount > 0 ? formatCurrency(minPackagesValue / minPackagesCount) : "—"}</td>
+                  </tr>
+                  <tr>
+                    <td style={compactCellStyle({ textAlign: "left", fontWeight: 600, background: COLORS.grayLight })}>Adicionais e Descontos</td>
+                    <td style={compactCellStyle({ background: COLORS.grayLight })}>—</td>
+                    <td style={compactCellStyle({ background: COLORS.grayLight })}>{formatCurrency(grandTotalBonus + grandTotalReativo - grandTotalDnr)}</td>
+                    <td style={compactCellStyle({ background: COLORS.grayLight })}>—</td>
                   </tr>
                   <tr>
                     <td style={compactCellStyle({ textAlign: "left", fontWeight: 800, background: COLORS.tealLight })}>TOTAL GERAL</td>
