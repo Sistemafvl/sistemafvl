@@ -165,21 +165,17 @@ const UnitRescuePage = () => {
       const selectedTbrsData = sourceTbrs.filter(t => selectedTbrIds.has(t.id));
       const tbrIds = selectedTbrsData.map(t => t.id);
 
-      // ATOMIC UPDATE: Move TBRs to target ride and mark as rescue
-      // This preserves metadata like scanned_at and avoids data loss risks from delete+insert
+      // Use SECURITY DEFINER RPC to bypass RLS restrictions on finished rides
       console.log(`[Socorrendo] Moving ${tbrIds.length} TBRs from ride ${sourceInfo.rideId} to ${targetInfo.rideId}`);
       
-      const { error: moveError } = await supabase
-        .from("ride_tbrs")
-        .update({ 
-          ride_id: targetInfo.rideId,
-          is_rescue: true,
-          // Optional: we could update scanned_at to now() to reflect transfer time
-          // scanned_at: new Date().toISOString() 
-        })
-        .in("id", tbrIds);
+      const { data: rpcResult, error: rpcError } = await supabase.rpc("process_rescue_tbr_batch", {
+        p_tbr_ids: tbrIds,
+        p_target_ride_id: targetInfo.rideId,
+      });
 
-      if (moveError) throw moveError;
+      if (rpcError || !(rpcResult as any)?.success) {
+        throw new Error(rpcError?.message || (rpcResult as any)?.error || "Erro desconhecido na transferência");
+      }
 
       // 2. Log into rescue_entries
       const rescueLogs = selectedTbrsData.map(t => ({

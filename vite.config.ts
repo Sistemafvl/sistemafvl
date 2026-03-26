@@ -37,7 +37,7 @@ export default defineConfig(({ mode }) => ({
           /^\/_lovable/,
           /^\/dev-server/,
         ],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         skipWaiting: true,
         clientsClaim: true,
       },

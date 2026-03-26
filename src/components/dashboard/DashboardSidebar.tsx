@@ -206,17 +206,11 @@ const DashboardSidebar = () => {
     const cleanCnpj = cnpj.replace(/\D/g, "");
     if (cleanCnpj.length !== 14 || !password || !unitSession) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("managers")
-      .select("id, name, cnpj")
-      .eq("unit_id", unitSession.id)
-      .eq("cnpj", cleanCnpj)
-      .eq("manager_password", password)
-      .eq("active", true)
-      .maybeSingle();
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const result = await validateManagerPassword(unitSession.id, password, cleanCnpj);
     setLoading(false);
-    if (error || !data) return;
-    setManagerSession({ id: data.id, name: data.name, cnpj: data.cnpj });
+    if (!result.valid || !result.manager) return;
+    setManagerSession({ id: result.manager.id, name: result.manager.name, cnpj: result.manager.cnpj });
     setLoginOpen(false);
     setCnpj("");
     setPassword("");

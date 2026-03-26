@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
+import QRCode from "qrcode";
+import jsPDF from "jspdf";
+import { getBrazilTodayStr } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -129,6 +132,35 @@ const QueuePanel = () => {
   const [batchProcessing, setBatchProcessing] = useState(false);
 
   const unitId = unitSession?.id;
+  const unitName = unitSession?.name;
+
+  const generateQrPdf = useCallback(async (turno: "madrugada" | "diurno") => {
+    if (!unitId) return;
+    const today = getBrazilTodayStr();
+    const url = `${window.location.origin}/driver/queue?qr_turno=${turno}&qr_unit=${unitId}&qr_date=${today}`;
+    try {
+      const qrDataUrl = await QRCode.toDataURL(url, { width: 600, margin: 2 });
+      const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+      const title = turno === "madrugada" ? "FILA — TURNO MADRUGADA" : "FILA — TURNO DIURNO";
+      const hours = turno === "madrugada" ? "00:00 às 05:00" : "05:01 às 23:59";
+      doc.setFontSize(28);
+      doc.setFont("helvetica", "bold");
+      doc.text(title, 105, 35, { align: "center" });
+      doc.setFontSize(14);
+      doc.setFont("helvetica", "normal");
+      doc.text("Horário válido: " + hours, 105, 48, { align: "center" });
+      doc.text("Unidade: " + (unitName || "—"), 105, 58, { align: "center" });
+      doc.text("Data: " + today.split("-").reverse().join("/"), 105, 68, { align: "center" });
+      doc.addImage(qrDataUrl, "PNG", 52.5, 85, 100, 100);
+      doc.setFontSize(11);
+      doc.setTextColor(120, 120, 120);
+      doc.text("Escaneie este QR Code com a câmera do celular para entrar na fila.", 105, 200, { align: "center" });
+      doc.text("Este QR é válido somente para a data e horário indicados acima.", 105, 208, { align: "center" });
+      doc.save("qr_fila_" + turno + "_" + today + ".pdf");
+    } catch (e) {
+      console.error("Erro ao gerar QR PDF:", e);
+    }
+  }, [unitId, unitName]);
 
   // Auto-dismiss toasts after 5s
   useEffect(() => {
@@ -358,7 +390,7 @@ const QueuePanel = () => {
 
       for (const pd of predefinedDrivers) {
         // 1. Check if driver is already in a ride
-        const { data: activeRide } = await supabase.from("driver_rides").select("id").eq("driver_id", pd.driver_id).eq("status", "in_progress").maybeSingle();
+        const { data: activeRide } = await (supabase.from("driver_rides").select("id").eq("driver_id", pd.driver_id) as any).eq("status", "in_progress").maybeSingle();
         if (activeRide) continue;
 
         // 2. Find or create queue entry
@@ -630,7 +662,22 @@ const QueuePanel = () => {
             </SheetTitle>
           </SheetHeader>
 
-          {/* Search filter */}
+          {/* QR Code buttons */}
+          <div className="px-3 pt-2 flex gap-2">
+            <button
+              onClick={() => generateQrPdf("madrugada")}
+              className="flex-1 text-xs font-semibold py-1.5 px-2 rounded-md border border-sky-300/30 bg-sky-500/10 text-sky-400 hover:bg-sky-500/20 transition-colors"
+            >
+              🌙 Madrugada
+            </button>
+            <button
+              onClick={() => generateQrPdf("diurno")}
+              className="flex-1 text-xs font-semibold py-1.5 px-2 rounded-md border border-amber-400/30 bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 transition-colors"
+            >
+              ☀️ Diurno
+            </button>
+          </div>
+
           <div className="px-3 pt-3 pb-1">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

@@ -405,6 +405,8 @@ export type Database = {
           driver_id: string
           id: string
           min_packages: number
+          period_end: string | null
+          period_start: string | null
           unit_id: string
         }
         Insert: {
@@ -412,6 +414,8 @@ export type Database = {
           driver_id: string
           id?: string
           min_packages?: number
+          period_end?: string | null
+          period_start?: string | null
           unit_id: string
         }
         Update: {
@@ -419,6 +423,8 @@ export type Database = {
           driver_id?: string
           id?: string
           min_packages?: number
+          period_end?: string | null
+          period_start?: string | null
           unit_id?: string
         }
         Relationships: []
@@ -875,6 +881,7 @@ export type Database = {
           driver_id: string
           id: string
           joined_at: string
+          parking_spot: string | null
           status: string
           unit_id: string
         }
@@ -885,6 +892,7 @@ export type Database = {
           driver_id: string
           id?: string
           joined_at?: string
+          parking_spot?: string | null
           status?: string
           unit_id: string
         }
@@ -895,6 +903,7 @@ export type Database = {
           driver_id?: string
           id?: string
           joined_at?: string
+          parking_spot?: string | null
           status?: string
           unit_id?: string
         }
@@ -1052,6 +1061,8 @@ export type Database = {
           created_at: string
           dispute_type: string
           driver_id: string
+          feedback: string | null
+          feedback_at: string | null
           id: string
           observation: string | null
           resolved_at: string | null
@@ -1064,6 +1075,8 @@ export type Database = {
           created_at?: string
           dispute_type: string
           driver_id: string
+          feedback?: string | null
+          feedback_at?: string | null
           id?: string
           observation?: string | null
           resolved_at?: string | null
@@ -1076,6 +1089,8 @@ export type Database = {
           created_at?: string
           dispute_type?: string
           driver_id?: string
+          feedback?: string | null
+          feedback_at?: string | null
           id?: string
           observation?: string | null
           resolved_at?: string | null
@@ -1293,6 +1308,76 @@ export type Database = {
           unit_id?: string
         }
         Relationships: []
+      }
+      unit_predefined_drivers: {
+        Row: {
+          created_at: string | null
+          driver_id: string | null
+          id: string
+          suggested_route: string | null
+          unit_id: string | null
+          unit_login_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          driver_id?: string | null
+          id?: string
+          suggested_route?: string | null
+          unit_id?: string | null
+          unit_login_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          driver_id?: string | null
+          id?: string
+          suggested_route?: string | null
+          unit_id?: string | null
+          unit_login_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unit_predefined_drivers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_driver_id_fkey"
+            columns: ["driver_id"]
+            isOneToOne: false
+            referencedRelation: "drivers_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_id_fkey"
+            columns: ["unit_id"]
+            isOneToOne: false
+            referencedRelation: "units_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_login_id_fkey"
+            columns: ["unit_login_id"]
+            isOneToOne: false
+            referencedRelation: "unit_logins"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unit_predefined_drivers_unit_login_id_fkey"
+            columns: ["unit_login_id"]
+            isOneToOne: false
+            referencedRelation: "unit_logins_public"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       unit_reviews: {
         Row: {
@@ -1728,6 +1813,19 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      process_rescue_tbr: {
+        Args: {
+          p_code: string
+          p_original_tbr_id: string
+          p_rescuer_ride_id: string
+          p_trip_number: number
+        }
+        Returns: Json
+      }
+      process_rescue_tbr_batch: {
+        Args: { p_target_ride_id: string; p_tbr_ids: string[] }
+        Returns: Json
       }
       process_tbr_scan: {
         Args: { p_code: string; p_ride_id: string; p_unit_id: string }
