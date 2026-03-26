@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -9,7 +9,6 @@ import VersionSyncControl from "@/components/VersionSyncControl";
 const MatrizLayout = () => {
   const { unitSession } = useAuthStore();
   const { setTheme } = useTheme();
-  const [loadingCache, setLoadingCache] = useState(false);
 
   const handleClearCache = async () => {
     setLoadingCache(true);
