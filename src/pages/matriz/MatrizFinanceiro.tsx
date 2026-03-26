@@ -43,7 +43,7 @@ const MatrizFinanceiro = () => {
         fetchAllRows<any>((from, to) => supabase.from("dnr_entries").select("id, unit_id, dnr_value, status, discounted").in("unit_id", unitIds).gte("created_at", start).lte("created_at", end).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds).order("id").range(from, to)),
-        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages").in("unit_id", unitIds).order("id").range(from, to)),
+        fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages, period_start, period_end").in("unit_id", unitIds).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", dateStart).lte("target_date", dateEnd).order("id").range(from, to)),
         fetchAllRows<any>((from, to) => supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end).order("id").range(from, to)),
       ]);
@@ -123,7 +123,13 @@ const MatrizFinanceiro = () => {
         if (fixedVal !== undefined) {
           totalPaid += fixedVal;
         } else {
-          const minPkg = minPackages.find(mp => mp.driver_id === g.driverId && mp.unit_id === u.id);
+          const minPkg = minPackages.find((mp: any) => {
+            if (mp.driver_id !== g.driverId || mp.unit_id !== u.id) return false;
+            if (!mp.period_start && !mp.period_end) return true; // fixed
+            const afterStart = !mp.period_start || g.day >= mp.period_start;
+            const beforeEnd = !mp.period_end || g.day <= mp.period_end;
+            return afterStart && beforeEnd;
+          }) ?? minPackages.find((mp: any) => mp.driver_id === g.driverId && mp.unit_id === u.id && !mp.period_start && !mp.period_end);
           const effectiveTbrs = minPkg && g.tbrCount < Number(minPkg.min_packages) ? Number(minPkg.min_packages) : g.tbrCount;
           totalPaid += effectiveTbrs * g.tbrVal;
         }
