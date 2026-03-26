@@ -1,52 +1,32 @@
 
 
-# Fix: Socorrendo deve funcionar independente do status do card
+# Fix: Bloquear bipagem de TBRs com PS fechado
 
 ## Problema
-A página `UnitRescuePage.tsx` (linha 172-180) faz um `UPDATE` direto na tabela `ride_tbrs`:
-```typescript
-await supabase.from("ride_tbrs").update({ ride_id: targetInfo.rideId, is_rescue: true }).in("id", tbrIds);
-```
-
-A policy RLS de UPDATE em `ride_tbrs` exige que o `loading_status` do ride seja `'pending'` ou `'loading'`. Quando o card está `'finished'`, o UPDATE é **silenciosamente rejeitado** pela RLS -- os TBRs somem do UI (otimismo) mas voltam ao recarregar.
+A RPC `process_tbr_scan` verifica duplicatas e calcula `trip_number`, mas **não consulta `ps_entries`** para checar se o TBR tem PS com `status = 'closed'`. Resultado: TBRs já resolvidos via PS podem ser bipados e carregados novamente.
 
 ## Solução
 
-### 1. Migration SQL -- nova RPC `process_rescue_tbr_batch`
-Função `SECURITY DEFINER` que recebe um array de IDs de TBRs e o ride de destino, fazendo o UPDATE internamente (bypassa RLS):
+### Migration SQL — atualizar `process_tbr_scan`
+Adicionar verificação logo após o check de duplicata:
 
 ```sql
-CREATE OR REPLACE FUNCTION public.process_rescue_tbr_batch(
-  p_tbr_ids uuid[],
-  p_target_ride_id uuid
-) RETURNS jsonb
-LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public'
-AS $$
-DECLARE v_count int;
-BEGIN
-  UPDATE ride_tbrs
-  SET ride_id = p_target_ride_id, is_rescue = true
-  WHERE id = ANY(p_tbr_ids);
-  GET DIAGNOSTICS v_count = ROW_COUNT;
-  RETURN jsonb_build_object('success', true, 'moved', v_count);
-EXCEPTION WHEN OTHERS THEN
-  RETURN jsonb_build_object('success', false, 'error', SQLERRM);
-END;
-$$;
+-- Check if TBR has a closed PS (globally for this unit)
+IF EXISTS (
+  SELECT 1 FROM ps_entries
+  WHERE UPPER(tbr_code) = v_code
+    AND unit_id = p_unit_id
+    AND status = 'closed'
+) THEN
+  RETURN jsonb_build_object(
+    'success', false,
+    'error', 'TBR possui PS fechado e não pode ser carregado'
+  );
+END IF;
 ```
 
-### 2. `src/pages/dashboard/UnitRescuePage.tsx`
-Substituir o `supabase.from("ride_tbrs").update(...)` (linhas 172-182) pela chamada à nova RPC:
-
-```typescript
-const { data: rpcResult, error: rpcError } = await supabase.rpc("process_rescue_tbr_batch", {
-  p_tbr_ids: tbrIds,
-  p_target_ride_id: targetInfo.rideId,
-});
-if (rpcError || !(rpcResult as any)?.success) throw new Error(rpcError?.message || (rpcResult as any)?.error);
-```
+A função completa será recriada com `CREATE OR REPLACE` mantendo toda a lógica existente + esta nova verificação inserida entre o check de duplicata e o cálculo do `trip_number`.
 
 ## Arquivos alterados
-- **Migration SQL** -- nova função `process_rescue_tbr_batch`
-- **`src/pages/dashboard/UnitRescuePage.tsx`** -- usar RPC em vez de update direto
+- **Migration SQL** — `CREATE OR REPLACE FUNCTION process_tbr_scan` com bloqueio de PS fechado
 
