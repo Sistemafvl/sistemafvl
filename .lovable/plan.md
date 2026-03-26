@@ -1,36 +1,29 @@
 
 
-# Fix: Retornos contando TBRs que ainda estão no carregamento
+# Editar e Período em Pacotes Mínimos
 
-## Causa Raiz
-
-O trigger `auto_remove_tbr_from_ride` deveria deletar o TBR de `ride_tbrs` quando um retorno (piso/ps/rto) é criado. Porém, para dados anteriores à criação do trigger (ou casos onde o trigger falhou), existem TBRs que estão **simultaneamente** em `ride_tbrs` E em `piso_entries`/`ps_entries`/`rto_entries`.
-
-No caso do Marcos Melo em 16/03 (SQA9): ele tem 100 TBRs em `ride_tbrs`, mas 98 desses TBRs também têm entradas de retorno. Como o código do relatório conta esses retornos sem verificar se o TBR ainda está carregado, mostra 98 retornos e apenas 2 concluídos — quando deveria mostrar o contrário.
+## Problema
+1. Não há botão de edição nos registros existentes de pacotes mínimos
+2. O campo de data é único (`target_date`) — o usuário quer definir um **período** (início e fim), e se ambos em branco, fica fixo
 
 ## Solução
 
-### `src/pages/dashboard/RelatoriosPage.tsx` (linhas 606-620)
+### 1. Migration SQL — alterar tabela `driver_minimum_packages`
+- Adicionar colunas `period_start date` e `period_end date` (ambas nullable)
+- Migrar dados: copiar `target_date` para `period_start` (registros com data passam a ter período de 1 dia)
+- Remover coluna `target_date`
+- Atualizar constraint unique para `(unit_id, driver_id, period_start, period_end)`
 
-Antes de processar `netReturns`, criar um Set com os códigos TBR ativos (presentes em `ride_tbrs` para os rides do dia). Ao iterar `returnCodesForDay`, pular qualquer código que ainda exista em `ride_tbrs` — pois se o TBR está carregado, o retorno não é efetivo:
+### 2. `src/pages/dashboard/ConfiguracoesPage.tsx`
+- **Estado**: trocar `mpDate` por `mpPeriodStart` e `mpPeriodEnd`; adicionar `editingMpId`, `editMpValue`, `editMpStart`, `editMpEnd` para edição inline
+- **Formulário de criação**: substituir o campo de data único por dois inputs lado a lado ("Início do período" e "Fim do período") com label "Opcional — Em branco fica fixo"
+- **Lista de registros**: adicionar botão de lápis (Pencil) ao lado da lixeira; ao clicar, a linha vira editável com inputs para período e quantidade, com botão Check para salvar
+- **Interface MinPackage**: trocar `target_date` por `period_start` e `period_end`
+- **handleAddMinPackage**: enviar `period_start` e `period_end` em vez de `target_date`
+- **handleEditMinPackage** (novo): faz `update` no registro com novos valores
+- **Exibição**: mostrar "Fixo" quando sem período, ou "DD/MM — DD/MM" quando com período
 
-```typescript
-// Códigos ativos na carga (ride_tbrs) — se estão lá, o retorno não vale
-const activeTbrCodes = new Set(
-  rTbrs.map((t: any) => t.code?.toString().toUpperCase()).filter(Boolean)
-);
-
-const netReturns = new Set<string>();
-returnCodesForDay.forEach(codeUpper => {
-  // TBR ainda está no carregamento → não é retorno efetivo
-  if (activeTbrCodes.has(codeUpper)) return;
-
-  // ... restante da lógica existente (lastRideId, etc.)
-});
-```
-
-Isso corrige automaticamente **todas as unidades**, presente e futuro, sem necessidade de alterar dados no banco.
-
-## Arquivos alterados
-- **`src/pages/dashboard/RelatoriosPage.tsx`** — adicionar filtro de TBRs ativos antes de contar retornos
+### Arquivos alterados
+- **Migration SQL** — reestruturar colunas de data
+- **`src/pages/dashboard/ConfiguracoesPage.tsx`** — formulário com período + botão editar
 
