@@ -193,14 +193,9 @@ const FinanceiroPage = () => {
     if (!deleteReportId || !unitId) return;
     setDeleting(true);
     try {
-      // Validate manager password
-      const { data: managers } = await supabase
-        .from("managers")
-        .select("manager_password")
-        .eq("unit_id", unitId)
-        .eq("active", true);
-
-      const valid = (managers ?? []).some((m: any) => m.manager_password === deletePassword);
+      // Validate manager password server-side
+      const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+      const { valid } = await validateManagerPassword(unitId, deletePassword);
       if (!valid) {
         toast({ title: "Erro", description: "Senha do gerente inválida.", variant: "destructive" });
         setDeleting(false);

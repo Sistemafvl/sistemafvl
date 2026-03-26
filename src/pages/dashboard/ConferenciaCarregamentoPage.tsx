@@ -880,8 +880,8 @@ const ConferenciaCarregamentoPage = () => {
   const confirmDeleteTbrWithPassword = async () => {
     if (!deleteTbrPending || !unitId) return;
     setDeleteTbrLoading(true);
-    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
-    const valid = (managers ?? []).some(m => m.manager_password === deleteTbrPassword);
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid } = await validateManagerPassword(unitId, deleteTbrPassword);
     if (!valid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", variant: "destructive" });
@@ -914,8 +914,8 @@ const ConferenciaCarregamentoPage = () => {
   const confirmBatchDelete = async () => {
     if (!batchDeleteRideId || !unitId) return;
     setBatchDeleteLoading(true);
-    const { data: managers } = await supabase.from("managers").select("manager_password").eq("unit_id", unitId).eq("active", true);
-    const valid = (managers ?? []).some(m => m.manager_password === batchDeletePassword);
+    const { validateManagerPassword } = await import("@/lib/validate-manager-password");
+    const { valid } = await validateManagerPassword(unitId, batchDeletePassword);
     if (!valid) {
       const { toast } = await import("@/hooks/use-toast");
       toast({ title: "Senha incorreta", variant: "destructive" });
