@@ -3,6 +3,7 @@ import { Navigate, Outlet } from "react-router-dom";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import AdminSidebar from "./AdminSidebar";
 import { ShieldCheck } from "lucide-react";
+import VersionSyncControl from "@/components/VersionSyncControl";
 
 const AdminLayout = () => {
   const { isMasterAdmin } = useAuthStore();
@@ -20,6 +21,7 @@ const AdminLayout = () => {
               <ShieldCheck className="h-3.5 w-3.5" />
               Master Admin
             </span>
+            <div className="ml-auto"><VersionSyncControl /></div>
           </header>
           <div className="flex-1 p-4 sm:p-6 overflow-x-hidden">
             <Outlet />

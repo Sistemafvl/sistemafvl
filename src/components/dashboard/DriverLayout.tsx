@@ -7,6 +7,7 @@ import DriverSidebar from "./DriverSidebar";
 import DriverCallAlert from "./DriverCallAlert";
 import DriverDailyNotices from "./DriverDailyNotices";
 import DriverInvoicePendingModal from "./DriverInvoicePendingModal";
+import VersionSyncControl from "@/components/VersionSyncControl";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
@@ -30,6 +31,7 @@ const DriverLayout = () => {
             <span className="text-xs font-bold italic text-primary uppercase tracking-wider">
               Motorista Parceiro
             </span>
+            <div className="ml-auto"><VersionSyncControl /></div>
           </header>
           <div className="flex-1 p-4 sm:p-6">
             <Outlet />
