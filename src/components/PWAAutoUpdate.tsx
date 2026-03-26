@@ -1,18 +1,28 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { toast } from "sonner";
+import { useEffect, useRef } from "react";
 
 declare const __BUILD_VERSION__: string;
 
-const UPDATE_INTERVAL = 60 * 1000;
 const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
+const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
+
+const isPreviewHost =
+  typeof window !== "undefined" &&
+  (window.location.hostname.includes("id-preview--") ||
+    window.location.hostname.includes("lovableproject.com"));
+
+const isInIframe = (() => {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+})();
 
 const PWAAutoUpdate = () => {
-  const hasReloaded = useRef(false);
-  const [needRefresh, setNeedRefresh] = useState(false);
-  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
+  const hasRun = useRef(false);
 
-  // Build version check
+  // Build version check — works in all environments
   useEffect(() => {
     const current = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
     if (!current) return;
@@ -31,55 +41,59 @@ const PWAAutoUpdate = () => {
     sessionStorage.removeItem(RELOAD_FLAG);
   }, []);
 
-  // Register SW using vanilla API
+  // In preview/iframe: clean up any stale SWs + caches once per session
   useEffect(() => {
-    if (!("serviceWorker" in navigator)) return;
+    if (hasRun.current) return;
+    hasRun.current = true;
 
-    const registerSW = async () => {
-      try {
-        const registration = await navigator.serviceWorker.register("/sw.js", { type: "classic" });
-        registrationRef.current = registration;
+    if (isPreviewHost || isInIframe) {
+      const alreadyCleaned = sessionStorage.getItem(PREVIEW_CLEANUP_FLAG);
+      if (alreadyCleaned) return;
 
-        // Check for updates immediately
-        registration.update();
-
-        // Periodic checks
-        const interval = setInterval(() => {
-          registration.update();
-        }, UPDATE_INTERVAL);
-
-        // Listen for new SW waiting
-        registration.addEventListener("updatefound", () => {
-          const newSW = registration.installing;
-          if (!newSW) return;
-          newSW.addEventListener("statechange", () => {
-            if (newSW.state === "installed" && navigator.serviceWorker.controller) {
-              setNeedRefresh(true);
-            }
-          });
-        });
-
-        return () => clearInterval(interval);
-      } catch (error) {
-        console.error("SW registration error:", error);
-      }
-    };
-
-    registerSW();
-  }, []);
-
-  // Auto-update when refresh needed
-  useEffect(() => {
-    if (needRefresh && !hasReloaded.current) {
-      hasReloaded.current = true;
-      toast.info("Atualizando sistema...");
-      const waiting = registrationRef.current?.waiting;
-      if (waiting) {
-        waiting.postMessage({ type: "SKIP_WAITING" });
-      }
-      setTimeout(() => window.location.reload(), 1000);
+      const cleanup = async () => {
+        let didClean = false;
+        if ("serviceWorker" in navigator) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const r of regs) {
+            await r.unregister();
+            didClean = true;
+          }
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          for (const k of keys) {
+            await caches.delete(k);
+            didClean = true;
+          }
+        }
+        sessionStorage.setItem(PREVIEW_CLEANUP_FLAG, "1");
+        if (didClean) {
+          window.location.reload();
+        }
+      };
+      cleanup().catch(console.error);
+      return;
     }
-  }, [needRefresh]);
+
+    // Production: only register SW if /sw.js actually exists
+    if ("serviceWorker" in navigator) {
+      fetch("/sw.js", { method: "HEAD" }).then((res) => {
+        if (res.ok) {
+          navigator.serviceWorker.register("/sw.js", { type: "classic" }).catch(console.error);
+        } else {
+          // No sw.js — clean up stale registrations
+          navigator.serviceWorker.getRegistrations().then((regs) => {
+            regs.forEach((r) => r.unregister());
+          });
+        }
+      }).catch(() => {
+        // Network error fetching sw.js — clean up
+        navigator.serviceWorker.getRegistrations().then((regs) => {
+          regs.forEach((r) => r.unregister());
+        });
+      });
+    }
+  }, []);
 
   return null;
 };
