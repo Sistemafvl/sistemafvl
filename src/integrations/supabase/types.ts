@@ -405,7 +405,8 @@ export type Database = {
           driver_id: string
           id: string
           min_packages: number
-          target_date: string | null
+          period_end: string | null
+          period_start: string | null
           unit_id: string
         }
         Insert: {
@@ -413,7 +414,8 @@ export type Database = {
           driver_id: string
           id?: string
           min_packages?: number
-          target_date?: string | null
+          period_end?: string | null
+          period_start?: string | null
           unit_id: string
         }
         Update: {
@@ -421,7 +423,8 @@ export type Database = {
           driver_id?: string
           id?: string
           min_packages?: number
-          target_date?: string | null
+          period_end?: string | null
+          period_start?: string | null
           unit_id?: string
         }
         Relationships: []
