@@ -457,7 +457,7 @@ const RelatoriosPage = () => {
       supabase.from("driver_custom_values").select("driver_id, custom_tbr_value").eq("unit_id", unitId!),
       supabase.from("driver_bonus").select("driver_id, amount, description, period_start").eq("unit_id", unitId!)
         .gte("period_start", format(startDate, "yyyy-MM-dd")).lte("period_start", format(endDate, "yyyy-MM-dd")),
-      supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages").eq("unit_id", unitId!),
+      supabase.from("driver_minimum_packages" as any).select("driver_id, min_packages, period_start, period_end").eq("unit_id", unitId!),
       supabase.from("driver_fixed_values" as any).select("driver_id, target_date, fixed_value").eq("unit_id", unitId!)
         .gte("target_date", format(startDate, "yyyy-MM-dd")).lte("target_date", format(endDate, "yyyy-MM-dd")),
       supabase.from("dnr_entries").select("id, driver_id, dnr_value")
@@ -533,8 +533,34 @@ const RelatoriosPage = () => {
     (customValuesRes.data ?? []).forEach((cv: any) => { customValueMap.set(cv.driver_id, Number(cv.custom_tbr_value)); });
     const bonusByDriver = new Map<string, number>();
     (bonusRes.data ?? []).forEach((b: any) => { bonusByDriver.set(b.driver_id, (bonusByDriver.get(b.driver_id) ?? 0) + Number(b.amount)); });
+    const minPkgByDriver = new Map<string, Array<{ min_packages: number; period_start: string | null; period_end: string | null }>>();
+    ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => {
+      const arr = minPkgByDriver.get(mp.driver_id) ?? [];
+      arr.push({ min_packages: Number(mp.min_packages), period_start: mp.period_start ?? null, period_end: mp.period_end ?? null });
+      minPkgByDriver.set(mp.driver_id, arr);
+    });
+    const getMinPkgForDay = (driverId: string, day?: string): number => {
+      const entries = minPkgByDriver.get(driverId);
+      if (!entries) return 0;
+      // Find entry whose period covers this day, or a fixed (no period) entry
+      for (const e of entries) {
+        if (!e.period_start && !e.period_end) return e.min_packages; // fixed
+        if (day) {
+          const afterStart = !e.period_start || day >= e.period_start;
+          const beforeEnd = !e.period_end || day <= e.period_end;
+          if (afterStart && beforeEnd) return e.min_packages;
+        }
+      }
+      // Fallback to fixed if exists
+      const fixed = entries.find(e => !e.period_start && !e.period_end);
+      return fixed ? fixed.min_packages : 0;
+    };
     const minPkgMap = new Map<string, number>();
-    ((minPkgRes.data as any[]) ?? []).forEach((mp: any) => { minPkgMap.set(mp.driver_id, Number(mp.min_packages)); });
+    minPkgByDriver.forEach((entries, driverId) => {
+      // For backward compat (minPkgDriversList), use the max configured value
+      const maxVal = Math.max(...entries.map(e => e.min_packages));
+      minPkgMap.set(driverId, maxVal);
+    });
     const fixedValueMap = new Map<string, number>();
     ((fixedValuesRes as any)?.data ?? []).forEach((fv: any) => { fixedValueMap.set(`${fv.driver_id}_${fv.target_date}`, Number(fv.fixed_value)); });
 
@@ -628,7 +654,7 @@ const RelatoriosPage = () => {
 
         let tbrCount = rTbrs.length;
         const returns = netReturns.size;
-        const minPkg = minPkgMap.get(driverId) ?? 0;
+        const minPkg = getMinPkgForDay(driverId, date);
         if (minPkg > 0 && tbrCount < minPkg) tbrCount = minPkg;
         const completed = tbrCount - returns;
         const fixedKey = `${driverId}_${date}`;

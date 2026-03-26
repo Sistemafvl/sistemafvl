@@ -30,7 +30,8 @@ interface MinPackage {
   driver_id: string;
   driver_name: string;
   min_packages: number;
-  target_date: string | null;
+  period_start: string | null;
+  period_end: string | null;
 }
 
 interface FixedValue {
@@ -101,8 +102,13 @@ const ConfiguracoesPage = () => {
   const [mpDriverResults, setMpDriverResults] = useState<DriverOption[]>([]);
   const [mpSelectedDriver, setMpSelectedDriver] = useState<DriverOption | null>(null);
   const [mpValue, setMpValue] = useState("");
-  const [mpDate, setMpDate] = useState("");
+  const [mpPeriodStart, setMpPeriodStart] = useState("");
+  const [mpPeriodEnd, setMpPeriodEnd] = useState("");
   const [mpSaving, setMpSaving] = useState(false);
+  const [editingMpId, setEditingMpId] = useState<string | null>(null);
+  const [editMpValue, setEditMpValue] = useState("");
+  const [editMpStart, setEditMpStart] = useState("");
+  const [editMpEnd, setEditMpEnd] = useState("");
 
   // Fixed values
   const [fixedValues, setFixedValues] = useState<FixedValue[]>([]);
@@ -156,7 +162,7 @@ const ConfiguracoesPage = () => {
   const fetchMinPackages = useCallback(async () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("id, driver_id, min_packages, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
+    const data = await fetchAllRows<any>((from, to) => supabase.from("driver_minimum_packages" as any).select("id, driver_id, min_packages, period_start, period_end, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).range(from, to));
     if (!data.length) { setMinPackages([]); return; }
     const driverIds = data.map((d: any) => d.driver_id);
     if (!driverIds.length) { setMinPackages([]); return; }
@@ -167,7 +173,8 @@ const ConfiguracoesPage = () => {
       driver_id: d.driver_id,
       driver_name: nameMap.get(d.driver_id) ?? "—",
       min_packages: d.min_packages,
-      target_date: d.target_date
+      period_start: d.period_start,
+      period_end: d.period_end
     })));
   }, [unitId]);
 
@@ -344,19 +351,21 @@ const ConfiguracoesPage = () => {
         return;
       }
       
-      const { error } = await supabase.from("driver_minimum_packages" as any).upsert({
+      const { error } = await supabase.from("driver_minimum_packages" as any).insert({
         unit_id: unitId,
         driver_id: mpSelectedDriver.id,
         min_packages: num,
-        target_date: mpDate || null
-      } as any, { onConflict: "unit_id,driver_id,target_date" });
+        period_start: mpPeriodStart || null,
+        period_end: mpPeriodEnd || null,
+      } as any);
 
       if (error) throw error;
 
       setMpSelectedDriver(null); 
       setMpDriverSearch(""); 
       setMpValue(""); 
-      setMpDate(""); 
+      setMpPeriodStart("");
+      setMpPeriodEnd("");
       setMpDriverResults([]);
       await fetchMinPackages();
       toast({ title: "Pacote mínimo salvo!" });
@@ -369,6 +378,35 @@ const ConfiguracoesPage = () => {
       });
     } finally {
       setMpSaving(false);
+    }
+  };
+
+  const handleEditMinPackage = (mp: MinPackage) => {
+    setEditingMpId(mp.id);
+    setEditMpValue(String(mp.min_packages));
+    setEditMpStart(mp.period_start ?? "");
+    setEditMpEnd(mp.period_end ?? "");
+  };
+
+  const handleSaveEditMinPackage = async () => {
+    if (!editingMpId || !editMpValue) return;
+    const num = parseInt(editMpValue, 10);
+    if (isNaN(num) || num <= 0) {
+      toast({ title: "Valor inválido", variant: "destructive" });
+      return;
+    }
+    try {
+      const { error } = await supabase.from("driver_minimum_packages" as any).update({
+        min_packages: num,
+        period_start: editMpStart || null,
+        period_end: editMpEnd || null,
+      } as any).eq("id", editingMpId);
+      if (error) throw error;
+      setEditingMpId(null);
+      await fetchMinPackages();
+      toast({ title: "Pacote mínimo atualizado!" });
+    } catch (error: any) {
+      toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
     }
   };
 
@@ -737,9 +775,16 @@ const ConfiguracoesPage = () => {
             )}
             {mpSelectedDriver && (
               <div className="space-y-2">
-                <div>
-                  <label className="text-xs text-muted-foreground">Data (Opcional - Em branco fica fixo)</label>
-                  <Input type="date" value={mpDate} onChange={(e) => setMpDate(e.target.value)} />
+                <label className="text-xs text-muted-foreground">Período (Opcional — Em branco fica fixo)</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-muted-foreground">Início</label>
+                    <Input type="date" value={mpPeriodStart} onChange={(e) => setMpPeriodStart(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground">Fim</label>
+                    <Input type="date" value={mpPeriodEnd} onChange={(e) => setMpPeriodEnd(e.target.value)} />
+                  </div>
                 </div>
                 <div className="flex gap-2 items-center">
                   <Input
@@ -762,16 +807,46 @@ const ConfiguracoesPage = () => {
             <div className="space-y-2">
               {minPackages.map(mp => (
                 <div key={mp.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
-                  <div className="flex-1">
-                    <span className="font-semibold">
-                      {mp.driver_name}
-                      {mp.target_date && ` - ${formatDateFullBR(mp.target_date)}`}
-                    </span>
-                  </div>
-                  <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {editingMpId === mp.id ? (
+                    <>
+                      <div className="flex-1 space-y-1">
+                        <span className="font-semibold text-xs">{mp.driver_name}</span>
+                        <div className="grid grid-cols-2 gap-1">
+                          <Input type="date" value={editMpStart} onChange={(e) => setEditMpStart(e.target.value)} className="h-7 text-xs" />
+                          <Input type="date" value={editMpEnd} onChange={(e) => setEditMpEnd(e.target.value)} className="h-7 text-xs" />
+                        </div>
+                      </div>
+                      <Input type="number" value={editMpValue} onChange={(e) => setEditMpValue(e.target.value)} className="h-7 w-20 text-xs font-mono" min={1} />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-primary" onClick={handleSaveEditMinPackage}>
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditingMpId(null)}>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex-1">
+                        <span className="font-semibold">{mp.driver_name}</span>
+                        <p className="text-xs text-muted-foreground">
+                          {mp.period_start && mp.period_end
+                            ? `${formatDateFullBR(mp.period_start)} — ${formatDateFullBR(mp.period_end)}`
+                            : mp.period_start
+                              ? `A partir de ${formatDateFullBR(mp.period_start)}`
+                              : mp.period_end
+                                ? `Até ${formatDateFullBR(mp.period_end)}`
+                                : "Fixo (sem período)"}
+                        </p>
+                      </div>
+                      <span className="text-primary font-mono font-bold">{mp.min_packages} pacotes</span>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEditMinPackage(mp)}>
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleDeleteMinPackage(mp.id)}>
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
