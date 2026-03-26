@@ -603,8 +603,15 @@ const RelatoriosPage = () => {
           .filter(r => info.rideIds.includes(r.id))
           .sort((a, b) => new Date(a.completed_at).getTime() - new Date(b.completed_at).getTime());
 
+        // Códigos ativos na carga (ride_tbrs) — se estão lá, o retorno não é efetivo
+        const activeTbrCodes = new Set(
+          rTbrs.map((t: any) => t.code?.toString().toUpperCase()).filter(Boolean)
+        );
+
         const netReturns = new Set<string>();
         returnCodesForDay.forEach(codeUpper => {
+          // TBR ainda está no carregamento → não é retorno efetivo
+          if (activeTbrCodes.has(codeUpper)) return;
           let lastRideId: string | null = null;
           for (const ride of sortedDayRides) {
             if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code && t.code.toString().toUpperCase() === codeUpper)) {
