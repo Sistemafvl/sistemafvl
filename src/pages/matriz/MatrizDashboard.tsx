@@ -9,7 +9,6 @@ import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Loader2 } from "lucide-react";
 import { formatBRL } from "@/lib/utils";
 
 const MatrizDashboard = () => {
@@ -37,24 +36,45 @@ const MatrizDashboard = () => {
       const start = startOfDay(new Date(dateStart)).toISOString();
       const end = endOfDay(new Date(dateEnd)).toISOString();
 
-      const [ridesData] = await Promise.all([
-        fetchAllRows<any>((from, to) =>
-          supabase.from("driver_rides").select("id, unit_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)
-        ),
-      ]);
+      const ridesData = await fetchAllRows<any>((from, to) =>
+        supabase.from("driver_rides")
+          .select("id, unit_id, completed_at")
+          .in("unit_id", unitIds)
+          .gte("completed_at", start)
+          .lte("completed_at", end)
+          .order("id")
+          .range(from, to)
+      );
 
-      if (ridesData.length === 0) return { rides: [], tbrs: [] };
+      if (ridesData.length === 0) return { rides: [], tbrs: [], settings: [] };
 
       const rideIds = ridesData.map(r => r.id);
-      const { data: settings } = await supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds);
       
-      return { rides: ridesData, tbrs: tbrData, settings: settings || [] };
+      const [tbrData, settingsResult] = await Promise.all([
+        fetchAllRows<any>((from, to) =>
+          supabase.from("ride_tbrs")
+            .select("id, code, ride_id")
+            .in("ride_id", rideIds)
+            .order("id")
+            .range(from, to)
+        ),
+        supabase.from("unit_settings")
+          .select("unit_id, tbr_value")
+          .in("unit_id", unitIds)
+      ]);
+      
+      return { 
+        rides: ridesData, 
+        tbrs: tbrData, 
+        settings: settingsResult.data || [] 
+      };
     },
     enabled: units.length > 0,
   });
 
   const processedData = useMemo(() => {
-    const { rides, tbrs, settings = [] } = dashboardData;
+    if (!dashboardData) return { unitMetrics: [], chartData: [], avgPacoteGeral: 0 };
+    const { rides = [], tbrs = [], settings = [] } = dashboardData;
 
     // Map ride_id to tbr count
     const tbrCountsMap: Record<string, number> = {};
