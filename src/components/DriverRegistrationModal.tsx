@@ -116,7 +116,10 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
 
     setLoading(true);
 
-    const { data: insertedDriver, error } = await supabase.from("drivers" as any).insert({
+    const driverId = crypto.randomUUID();
+
+    const { error } = await supabase.from("drivers" as any).insert({
+      id: driverId,
       name: form.name.trim(),
       cpf: rawCpf,
       cep: form.cep.replace(/\D/g, "") || null,
@@ -131,15 +134,20 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       email: form.email.trim() || null,
       whatsapp: form.whatsapp.replace(/\D/g, "") || null,
       password: form.password,
-    }).select("id").single();
+    });
 
-    if (error || !insertedDriver) {
-      toast({ title: "Erro ao cadastrar", description: "Não foi possível cadastrar o motorista. Tente novamente.", variant: "destructive" });
+    if (error) {
+      console.error("[DriverRegistration] Insert error:", error.code, error.message);
+      let msg = "Não foi possível cadastrar o motorista. Tente novamente.";
+      if (error.message.includes("duplicate") || error.code === "23505") {
+        msg = "CPF ou placa já cadastrado.";
+      } else if (error.message.includes("row-level security") || error.code === "42501") {
+        msg = "Erro de permissão no servidor. Tente novamente em instantes.";
+      }
+      toast({ title: "Erro ao cadastrar", description: msg, variant: "destructive" });
       setLoading(false);
       return;
     }
-
-    const driverId = (insertedDriver as any).id;
 
     // Success — close modal and reset immediately
     toast({ title: "Motorista cadastrado!", description: "Cadastro realizado com sucesso." });

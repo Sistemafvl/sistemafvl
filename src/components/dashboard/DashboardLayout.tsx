@@ -5,14 +5,13 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useTheme } from "next-themes";
 import DashboardSidebar from "./DashboardSidebar";
 import QueuePanel from "./QueuePanel";
-import { UserCheck, Crown, RotateCcw, Loader2 } from "lucide-react";
+import { UserCheck, Crown } from "lucide-react";
 import InsucessoBalloon from "./InsucessoBalloon";
 import { supabase } from "@/integrations/supabase/client";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useConferenteSessionLock } from "@/hooks/use-conferente-session-lock";
-import { toast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
 import { useDisputeStore } from "@/stores/use-dispute-store";
+import VersionSyncControl from "@/components/VersionSyncControl";
 import DisputeNotificationModal from "./DisputeNotificationModal";
 
 const DashboardLayout = () => {
@@ -21,36 +20,6 @@ const DashboardLayout = () => {
   const { setTheme } = useTheme();
   const [conferentes, setConferentes] = useState<{ id: string; name: string }[]>([]);
   const { claimSession } = useConferenteSessionLock();
-  const [loadingCache, setLoadingCache] = useState(false);
-
-  const handleClearCache = async () => {
-    setLoadingCache(true);
-    try {
-      if ("serviceWorker" in navigator) {
-        const registrations = await navigator.serviceWorker.getRegistrations();
-        for (const registration of registrations) {
-          await registration.unregister();
-        }
-      }
-      if ("caches" in window) {
-        const keys = await caches.keys();
-        for (const key of keys) {
-          await caches.delete(key);
-        }
-      }
-      toast({ 
-        title: "Cache limpo!", 
-        description: "Enviando comando de sincronização... A página irá recarregar.",
-      });
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
-    } catch (err) {
-      console.error("Cache purge failed:", err);
-      toast({ title: "Erro", description: "Falha ao sincronizar versão.", variant: "destructive" });
-      setLoadingCache(false);
-    }
-  };
 
   useEffect(() => {
     const saved = localStorage.getItem("theme_unit") || "light";
@@ -95,16 +64,7 @@ const DashboardLayout = () => {
               </span>
               
               <div className="ml-auto flex items-center gap-4">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="gap-2 text-[10px] text-muted-foreground h-7 px-2 hover:bg-destructive/10 hover:text-destructive transition-colors hidden sm:flex shrink-0"
-                  onClick={handleClearCache}
-                  disabled={loadingCache}
-                >
-                  {loadingCache ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-                  LIMPAR CACHE E SINCRONIZAR
-                </Button>
+                <VersionSyncControl />
 
                 {isDirector && (
                   <span className="text-xs text-amber-600 flex items-center gap-1 font-semibold shrink-0">
