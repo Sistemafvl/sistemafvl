@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Package, TrendingUp, Users, Truck, Calendar as CalendarIcon, BarChart3, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
-import { fetchAllRows } from "@/lib/supabase-helpers";
+import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { formatBRL } from "@/lib/utils";
 
@@ -74,22 +74,22 @@ const MatrizDashboard = () => {
       const rideIds = ridesData.map(r => r.id);
       
       const [tbrData, pisoData, psData, rtoData] = await Promise.all([
-        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
-          supabase.from("ride_tbrs")
-            .select("id, code, ride_id")
-            .in("ride_id", rideIds)
-            .order("id")
-            .range(from, to)
-        ) : Promise.resolve([]),
-        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
-          supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).order("id").range(from, to)
-        ) : Promise.resolve([]),
-        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
-          supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).order("id").range(from, to)
-        ) : Promise.resolve([]),
-        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
-          supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).order("id").range(from, to)
-        ) : Promise.resolve([])
+        fetchAllRowsWithIn<any>(
+          (ids) => (from, to) => supabase.from("ride_tbrs").select("id, code, ride_id").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+        fetchAllRowsWithIn<any>(
+          (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+        fetchAllRowsWithIn<any>(
+          (ids) => (from, to) => supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        ),
+        fetchAllRowsWithIn<any>(
+          (ids) => (from, to) => supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", ids).order("id").range(from, to),
+          rideIds
+        )
       ]);
       
       return { 
