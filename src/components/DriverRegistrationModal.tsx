@@ -137,7 +137,13 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     });
 
     if (error) {
-      const msg = error.message.includes("duplicate") ? "CPF ou placa já cadastrado." : "Não foi possível cadastrar o motorista. Tente novamente.";
+      console.error("[DriverRegistration] Insert error:", error.code, error.message);
+      let msg = "Não foi possível cadastrar o motorista. Tente novamente.";
+      if (error.message.includes("duplicate") || error.code === "23505") {
+        msg = "CPF ou placa já cadastrado.";
+      } else if (error.message.includes("row-level security") || error.code === "42501") {
+        msg = "Erro de permissão no servidor. Tente novamente em instantes.";
+      }
       toast({ title: "Erro ao cadastrar", description: msg, variant: "destructive" });
       setLoading(false);
       return;
