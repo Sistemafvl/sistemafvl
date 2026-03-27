@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { AlertTriangle, ShieldCheck, RotateCcw, FileWarning } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 
 const statusLabel: Record<string, string> = {
   open: "Aberto", analysis: "Analisando", closed: "Fechado", approved: "Aprovado",
@@ -42,8 +42,8 @@ const MatrizOcorrencias = () => {
   useEffect(() => {
     if (!units.length) return;
     const unitIds = filterUnit === "all" ? units.map(u => u.id) : [filterUnit];
-    const start = startOfDay(new Date(dateStart)).toISOString();
-    const end = endOfDay(new Date(dateEnd)).toISOString();
+    const start = startOfDay(parseISO(dateStart)).toISOString();
+    const end = endOfDay(parseISO(dateEnd)).toISOString();
     setLoading(true);
     import("@/lib/supabase-helpers").then(({ fetchAllRows }) => {
       Promise.all([

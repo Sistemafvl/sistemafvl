@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { BarChart3, Scale, Info, LayoutTemplate, Filter, Download } from "lucide-react";
-import { format, subDays } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
@@ -36,8 +36,10 @@ const GeneralAnalysisPage = () => {
     queryFn: async () => {
       if (!units.length) return null;
       const unitIds = units.map(u => u.id);
+      const start = startOfDay(parseISO(dateStart)).toISOString();
+      const end = endOfDay(parseISO(dateEnd)).toISOString();
       
-      const { data: ridesData } = await supabase.from("driver_rides").select("id, unit_id").in("unit_id", unitIds).gte("completed_at", dateStart).lte("completed_at", dateEnd);
+      const { data: ridesData } = await supabase.from("driver_rides").select("id, unit_id").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end);
       
       const rideIds = (ridesData || []).map(r => r.id);
       

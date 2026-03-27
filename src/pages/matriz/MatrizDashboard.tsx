@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Package, TrendingUp, Users, Truck, Calendar as CalendarIcon, BarChart3, Loader2 } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, parseISO, isSameDay } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows, fetchAllRowsWithIn } from "@/lib/supabase-helpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -33,10 +33,10 @@ const MatrizDashboard = () => {
     queryFn: async () => {
       if (!units.length) return null;
       const unitIds = units.map(u => u.id);
-      const start = startOfDay(new Date(dateStart)).toISOString();
-      const end = endOfDay(new Date(dateEnd)).toISOString();
-      const startDay = format(new Date(dateStart), "yyyy-MM-dd");
-      const endDay = format(new Date(dateEnd), "yyyy-MM-dd");
+      const start = startOfDay(parseISO(dateStart)).toISOString();
+      const end = endOfDay(parseISO(dateEnd)).toISOString();
+      const startDay = format(parseISO(dateStart), "yyyy-MM-dd");
+      const endDay = format(parseISO(dateEnd), "yyyy-MM-dd");
 
       const [ridesData, settingsData, customData, minPkgData, fixedData, reativoData, dnrData, bonusData] = await Promise.all([
         fetchAllRows<any>((from, to) =>
@@ -215,43 +215,93 @@ const MatrizDashboard = () => {
     });
 
     const dailyData: Record<string, any> = {};
-    rides.forEach((r: any) => {
-      const day = format(new Date(r.completed_at), "dd/MM");
-      if (!dailyData[day]) dailyData[day] = { name: day };
-      const unit = units.find(u => u.id === r.unit_id);
-      if (unit) {
-        const rideTbrs = tbrsByRide.get(r.id) || [];
-        const rideReturnsSet = returnsByRide.get(r.id) || new Set();
-        let actualReturns = 0;
-        
-        const allDayActiveCodes = new Set<string>();
-        rides.filter((rr: any) => rr.driver_id === r.driver_id && format(new Date(rr.completed_at), "dd/MM") === day)
-             .forEach((rr: any) => (tbrsByRide.get(rr.id) || []).forEach(c => allDayActiveCodes.add(c)));
+    const avgDailyData: Record<string, any> = {};
 
-        rideReturnsSet.forEach(code => { if (!allDayActiveCodes.has(code)) actualReturns++; });
+    // To calculate daily averages per unit, we need to process groups day by day
+    const allDays = new Set<string>();
+    rides.forEach((r: any) => allDays.add(format(new Date(r.completed_at), "yyyy-MM-dd")));
+    const sortedDays = Array.from(allDays).sort();
+
+    sortedDays.forEach(dayStr => {
+      const displayDay = format(parseISO(dayStr), "dd/MM");
+      if (!dailyData[displayDay]) dailyData[displayDay] = { name: displayDay };
+      if (!avgDailyData[displayDay]) avgDailyData[displayDay] = { name: displayDay };
+
+      unitMetrics.forEach(u => {
+        // Find rides for this unit on this day
+        const uRidesOnDay = rides.filter((r: any) => r.unit_id === u.id && format(new Date(r.completed_at), "yyyy-MM-dd") === dayStr);
+        if (uRidesOnDay.length === 0) return;
+
+        const unitBaseVal = Number(settings.find((s: any) => s.unit_id === u.id)?.tbr_value || 0);
+        let dayPaid = 0;
+        let dayPackages = 0;
+
+        // Group by driver for min package logic
+        const driverGroups = new Map<string, any[]>();
+        uRidesOnDay.forEach((r: any) => {
+          if (!driverGroups.has(r.driver_id)) driverGroups.set(r.driver_id, []);
+          driverGroups.get(r.driver_id)!.push(r);
+        });
+
+        driverGroups.forEach((groupRides, driverId) => {
+          const tbrVal = Number(customValues.find((cv: any) => cv.driver_id === driverId && cv.unit_id === u.id)?.custom_tbr_value ?? unitBaseVal);
+          const fixedVal = (fixedValues as any[]).find((fv: any) => fv.driver_id === driverId && fv.unit_id === u.id && fv.target_date === dayStr)?.fixed_value;
+          
+          let tbrCount = 0;
+          let returnsCount = 0;
+
+          groupRides.forEach(ride => {
+            const rTbrs = tbrsByRide.get(ride.id) || [];
+            const rReturns = returnsByRide.get(ride.id) || new Set();
+            tbrCount += rTbrs.length;
+
+            const allDayActiveCodes = new Set<string>();
+            groupRides.forEach(rr => (tbrsByRide.get(rr.id) || []).forEach(c => allDayActiveCodes.add(c)));
+            rReturns.forEach(code => { if (!allDayActiveCodes.has(code)) returnsCount++; });
+          });
+
+          const minPkg = (minPackages as any[]).find((mp: any) => {
+            if (mp.driver_id !== driverId || mp.unit_id !== u.id) return false;
+            if (!mp.period_start && !mp.period_end) return true;
+            return (!mp.period_start || dayStr >= mp.period_start) && (!mp.period_end || dayStr <= mp.period_end);
+          })?.min_packages || 0;
+
+          const effectivePackages = Math.max(tbrCount, Number(minPkg));
+          const completed = effectivePackages - returnsCount;
+
+          if (fixedVal !== undefined) dayPaid += Number(fixedVal);
+          else dayPaid += completed * tbrVal;
+          
+          dayPackages += (tbrCount - returnsCount);
+        });
+
+        // Add daily proportional bonuses/reatives? Usually they are per day in the DB anyway
+        const dayBonuses = bonuses.filter((b: any) => b.unit_id === u.id && b.period_start === dayStr).reduce((s: number, b: any) => s + Number(b.amount), 0);
+        // Activated_at is ISO, so we check day
+        const dayReatives = reatives.filter((r: any) => r.unit_id === u.id && format(new Date(r.activated_at), "yyyy-MM-dd") === dayStr).reduce((s: number, r: any) => s + Number(r.reativo_value), 0);
+        const dayDnrs = dnrs.filter((d: any) => d.unit_id === u.id && format(new Date(d.closed_at), "yyyy-MM-dd") === dayStr).reduce((s: number, d: any) => s + Number(d.dnr_value), 0);
+
+        const finalDayPaid = dayPaid + dayBonuses + dayReatives - dayDnrs;
         
-        dailyData[day][unit.name] = (dailyData[day][unit.name] ?? 0) + (rideTbrs.length - actualReturns);
-      }
+        dailyData[displayDay][u.name] = (dailyData[displayDay][u.name] ?? 0) + dayPackages;
+        avgDailyData[displayDay][u.name] = dayPackages > 0 ? (finalDayPaid / dayPackages) : 0;
+      });
     });
 
-    const chartData = Object.values(dailyData).sort((a, b) => {
-      const partsA = a.name.split('/');
-      const partsB = b.name.split('/');
-      return new Date(2026, parseInt(partsA[1])-1, parseInt(partsA[0])).getTime() - 
-             new Date(2026, parseInt(partsB[1])-1, parseInt(partsB[0])).getTime();
-    });
+    const chartData = Object.values(dailyData);
+    const avgChartData = Object.values(avgDailyData);
 
     const totalBRL = unitMetrics.reduce((a, b) => a + b.totalBRL, 0);
     const totalPackages = unitMetrics.reduce((a, b) => a + b.packages, 0);
     const avgPacoteGeral = totalPackages > 0 ? (totalBRL / totalPackages) : 0;
 
-    return { unitMetrics, chartData, avgPacoteGeral };
+    return { unitMetrics, chartData, avgChartData, avgPacoteGeral };
   }, [units, dashboardData]);
 
 
   const totals = useMemo(() => ({
-    packages: processedData.unitMetrics.reduce((a, b) => a + b.packages, 0),
-    rides: processedData.unitMetrics.reduce((a, b) => a + b.rides, 0),
+    packages: (processedData.unitMetrics as any[]).reduce((a: number, b: any) => a + (b.packages || 0), 0),
+    rides: (processedData.unitMetrics as any[]).reduce((a: number, b: any) => a + (b.rides || 0), 0),
     avgPacoteGeral: processedData.avgPacoteGeral,
   }), [processedData]);
 
@@ -318,11 +368,49 @@ const MatrizDashboard = () => {
         </div>
       </div>
 
+      {/* New Average Trend Chart */}
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-bold italic flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" /> Tendência de Média Pacote por Unidade
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] w-full mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={processedData.avgChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10 }} tickFormatter={(val) => `R$ ${val}`} />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    formatter={(val: any) => formatBRL(Number(val))}
+                  />
+                  <Legend />
+                  {units.map((u, i) => (
+                    <Line 
+                      key={u.id} 
+                      type="monotone" 
+                      dataKey={u.name} 
+                      stroke={`hsl(${(i * 137.5) % 360}, 70%, 50%)`} 
+                      strokeWidth={2} 
+                      dot={{ r: 4 }}
+                      activeDot={{ r: 6 }} 
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="text-sm font-bold italic flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-primary" /> Tendência de Volume por Unidade
+              <TrendingUp className="h-4 w-4 text-primary" /> Tendência de TBR's por Unidade
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -355,7 +443,7 @@ const MatrizDashboard = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-sm font-bold italic">Top Ranking (Volume)</CardTitle>
+            <CardTitle className="text-sm font-bold italic">Top Ranking (TBR's)</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {processedData.unitMetrics.sort((a,b) => b.packages - a.packages).slice(0, 5).map((u, i) => (
@@ -378,6 +466,7 @@ const MatrizDashboard = () => {
     </div>
   );
 };
+
 
 const StatsCard = ({ icon: Icon, label, value, loading, color = "text-primary" }: any) => (
   <Card className="overflow-hidden">
