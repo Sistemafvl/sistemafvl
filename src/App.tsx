@@ -31,12 +31,17 @@ import UnitRescuePage from "./pages/dashboard/UnitRescuePage";
 import DriverDNR from "./pages/driver/DriverDNR";
 import DriverRecebiveis from "./pages/driver/DriverRecebiveis";
 import DriverRescue from "./pages/driver/DriverRescue";
+import DriverContractPage from "./pages/driver/DriverContractPage";
 import MatrizLayout from "./components/matriz/MatrizLayout";
 import MatrizOverview from "./pages/matriz/MatrizOverview";
 import MatrizUnidades from "./pages/matriz/MatrizUnidades";
 import MatrizMotoristas from "./pages/matriz/MatrizMotoristas";
 import MatrizFinanceiro from "./pages/matriz/MatrizFinanceiro";
 import MatrizOcorrencias from "./pages/matriz/MatrizOcorrencias";
+import MatrizDashboard from "./pages/matriz/MatrizDashboard";
+import DirectorFinancePage from "./pages/matriz/DirectorFinancePage";
+import GeneralAnalysisPage from "./pages/matriz/GeneralAnalysisPage";
+import ContractEditorPage from "./pages/matriz/ContractEditorPage";
 import AdminLayout from "./components/admin/AdminLayout";
 import AdminOverviewPage from "./pages/admin/AdminOverviewPage";
 import DomainsUnitsPage from "./pages/admin/DomainsUnitsPage";
@@ -95,6 +100,10 @@ const App = () => (
             <Route path="bi/motoristas" element={<MatrizMotoristas />} />
             <Route path="bi/financeiro" element={<MatrizFinanceiro />} />
             <Route path="bi/ocorrencias" element={<MatrizOcorrencias />} />
+            <Route path="matriz" element={<MatrizDashboard />} />
+            <Route path="matriz/financeiro" element={<DirectorFinancePage />} />
+            <Route path="matriz/analise" element={<GeneralAnalysisPage />} />
+            <Route path="matriz/contrato" element={<ContractEditorPage />} />
           </Route>
           <Route path="/motorista" element={<DriverLayout />}>
             <Route index element={<DriverHome />} />
@@ -107,6 +116,7 @@ const App = () => (
             <Route path="recebiveis" element={<DriverRecebiveis />} />
             <Route path="avaliacoes" element={<DriverReviews />} />
             <Route path="configuracoes" element={<DriverSettings />} />
+            <Route path="contrato" element={<DriverContractPage />} />
           </Route>
           <Route path="/matriz" element={<MatrizLayout />}>
             <Route index element={<MatrizOverview />} />

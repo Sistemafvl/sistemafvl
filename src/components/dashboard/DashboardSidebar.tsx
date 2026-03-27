@@ -79,6 +79,13 @@ const biMenuItems = [
   { title: "Ocorrências", url: "/dashboard/bi/ocorrencias", icon: ShieldAlert },
 ];
 
+const directorMenuItems = [
+  { title: "Visão Geral", url: "/dashboard/matriz", icon: LayoutDashboard },
+  { title: "Financeiro", url: "/dashboard/matriz/financeiro", icon: DollarSign },
+  { title: "Análise Geral", url: "/dashboard/matriz/analise", icon: BarChart3 },
+  { title: "Contrato Motorista", url: "/dashboard/matriz/contrato", icon: Scale },
+];
+
 const managerModalItems = [
   { title: "Cadastro de Motorista", key: "driver" as const, icon: Truck },
 ];
@@ -302,90 +309,15 @@ const DashboardSidebar = () => {
             </>
           )}
 
-          <SidebarGroup>
-            <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
-              Menu
-            </SidebarGroupLabel>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {menuItems.map((item) => (
-                  <SidebarMenuItem key={item.title}>
-                    <SidebarMenuButton asChild>
-                      <NavLink
-                        to={item.url}
-                        end
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
-                        activeClassName="bg-primary/10 text-primary"
-                        onClick={() => setOpenMobile(false)}
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        <span className="flex-1">{item.title}</span>
-                        {item.url === "/dashboard/conferencia" && pendingCount > 0 && (
-                          <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
-                            {pendingCount}
-                          </Badge>
-                        )}
-                        {item.url === "/dashboard/contestacoes" && pendingDisputesCount > 0 && (
-                          <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
-                            {pendingDisputesCount}
-                          </Badge>
-                        )}
-                      </NavLink>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-
-          {showManagerMenu && (
+          {/* Director new menu structure */}
+          {isDirector ? (
             <SidebarGroup>
               <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
-                {isDirector ? "Gestão" : "Gerente"}
+                Diretoria
               </SidebarGroupLabel>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {managerMenuItems.map((item) => (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton asChild>
-                        <NavLink
-                          to={item.url}
-                          end
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
-                          activeClassName="bg-primary/10 text-primary"
-                          onClick={() => setOpenMobile(false)}
-                        >
-                          <item.icon className="h-4 w-4 shrink-0" />
-                          <span>{item.title}</span>
-                        </NavLink>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                  {managerModalItems.map((item) => (
-                    <SidebarMenuItem key={item.key}>
-                      <SidebarMenuButton
-                        className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50 cursor-pointer"
-                        onClick={() => setDriverModalOpen(true)}
-                      >
-                        <item.icon className="h-4 w-4 shrink-0" />
-                        <span>{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          )}
-
-          {/* BI Consolidado — only for directors */}
-          {isDirector && (
-            <SidebarGroup>
-              <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
-                BI Consolidado
-              </SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {biMenuItems.map((item) => (
+                  {directorMenuItems.map((item) => (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton asChild>
                         <NavLink
@@ -404,7 +336,85 @@ const DashboardSidebar = () => {
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
+          ) : (
+            <>
+              <SidebarGroup>
+                <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
+                  Menu
+                </SidebarGroupLabel>
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {menuItems.map((item) => (
+                      <SidebarMenuItem key={item.title}>
+                        <SidebarMenuButton asChild>
+                          <NavLink
+                            to={item.url}
+                            end
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
+                            activeClassName="bg-primary/10 text-primary"
+                            onClick={() => setOpenMobile(false)}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            <span className="flex-1">{item.title}</span>
+                            {item.url === "/dashboard/conferencia" && pendingCount > 0 && (
+                              <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-orange-500 text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
+                                {pendingCount}
+                              </Badge>
+                            )}
+                            {item.url === "/dashboard/contestacoes" && pendingDisputesCount > 0 && (
+                              <Badge className="ml-auto h-5 min-w-5 flex items-center justify-center rounded-full bg-destructive text-white text-[10px] font-bold px-1.5 animate-pulse border-0">
+                                {pendingDisputesCount}
+                              </Badge>
+                            )}
+                          </NavLink>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    ))}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </SidebarGroup>
+
+              {showManagerMenu && !isDirector && (
+                <SidebarGroup>
+                  <SidebarGroupLabel className="font-bold italic text-xs uppercase tracking-wider">
+                    Gerente
+                  </SidebarGroupLabel>
+                  <SidebarGroupContent>
+                    <SidebarMenu>
+                      {managerMenuItems.map((item) => (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild>
+                            <NavLink
+                              to={item.url}
+                              end
+                              className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50"
+                              activeClassName="bg-primary/10 text-primary"
+                              onClick={() => setOpenMobile(false)}
+                            >
+                              <item.icon className="h-4 w-4 shrink-0" />
+                              <span>{item.title}</span>
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                      {managerModalItems.map((item) => (
+                        <SidebarMenuItem key={item.key}>
+                          <SidebarMenuButton
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-semibold italic transition-colors hover:bg-muted/50 cursor-pointer"
+                            onClick={() => setDriverModalOpen(true)}
+                          >
+                            <item.icon className="h-4 w-4 shrink-0" />
+                            <span>{item.title}</span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      ))}
+                    </SidebarMenu>
+                  </SidebarGroupContent>
+                </SidebarGroup>
+              )}
+            </>
           )}
+
         </SidebarContent>
         <SidebarFooter className="p-3">
           <Button
