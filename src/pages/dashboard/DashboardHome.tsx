@@ -79,6 +79,12 @@ const DashboardHome = () => {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    if (unitSession?.sessionType === "matriz") {
+      navigate("/dashboard/matriz", { replace: true });
+    }
+  }, [unitSession, navigate]);
+
   // Fetch feedback + DNR stats in a single effect with count queries
   useEffect(() => {
     if (!unitSession?.id) return;
