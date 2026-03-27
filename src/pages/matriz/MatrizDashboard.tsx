@@ -4,18 +4,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Package, TrendingUp, Users, Truck, Calendar as CalendarIcon, BarChart3 } from "lucide-react";
+import { Package, TrendingUp, Users, Truck, Calendar as CalendarIcon, BarChart3, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { Skeleton } from "@/components/ui/skeleton";
+import { Loader2 } from "lucide-react";
+import { formatBRL } from "@/lib/utils";
 
 const MatrizDashboard = () => {
   const { unitSession } = useAuthStore();
   const domainId = unitSession?.domain_id || "";
 
-  const [dateStart, setDateStart] = useState(format(subDays(new Date(), 7), "yyyy-MM-dd"));
+  const [dateStart, setDateStart] = useState(format(new Date(), "yyyy-MM-dd"));
   const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const { data: units = [] } = useQuery({
@@ -45,18 +46,15 @@ const MatrizDashboard = () => {
       if (ridesData.length === 0) return { rides: [], tbrs: [] };
 
       const rideIds = ridesData.map(r => r.id);
-      const tbrData = await fetchAllRows<any>((from, to) =>
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
-      );
-
-      return { rides: ridesData, tbrs: tbrData };
+      const { data: settings } = await supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds);
+      
+      return { rides: ridesData, tbrs: tbrData, settings: settings || [] };
     },
     enabled: units.length > 0,
   });
 
   const processedData = useMemo(() => {
-    if (!dashboardData) return { unitMetrics: [], chartData: [] };
-    const { rides, tbrs } = dashboardData;
+    const { rides, tbrs, settings = [] } = dashboardData;
 
     // Map ride_id to tbr count
     const tbrCountsMap: Record<string, number> = {};
@@ -67,14 +65,16 @@ const MatrizDashboard = () => {
     const unitMetrics = units.map(u => {
       const uRides = rides.filter((r: any) => r.unit_id === u.id);
       const totalPackages = uRides.reduce((sum: number, r: any) => sum + (tbrCountsMap[r.id] || 0), 0);
-      const avgPackages = uRides.length > 0 ? (totalPackages / uRides.length).toFixed(1) : "0";
+      const tbrValue = settings.find((s: any) => s.unit_id === u.id)?.tbr_value || 0;
+      const totalBRL = totalPackages * Number(tbrValue);
 
       return {
         id: u.id,
         name: u.name,
         rides: uRides.length,
         packages: totalPackages,
-        avg: avgPackages,
+        tbrValue: Number(tbrValue),
+        totalBRL,
       };
     });
 
@@ -89,14 +89,24 @@ const MatrizDashboard = () => {
       }
     });
 
-    const chartData = Object.values(dailyData).sort((a, b) => a.name.localeCompare(b.name));
+    const chartData = Object.values(dailyData).sort((a, b) => {
+      const partsA = a.name.split('/');
+      const partsB = b.name.split('/');
+      return new Date(2026, parseInt(partsA[1])-1, parseInt(partsA[0])).getTime() - 
+             new Date(2026, parseInt(partsB[1])-1, parseInt(partsB[0])).getTime();
+    });
 
-    return { unitMetrics, chartData };
+    const totalBRL = unitMetrics.reduce((a, b) => a + b.totalBRL, 0);
+    const totalPackages = unitMetrics.reduce((a, b) => a + b.packages, 0);
+    const avgPacoteGeral = totalPackages > 0 ? (totalBRL / totalPackages) : 0;
+
+    return { unitMetrics, chartData, avgPacoteGeral };
   }, [units, dashboardData]);
 
   const totals = useMemo(() => ({
     packages: processedData.unitMetrics.reduce((a, b) => a + b.packages, 0),
     rides: processedData.unitMetrics.reduce((a, b) => a + b.rides, 0),
+    avgPacoteGeral: processedData.avgPacoteGeral,
   }), [processedData]);
 
   return (
@@ -121,7 +131,7 @@ const MatrizDashboard = () => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatsCard icon={Package} label="Total de Pacotes" value={totals.packages} loading={loading} />
         <StatsCard icon={Truck} label="Total Carregamentos" value={totals.rides} loading={loading} color="text-blue-500" />
-        <StatsCard icon={TrendingUp} label="Média Geral / Unidade" value={(totals.packages / (units.length || 1)).toFixed(0)} loading={loading} color="text-emerald-500" />
+        <StatsCard icon={TrendingUp} label="Média Pacote Geral" value={formatBRL(totals.avgPacoteGeral)} loading={loading} color="text-emerald-500" />
         <StatsCard icon={Users} label="Unidades Ativas" value={units.length} loading={loading} color="text-amber-500" />
       </div>
 
@@ -129,7 +139,9 @@ const MatrizDashboard = () => {
         <h2 className="text-sm font-bold italic text-muted-foreground uppercase tracking-wider px-1">Performance por Unidade</h2>
         <div className="flex overflow-x-auto pb-4 gap-4 scrollbar-hide">
           {loading ? (
-            [1, 2, 3, 4].map(i => <Skeleton key={i} className="h-32 w-64 shrink-0 rounded-xl" />)
+            <div className="flex items-center justify-center w-full py-12">
+              <Loader2 className="h-10 w-10 text-primary animate-spin" />
+            </div>
           ) : (
             processedData.unitMetrics.map(u => (
               <Card key={u.id} className="min-w-[260px] shrink-0 border-l-4 border-l-primary hover:shadow-md transition-shadow">
@@ -143,8 +155,8 @@ const MatrizDashboard = () => {
                       <p className="text-xl font-bold">{u.packages}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-[10px] text-muted-foreground font-semibold uppercase">Média/Viagem</p>
-                      <p className="text-lg font-bold text-primary">{u.avg}</p>
+                      <p className="text-[10px] text-muted-foreground font-semibold uppercase">Média Pacote</p>
+                      <p className="text-lg font-bold text-primary">{formatBRL(u.tbrValue)}</p>
                     </div>
                   </div>
                   <div className="h-1 w-full bg-muted rounded-full overflow-hidden">
@@ -229,7 +241,9 @@ const StatsCard = ({ icon: Icon, label, value, loading, color = "text-primary" }
       </div>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground font-semibold italic truncate mb-0.5">{label}</p>
-        <p className="text-2xl font-black tracking-tight">{loading ? "..." : value}</p>
+        <div className="flex items-center h-8">
+          {loading ? <Loader2 className="h-5 w-5 text-primary animate-spin" /> : <p className="text-2xl font-black tracking-tight">{value}</p>}
+        </div>
       </div>
     </CardContent>
   </Card>

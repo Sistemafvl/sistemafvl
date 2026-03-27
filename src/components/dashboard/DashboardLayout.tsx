@@ -116,7 +116,7 @@ const DashboardLayout = () => {
         </main>
       </div>
       <InsucessoBalloon />
-      <QueuePanel />
+      {!isDirector && <QueuePanel />}
       <DisputeNotificationModal />
     </SidebarProvider>
   );
