@@ -1,37 +1,49 @@
 
-Objetivo: eliminar a divergência entre ambiente de criação e publicado sem quebrar fluxo operacional.
+Objetivo: corrigir de forma definitiva o erro no cadastro de motorista no site publicado, sem quebrar fluxo existente.
 
-1) Diagnóstico e causa provável
-- O comportamento do print indica bundle antigo em cache (Service Worker/Cache Storage), não falta real de código.
-- Hoje o app tenta registrar `/sw.js` em `PWAAutoUpdate`, mas a PWA do Vite está comentada. Isso cria cenário de SW “fantasma” (stale) e tela desatualizada.
+Diagnóstico confirmado
+- O erro atual no publicado é de RLS no banco: `new row violates row-level security policy for table "drivers"`.
+- O frontend já está com a correção de UUID local e sem `.select()` no insert.
+- Portanto, o problema está na camada de políticas/permissões do ambiente publicado (diferença entre ambientes e/ou role efetiva diferente no momento do insert).
 
-2) Correção estrutural (sem impacto de negócio)
-- Refatorar `src/components/PWAAutoUpdate.tsx` para ficar “ambiente-aware”:
-  - Em criação/preview (`id-preview--...`): não registrar SW; limpar registrations + caches automaticamente (1 vez por sessão) e dar 1 reload controlado.
-  - Em publicado: só registrar SW se `/sw.js` existir; se não existir, limpar SW antigo automaticamente.
-  - Manter proteção contra loop de reload.
+Plano de implementação (seguro e sem impacto de operação)
 
-3) Tornar sincronização manual sempre acessível
-- Extrair botão “Limpar cache e sincronizar” para componente único reutilizável.
-- Usar em `DashboardLayout`, `MatrizLayout`, `AdminLayout` e `DriverLayout`.
-- Ajustar responsividade para nunca “sumir” (ícone em telas pequenas, texto em telas maiores; sem `hidden sm:flex` rígido).
+1) Normalizar políticas de INSERT da tabela `drivers` (idempotente)
+- Criar uma migration cirúrgica para:
+  - Remover policies de INSERT conflitantes/antigas em `public.drivers`.
+  - Recriar policy explícita para `anon` com `WITH CHECK (true)`.
+  - Criar também policy de INSERT para `authenticated` com `WITH CHECK (true)` (fallback seguro caso a sessão venha autenticada no runtime).
+- Não abrir SELECT de `drivers` para `anon` (mantém blindagem de dados sensíveis).
 
-4) Transparência de versão para evitar confusão
-- Exibir selo discreto no header (ambiente + build version) para você ver na hora se está em criação ou publicado e se carregou versão nova.
+2) Garantir privilégio de tabela para INSERT (hardening compatível)
+- Na mesma migration, garantir `GRANT INSERT ON public.drivers TO anon, authenticated`.
+- Isso evita efeito colateral de hardening anterior que tenha revogado escrita em produção.
 
-5) Limpeza de configuração para evitar recaída
-- Em `vite.config.ts`, remover import/config morto de PWA comentada para não reintroduzir SW parcial no futuro.
+3) Blindagem sem quebrar UX no frontend
+- Manter o fluxo atual do `DriverRegistrationModal` (sem mudanças de comportamento).
+- Apenas reforçar tratamento de erro para identificar RLS explicitamente no toast/log técnico interno (sem expor detalhes sensíveis para usuário final).
 
-6) Validação final (E2E)
-- Abrir criação “do zero” (novo dia), logar e validar se o botão aparece no topo.
-- Comparar a mesma rota em criação vs publicado com mesmo build.
-- Testar fluxo gerente/conferente/motorista para garantir zero regressão funcional.
+4) Publicação e sincronização
+- Publicar para levar schema + código para o ambiente ao vivo.
+- Fazer atualização forçada de cache/sincronização no publicado para evitar bundle antigo.
 
-Arquivos-alvo:
-- `src/components/PWAAutoUpdate.tsx`
-- `src/components/dashboard/DashboardLayout.tsx`
-- `src/components/matriz/MatrizLayout.tsx`
-- `src/components/admin/AdminLayout.tsx`
-- `src/components/dashboard/DriverLayout.tsx`
-- novo componente compartilhado de sync/version (ex.: `src/components/VersionSyncControl.tsx`)
-- `vite.config.ts`
+5) Validação E2E obrigatória (sem regressão)
+- Testar no publicado com CPF novo:
+  - Cadastro simples sem documentos.
+  - Cadastro com 1 documento.
+- Confirmar que:
+  - toast de sucesso aparece,
+  - motorista entra na listagem normal,
+  - login do motorista funciona,
+  - login gerente e exibição de nomes continuam intactos.
+
+Detalhes técnicos
+- Arquivos alvo:
+  - `supabase/migrations/<nova_migration_fix_drivers_insert_live.sql>`
+  - `src/components/DriverRegistrationModal.tsx` (somente melhoria de mapeamento de erro, opcional e não disruptiva)
+- Sem alteração de fluxo operacional, layout ou regras de negócio.
+- Foco em correção de permissão/RLS entre ambientes, preservando a blindagem de dados já implantada.
+
+Critério de sucesso
+- Zero erro de RLS no insert de `drivers` no ambiente publicado.
+- Fluxos existentes mantidos (cadastro, login e visualização operacional).
