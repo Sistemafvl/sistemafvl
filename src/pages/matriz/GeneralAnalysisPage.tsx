@@ -37,15 +37,18 @@ const GeneralAnalysisPage = () => {
       if (!units.length) return null;
       const unitIds = units.map(u => u.id);
       
-      const [rides, tbrs, disputes] = await Promise.all([
-        supabase.from("driver_rides").select("unit_id").in("unit_id", unitIds).gte("completed_at", dateStart).lte("completed_at", dateEnd),
-        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", 
-            supabase.from("driver_rides").select("id").in("unit_id", unitIds).gte("completed_at", dateStart).lte("completed_at", dateEnd) as any
-        ),
+      const { data: ridesData } = await supabase.from("driver_rides").select("id, unit_id").in("unit_id", unitIds).gte("completed_at", dateStart).lte("completed_at", dateEnd);
+      
+      const rideIds = (ridesData || []).map(r => r.id);
+      
+      const [tbrs, disputes] = await Promise.all([
+        rideIds.length > 0 
+          ? supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds)
+          : Promise.resolve({ data: [] }),
         supabase.from("ride_disputes" as any).select("unit_id, status").in("unit_id", unitIds)
       ]);
 
-      return { rides: rides.data || [], tbrs: tbrs.data || [], disputes: disputes.data || [] };
+      return { rides: ridesData || [], tbrs: tbrs.data || [], disputes: disputes.data || [] };
     },
     enabled: units.length > 0,
   });

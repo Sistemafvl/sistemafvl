@@ -36,16 +36,18 @@ const MatrizDashboard = () => {
       const start = startOfDay(new Date(dateStart)).toISOString();
       const end = endOfDay(new Date(dateEnd)).toISOString();
 
-      const [ridesData, tbrData] = await Promise.all([
+      const [ridesData] = await Promise.all([
         fetchAllRows<any>((from, to) =>
           supabase.from("driver_rides").select("id, unit_id, completed_at").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end).order("id").range(from, to)
         ),
-        fetchAllRows<any>((from, to) =>
-          supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", 
-            supabase.from("driver_rides").select("id").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end) as any
-          ).order("id").range(from, to)
-        ),
       ]);
+
+      if (ridesData.length === 0) return { rides: [], tbrs: [] };
+
+      const rideIds = ridesData.map(r => r.id);
+      const tbrData = await fetchAllRows<any>((from, to) =>
+        supabase.from("ride_tbrs").select("id, ride_id").in("ride_id", rideIds).order("id").range(from, to)
+      );
 
       return { rides: ridesData, tbrs: tbrData };
     },
@@ -53,7 +55,7 @@ const MatrizDashboard = () => {
   });
 
   const processedData = useMemo(() => {
-    if (!dashboardData) return { units: [], chartData: [] };
+    if (!dashboardData) return { unitMetrics: [], chartData: [] };
     const { rides, tbrs } = dashboardData;
 
     // Map ride_id to tbr count
