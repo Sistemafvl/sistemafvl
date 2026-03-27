@@ -35,38 +35,74 @@ const MatrizDashboard = () => {
       const unitIds = units.map(u => u.id);
       const start = startOfDay(new Date(dateStart)).toISOString();
       const end = endOfDay(new Date(dateEnd)).toISOString();
+      const startDay = format(new Date(dateStart), "yyyy-MM-dd");
+      const endDay = format(new Date(dateEnd), "yyyy-MM-dd");
 
-      const ridesData = await fetchAllRows<any>((from, to) =>
-        supabase.from("driver_rides")
-          .select("id, unit_id, completed_at")
-          .in("unit_id", unitIds)
-          .gte("completed_at", start)
-          .lte("completed_at", end)
-          .order("id")
-          .range(from, to)
-      );
+      const [ridesData, settingsData, customData, minPkgData, fixedData, reativoData, dnrData, bonusData] = await Promise.all([
+        fetchAllRows<any>((from, to) =>
+          supabase.from("driver_rides")
+            .select("id, unit_id, driver_id, completed_at, login")
+            .in("unit_id", unitIds)
+            .gte("completed_at", start)
+            .lte("completed_at", end)
+            .order("id")
+            .range(from, to)
+        ),
+        supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds),
+        supabase.from("driver_custom_values").select("unit_id, driver_id, custom_tbr_value").in("unit_id", unitIds),
+        supabase.from("driver_minimum_packages" as any).select("unit_id, driver_id, min_packages, period_start, period_end").in("unit_id", unitIds),
+        supabase.from("driver_fixed_values" as any).select("unit_id, driver_id, target_date, fixed_value").in("unit_id", unitIds).gte("target_date", startDay).lte("target_date", endDay),
+        supabase.from("reativo_entries").select("unit_id, driver_id, reativo_value, activated_at, tbr_code").in("unit_id", unitIds).eq("status", "active").gte("activated_at", start).lte("activated_at", end),
+        supabase.from("dnr_entries").select("unit_id, driver_id, dnr_value, closed_at").in("unit_id", unitIds).eq("status", "closed").eq("discounted", true).gte("closed_at", start).lte("closed_at", end),
+        supabase.from("driver_bonus").select("unit_id, driver_id, amount, period_start").in("unit_id", unitIds).gte("period_start", startDay).lte("period_start", endDay)
+      ]);
 
-      if (ridesData.length === 0) return { rides: [], tbrs: [], settings: [] };
+      if ((ridesData || []).length === 0 && (reativoData.data || []).length === 0 && (bonusData.data || []).length === 0) {
+        return { 
+          rides: ridesData || [], 
+          tbrs: [], 
+          settings: settingsData.data || [], 
+          customValues: customData.data || [], 
+          minPackages: minPkgData.data || [], 
+          fixedValues: fixedData.data || [], 
+          reatives: reativoData.data || [], 
+          dnrs: dnrData.data || [], 
+          bonuses: bonusData.data || [] 
+        };
+      }
 
       const rideIds = ridesData.map(r => r.id);
       
-      const [tbrData, settingsResult] = await Promise.all([
-        fetchAllRows<any>((from, to) =>
+      const [tbrData, pisoData, psData, rtoData] = await Promise.all([
+        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
           supabase.from("ride_tbrs")
             .select("id, code, ride_id")
             .in("ride_id", rideIds)
             .order("id")
             .range(from, to)
-        ),
-        supabase.from("unit_settings")
-          .select("unit_id, tbr_value")
-          .in("unit_id", unitIds)
+        ) : Promise.resolve([]),
+        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
+          supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", rideIds).order("id").range(from, to)
+        ) : Promise.resolve([]),
+        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
+          supabase.from("ps_entries").select("ride_id, tbr_code").in("ride_id", rideIds).order("id").range(from, to)
+        ) : Promise.resolve([]),
+        rideIds.length > 0 ? fetchAllRows<any>((from, to) =>
+          supabase.from("rto_entries").select("ride_id, tbr_code").in("ride_id", rideIds).order("id").range(from, to)
+        ) : Promise.resolve([])
       ]);
       
       return { 
         rides: ridesData, 
         tbrs: tbrData, 
-        settings: settingsResult.data || [] 
+        settings: settingsData.data || [],
+        customValues: customData.data || [],
+        minPackages: minPkgData.data || [],
+        fixedValues: fixedData.data || [],
+        reatives: reativoData.data || [],
+        dnrs: dnrData.data || [],
+        bonuses: bonusData.data || [],
+        returns: { piso: pisoData, ps: psData, rto: rtoData }
       };
     },
     enabled: units.length > 0,
@@ -74,38 +110,127 @@ const MatrizDashboard = () => {
 
   const processedData = useMemo(() => {
     if (!dashboardData) return { unitMetrics: [], chartData: [], avgPacoteGeral: 0 };
-    const { rides = [], tbrs = [], settings = [] } = dashboardData;
+    const { 
+      rides = [], 
+      tbrs = [], 
+      settings = [], 
+      customValues = [], 
+      minPackages = [], 
+      fixedValues = [], 
+      reatives = [], 
+      dnrs = [], 
+      bonuses = [],
+      returns = { piso: [], ps: [], rto: [] }
+    } = dashboardData;
 
-    // Map ride_id to tbr count
-    const tbrCountsMap: Record<string, number> = {};
+    // Group returns by ride_id and tbr_code for faster lookup
+    const returnsByRide = new Map<string, Set<string>>();
+    [...returns.piso, ...returns.ps, ...returns.rto].forEach((p: any) => {
+      if (p.ride_id && p.tbr_code) {
+        if (!returnsByRide.has(p.ride_id)) returnsByRide.set(p.ride_id, new Set());
+        returnsByRide.get(p.ride_id)!.add(p.tbr_code.toString().toUpperCase());
+      }
+    });
+
+    // Map ride_id to tbr list
+    const tbrsByRide = new Map<string, string[]>();
     tbrs.forEach((t: any) => {
-      tbrCountsMap[t.ride_id] = (tbrCountsMap[t.ride_id] ?? 0) + 1;
+      if (!tbrsByRide.has(t.ride_id)) tbrsByRide.set(t.ride_id, []);
+      tbrsByRide.get(t.ride_id)!.push(t.code?.toString().toUpperCase() || "");
     });
 
     const unitMetrics = units.map(u => {
       const uRides = rides.filter((r: any) => r.unit_id === u.id);
-      const totalPackages = uRides.reduce((sum: number, r: any) => sum + (tbrCountsMap[r.id] || 0), 0);
-      const tbrValue = settings.find((s: any) => s.unit_id === u.id)?.tbr_value || 0;
-      const totalBRL = totalPackages * Number(tbrValue);
+      const unitBaseVal = Number(settings.find((s: any) => s.unit_id === u.id)?.tbr_value || 0);
+      
+      // Calculate total paid and total packages for this unit
+      let unitTotalPaid = 0;
+      let unitTotalPackages = 0;
+      let unitTotalRides = uRides.length;
+
+      // Group rides by driver and day for min package / fixed value logic
+      const driverDayGroups = new Map<string, { driverId: string; date: string; rides: any[] }>();
+      uRides.forEach((r: any) => {
+        const day = format(new Date(r.completed_at), "yyyy-MM-dd");
+        const key = `${r.driver_id}_${day}`;
+        if (!driverDayGroups.has(key)) driverDayGroups.set(key, { driverId: r.driver_id, date: day, rides: [] });
+        driverDayGroups.get(key)!.rides.push(r);
+      });
+
+      driverDayGroups.forEach(group => {
+        const tbrVal = Number(customValues.find((cv: any) => cv.driver_id === group.driverId && cv.unit_id === u.id)?.custom_tbr_value ?? unitBaseVal);
+        const fixedVal = (fixedValues as any[]).find((fv: any) => fv.driver_id === group.driverId && fv.unit_id === u.id && fv.target_date === group.date)?.fixed_value;
+        
+        let dayTbrCount = 0;
+        let dayReturnsCount = 0;
+
+        group.rides.forEach(ride => {
+          const rideTbrs = tbrsByRide.get(ride.id) || [];
+          const rideReturns = returnsByRide.get(ride.id) || new Set();
+          
+          dayTbrCount += rideTbrs.length;
+          
+          const allDayActiveCodes = new Set<string>();
+          group.rides.forEach(r => (tbrsByRide.get(r.id) || []).forEach(c => allDayActiveCodes.add(c)));
+          
+          rideReturns.forEach(code => {
+            if (!allDayActiveCodes.has(code)) {
+              dayReturnsCount++;
+            }
+          });
+        });
+
+        const minPkg = (minPackages as any[]).find((mp: any) => {
+          if (mp.driver_id !== group.driverId || mp.unit_id !== u.id) return false;
+          if (!mp.period_start && !mp.period_end) return true;
+          return (!mp.period_start || group.date >= mp.period_start) && (!mp.period_end || group.date <= mp.period_end);
+        })?.min_packages || 0;
+
+        const effectivePackages = Math.max(dayTbrCount, Number(minPkg));
+        const dayCompleted = effectivePackages - dayReturnsCount;
+        
+        if (fixedVal !== undefined) {
+          unitTotalPaid += Number(fixedVal);
+        } else {
+          unitTotalPaid += dayCompleted * tbrVal;
+        }
+        unitTotalPackages += dayTbrCount - dayReturnsCount;
+      });
+
+      const unitBonuses = bonuses.filter((b: any) => b.unit_id === u.id).reduce((sum: number, b: any) => sum + Number(b.amount), 0);
+      const unitReatives = reatives.filter((r: any) => r.unit_id === u.id).reduce((sum: number, r: any) => sum + Number(r.reativo_value), 0);
+      const unitDnrs = dnrs.filter((d: any) => d.unit_id === u.id).reduce((sum: number, d: any) => sum + Number(d.dnr_value), 0);
+
+      const finalUnitTotalPaid = unitTotalPaid + unitBonuses + unitReatives - unitDnrs;
+      const avgPacote = unitTotalPackages > 0 ? (finalUnitTotalPaid / unitTotalPackages) : 0;
 
       return {
         id: u.id,
         name: u.name,
-        rides: uRides.length,
-        packages: totalPackages,
-        tbrValue: Number(tbrValue),
-        totalBRL,
+        rides: unitTotalRides,
+        packages: unitTotalPackages,
+        tbrValue: avgPacote,
+        totalBRL: finalUnitTotalPaid,
       };
     });
 
-    // Chart data (by day)
     const dailyData: Record<string, any> = {};
     rides.forEach((r: any) => {
       const day = format(new Date(r.completed_at), "dd/MM");
       if (!dailyData[day]) dailyData[day] = { name: day };
       const unit = units.find(u => u.id === r.unit_id);
       if (unit) {
-        dailyData[day][unit.name] = (dailyData[day][unit.name] ?? 0) + (tbrCountsMap[r.id] || 0);
+        const rideTbrs = tbrsByRide.get(r.id) || [];
+        const rideReturnsSet = returnsByRide.get(r.id) || new Set();
+        let actualReturns = 0;
+        
+        const allDayActiveCodes = new Set<string>();
+        rides.filter((rr: any) => rr.driver_id === r.driver_id && format(new Date(rr.completed_at), "dd/MM") === day)
+             .forEach((rr: any) => (tbrsByRide.get(rr.id) || []).forEach(c => allDayActiveCodes.add(c)));
+
+        rideReturnsSet.forEach(code => { if (!allDayActiveCodes.has(code)) actualReturns++; });
+        
+        dailyData[day][unit.name] = (dailyData[day][unit.name] ?? 0) + (rideTbrs.length - actualReturns);
       }
     });
 
@@ -122,6 +247,7 @@ const MatrizDashboard = () => {
 
     return { unitMetrics, chartData, avgPacoteGeral };
   }, [units, dashboardData]);
+
 
   const totals = useMemo(() => ({
     packages: processedData.unitMetrics.reduce((a, b) => a + b.packages, 0),
