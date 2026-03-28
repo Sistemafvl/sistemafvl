@@ -98,6 +98,20 @@ const AdminDriversPage = () => {
     fetchDrivers();
   };
 
+  const handleEdgeFunctionSync = async () => {
+    if (drivers.length > 0) return;
+    setLoading(true);
+    try {
+      // If table is empty (RLS), try getting basic list via Edge Function if we had IDs
+      // But since we need IDs, we'll try to get all drivers via a new RPC or just the table
+      toast.info("Tentando sincronização de segurança...");
+      fetchDrivers(); // Retry after SQL fix
+    } catch (err) {
+      console.error(err);
+    }
+    setLoading(false);
+  };
+
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (

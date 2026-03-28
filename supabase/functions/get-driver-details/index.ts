@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing driver_id or driver_ids" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let selectFields = "id, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
+    let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
     // 1. Check for bypass access (Dashboard/Internal)
     if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {

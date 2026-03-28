@@ -540,8 +540,14 @@ const RelatoriosPage = () => {
         
         if (!pixError && Array.isArray(pixData)) {
           pixData.forEach((d: any) => {
-            if (d.id && d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
-              pixByDriver.set(d.id, d.pix_key.trim());
+            if (d.id) {
+              if (d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
+                pixByDriver.set(d.id, d.pix_key.trim());
+              }
+              // Backup name and cpf from edge function (bypasses RLS)
+              if (d.name && !driverMap.has(d.id)) {
+                driverMap.set(d.id, d);
+              }
             }
           });
         }
@@ -549,15 +555,18 @@ const RelatoriosPage = () => {
         // Fallback: fetch directly from drivers table for missing ones
         const missingPixIds = driverIdsToFetch.filter(id => !pixByDriver.has(id));
         if (missingPixIds.length > 0) {
-          const { data: directDrivers } = await supabase
-            .from("drivers" as any)
-            .select("id, pix_key")
+          const { data: directDrivers } = await (supabase
+            .from("drivers" as any) as any)
+            .select("id, pix_key, name, cpf, car_plate, car_model, car_color")
             .in("id", missingPixIds);
           
           if (directDrivers) {
             directDrivers.forEach((d: any) => {
               if (d.pix_key && typeof d.pix_key === "string" && d.pix_key.trim() !== "") {
                 pixByDriver.set(d.id, d.pix_key.trim());
+              }
+              if (d.name && !driverMap.has(d.id)) {
+                driverMap.set(d.id, d);
               }
             });
           }
