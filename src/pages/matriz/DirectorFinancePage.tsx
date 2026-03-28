@@ -59,14 +59,27 @@ const DirectorFinancePage = () => {
       
       const fetchPromises = units.map(async (u) => {
         try {
-          const { data } = await supabase
+          const { data, error } = await supabase
             .from("payroll_reports" as any)
             .select("id, period_start, period_end, report_data, status")
             .eq("unit_id", u.id)
             .order("created_at", { ascending: false })
             .limit(1)
             .maybeSingle();
-          if (data) reportsMap[u.id] = data;
+          
+          if (error) {
+             // Fallback if status column doesn't exist yet
+             const { data: fallbackData } = await supabase
+               .from("payroll_reports" as any)
+               .select("id, period_start, period_end, report_data")
+               .eq("unit_id", u.id)
+               .order("created_at", { ascending: false })
+               .limit(1)
+               .maybeSingle();
+             if (fallbackData) reportsMap[u.id] = fallbackData;
+          } else if (data) {
+             reportsMap[u.id] = data;
+          }
         } catch (err) {
           console.error(`Error fetching report for unit ${u.id}:`, err);
         }
@@ -193,12 +206,12 @@ const DirectorFinancePage = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-1 py-2">
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1 text-center justify-center">
-                      <Truck className="h-3 w-3" /> Viagens (Período)
-                    </p>
-                    <p className="text-xl font-black text-center">{u.rideCount}</p>
-                    <p className="text-[9px] text-muted-foreground italic text-center">Nenhum relatório gerado recentemente</p>
+                  <div className="space-y-3 py-2 border-t border-dashed mt-2">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase text-center">Último Relatório Final</p>
+                    <div className="flex flex-col items-center justify-center space-y-1">
+                      <p className="text-sm font-black text-muted-foreground italic">Nenhum relatório gerado</p>
+                      <Badge variant="outline" className="text-[9px] uppercase border-muted text-muted-foreground">Aguardando Fechamento</Badge>
+                    </div>
                   </div>
                 )}
                 <Button 
@@ -215,13 +228,6 @@ const DirectorFinancePage = () => {
           ))
         )}
 
-        <Card className="border-dashed border-2 flex flex-col items-center justify-center p-8 text-center bg-muted/20 opacity-60 hover:opacity-100 transition-opacity cursor-pointer">
-          <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center mb-4">
-            <DollarSign className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <h3 className="font-bold italic text-muted-foreground">Adicionar Unidade/Fluxo</h3>
-          <p className="text-xs text-muted-foreground mt-1">Implementações em breve</p>
-        </Card>
       </div>
 
     </div>

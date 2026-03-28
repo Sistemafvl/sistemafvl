@@ -135,30 +135,49 @@ const RelatoriosPage = () => {
     if (!unitId || !payrollData) return;
     setSavingPayroll(true);
     try {
-      const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
+      // 1. Try insert with status
+      const { data: savedReport, error: insertError } = await supabase.from("payroll_reports" as any).insert({
         unit_id: unitId, generated_by: generatedBy,
         period_start: format(startDate, "yyyy-MM-dd"), period_end: format(endDate, "yyyy-MM-dd"),
         report_data: payrollData,
         status: 'pending',
       } as any).select("id").single();
-      if (savedReport && (savedReport as any).id) {
-        const reportId = (savedReport as any).id;
-        const { data: usedDnrs } = await supabase.from("dnr_entries").select("id")
-          .eq("unit_id", unitId).eq("status", "closed").eq("discounted", true)
-          .is("reported_in_payroll_id" as any, null)
-          .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
-        if (usedDnrs?.length) {
-          for (const dnr of usedDnrs) {
-            await supabase.from("dnr_entries").update({ reported_in_payroll_id: reportId } as any).eq("id", dnr.id);
-          }
+
+      if (insertError) {
+        // 2. Try rollback without status column
+        const { data: fallbackReport } = await supabase.from("payroll_reports" as any).insert({
+          unit_id: unitId, generated_by: generatedBy,
+          period_start: format(startDate, "yyyy-MM-dd"), period_end: format(endDate, "yyyy-MM-dd"),
+          report_data: payrollData,
+        } as any).select("id").single();
+        
+        if (fallbackReport && (fallbackReport as any).id) {
+           await handlePostSaveActions((fallbackReport as any).id);
         }
+      } else if (savedReport && (savedReport as any).id) {
+        await handlePostSaveActions((savedReport as any).id);
       }
+      
       toast({ title: "Relatório salvo!", description: "Folha de pagamento registrada com sucesso." });
       setPayrollMode(null);
-    } catch {
+    } catch (err) {
+      console.error("Error saving report:", err);
       toast({ title: "Erro", description: "Erro ao salvar relatório.", variant: "destructive" });
     }
     setSavingPayroll(false);
+  };
+
+  const handlePostSaveActions = async (reportId: string) => {
+    const { data: usedDnrs } = await supabase.from("dnr_entries").select("id")
+      .eq("unit_id", unitId).eq("status", "closed").eq("discounted", true)
+      .is("reported_in_payroll_id" as any, null)
+      .gte("closed_at", startDate.toISOString()).lte("closed_at", endDate.toISOString());
+    
+    if (usedDnrs?.length) {
+      for (const dnr of usedDnrs) {
+        await supabase.from("dnr_entries").update({ reported_in_payroll_id: reportId } as any).eq("id", dnr.id);
+      }
+    }
   };
 
   // Save to DB + mark DNRs + generate PDF
@@ -166,8 +185,10 @@ const RelatoriosPage = () => {
     if (!unitId || !payrollData) return;
     setSavingPayroll(true);
     try {
-      // Save to payroll_reports
-      const { data: savedReport } = await supabase.from("payroll_reports" as any).insert({
+      let reportId: string | null = null;
+      
+      // 1. Try insert with status
+      const { data: savedReport, error: insertError } = await supabase.from("payroll_reports" as any).insert({
         unit_id: unitId,
         generated_by: generatedBy,
         period_start: format(startDate, "yyyy-MM-dd"),
@@ -176,9 +197,22 @@ const RelatoriosPage = () => {
         status: 'pending',
       } as any).select("id").single();
 
+      if (insertError) {
+        // 2. Try rollback without status column
+        const { data: fallbackReport } = await supabase.from("payroll_reports" as any).insert({
+          unit_id: unitId,
+          generated_by: generatedBy,
+          period_start: format(startDate, "yyyy-MM-dd"),
+          period_end: format(endDate, "yyyy-MM-dd"),
+          report_data: payrollData,
+        } as any).select("id").single();
+        if (fallbackReport) reportId = (fallbackReport as any).id;
+      } else if (savedReport) {
+        reportId = (savedReport as any).id;
+      }
+
       // Mark DNRs as reported in this payroll
-      if (savedReport && (savedReport as any).id) {
-        const reportId = (savedReport as any).id;
+      if (reportId) {
         const { data: usedDnrs } = await supabase.from("dnr_entries")
           .select("id")
           .eq("unit_id", unitId)
@@ -187,6 +221,7 @@ const RelatoriosPage = () => {
           .is("reported_in_payroll_id" as any, null)
           .gte("closed_at", startDate.toISOString())
           .lte("closed_at", endDate.toISOString());
+        
         if (usedDnrs?.length) {
           for (const dnr of usedDnrs) {
             await supabase.from("dnr_entries")

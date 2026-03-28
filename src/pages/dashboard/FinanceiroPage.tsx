@@ -58,10 +58,29 @@ const FinanceiroPage = () => {
   const loadReports = async () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
-    const reportsData = await fetchAllRows<any>((from, to) =>
-      supabase.from("payroll_reports" as any).select("id, generated_by, period_start, period_end, report_data, status, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
-    );
-    setReports(reportsData);
+    
+    // 1. Try fetching with status first
+    const { data: testData, error: statusError } = await supabase
+      .from("payroll_reports" as any)
+      .select("status")
+      .limit(1);
+
+    const useStatus = !statusError;
+
+    const reportsData = await fetchAllRows<any>((from, to) => {
+      const base = supabase.from("payroll_reports" as any);
+      const query = useStatus 
+        ? base.select("id, generated_by, period_start, period_end, report_data, status, created_at")
+        : base.select("id, generated_by, period_start, period_end, report_data, created_at");
+      
+      return (query as any)
+        .eq("unit_id", unitId)
+        .order("created_at", { ascending: false })
+        .order("id")
+        .range(from, to);
+    });
+
+    setReports(reportsData || []);
 
     const allInvoices = await fetchAllRows<any>((from, to) =>
       supabase.from("driver_invoices" as any).select("payroll_report_id, file_url").eq("unit_id", unitId).order("id").range(from, to)
