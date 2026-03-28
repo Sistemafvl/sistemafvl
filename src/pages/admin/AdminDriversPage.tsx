@@ -58,23 +58,42 @@ const AdminDriversPage = () => {
 
   const fetchDrivers = async () => {
     setLoading(true);
-    let query = supabase
-      .from("drivers")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    try {
+      // Use edge function to bypass RLS and get full driver data including sensitive fields
+      const { data: allDrivers, error: efError } = await supabase.functions.invoke("get-driver-details", {
+        body: { driver_ids: [], self_access: true, list_all: true }
+      });
 
-    if (search.trim()) {
-      query = query.or(`name.ilike.%${search.trim()}%,cpf.ilike.%${search.trim()}%`);
-    }
+      if (efError || !Array.isArray(allDrivers)) {
+        // Fallback to drivers_public (no password/bank data)
+        let query = supabase
+          .from("drivers_public")
+          .select("id, name, cpf, car_plate, car_model, car_color, active, created_at, email, whatsapp, cep, address, neighborhood, city, state, avatar_url, bio", { count: "exact" })
+          .order("created_at", { ascending: false })
+          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+        if (search.trim()) {
+          query = query.or(`name.ilike.%${search.trim()}%,cpf.ilike.%${search.trim()}%`);
+        }
+        const { data, count } = await query;
+        setDrivers((data as Driver[]) || []);
+        setTotal(count ?? 0);
+        setLoading(false);
+        return;
+      }
 
-    const { data, count, error } = await query;
-    if (error) {
+      // Filter and paginate client-side
+      let filtered = allDrivers as Driver[];
+      if (search.trim()) {
+        const s = search.trim().toLowerCase();
+        filtered = filtered.filter(d => d.name?.toLowerCase().includes(s) || d.cpf?.includes(s));
+      }
+      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setTotal(filtered.length);
+      setDrivers(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
+    } catch (err) {
+      console.error("Error fetching drivers:", err);
       toast.error("Erro ao carregar motoristas");
-      console.error(error);
     }
-    setDrivers((data as Driver[]) || []);
-    setTotal(count ?? 0);
     setLoading(false);
   };
 

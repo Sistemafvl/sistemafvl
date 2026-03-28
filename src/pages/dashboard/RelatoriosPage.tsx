@@ -410,7 +410,7 @@ const RelatoriosPage = () => {
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [driversRes, pisoRaw, psRankData, rtoRankData] = await Promise.all([
-        (supabase.from("drivers" as any) as any).select("id, name").in("id", driverIds),
+        supabase.from("drivers_public").select("id, name").in("id", driverIds),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
@@ -478,7 +478,7 @@ const RelatoriosPage = () => {
 
     const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
     const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes, dnrRes, reativoRes] = await Promise.all([
-      (supabase.from("drivers" as any) as any).select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
+      supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
         (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
         rideIds
@@ -552,12 +552,12 @@ const RelatoriosPage = () => {
           });
         }
 
-        // Fallback: fetch directly from drivers table for missing ones (can be bypassed by RLS, but Edge Function is primary)
+        // Fallback: fetch from drivers_public for missing driver info (no pix_key here, edge function is primary for that)
         const missingPixIds = driverIdsToFetch.filter(id => !pixByDriver.has(id));
         if (missingPixIds.length > 0) {
-          const { data: directDrivers } = await (supabase
-            .from("drivers" as any) as any)
-            .select("id, pix_key, name, cpf, car_plate, car_model, car_color")
+          const { data: directDrivers } = await supabase
+            .from("drivers_public")
+            .select("id, name, cpf, car_plate, car_model, car_color")
             .in("id", missingPixIds);
           
           if (directDrivers) {
