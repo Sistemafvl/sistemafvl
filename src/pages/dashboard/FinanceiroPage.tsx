@@ -15,6 +15,7 @@ import { ptBR } from "date-fns/locale";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
 
 interface PayrollReport {
   id: string;
@@ -29,6 +30,7 @@ const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "cu
 
 const FinanceiroPage = () => {
   const { unitSession } = useAuthStore();
+  const navigate = useNavigate();
   const [reports, setReports] = useState<PayrollReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<PayrollReport | null>(null);
@@ -395,9 +397,22 @@ const FinanceiroPage = () => {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2 justify-between">
-        <h1 className="text-2xl font-bold italic flex items-center gap-2">
-          <DollarSign className="h-6 w-6 text-primary" /> Financeiro
-        </h1>
+        <div className="flex items-center gap-3">
+          {unitSession?.sessionType === "matriz" && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2 h-8 text-[10px] font-bold uppercase italic border-primary/20 hover:bg-primary/5"
+              onClick={() => navigate("/dashboard/matriz/financeiro")}
+            >
+              <ChevronLeft className="h-3.5 w-3.5" />
+              Visão Consolidada
+            </Button>
+          )}
+          <h1 className="text-2xl font-bold italic flex items-center gap-2">
+            <DollarSign className="h-6 w-6 text-primary" /> Financeiro
+          </h1>
+        </div>
       </div>
 
       {/* Summary cards */}

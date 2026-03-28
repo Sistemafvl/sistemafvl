@@ -94,7 +94,7 @@ const InsucessoBalloon = () => {
     setPrevCount(items.length);
   }, [items.length]);
 
-  if (items.length === 0 || dismissed) return null;
+  if (items.length === 0 || dismissed || unitSession?.sessionType === "matriz") return null;
 
   // Group by route
   const grouped = items.reduce<Record<string, InsucessoItem[]>>((acc, item) => {

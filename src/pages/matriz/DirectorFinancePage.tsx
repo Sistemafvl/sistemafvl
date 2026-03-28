@@ -50,11 +50,9 @@ const DirectorFinancePage = () => {
     if (!financialData) return [];
     return units.map(u => {
       const uRides = financialData.rides?.filter((r: any) => r.unit_id === u.id) || [];
-      const tbrVal = financialData.settings?.find((s: any) => s.unit_id === u.id)?.tbr_value || 0;
       return {
         ...u,
         rideCount: uRides.length,
-        estimatedTotal: uRides.length * Number(tbrVal), // Simplified for card view
       };
     });
   }, [units, financialData]);
@@ -108,20 +106,12 @@ const DirectorFinancePage = () => {
                 <CardTitle className="text-lg font-bold italic mt-2">{u.name}</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-4 mt-2">
                   <div className="space-y-1">
                     <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1">
-                      <Truck className="h-3 w-3" /> Viagens
+                      <Truck className="h-3 w-3" /> Viagens (Período)
                     </p>
                     <p className="text-xl font-black">{u.rideCount}</p>
                   </div>
-                  <div className="space-y-1 text-right">
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1 justify-end">
-                      <TrendingUp className="h-3 w-3" /> Estimativa
-                    </p>
-                    <p className="text-xl font-black text-emerald-600 font-mono">{formatBRL(u.estimatedTotal)}</p>
-                  </div>
-                </div>
                 <Button 
                   className="w-full mt-4 bg-primary/5 text-primary hover:bg-primary hover:text-white border-0 font-bold italic h-9"
                   onClick={() => handleDrillDown(u.id, u.name)}
@@ -146,28 +136,18 @@ const DirectorFinancePage = () => {
       </div>
 
       <div className="mt-8 flex flex-wrap gap-4">
-        <Card className="flex-1 min-w-[300px] border-l-4 border-l-amber-500">
-           <CardHeader className="p-4">
-             <CardTitle className="text-sm font-bold italic">Despesas por Unidade (Placeholder)</CardTitle>
-           </CardHeader>
-           <CardContent className="p-4 pt-0">
-             <div className="space-y-2">
-               {units.slice(0, 3).map(u => (
-                 <div key={u.id} className="flex justify-between items-center text-xs">
-                   <span>{u.name}</span>
-                   <span className="font-bold text-destructive">- {formatBRL(Math.random() * 5000)}</span>
-                 </div>
-               ))}
-             </div>
-           </CardContent>
-        </Card>
         <Card className="flex-1 min-w-[300px] border-l-4 border-l-emerald-500">
            <CardHeader className="p-4">
-             <CardTitle className="text-sm font-bold italic">Balanço do Dia</CardTitle>
+             <CardTitle className="text-sm font-bold italic">Balanço Consolidado (Total Unidades)</CardTitle>
            </CardHeader>
            <CardContent className="p-4 pt-0">
-             <p className="text-2xl font-black text-emerald-600 font-mono">{formatBRL(34590.22)}</p>
-             <p className="text-[10px] text-muted-foreground font-semibold mt-1 italic">Consolidado em {format(new Date(), "dd/MM/yyyy")}</p>
+             <p className="text-2xl font-black text-emerald-600 font-mono">
+               {formatBRL(unitStats.reduce((sum, u) => {
+                 const tbrVal = financialData?.settings?.find((s: any) => s.unit_id === u.id)?.tbr_value || 0;
+                 return sum + (u.rideCount * Number(tbrVal));
+               }, 0))}
+             </p>
+             <p className="text-[10px] text-muted-foreground font-semibold mt-1 italic">Soma das previsões baseadas em TBR de cada unidade</p>
            </CardContent>
         </Card>
       </div>
