@@ -23,6 +23,7 @@ interface PayrollReport {
   period_start: string;
   period_end: string;
   report_data: any[];
+  status?: "pending" | "approved" | "rejected" | "published";
   created_at: string;
 }
 
@@ -58,7 +59,7 @@ const FinanceiroPage = () => {
     if (!unitId) return;
     const { fetchAllRows } = await import("@/lib/supabase-helpers");
     const reportsData = await fetchAllRows<any>((from, to) =>
-      supabase.from("payroll_reports" as any).select("id, generated_by, period_start, period_end, report_data, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
+      supabase.from("payroll_reports" as any).select("id, generated_by, period_start, period_end, report_data, status, created_at").eq("unit_id", unitId).order("created_at", { ascending: false }).order("id").range(from, to)
     );
     setReports(reportsData);
 
@@ -189,6 +190,53 @@ const FinanceiroPage = () => {
     } finally {
         setZipLoading(false);
     }
+  };
+
+  const handleUpdateStatus = async (reportId: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from("payroll_reports" as any)
+        .update({ status: newStatus } as any)
+        .eq("id", reportId);
+      
+      if (error) throw error;
+      
+      toast({ title: "Sucesso", description: `Relatório ${newStatus === 'approved' ? 'aprovado' : newStatus === 'rejected' ? 'recusado' : 'publicado'} com sucesso!` });
+      loadReports();
+    } catch (err) {
+      console.error("Error updating report status:", err);
+      toast({ title: "Erro", description: "Não foi possível atualizar o status do relatório.", variant: "destructive" });
+    }
+  };
+
+  const handleExportCSV = (report: PayrollReport) => {
+    if (!report.report_data || !Array.isArray(report.report_data)) return;
+    
+    const headers = ["Motorista", "CPF", "TBRs", "Retornos", "DNR", "Bônus", "Reativo", "Valor Total"];
+    const rows = report.report_data.map(d => [
+      d.driver?.name || "",
+      d.driver?.cpf || "",
+      d.totalTbrs || 0,
+      d.totalReturns || 0,
+      d.dnrDiscount || 0,
+      d.bonus || 0,
+      d.reativoTotal || 0,
+      d.totalValue || 0
+    ]);
+
+    const csvContent = [
+      headers.join(","),
+      ...rows.map(r => r.map(v => typeof v === 'string' ? `"${v}"` : v).join(","))
+    ].join("\n");
+
+    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `relatorio_pagamento_${report.period_start}_a_${report.period_end}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleDeleteReport = async () => {
@@ -521,12 +569,66 @@ const FinanceiroPage = () => {
                 <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
                   <FileText className="h-4 w-4 text-primary" />
                 </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-bold text-sm truncate">
-                    {format(new Date(r.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(r.period_end + "T12:00:00"), "dd/MM/yyyy")}
-                  </p>
-                  <p className="text-xs text-muted-foreground truncate">Gerado por {r.generated_by}</p>
-                </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <p className="font-bold text-sm truncate">
+                        {format(new Date(r.period_start + "T12:00:00"), "dd/MM/yyyy")} — {format(new Date(r.period_end + "T12:00:00"), "dd/MM/yyyy")}
+                      </p>
+                      {(!r.status || r.status === "pending") ? (
+                        <Badge variant="outline" className="text-[10px] animate-pulse border-amber-500 text-amber-600 bg-amber-500/5 uppercase font-black">Pendente Aprovação</Badge>
+                      ) : r.status === "approved" ? (
+                        <Badge variant="outline" className="text-[10px] border-emerald-500 text-emerald-600 bg-emerald-500/5 uppercase font-black">Aprovado pelo Diretor</Badge>
+                      ) : r.status === "published" ? (
+                        <Badge variant="outline" className="text-[10px] border-blue-500 text-blue-600 bg-blue-500/5 uppercase font-black">Enviado aos Motoristas</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] border-destructive text-destructive bg-destructive/5 uppercase font-black">Recusado pelo Diretor</Badge>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate italic">Gerado por {r.generated_by}</p>
+                    
+                    {/* Approval actions for Director */}
+                    {unitSession?.sessionType === "matriz" && (!r.status || r.status === "pending") && (
+                      <div className="flex items-center gap-2 mt-3">
+                        <Button 
+                          size="sm" 
+                          className="h-8 text-[10px] font-bold uppercase bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(r.id, "approved"); }}
+                        >
+                          <CheckCircle className="h-3 w-3" /> Aprovar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="destructive" 
+                          className="h-8 text-[10px] font-bold uppercase gap-2"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(r.id, "rejected"); }}
+                        >
+                          <Trash2 className="h-3 w-3" /> Recusar
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="secondary" 
+                          className="h-8 text-[10px] font-bold uppercase gap-2"
+                          onClick={(e) => { e.stopPropagation(); handleExportCSV(r); }}
+                        >
+                          <Download className="h-3 w-3" /> Exportar Excel
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Manager actions: Publish after approval */}
+                    {unitSession?.sessionType !== "matriz" && r.status === "approved" && (
+                      <div className="mt-3">
+                        <Button 
+                          size="sm" 
+                          className="h-8 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-700 text-white gap-2"
+                          onClick={(e) => { e.stopPropagation(); handleUpdateStatus(r.id, "published"); }}
+                        >
+                          <Users className="h-3 w-3" /> Enviar aos Motoristas
+                        </Button>
+                        <p className="text-[9px] text-muted-foreground mt-1 italic italic">O diretor aprovou seu relatório! Agora você pode liberar a visão para os motoristas.</p>
+                      </div>
+                    )}
+                  </div>
                 <div className="text-right shrink-0 space-y-0.5">
                   <p className="font-bold text-sm text-primary">{formatCurrency(totalValue)}</p>
                   <p className="text-xs text-muted-foreground">{format(new Date(r.created_at), "dd/MM HH:mm")}</p>

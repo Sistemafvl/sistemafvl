@@ -139,6 +139,7 @@ const RelatoriosPage = () => {
         unit_id: unitId, generated_by: generatedBy,
         period_start: format(startDate, "yyyy-MM-dd"), period_end: format(endDate, "yyyy-MM-dd"),
         report_data: payrollData,
+        status: 'pending',
       } as any).select("id").single();
       if (savedReport && (savedReport as any).id) {
         const reportId = (savedReport as any).id;
@@ -172,6 +173,7 @@ const RelatoriosPage = () => {
         period_start: format(startDate, "yyyy-MM-dd"),
         period_end: format(endDate, "yyyy-MM-dd"),
         report_data: payrollData,
+        status: 'pending',
       } as any).select("id").single();
 
       // Mark DNRs as reported in this payroll

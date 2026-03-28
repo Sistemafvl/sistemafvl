@@ -1,8 +1,9 @@
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useAuthStore } from "@/stores/auth-store";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { DollarSign, Building2, ChevronRight, Wallet, Receipt, FileText, TrendingUp, Truck } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -46,16 +47,65 @@ const DirectorFinancePage = () => {
     enabled: units.length > 0,
   });
 
+  const [unitReports, setUnitReports] = useState<Record<string, any>>({});
+  const [loadingReports, setLoadingReports] = useState(true);
+
+  // Fetch only the latest payroll_reports for each unit
+  useEffect(() => {
+    if (!units.length) return;
+    const fetchLatestReports = async () => {
+      setLoadingReports(true);
+      const reportsMap: Record<string, any> = {};
+      
+      const fetchPromises = units.map(async (u) => {
+        try {
+          const { data } = await supabase
+            .from("payroll_reports" as any)
+            .select("id, period_start, period_end, report_data, status")
+            .eq("unit_id", u.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (data) reportsMap[u.id] = data;
+        } catch (err) {
+          console.error(`Error fetching report for unit ${u.id}:`, err);
+        }
+      });
+
+      await Promise.all(fetchPromises);
+      setUnitReports(reportsMap);
+      setLoadingReports(false);
+    };
+
+    fetchLatestReports();
+  }, [units]);
+
   const unitStats = useMemo(() => {
     if (!financialData) return [];
     return units.map(u => {
       const uRides = financialData.rides?.filter((r: any) => r.unit_id === u.id) || [];
+      const latestReport = unitReports[u.id];
+      
+      let reportTotal = 0;
+      let totalTbrsInReport = 0;
+      let mediaPacote = 0;
+
+      if (latestReport?.report_data) {
+        const drivers = latestReport.report_data as any[];
+        reportTotal = drivers.reduce((sum, d) => sum + (d.totalValue || 0), 0);
+        totalTbrsInReport = drivers.reduce((sum, d) => sum + (d.totalTbrs || 0), 0);
+        mediaPacote = totalTbrsInReport > 0 ? (reportTotal / totalTbrsInReport) : 0;
+      }
+
       return {
         ...u,
         rideCount: uRides.length,
+        latestReport,
+        reportTotal,
+        mediaPacote,
       };
     });
-  }, [units, financialData]);
+  }, [units, financialData, unitReports]);
 
   const handleDrillDown = (unitId: string, unitName: string) => {
     setActiveUnit(unitId, unitName);
@@ -105,13 +155,52 @@ const DirectorFinancePage = () => {
                 </div>
                 <CardTitle className="text-lg font-bold italic mt-2">{u.name}</CardTitle>
               </CardHeader>
-              <CardContent>
-                  <div className="space-y-1">
-                    <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1">
+              <CardContent className="space-y-4">
+                {u.latestReport ? (
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center bg-primary/5 p-2 rounded-md">
+                       <p className="text-[10px] text-muted-foreground font-bold uppercase">Período</p>
+                       <p className="text-xs font-black">
+                         {format(new Date(u.latestReport.period_start + "T12:00:00"), "dd/MM")} — {format(new Date(u.latestReport.period_end + "T12:00:00"), "dd/MM")}
+                       </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1">
+                          <DollarSign className="h-3 w-3" /> Valor Total
+                        </p>
+                        <p className="text-sm font-black text-primary">{formatBRL(u.reportTotal)}</p>
+                      </div>
+                      <div className="space-y-1 text-right">
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1 justify-end">
+                          <TrendingUp className="h-3 w-3" /> Média Pacote
+                        </p>
+                        <p className="text-sm font-black text-amber-600">{formatBRL(u.mediaPacote)}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-1">
+                      {(!u.latestReport.status || u.latestReport.status === "pending") ? (
+                        <Badge className="bg-amber-500 text-white border-0 text-[10px] font-bold uppercase animate-pulse">Relatório para Aprovação</Badge>
+                      ) : u.latestReport.status === "approved" ? (
+                        <Badge className="bg-emerald-500 text-white border-0 text-[10px] font-bold uppercase">Relatório Aprovado</Badge>
+                      ) : u.latestReport.status === "published" ? (
+                        <Badge className="bg-blue-600 text-white border-0 text-[10px] font-bold uppercase">Relatório Publicado</Badge>
+                      ) : (
+                        <Badge variant="destructive" className="border-0 text-[10px] font-bold uppercase">Relatório Recusado</Badge>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1 py-2">
+                    <p className="text-[10px] text-muted-foreground font-bold uppercase flex items-center gap-1 text-center justify-center">
                       <Truck className="h-3 w-3" /> Viagens (Período)
                     </p>
-                    <p className="text-xl font-black">{u.rideCount}</p>
+                    <p className="text-xl font-black text-center">{u.rideCount}</p>
+                    <p className="text-[9px] text-muted-foreground italic text-center">Nenhum relatório gerado recentemente</p>
                   </div>
+                )}
                 <Button 
                   className="w-full mt-4 bg-primary/5 text-primary hover:bg-primary hover:text-white border-0 font-bold italic h-9"
                   onClick={() => handleDrillDown(u.id, u.name)}
@@ -135,22 +224,6 @@ const DirectorFinancePage = () => {
         </Card>
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-4">
-        <Card className="flex-1 min-w-[300px] border-l-4 border-l-emerald-500">
-           <CardHeader className="p-4">
-             <CardTitle className="text-sm font-bold italic">Balanço Consolidado (Total Unidades)</CardTitle>
-           </CardHeader>
-           <CardContent className="p-4 pt-0">
-             <p className="text-2xl font-black text-emerald-600 font-mono">
-               {formatBRL(unitStats.reduce((sum, u) => {
-                 const tbrVal = financialData?.settings?.find((s: any) => s.unit_id === u.id)?.tbr_value || 0;
-                 return sum + (u.rideCount * Number(tbrVal));
-               }, 0))}
-             </p>
-             <p className="text-[10px] text-muted-foreground font-semibold mt-1 italic">Soma das previsões baseadas em TBR de cada unidade</p>
-           </CardContent>
-        </Card>
-      </div>
     </div>
   );
 };
