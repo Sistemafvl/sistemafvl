@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Building2, ChevronRight, Wallet, Receipt, FileText, TrendingUp, Truck } from "lucide-react";
+import { DollarSign, Building2, ChevronRight, Wallet, Receipt, FileText, TrendingUp, Truck, Loader2 } from "lucide-react";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
@@ -147,8 +147,11 @@ const DirectorFinancePage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading ? (
-          [1, 2, 3].map(i => <Skeleton key={i} className="h-48 w-full rounded-xl" />)
+        {loading || loadingReports ? (
+          <div className="col-span-full flex flex-col items-center justify-center py-24 animate-in fade-in">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <p className="text-sm font-bold italic text-muted-foreground animate-pulse">Consolidando dados financeiros...</p>
+          </div>
         ) : (
           unitStats.map(u => (
             <Card key={u.id} className="group relative overflow-hidden hover:shadow-xl transition-all duration-300 border-t-4 border-t-primary">

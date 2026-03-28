@@ -14,13 +14,9 @@ const ContractEditorPage = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
-  useEffect(() => {
-    fetchLatestContract();
-  }, []);
-
   const fetchLatestContract = async () => {
-    const { data, error } = await supabase
-      .from("contracts")
+    setFetching(true);
+    const { data } = await (supabase.from("contracts" as any) as any)
       .select("*")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -33,13 +29,46 @@ const ContractEditorPage = () => {
     setFetching(false);
   };
 
+  const DEFAULT_CONTRACT = `# CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
+
+**CONTRATANTE:** FAVELA LLOG Prestação de Serviços Logísticos Ltda.
+
+**CONTRATADO(A):** Motorista Parceiro(a) devidamente cadastrado no sistema digital da CONTRATANTE.
+
+---
+
+### 1. DO OBJETO
+O presente instrumento tem por objeto a prestação de serviços de transporte e entrega de mercadorias (última milha/last-mile) pelo CONTRATADO à CONTRATANTE, de forma eventual e sem exclusividade.
+
+### 2. DA AUTONOMIA E VÍNCULO EMPREGATÍCIO
+As partes declaram expressamente que este contrato não estabelece qualquer vínculo empregatício entre o CONTRATADO e a CONTRATANTE, nos termos da Lei nº 11.442/2007. O CONTRATADO é profissional autônomo, detendo plena liberdade na execução de suas atividades.
+
+### 3. DAS OBRIGAÇÕES DO CONTRATADO
+- Manter o veículo em perfeitas condições de uso, segurança e higiene.
+- Portar CNH válida e toda a documentação do veículo em dia.
+- Utilizar os equipamentos de proteção individual (EPIs) quando exigido.
+- Zelar pela integridade das mercadorias transportadas.
+- Efetuar a baixa das entregas em tempo real via sistema mobile.
+
+### 4. DA REMUNERAÇÃO
+A remuneração será composta por valor fixo por pacote entregue com sucesso, conforme tabela vigente no sistema. Os pagamentos serão realizados quinzenalmente após a conciliação dos relatórios gerados pelo sistema e aprovação da diretoria.
+
+### 5. DA RESPONSABILIDADE CIVIL
+O CONTRATADO responde civilmente por eventuais danos causados a terceiros ou às mercadorias durante a execução dos serviços, bem como por multas de trânsito decorrentes de sua conduta.
+
+### 6. DA RESCISÃO
+Este contrato poderá ser rescindido por qualquer uma das partes, a qualquer tempo, mediante aviso prévio de 24 (vinte e quatro) horas, sem ônus, exceto em casos de má conduta ou descumprimento grave das cláusulas aqui pactuadas.
+
+### 7. DO FORO
+Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato.`;
+
   const handleSave = async () => {
     if (!content.trim()) {
       toast({ title: "Erro", description: "O conteúdo do contrato não pode estar vazio.", variant: "destructive" });
       return;
     }
     setLoading(true);
-    const { error } = await supabase.from("contracts").insert([{ title, content }]);
+    const { error } = await (supabase.from("contracts" as any) as any).insert([{ title, content }]);
     setLoading(false);
 
     if (error) {
@@ -73,7 +102,7 @@ const ContractEditorPage = () => {
         <div className="lg:col-span-2">
           {preview ? (
             <Card className="min-h-[600px] border-2 border-primary/20 shadow-lg animate-in fade-in duration-300">
-              <CardContent className="p-8">
+              <CardContent className="p-8 markdown-content">
                 <div className="whitespace-pre-wrap font-sans leading-relaxed text-slate-800">
                   {content || "_Sem conteúdo_"}
                 </div>
@@ -124,9 +153,9 @@ const ContractEditorPage = () => {
                 variant="ghost" 
                 size="sm" 
                 className="w-full mt-4 text-[10px] uppercase font-black tracking-widest text-primary hover:bg-primary/10"
-                onClick={() => setContent("# NOVO CONTRATO\n\nDescreva os termos aqui...")}
+                onClick={() => setContent(DEFAULT_CONTRACT)}
               >
-                Limpar e Iniciar Novo
+                Carregar Modelo Padrão
               </Button>
             </CardContent>
           </Card>
