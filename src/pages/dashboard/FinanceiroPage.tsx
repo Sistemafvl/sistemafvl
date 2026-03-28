@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
+import XLSX from "xlsx-js-style";
+import { generatePayrollExcel } from "./reports/generatePayrollExcel";
 
 interface PayrollReport {
   id: string;
@@ -233,34 +235,26 @@ const FinanceiroPage = () => {
     }
   };
 
-  const handleExportCSV = (report: PayrollReport) => {
+  const handleExportExcel = (report: PayrollReport) => {
     if (!report.report_data || !Array.isArray(report.report_data)) return;
     
-    const headers = ["Motorista", "CPF", "TBRs", "Retornos", "DNR", "Bônus", "Reativo", "Valor Total"];
-    const rows = report.report_data.map(d => [
-      d.driver?.name || "",
-      d.driver?.cpf || "",
-      d.totalTbrs || 0,
-      d.totalReturns || 0,
-      d.dnrDiscount || 0,
-      d.bonus || 0,
-      d.reativoTotal || 0,
-      d.totalValue || 0
-    ]);
+    try {
+      const workbook = generatePayrollExcel(
+        report.report_data,
+        unitSession?.name || "Unidade",
+        new Date(report.period_start + "T12:00:00"),
+        new Date(report.period_end + "T12:00:00"),
+        report.generated_by
+      );
 
-    const csvContent = [
-      headers.join(","),
-      ...rows.map(r => r.map(v => typeof v === 'string' ? `"${v}"` : v).join(","))
-    ].join("\n");
-
-    const blob = new Blob(["\ufeff" + csvContent], { type: "text/csv;charset=utf-8;" });
-    const link = document.createElement("a");
-    const url = URL.createObjectURL(blob);
-    link.setAttribute("href", url);
-    link.setAttribute("download", `relatorio_pagamento_${report.period_start}_a_${report.period_end}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const fileName = `folha_pagamento_${report.period_start}_a_${report.period_end}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      
+      toast({ title: "Sucesso", description: "Relatório Excel gerado com sucesso!" });
+    } catch (err) {
+      console.error("Error generating Excel:", err);
+      toast({ title: "Erro", description: "Não foi possível gerar o arquivo Excel.", variant: "destructive" });
+    }
   };
 
   const handleDeleteReport = async () => {
@@ -632,7 +626,7 @@ const FinanceiroPage = () => {
                           size="sm" 
                           variant="secondary" 
                           className="h-8 text-[10px] font-bold uppercase gap-2"
-                          onClick={(e) => { e.stopPropagation(); handleExportCSV(r); }}
+                          onClick={(e) => { e.stopPropagation(); handleExportExcel(r); }}
                         >
                           <Download className="h-3 w-3" /> Exportar Excel
                         </Button>

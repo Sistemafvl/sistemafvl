@@ -21,14 +21,14 @@ const DriverInvoicePendingModal = () => {
 
     const checkPendingInvoices = async () => {
         try {
-            // Frequency limit: Once per day
-            const lastShown = localStorage.getItem("last_invoice_modal_shown");
-            const today = new Date().toISOString().slice(0, 10);
-            if (lastShown === today) return;
+            // Frequency limit: Removed per user request to show on every entry
+            // const lastShown = localStorage.getItem("last_invoice_modal_shown");
+            // const today = new Date().toISOString().slice(0, 10);
+            // if (lastShown === today) return;
 
             // Fetch reports for this unit
             const { data: reports, error: reportsError } = await supabase
-                .from("payroll_reports")
+                .from("payroll_reports" as any)
                 .select("id, report_data")
                 .eq("unit_id", unitSession!.id);
 
@@ -36,7 +36,7 @@ const DriverInvoicePendingModal = () => {
 
             // Fetch already uploaded invoices for this driver
             const { data: invoiceData, error: invoiceError } = await supabase
-                .from("driver_invoices")
+                .from("driver_invoices" as any)
                 .select("payroll_report_id")
                 .eq("driver_id", driverId!);
 
@@ -45,15 +45,18 @@ const DriverInvoicePendingModal = () => {
             const uploadedReportIds = new Set((invoiceData as any[])?.map(inv => inv.payroll_report_id));
 
             // Check if any report containing this driver is missing an invoice
+            let pendingCount = 0;
             const hasPending = (reports as any[]).some(r => {
                 const drivers = (r.report_data as any[]) || [];
                 const isMyReport = drivers.some((d: any) => d.driver?.id === driverId);
-                return isMyReport && !uploadedReportIds.has(r.id);
+                const isPending = isMyReport && !uploadedReportIds.has(r.id);
+                if (isPending) pendingCount++;
+                return isPending;
             });
 
             if (hasPending) {
                 setIsOpen(true);
-                localStorage.setItem("last_invoice_modal_shown", today);
+                // localStorage.setItem("last_invoice_modal_shown", today);
             }
         } catch (err) {
             console.error("Error checking pending invoices:", err);
@@ -73,9 +76,19 @@ const DriverInvoicePendingModal = () => {
                     <DialogDescription className="text-base font-semibold text-foreground px-4">
                         Atenção! Identificamos que você possui fechamentos pendentes sem Nota Fiscal anexada.
                     </DialogDescription>
-                    <p className="text-sm text-muted-foreground px-6 leading-relaxed">
-                        O envio da NF é <span className="font-bold text-destructive">OBRIGATÓRIO</span> e <span className="font-bold text-destructive">URGENTE</span> para que seu pagamento não seja retido pela unidade.
-                    </p>
+                    <div className="text-sm text-muted-foreground px-6 space-y-2 leading-relaxed">
+                        <p>
+                            O envio da NF é <span className="font-bold text-destructive">OBRIGATÓRIO</span> e <span className="font-bold text-destructive">URGENTE</span> para que seu pagamento não seja retido pela unidade.
+                        </p>
+                        <div className="bg-destructive/5 p-3 rounded-lg border border-destructive/20 mt-2">
+                            <p className="font-black text-destructive uppercase text-xs">
+                                ⚠️ Aviso Importante:
+                            </p>
+                            <p className="text-[11px] font-bold text-destructive/80">
+                                Caso você acumule 2 ou mais NFs pendentes para anexar, você será AUTOMATICAMENTE BLOQUEADO de realizar novos carregamentos.
+                            </p>
+                        </div>
+                    </div>
                 </DialogHeader>
                 <DialogFooter className="sm:justify-center mt-6 pb-4">
                     <Button 

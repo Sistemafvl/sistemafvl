@@ -1525,4 +1525,6 @@ function createIndicadoresSheet(wb: XLSX.WorkBook, data: DriverPayrollData[]) {
   }
 
   XLSX.utils.book_append_sheet(wb, ws, "Indicadores");
+  
+  return wb;
 }
