@@ -224,7 +224,12 @@ const FinanceiroPage = () => {
       loadReports();
     } catch (err) {
       console.error("Error updating report status:", err);
-      toast({ title: "Erro", description: "Não foi possível atualizar o status do relatório.", variant: "destructive" });
+      toast({ 
+        title: "Erro ao atualizar status", 
+        description: "Certifique-se de que a migração do banco de dados foi aplicada. (Coluna 'status' em 'payroll_reports')", 
+        variant: "destructive",
+        duration: 8000
+      });
     }
   };
 
