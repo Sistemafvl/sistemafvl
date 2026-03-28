@@ -239,18 +239,15 @@ const FinanceiroPage = () => {
     if (!report.report_data || !Array.isArray(report.report_data)) return;
     
     try {
-      const workbook = generatePayrollExcel(
+      generatePayrollExcel(
         report.report_data,
         unitSession?.name || "Unidade",
         new Date(report.period_start + "T12:00:00"),
         new Date(report.period_end + "T12:00:00"),
         report.generated_by
       );
-
-      const fileName = `folha_pagamento_${report.period_start}_a_${report.period_end}.xlsx`;
-      XLSX.writeFile(workbook, fileName);
       
-      toast({ title: "Sucesso", description: "Relatório Excel gerado com sucesso!" });
+      toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
     } catch (err) {
       console.error("Error generating Excel:", err);
       toast({ title: "Erro", description: "Não foi possível gerar o arquivo Excel.", variant: "destructive" });
