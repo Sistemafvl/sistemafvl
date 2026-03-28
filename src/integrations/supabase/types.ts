@@ -38,6 +38,27 @@ export type Database = {
         }
         Relationships: []
       }
+      contracts: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          title: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          title: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          title?: string
+        }
+        Relationships: []
+      }
       cycle_records: {
         Row: {
           abertura_galpao: string | null
@@ -663,6 +684,7 @@ export type Database = {
           period_end: string
           period_start: string
           report_data: Json
+          status: string | null
           unit_id: string
         }
         Insert: {
@@ -672,6 +694,7 @@ export type Database = {
           period_end: string
           period_start: string
           report_data: Json
+          status?: string | null
           unit_id: string
         }
         Update: {
@@ -681,6 +704,7 @@ export type Database = {
           period_end?: string
           period_start?: string
           report_data?: Json
+          status?: string | null
           unit_id?: string
         }
         Relationships: []
@@ -1788,6 +1812,42 @@ export type Database = {
       }
     }
     Functions: {
+      get_driver_registry: {
+        Args: { p_driver_ids: string[] }
+        Returns: {
+          active: boolean
+          address: string | null
+          avatar_url: string | null
+          bank_account: string | null
+          bank_agency: string | null
+          bank_name: string | null
+          bio: string | null
+          car_color: string | null
+          car_model: string
+          car_plate: string
+          cep: string | null
+          city: string | null
+          cpf: string
+          created_at: string
+          email: string | null
+          house_number: string | null
+          id: string
+          name: string
+          neighborhood: string | null
+          password: string
+          pix_key: string | null
+          pix_key_name: string | null
+          pix_key_type: string | null
+          state: string | null
+          whatsapp: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "drivers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_ride_tbr_counts: {
         Args: { p_ride_ids: string[] }
         Returns: {

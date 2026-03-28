@@ -35,7 +35,7 @@ const DriverContractPage = () => {
       setContract(latestContract);
       
       // Check if driver already accepted this version
-      const { data: existingAcceptance } = await supabase
+      const { data: existingAcceptance } = await (supabase as any)
         .from("driver_contracts")
         .select("*")
         .eq("driver_id", driverId)
@@ -49,7 +49,7 @@ const DriverContractPage = () => {
 
   const handleAccept = async () => {
     setSubmitting(true);
-    const { error } = await supabase.from("driver_contracts").insert([
+    const { error } = await (supabase as any).from("driver_contracts").insert([
       {
         driver_id: driverId,
         contract_id: contract.id,

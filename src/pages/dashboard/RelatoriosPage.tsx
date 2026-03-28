@@ -552,7 +552,7 @@ const RelatoriosPage = () => {
           });
         }
 
-        // Fallback: fetch directly from drivers table for missing ones
+        // Fallback: fetch directly from drivers table for missing ones (can be bypassed by RLS, but Edge Function is primary)
         const missingPixIds = driverIdsToFetch.filter(id => !pixByDriver.has(id));
         if (missingPixIds.length > 0) {
           const { data: directDrivers } = await (supabase
