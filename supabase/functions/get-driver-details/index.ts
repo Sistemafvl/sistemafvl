@@ -15,7 +15,7 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { driver_id, driver_ids, include_password, self_access, bypass_key } = await req.json();
+    const { driver_id, driver_ids, include_password, self_access, bypass_key, list_all } = await req.json();
 
     // Verify bypass key (Opt-in security)
     const internalBypassKey = Deno.env.get("INTERNAL_BYPASS_KEY");
@@ -23,16 +23,23 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Unauthorized bypass attempt" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    if (!driver_id && (!driver_ids || !Array.isArray(driver_ids))) {
-      return new Response(JSON.stringify({ error: "Missing driver_id or driver_ids" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    if (!driver_id && !list_all && (!driver_ids || !Array.isArray(driver_ids))) {
+      return new Response(JSON.stringify({ error: "Missing driver_id, driver_ids, or list_all" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
 
     // 1. Check for bypass access (Dashboard/Internal)
     if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {
+      let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio";
+      if (list_all) {
+        selectFields += ", password";
+        const { data, error } = await supabase.from("drivers").select(selectFields).order("created_at", { ascending: false });
+        if (error) throw error;
+        return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
       const q = supabase.from("drivers").select(selectFields);
-      const { data, error } = driver_ids ? await q.in("id", driver_ids) : await q.eq("id", driver_id).maybeSingle();
+      const { data, error } = driver_ids && driver_ids.length > 0 ? await q.in("id", driver_ids) : driver_id ? await q.eq("id", driver_id).maybeSingle() : await q;
       if (error) throw error;
       return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
