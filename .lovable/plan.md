@@ -1,36 +1,24 @@
 
 
-## Plano: Criar tabela `driver_contracts` e painel de aceites para diretores
+## Plano: Corrigir ID do motorista no aceite de contrato
 
-### Problema
-A tabela `driver_contracts` não existe no banco de dados, causando o erro ao motorista tentar aceitar o contrato. Além disso, o diretor não tem visibilidade sobre quais motoristas aceitaram ou não.
-
-### 1. Migração SQL — criar tabela `driver_contracts`
-
-```sql
-CREATE TABLE public.driver_contracts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  driver_id UUID NOT NULL,
-  contract_id UUID NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
-  accepted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (driver_id, contract_id)
-);
-
-ALTER TABLE public.driver_contracts ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Anyone can read driver_contracts" ON public.driver_contracts FOR SELECT USING (true);
-CREATE POLICY "Anyone can insert driver_contracts" ON public.driver_contracts FOR INSERT WITH CHECK (true);
+### Problema raiz
+Em `DriverContractPage.tsx`, linha 12:
+```typescript
+const driverId = unitSession?.id; // ← Isto é o ID da UNIDADE, não do motorista!
 ```
 
-### 2. ContractEditorPage.tsx — adicionar painel de aceites
+Quando o motorista aceita o contrato, o registro em `driver_contracts` é salvo com o `unit_id` no campo `driver_id`. Na visão do diretor, `fetchAcceptances` busca motoristas reais via `driver_rides.driver_id` — os IDs nunca batem.
 
-Abaixo do editor de contrato, adicionar uma seção "Aceites dos Motoristas" que:
-- Busca todos os motoristas vinculados às unidades do domínio do diretor (via `unit_predefined_drivers` ou `driver_rides`)
-- Cruza com `driver_contracts` para o contrato atual
-- Exibe lista com nome do motorista, status (aceito/pendente) e data do aceite
-- Contadores: X aceitos / Y pendentes
+### Correção
+Uma única linha em `src/pages/driver/DriverContractPage.tsx`:
+```typescript
+const driverId = unitSession?.user_profile_id; // ← ID correto do motorista
+```
 
-### 3. Arquivos alterados
-- **Nova migração SQL** — criar tabela `driver_contracts`
-- `src/pages/matriz/ContractEditorPage.tsx` — adicionar seção de aceites dos motoristas
+### Arquivo alterado
+- `src/pages/driver/DriverContractPage.tsx` — corrigir `driverId` para usar `user_profile_id`
+
+### Observação
+Registros de aceite existentes (salvos com unit_id no campo driver_id) estão incorretos. Após a correção, o motorista precisará aceitar novamente para gerar o registro correto.
 
