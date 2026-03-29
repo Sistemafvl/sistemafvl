@@ -1,49 +1,38 @@
 
-Objetivo: corrigir de forma definitiva o erro no cadastro de motorista no site publicado, sem quebrar fluxo existente.
 
-Diagnóstico confirmado
-- O erro atual no publicado é de RLS no banco: `new row violates row-level security policy for table "drivers"`.
-- O frontend já está com a correção de UUID local e sem `.select()` no insert.
-- Portanto, o problema está na camada de políticas/permissões do ambiente publicado (diferença entre ambientes e/ou role efetiva diferente no momento do insert).
+## Diagnóstico
 
-Plano de implementação (seguro e sem impacto de operação)
+A exclusão falha silenciosamente porque o frontend usa o cliente Supabase com a chave `anon`, mas a tabela `drivers` só permite DELETE para o role `authenticated`. O motorista some da lista temporariamente (estado local) mas reaparece ao recarregar.
 
-1) Normalizar políticas de INSERT da tabela `drivers` (idempotente)
-- Criar uma migration cirúrgica para:
-  - Remover policies de INSERT conflitantes/antigas em `public.drivers`.
-  - Recriar policy explícita para `anon` com `WITH CHECK (true)`.
-  - Criar também policy de INSERT para `authenticated` com `WITH CHECK (true)` (fallback seguro caso a sessão venha autenticada no runtime).
-- Não abrir SELECT de `drivers` para `anon` (mantém blindagem de dados sensíveis).
+Além disso, excluir apenas da tabela `drivers` deixaria dados órfãos em tabelas relacionadas (`driver_documents`, `driver_rides`, `ride_tbrs`, `driver_invoices`, etc.).
 
-2) Garantir privilégio de tabela para INSERT (hardening compatível)
-- Na mesma migration, garantir `GRANT INSERT ON public.drivers TO anon, authenticated`.
-- Isso evita efeito colateral de hardening anterior que tenha revogado escrita em produção.
+## Plano
 
-3) Blindagem sem quebrar UX no frontend
-- Manter o fluxo atual do `DriverRegistrationModal` (sem mudanças de comportamento).
-- Apenas reforçar tratamento de erro para identificar RLS explicitamente no toast/log técnico interno (sem expor detalhes sensíveis para usuário final).
+### 1. Adicionar ação `delete` na Edge Function `get-driver-details`
+Usar o service role key (que já está disponível na função) para deletar permanentemente o motorista e todos os dados relacionados:
+- `ride_tbrs` (via rides do motorista)
+- `driver_rides`
+- `driver_documents`
+- `driver_invoices`
+- `driver_bonus`
+- `driver_fixed_values`
+- `driver_custom_values`
+- `driver_minimum_packages`
+- `queue_entries`
+- `rescue_entries`
+- `unit_predefined_drivers`
+- `unit_reviews`
+- `ride_disputes`
+- `dnr_entries` (por driver_id)
+- `reativo_entries` (por driver_id)
+- `drivers` (registro principal)
 
-4) Publicação e sincronização
-- Publicar para levar schema + código para o ambiente ao vivo.
-- Fazer atualização forçada de cache/sincronização no publicado para evitar bundle antigo.
+A função receberá `{ action: "delete", driver_id: "uuid" }` e executará todas as deleções em cascata.
 
-5) Validação E2E obrigatória (sem regressão)
-- Testar no publicado com CPF novo:
-  - Cadastro simples sem documentos.
-  - Cadastro com 1 documento.
-- Confirmar que:
-  - toast de sucesso aparece,
-  - motorista entra na listagem normal,
-  - login do motorista funciona,
-  - login gerente e exibição de nomes continuam intactos.
+### 2. Atualizar `AdminDriversPage.tsx`
+Substituir o `supabase.from("drivers").delete()` por uma chamada `fetch` à Edge Function com `action: "delete"`, igual ao padrão já usado para listar motoristas.
 
-Detalhes técnicos
-- Arquivos alvo:
-  - `supabase/migrations/<nova_migration_fix_drivers_insert_live.sql>`
-  - `src/components/DriverRegistrationModal.tsx` (somente melhoria de mapeamento de erro, opcional e não disruptiva)
-- Sem alteração de fluxo operacional, layout ou regras de negócio.
-- Foco em correção de permissão/RLS entre ambientes, preservando a blindagem de dados já implantada.
+**Arquivos alterados:**
+- `supabase/functions/get-driver-details/index.ts` — adicionar handler de delete com cascata
+- `src/pages/admin/AdminDriversPage.tsx` — chamar edge function para deletar
 
-Critério de sucesso
-- Zero erro de RLS no insert de `drivers` no ambiente publicado.
-- Fluxos existentes mantidos (cadastro, login e visualização operacional).
