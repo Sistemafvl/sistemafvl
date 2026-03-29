@@ -2,37 +2,31 @@
 
 ## Diagnóstico
 
-A exclusão falha silenciosamente porque o frontend usa o cliente Supabase com a chave `anon`, mas a tabela `drivers` só permite DELETE para o role `authenticated`. O motorista some da lista temporariamente (estado local) mas reaparece ao recarregar.
+### Problema 1: Página de Contrato do Diretor fica carregando infinitamente
+A função `fetchLatestContract` é definida na linha 17, mas **nunca é chamada** — não existe um `useEffect` para executá-la. O estado `fetching` começa como `true` e nunca muda, travando na tela de loading.
 
-Além disso, excluir apenas da tabela `drivers` deixaria dados órfãos em tabelas relacionadas (`driver_documents`, `driver_rides`, `ride_tbrs`, `driver_invoices`, etc.).
+### Problema 2: Motorista excluída ainda consegue logar
+A Edge Function `authenticate-unit` (linha 160-165) busca o motorista na tabela `drivers` com `eq("active", true)`. A exclusão via `get-driver-details` deleta o registro da tabela `drivers`. Porém, se a motorista Vitória ainda consegue logar, é possível que:
+- O registro não foi de fato deletado (a Edge Function pode ter falhado silenciosamente em alguma tabela dependente com FK)
+- Ou o `drivers_public` view ainda retorna dados antigos
+
+A solução mais robusta é adicionar uma verificação explícita na `authenticate-unit`: se o driver não existir na tabela `drivers`, negar login.
 
 ## Plano
 
-### 1. Adicionar ação `delete` na Edge Function `get-driver-details`
-Usar o service role key (que já está disponível na função) para deletar permanentemente o motorista e todos os dados relacionados:
-- `ride_tbrs` (via rides do motorista)
-- `driver_rides`
-- `driver_documents`
-- `driver_invoices`
-- `driver_bonus`
-- `driver_fixed_values`
-- `driver_custom_values`
-- `driver_minimum_packages`
-- `queue_entries`
-- `rescue_entries`
-- `unit_predefined_drivers`
-- `unit_reviews`
-- `ride_disputes`
-- `dnr_entries` (por driver_id)
-- `reativo_entries` (por driver_id)
-- `drivers` (registro principal)
+### 1. Corrigir `ContractEditorPage.tsx` — adicionar `useEffect`
+Adicionar o `useEffect` que chama `fetchLatestContract()` ao montar o componente. Sem isso, a página nunca sai do estado de loading.
 
-A função receberá `{ action: "delete", driver_id: "uuid" }` e executará todas as deleções em cascata.
+```typescript
+useEffect(() => {
+  fetchLatestContract();
+}, []);
+```
 
-### 2. Atualizar `AdminDriversPage.tsx`
-Substituir o `supabase.from("drivers").delete()` por uma chamada `fetch` à Edge Function com `action: "delete"`, igual ao padrão já usado para listar motoristas.
+### 2. Reforçar bloqueio de login para motoristas excluídos
+Na Edge Function `authenticate-unit`, o trecho que busca o motorista (linha 160-165) já filtra por `active: true`. Mas para garantir que motoristas deletados não consigam logar mesmo por cache ou race condition, vamos verificar os logs e, se necessário, redeployar a função para garantir que a versão mais recente está ativa.
 
 **Arquivos alterados:**
-- `supabase/functions/get-driver-details/index.ts` — adicionar handler de delete com cascata
-- `src/pages/admin/AdminDriversPage.tsx` — chamar edge function para deletar
+- `src/pages/matriz/ContractEditorPage.tsx` — adicionar `useEffect` para chamar `fetchLatestContract`
+- `supabase/functions/authenticate-unit/index.ts` — redeploy para garantir versão atualizada (o código já bloqueia drivers deletados, pois o `SELECT` não encontrará o registro)
 
