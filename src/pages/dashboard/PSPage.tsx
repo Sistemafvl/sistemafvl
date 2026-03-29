@@ -359,18 +359,25 @@ const PSPage = () => {
   };
 
   // Camera functions
-  const startCamera = async () => {
+  const [cameraActive, setCameraActive] = useState(false);
+
+  const startCamera = async (slotIndex: number) => {
+    setActivePhotoSlot(slotIndex);
     setCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      // Wait for video element to mount
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 100);
     } catch {
       toast({ title: "Erro ao acessar câmera", description: "Permita o acesso à câmera.", variant: "destructive" });
       setCameraActive(false);
+      setActivePhotoSlot(null);
     }
   };
 
@@ -383,7 +390,7 @@ const PSPage = () => {
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || activePhotoSlot === null) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
@@ -392,32 +399,38 @@ const PSPage = () => {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
     canvas.toBlob((blob) => {
-      if (blob) {
-        setCapturedPhoto(blob);
-        setPhotoPreview(URL.createObjectURL(blob));
+      if (blob && activePhotoSlot !== null) {
+        setCapturedPhotos(prev => { const n = [...prev]; n[activePhotoSlot] = blob; return n; });
+        setPhotoPreviews(prev => { const n = [...prev]; n[activePhotoSlot] = URL.createObjectURL(blob); return n; });
         stopCamera();
+        setActivePhotoSlot(null);
       }
     }, "image/jpeg", 0.8);
   };
 
-  const retakePhoto = () => {
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
-    startCamera();
+  const clearPhotoSlot = (slotIndex: number) => {
+    setCapturedPhotos(prev => { const n = [...prev]; n[slotIndex] = null; return n; });
+    setPhotoPreviews(prev => { const n = [...prev]; n[slotIndex] = null; return n; });
   };
 
-  const uploadPhoto = async (): Promise<string | null> => {
-    if (!capturedPhoto) return null;
-    setUploadingPhoto(true);
+  const uploadSinglePhoto = async (blob: Blob): Promise<string | null> => {
     const fileName = `ps_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const { error } = await supabase.storage.from("ps-photos").upload(fileName, capturedPhoto, { contentType: "image/jpeg" });
-    setUploadingPhoto(false);
-    if (error) {
-      toast({ title: "Erro no upload", description: "Não foi possível enviar a foto.", variant: "destructive" });
-      return null;
-    }
+    const { error } = await supabase.storage.from("ps-photos").upload(fileName, blob, { contentType: "image/jpeg" });
+    if (error) return null;
     const { data: urlData } = supabase.storage.from("ps-photos").getPublicUrl(fileName);
     return urlData.publicUrl;
+  };
+
+  const uploadAllPhotos = async (): Promise<(string | null)[]> => {
+    setUploadingPhoto(true);
+    const results: (string | null)[] = [null, null, null];
+    for (let i = 0; i < 3; i++) {
+      if (capturedPhotos[i]) {
+        results[i] = await uploadSinglePhoto(capturedPhotos[i]!);
+      }
+    }
+    setUploadingPhoto(false);
+    return results;
   };
 
   const handleAddReason = async () => {
