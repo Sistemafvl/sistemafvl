@@ -55,6 +55,8 @@ interface PsEntry {
   description: string;
   reason: string | null;
   photo_url: string | null;
+  photo_url_2: string | null;
+  photo_url_3: string | null;
   status: string;
   created_at: string;
   conferente_id: string | null;
@@ -128,10 +130,10 @@ const PSPage = () => {
   const [showNewReason, setShowNewReason] = useState(false);
   const [newReasonInput, setNewReasonInput] = useState("");
 
-  // Photo capture
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<Blob | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  // Photo capture — 3 slots
+  const [activePhotoSlot, setActivePhotoSlot] = useState<number | null>(null);
+  const [capturedPhotos, setCapturedPhotos] = useState<(Blob | null)[]>([null, null, null]);
+  const [photoPreviews, setPhotoPreviews] = useState<(string | null)[]>([null, null, null]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
@@ -171,7 +173,7 @@ const PSPage = () => {
     const data = await fetchAllRows<any>((from, to) => {
       let query = supabase
         .from("ps_entries")
-        .select("id, tbr_code, driver_name, route, description, reason, photo_url, status, created_at, conferente_id, is_seller, observations")
+        .select("id, tbr_code, driver_name, route, description, reason, photo_url, photo_url_2, photo_url_3, status, created_at, conferente_id, is_seller, observations")
         .eq("unit_id", unitSession.id)
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString())
@@ -197,6 +199,8 @@ const PSPage = () => {
         ...e,
         reason: e.reason ?? null,
         photo_url: e.photo_url ?? null,
+        photo_url_2: e.photo_url_2 ?? null,
+        photo_url_3: e.photo_url_3 ?? null,
         conferente_name: e.conferente_id ? confMap[e.conferente_id] : undefined,
         is_seller: (e as any).is_seller ?? false,
         observations: (e as any).observations ?? null,
@@ -331,8 +335,9 @@ const PSPage = () => {
     setIncludeMode(true);
     setSelectedReason("");
     setSelectedConferente("");
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
+    setCapturedPhotos([null, null, null]);
+    setPhotoPreviews([null, null, null]);
+    setActivePhotoSlot(null);
     setIsSeller(false);
     setObservations("");
     setEditingEntry(null);
@@ -345,26 +350,34 @@ const PSPage = () => {
     setSelectedConferente(entry.conferente_id ?? "");
     setIsSeller(entry.is_seller ?? false);
     setObservations(entry.observations ?? "");
-    setPhotoPreview(entry.photo_url ?? null);
-    setCapturedPhoto(null);
+    setPhotoPreviews([entry.photo_url ?? null, entry.photo_url_2 ?? null, entry.photo_url_3 ?? null]);
+    setCapturedPhotos([null, null, null]);
+    setActivePhotoSlot(null);
     setHistory(null);
     setIncludeMode(true);
     setHistoryModalOpen(true);
   };
 
   // Camera functions
-  const startCamera = async () => {
+  const [cameraActive, setCameraActive] = useState(false);
+
+  const startCamera = async (slotIndex: number) => {
+    setActivePhotoSlot(slotIndex);
     setCameraActive(true);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.play();
-      }
+      // Wait for video element to mount
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+        }
+      }, 100);
     } catch {
       toast({ title: "Erro ao acessar câmera", description: "Permita o acesso à câmera.", variant: "destructive" });
       setCameraActive(false);
+      setActivePhotoSlot(null);
     }
   };
 
@@ -377,7 +390,7 @@ const PSPage = () => {
   };
 
   const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!videoRef.current || !canvasRef.current || activePhotoSlot === null) return;
     const video = videoRef.current;
     const canvas = canvasRef.current;
     canvas.width = video.videoWidth;
@@ -386,32 +399,38 @@ const PSPage = () => {
     if (!ctx) return;
     ctx.drawImage(video, 0, 0);
     canvas.toBlob((blob) => {
-      if (blob) {
-        setCapturedPhoto(blob);
-        setPhotoPreview(URL.createObjectURL(blob));
+      if (blob && activePhotoSlot !== null) {
+        setCapturedPhotos(prev => { const n = [...prev]; n[activePhotoSlot] = blob; return n; });
+        setPhotoPreviews(prev => { const n = [...prev]; n[activePhotoSlot] = URL.createObjectURL(blob); return n; });
         stopCamera();
+        setActivePhotoSlot(null);
       }
     }, "image/jpeg", 0.8);
   };
 
-  const retakePhoto = () => {
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
-    startCamera();
+  const clearPhotoSlot = (slotIndex: number) => {
+    setCapturedPhotos(prev => { const n = [...prev]; n[slotIndex] = null; return n; });
+    setPhotoPreviews(prev => { const n = [...prev]; n[slotIndex] = null; return n; });
   };
 
-  const uploadPhoto = async (): Promise<string | null> => {
-    if (!capturedPhoto) return null;
-    setUploadingPhoto(true);
+  const uploadSinglePhoto = async (blob: Blob): Promise<string | null> => {
     const fileName = `ps_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.jpg`;
-    const { error } = await supabase.storage.from("ps-photos").upload(fileName, capturedPhoto, { contentType: "image/jpeg" });
-    setUploadingPhoto(false);
-    if (error) {
-      toast({ title: "Erro no upload", description: "Não foi possível enviar a foto.", variant: "destructive" });
-      return null;
-    }
+    const { error } = await supabase.storage.from("ps-photos").upload(fileName, blob, { contentType: "image/jpeg" });
+    if (error) return null;
     const { data: urlData } = supabase.storage.from("ps-photos").getPublicUrl(fileName);
     return urlData.publicUrl;
+  };
+
+  const uploadAllPhotos = async (): Promise<(string | null)[]> => {
+    setUploadingPhoto(true);
+    const results: (string | null)[] = [null, null, null];
+    for (let i = 0; i < 3; i++) {
+      if (capturedPhotos[i]) {
+        results[i] = await uploadSinglePhoto(capturedPhotos[i]!);
+      }
+    }
+    setUploadingPhoto(false);
+    return results;
   };
 
   const handleAddReason = async () => {
@@ -438,9 +457,16 @@ const PSPage = () => {
 
     // Edit mode — update existing entry
     if (editingEntry) {
-      let photoUrl: string | null = editingEntry.photo_url ?? null;
-      if (capturedPhoto) {
-        photoUrl = await uploadPhoto();
+      let photoUrls: (string | null)[] = [
+        editingEntry.photo_url ?? null,
+        editingEntry.photo_url_2 ?? null,
+        editingEntry.photo_url_3 ?? null,
+      ];
+      if (capturedPhotos.some(p => p !== null)) {
+        const uploaded = await uploadAllPhotos();
+        for (let i = 0; i < 3; i++) {
+          if (uploaded[i]) photoUrls[i] = uploaded[i];
+        }
       }
 
       const { error } = await supabase.from("ps_entries").update({
@@ -449,7 +475,9 @@ const PSPage = () => {
         conferente_id: selectedConferente || null,
         is_seller: isSeller,
         observations: observations || null,
-        photo_url: photoUrl,
+        photo_url: photoUrls[0],
+        photo_url_2: photoUrls[1],
+        photo_url_3: photoUrls[2],
       } as any).eq("id", editingEntry.id);
       setSaving(false);
 
@@ -478,9 +506,9 @@ const PSPage = () => {
       return;
     }
 
-    let photoUrl: string | null = null;
-    if (capturedPhoto) {
-      photoUrl = await uploadPhoto();
+    let photoUrls: (string | null)[] = [null, null, null];
+    if (capturedPhotos.some(p => p !== null)) {
+      photoUrls = await uploadAllPhotos();
     }
 
     const entry = {
@@ -490,7 +518,9 @@ const PSPage = () => {
       conferente_id: selectedConferente || null,
       description: selectedReason,
       reason: selectedReason,
-      photo_url: photoUrl,
+      photo_url: photoUrls[0],
+      photo_url_2: photoUrls[1],
+      photo_url_3: photoUrls[2],
       driver_name: history?.driver_name ?? null,
       route: history?.route ?? null,
       is_seller: isSeller,
@@ -571,8 +601,9 @@ const PSPage = () => {
     setHistoryModalOpen(false);
     setIncludeMode(false);
     setHistory(null);
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
+    setCapturedPhotos([null, null, null]);
+    setPhotoPreviews([null, null, null]);
+    setActivePhotoSlot(null);
     setIsSeller(false);
     setObservations("");
     setEditingEntry(null);
@@ -766,7 +797,7 @@ const PSPage = () => {
     let entryIndex = 0;
     for (const e of entries) {
       entryIndex++;
-      const needsSpace = e.photo_url ? 90 : 30;
+      const needsSpace = [e.photo_url, (e as any).photo_url_2, (e as any).photo_url_3].filter(Boolean).length > 0 ? 90 : 30;
       if (y + needsSpace > pageH - 20) {
         // Footer before new page
         addFooter(doc, pageW, pageH);
@@ -829,19 +860,27 @@ const PSPage = () => {
       }
       y += 3;
 
-      if (e.photo_url) {
-        const imgData = await loadImageAsBase64(e.photo_url);
-        if (imgData) {
-          if (y + 65 > pageH - 20) {
-            addFooter(doc, pageW, pageH);
-            doc.addPage();
-            y = 15;
-          }
-          doc.setDrawColor(200, 200, 200);
-          doc.roundedRect(margin + 4, y, 82, 62, 1, 1, "S");
-          doc.addImage(imgData, "JPEG", margin + 5, y + 1, 80, 60);
-          y += 64;
+      // Photos — up to 3
+      const photoUrls = [e.photo_url, (e as any).photo_url_2, (e as any).photo_url_3].filter(Boolean) as string[];
+      if (photoUrls.length > 0) {
+        const imgWidth = photoUrls.length === 1 ? 80 : photoUrls.length === 2 ? 55 : 38;
+        const imgHeight = Math.round(imgWidth * 0.75);
+        if (y + imgHeight + 4 > pageH - 20) {
+          addFooter(doc, pageW, pageH);
+          doc.addPage();
+          y = 15;
         }
+        let imgX = margin + 4;
+        for (const url of photoUrls) {
+          const imgData = await loadImageAsBase64(url);
+          if (imgData) {
+            doc.setDrawColor(200, 200, 200);
+            doc.roundedRect(imgX, y, imgWidth + 2, imgHeight + 2, 1, 1, "S");
+            doc.addImage(imgData, "JPEG", imgX + 1, y + 1, imgWidth, imgHeight);
+            imgX += imgWidth + 4;
+          }
+        }
+        y += imgHeight + 4;
       }
 
       // Separator
@@ -1146,10 +1185,27 @@ const PSPage = () => {
                                 <Pencil className="h-3 w-3" />
                               </Button>
                             )}
-                            {e.photo_url && (
-                              <Button variant="ghost" size="sm" onClick={() => window.open(e.photo_url!, "_blank")}>
-                                <Camera className="h-3 w-3" />
-                              </Button>
+                            {(e.photo_url || e.photo_url_2 || e.photo_url_3) && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="ghost" size="sm" title="Ver fotos">
+                                    <Camera className="h-3 w-3" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2" align="end">
+                                  <div className="flex gap-2">
+                                    {[e.photo_url, e.photo_url_2, e.photo_url_3].filter(Boolean).map((url, i) => (
+                                      <img
+                                        key={i}
+                                        src={url!}
+                                        alt={`Foto ${i + 1}`}
+                                        className="h-24 w-24 object-cover rounded-md border cursor-pointer hover:opacity-80"
+                                        onClick={() => window.open(url!, "_blank")}
+                                      />
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             )}
                             {e.status === "open" && (
                               <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
@@ -1250,30 +1306,47 @@ const PSPage = () => {
                 </Select>
               </div>
 
-              {/* Photo capture */}
+              {/* Photo capture — 3 slots */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold">Foto</label>
-                {!cameraActive && !photoPreview && (
-                  <Button variant="outline" size="sm" className="w-full gap-2" onClick={startCamera}>
-                    <Camera className="h-4 w-4" /> Tirar Foto
-                  </Button>
-                )}
+                <label className="text-xs font-semibold">Fotos (até 3)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((slotIndex) => (
+                    <div key={slotIndex} className="space-y-1">
+                      {photoPreviews[slotIndex] ? (
+                        <div className="relative">
+                          <img src={photoPreviews[slotIndex]!} alt={`Foto ${slotIndex + 1}`} className="w-full rounded-md border aspect-square object-cover" />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-1 right-1 h-5 w-5"
+                            onClick={() => clearPhotoSlot(slotIndex)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full aspect-square flex flex-col gap-1"
+                          onClick={() => startCamera(slotIndex)}
+                          disabled={cameraActive}
+                        >
+                          <Camera className="h-4 w-4" />
+                          <span className="text-[10px]">Foto {slotIndex + 1}</span>
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 {cameraActive && (
                   <div className="space-y-2">
                     <video ref={videoRef} className="w-full rounded-md border" autoPlay playsInline muted />
                     <canvas ref={canvasRef} className="hidden" />
                     <div className="flex gap-2">
                       <Button size="sm" className="flex-1" onClick={capturePhoto}>Capturar</Button>
-                      <Button variant="outline" size="sm" onClick={stopCamera}>Cancelar</Button>
+                      <Button variant="outline" size="sm" onClick={() => { stopCamera(); setActivePhotoSlot(null); }}>Cancelar</Button>
                     </div>
-                  </div>
-                )}
-                {photoPreview && (
-                  <div className="space-y-2">
-                    <img src={photoPreview} alt="Preview" className="w-full rounded-md border max-h-48 object-cover" />
-                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={retakePhoto}>
-                      <RefreshCw className="h-3 w-3" /> Refazer
-                    </Button>
                   </div>
                 )}
               </div>

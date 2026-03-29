@@ -823,6 +823,8 @@ export type Database = {
           is_seller: boolean
           observations: string | null
           photo_url: string | null
+          photo_url_2: string | null
+          photo_url_3: string | null
           reason: string | null
           reversa_at: string | null
           reversa_batch_id: string | null
@@ -842,6 +844,8 @@ export type Database = {
           is_seller?: boolean
           observations?: string | null
           photo_url?: string | null
+          photo_url_2?: string | null
+          photo_url_3?: string | null
           reason?: string | null
           reversa_at?: string | null
           reversa_batch_id?: string | null
@@ -861,6 +865,8 @@ export type Database = {
           is_seller?: boolean
           observations?: string | null
           photo_url?: string | null
+          photo_url_2?: string | null
+          photo_url_3?: string | null
           reason?: string | null
           reversa_at?: string | null
           reversa_batch_id?: string | null
