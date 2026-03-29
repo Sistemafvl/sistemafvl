@@ -59,35 +59,67 @@ const AdminDriversPage = () => {
   const fetchDrivers = async () => {
     setLoading(true);
     try {
-      // Use edge function to bypass RLS and get full driver data including sensitive fields
-      const { data: allDrivers, error: efError } = await supabase.functions.invoke("get-driver-details", {
-        body: { driver_ids: [], self_access: true, list_all: true }
-      });
+      // Use direct fetch to bypass supabase.functions.invoke auth issues
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-      if (efError || !Array.isArray(allDrivers)) {
+      let allDrivers: Driver[] | null = null;
+
+      try {
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/get-driver-details`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+              "apikey": supabaseAnonKey,
+            },
+            body: JSON.stringify({ driver_ids: [], self_access: true, list_all: true }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            allDrivers = data as Driver[];
+          } else {
+            console.error("Edge function returned non-array:", data);
+          }
+        } else {
+          const errBody = await response.text();
+          console.error("Edge function failed:", response.status, errBody);
+        }
+      } catch (efErr) {
+        console.error("Edge function network error:", efErr);
+      }
+
+      if (!allDrivers) {
         // Fallback to drivers_public (no password/bank data)
+        console.warn("Falling back to drivers_public view");
         let query = supabase
           .from("drivers_public")
           .select("id, name, cpf, car_plate, car_model, car_color, active, created_at, email, whatsapp, cep, address, neighborhood, city, state, avatar_url, bio", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+          .order("name", { ascending: true });
         if (search.trim()) {
           query = query.or(`name.ilike.%${search.trim()}%,cpf.ilike.%${search.trim()}%`);
         }
-        const { data, count } = await query;
-        setDrivers((data as Driver[]) || []);
-        setTotal(count ?? 0);
+        const { data, count, error: fbErr } = await query;
+        if (fbErr) console.error("Fallback query error:", fbErr);
+        const all = (data as Driver[]) || [];
+        setTotal(all.length);
+        setDrivers(all.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
         setLoading(false);
         return;
       }
 
-      // Filter and paginate client-side
-      let filtered = allDrivers as Driver[];
+      // Filter and sort alphabetically by name
+      let filtered = allDrivers;
       if (search.trim()) {
         const s = search.trim().toLowerCase();
         filtered = filtered.filter(d => d.name?.toLowerCase().includes(s) || d.cpf?.includes(s));
       }
-      filtered.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      filtered.sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
       setTotal(filtered.length);
       setDrivers(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
     } catch (err) {
