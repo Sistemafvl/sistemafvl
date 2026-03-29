@@ -457,9 +457,16 @@ const PSPage = () => {
 
     // Edit mode — update existing entry
     if (editingEntry) {
-      let photoUrl: string | null = editingEntry.photo_url ?? null;
-      if (capturedPhoto) {
-        photoUrl = await uploadPhoto();
+      let photoUrls: (string | null)[] = [
+        editingEntry.photo_url ?? null,
+        editingEntry.photo_url_2 ?? null,
+        editingEntry.photo_url_3 ?? null,
+      ];
+      if (capturedPhotos.some(p => p !== null)) {
+        const uploaded = await uploadAllPhotos();
+        for (let i = 0; i < 3; i++) {
+          if (uploaded[i]) photoUrls[i] = uploaded[i];
+        }
       }
 
       const { error } = await supabase.from("ps_entries").update({
@@ -468,7 +475,9 @@ const PSPage = () => {
         conferente_id: selectedConferente || null,
         is_seller: isSeller,
         observations: observations || null,
-        photo_url: photoUrl,
+        photo_url: photoUrls[0],
+        photo_url_2: photoUrls[1],
+        photo_url_3: photoUrls[2],
       } as any).eq("id", editingEntry.id);
       setSaving(false);
 
@@ -497,9 +506,9 @@ const PSPage = () => {
       return;
     }
 
-    let photoUrl: string | null = null;
-    if (capturedPhoto) {
-      photoUrl = await uploadPhoto();
+    let photoUrls: (string | null)[] = [null, null, null];
+    if (capturedPhotos.some(p => p !== null)) {
+      photoUrls = await uploadAllPhotos();
     }
 
     const entry = {
@@ -509,7 +518,9 @@ const PSPage = () => {
       conferente_id: selectedConferente || null,
       description: selectedReason,
       reason: selectedReason,
-      photo_url: photoUrl,
+      photo_url: photoUrls[0],
+      photo_url_2: photoUrls[1],
+      photo_url_3: photoUrls[2],
       driver_name: history?.driver_name ?? null,
       route: history?.route ?? null,
       is_seller: isSeller,
