@@ -978,8 +978,12 @@ const RelatoriosPage = () => {
                 <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0)}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
-                <p className="text-xs text-muted-foreground">Retornos</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalReturns || 0), 0)}</p>
+                <p className="text-xs text-muted-foreground">Média Pacote</p>
+                <p className="font-bold">{(() => {
+                  const totalTbrs = payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0);
+                  const totalValue = payrollData.reduce((s, d) => s + (d.totalValue || 0), 0);
+                  return totalTbrs === 0 ? "R$ 0,00" : formatCurrency(totalValue / totalTbrs);
+                })()}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Concluídos</p>
