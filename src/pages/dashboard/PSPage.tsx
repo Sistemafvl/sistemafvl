@@ -601,8 +601,9 @@ const PSPage = () => {
     setHistoryModalOpen(false);
     setIncludeMode(false);
     setHistory(null);
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
+    setCapturedPhotos([null, null, null]);
+    setPhotoPreviews([null, null, null]);
+    setActivePhotoSlot(null);
     setIsSeller(false);
     setObservations("");
     setEditingEntry(null);
