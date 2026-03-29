@@ -7,9 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Scale, Save, Eye, Edit3, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-const DEFAULT_CONTRACT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
+const getDefaultContract = (domainName: string) => `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
 
-CONTRATANTE: FAVELA LLOG Prestação de Serviços Logísticos Ltda.
+CONTRATANTE: ${domainName} Prestação de Serviços Logísticos Ltda.
 
 CONTRATADO(A): Motorista Parceiro(a) devidamente cadastrado no sistema digital da CONTRATANTE.
 
@@ -73,7 +73,8 @@ Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúv
 const ContractEditorPage = () => {
   const { unitSession } = useAuthStore();
   const [content, setContent] = useState("");
-  const [title, setTitle] = useState("Contrato de Prestação de Serviços - Favela Llog");
+  const domainName = unitSession?.domain_name || "Empresa";
+  const [title, setTitle] = useState(`Contrato de Prestação de Serviços - ${domainName}`);
   const [preview, setPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -96,7 +97,7 @@ const ContractEditorPage = () => {
       setContent(data.content);
       setTitle(data.title);
     } else {
-      setContent(DEFAULT_CONTRACT);
+      setContent(getDefaultContract(domainName));
     }
     setFetching(false);
   };
@@ -191,7 +192,7 @@ const ContractEditorPage = () => {
                 variant="ghost" 
                 size="sm" 
                 className="w-full mt-4 text-[10px] uppercase font-black tracking-widest text-primary hover:bg-primary/10"
-                onClick={() => setContent(DEFAULT_CONTRACT)}
+                onClick={() => setContent(getDefaultContract(domainName))}
               >
                 Restaurar Modelo Padrão
               </Button>

@@ -62,7 +62,7 @@ const DriverContractPage = () => {
     if (error) {
       toast({ title: "Erro ao aceitar", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Contrato Aceito!", description: "Obrigado por sua parceria com a Favela Llog." });
+      toast({ title: "Contrato Aceito!", description: "Obrigado por sua parceria." });
       fetchData();
     }
     setSubmitting(false);
