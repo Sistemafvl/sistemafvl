@@ -1177,10 +1177,27 @@ const PSPage = () => {
                                 <Pencil className="h-3 w-3" />
                               </Button>
                             )}
-                            {e.photo_url && (
-                              <Button variant="ghost" size="sm" onClick={() => window.open(e.photo_url!, "_blank")}>
-                                <Camera className="h-3 w-3" />
-                              </Button>
+                            {(e.photo_url || e.photo_url_2 || e.photo_url_3) && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Button variant="ghost" size="sm" title="Ver fotos">
+                                    <Camera className="h-3 w-3" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-2" align="end">
+                                  <div className="flex gap-2">
+                                    {[e.photo_url, e.photo_url_2, e.photo_url_3].filter(Boolean).map((url, i) => (
+                                      <img
+                                        key={i}
+                                        src={url!}
+                                        alt={`Foto ${i + 1}`}
+                                        className="h-24 w-24 object-cover rounded-md border cursor-pointer hover:opacity-80"
+                                        onClick={() => window.open(url!, "_blank")}
+                                      />
+                                    ))}
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
                             )}
                             {e.status === "open" && (
                               <Button variant="outline" size="sm" onClick={() => handleFinalize(e.id)}>
