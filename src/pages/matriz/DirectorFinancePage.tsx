@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DollarSign, Building2, ChevronRight, Wallet, Receipt, FileText, TrendingUp, Truck, Loader2 } from "lucide-react";
-import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
 import { formatBRL } from "@/lib/utils";
@@ -17,8 +17,6 @@ const DirectorFinancePage = () => {
   const domainId = unitSession?.domain_id || "";
   const navigate = useNavigate();
 
-  const [dateStart, setDateStart] = useState(format(subDays(new Date(), 30), "yyyy-MM-dd"));
-  const [dateEnd, setDateEnd] = useState(format(new Date(), "yyyy-MM-dd"));
 
   const { data: units = [] } = useQuery({
     queryKey: ["director-finance-units", domainId],
@@ -30,22 +28,6 @@ const DirectorFinancePage = () => {
     enabled: !!domainId,
   });
 
-  const { data: financialData, isLoading: loading } = useQuery({
-    queryKey: ["director-finance-data", units.map(u => u.id).join(","), dateStart, dateEnd],
-    queryFn: async () => {
-      if (!units.length) return null;
-      const unitIds = units.map(u => u.id);
-      const start = startOfDay(parseISO(dateStart)).toISOString();
-      const end = endOfDay(parseISO(dateEnd)).toISOString();
-
-      // Aggregation for cards
-      const { data: rides } = await supabase.from("driver_rides").select("id, unit_id").in("unit_id", unitIds).gte("completed_at", start).lte("completed_at", end);
-      const { data: settings } = await supabase.from("unit_settings").select("unit_id, tbr_value").in("unit_id", unitIds);
-
-      return { rides, settings };
-    },
-    enabled: units.length > 0,
-  });
 
   const [unitReports, setUnitReports] = useState<Record<string, any>>({});
   const [loadingReports, setLoadingReports] = useState(true);
@@ -94,9 +76,7 @@ const DirectorFinancePage = () => {
   }, [units]);
 
   const unitStats = useMemo(() => {
-    if (!financialData) return [];
     return units.map(u => {
-      const uRides = financialData.rides?.filter((r: any) => r.unit_id === u.id) || [];
       const latestReport = unitReports[u.id];
       
       let reportTotal = 0;
@@ -112,13 +92,12 @@ const DirectorFinancePage = () => {
 
       return {
         ...u,
-        rideCount: uRides.length,
         latestReport,
         reportTotal,
         mediaPacote,
       };
     });
-  }, [units, financialData, unitReports]);
+  }, [units, unitReports]);
 
   const handleDrillDown = (unitId: string, unitName: string) => {
     setActiveUnit(unitId, unitName);
@@ -131,11 +110,6 @@ const DirectorFinancePage = () => {
         <h1 className="text-2xl font-bold italic flex items-center gap-2">
           <DollarSign className="h-6 w-6 text-primary" /> Financeiro Consolidado
         </h1>
-        <div className="flex items-center gap-2 bg-card p-1 rounded-lg border shadow-sm">
-          <input type="date" value={dateStart} onChange={e => setDateStart(e.target.value)} className="h-7 w-32 border-0 bg-transparent text-xs font-semibold focus-visible:ring-0" />
-          <span className="text-[10px] text-muted-foreground uppercase font-bold">Até</span>
-          <input type="date" value={dateEnd} onChange={e => setDateEnd(e.target.value)} className="h-7 w-32 border-0 bg-transparent text-xs font-semibold focus-visible:ring-0" />
-        </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-2 italic font-semibold border-amber-500/30 text-amber-700 bg-amber-500/10 hover:bg-amber-500/20">
             <Receipt className="h-4 w-4" /> Contas a Pagar
