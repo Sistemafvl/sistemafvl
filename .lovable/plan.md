@@ -1,19 +1,31 @@
 
 
-## Plano: 3 correções
+## Plano: Trocar card "Retornos" por "Média Pacote"
 
-### 1. Corrigir erro de build em `GeneralAnalysisPage.tsx`
-O arquivo ainda usa `RadixTooltip` no JSX (linhas 140-167) mas esse nome não está importado. Solução: substituir todas as ocorrências de `<RadixTooltip>` e `</RadixTooltip>` por `<Tooltip>` e `</Tooltip>` (do import UI na linha 7). O `RechartsTooltip` na linha 208 está correto.
+### O que muda
 
-### 2. Aceitar qualquer tipo de arquivo no upload de NF (`DriverRecebiveis.tsx`)
-O input atual tem `accept=".pdf,.jpg,.jpeg,.png"`. Remover o atributo `accept` para permitir qualquer formato de arquivo.
+No modal de pré-visualização da folha de pagamento (espelho, gerar ou consultar), o card que exibe **"Retornos"** será substituído por **"Média Pacote"**.
 
-### 3. Adicionar tabela resumo no Excel + remover abas extras (`generatePayrollExcel.ts`)
-- **Tabela resumo a partir da coluna Z, linha 7**: 3 colunas — Nome do Motorista, Total Tabela 1 (TOTAL GERAL da seção fixa), Total Tabela 2 (TOTAL GERAL da seção mínimo 60), e Total. Com totais ao final das colunas.
-- **Remover**: chamada de `createIndicadoresSheet` e todo o loop de criação de abas individuais por motorista. Manter apenas a aba "Fechamento".
+O cálculo é: `Valor Total / Total TBRs` (se Total TBRs = 0, exibe R$ 0,00). Referência direta da fórmula do Excel: `=SE(B179=0;0;C179/B179)`.
 
-### Arquivos alterados
-- `src/pages/matriz/GeneralAnalysisPage.tsx` — corrigir `RadixTooltip` → `Tooltip`
-- `src/pages/driver/DriverRecebiveis.tsx` — remover atributo `accept` dos inputs de arquivo
-- `src/pages/dashboard/reports/generatePayrollExcel.ts` — adicionar resumo na coluna Z e remover abas Indicadores e individuais
+### Implementação
+
+**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
+
+Substituir o bloco das linhas 980-983:
+```tsx
+// DE:
+<p className="text-xs text-muted-foreground">Retornos</p>
+<p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalReturns || 0), 0)}</p>
+
+// PARA:
+<p className="text-xs text-muted-foreground">Média Pacote</p>
+<p className="font-bold">{(() => {
+  const totalTbrs = payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0);
+  const totalValue = payrollData.reduce((s, d) => s + (d.totalValue || 0), 0);
+  return totalTbrs === 0 ? "R$ 0,00" : formatCurrency(totalValue / totalTbrs);
+})()}</p>
+```
+
+Uma única alteração de 2 linhas. Nenhum outro arquivo afetado.
 
