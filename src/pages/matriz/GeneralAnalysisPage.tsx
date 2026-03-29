@@ -137,34 +137,34 @@ const GeneralAnalysisPage = () => {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-bold italic">
-                      <Tooltip>
+                      <RadixTooltip>
                         <TooltipTrigger className="flex items-center gap-1 cursor-help">Unidade <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Código identificador da unidade operacional</TooltipContent>
-                      </Tooltip>
+                      </RadixTooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <Tooltip>
+                      <RadixTooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Viagens <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Total de viagens (TBRs) realizadas no período selecionado</TooltipContent>
-                      </Tooltip>
+                      </RadixTooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <Tooltip>
+                      <RadixTooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Contestações <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Quantidade de contestações registradas pelos motoristas</TooltipContent>
-                      </Tooltip>
+                      </RadixTooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <Tooltip>
+                      <RadixTooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Pendentes <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Contestações ainda não resolvidas pela gestão da unidade</TooltipContent>
-                      </Tooltip>
+                      </RadixTooltip>
                     </TableHead>
                     <TableHead className="text-right font-bold italic">
-                      <Tooltip>
+                      <RadixTooltip>
                         <TooltipTrigger className="flex items-center justify-end gap-1 cursor-help">Score <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Índice de eficiência: razão entre contestações e viagens (quanto menor, melhor)</TooltipContent>
-                      </Tooltip>
+                      </RadixTooltip>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
