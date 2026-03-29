@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { BarChart3, Scale, Info, LayoutTemplate, Filter, Download } from "lucide-react";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
@@ -123,10 +124,7 @@ const GeneralAnalysisPage = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
-            <div className="flex justify-between items-center">
-              <CardTitle className="text-sm font-bold italic">Tabela Comparativa de Performance</CardTitle>
-              <Info className="h-4 w-4 text-muted-foreground cursor-help" />
-            </div>
+            <CardTitle className="text-sm font-bold italic">Tabela Comparativa de Performance</CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -134,14 +132,40 @@ const GeneralAnalysisPage = () => {
                 {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-10 w-full" />)}
               </div>
             ) : (
+              <TooltipProvider>
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead className="font-bold italic">Unidade</TableHead>
-                    <TableHead className="text-center font-bold italic">Viagens</TableHead>
-                    <TableHead className="text-center font-bold italic">Contestações</TableHead>
-                    <TableHead className="text-center font-bold italic">Pendentes</TableHead>
-                    <TableHead className="text-right font-bold italic">Score</TableHead>
+                    <TableHead className="font-bold italic">
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1 cursor-help">Unidade <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Código identificador da unidade operacional</TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                    <TableHead className="text-center font-bold italic">
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Viagens <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Total de viagens (TBRs) realizadas no período selecionado</TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                    <TableHead className="text-center font-bold italic">
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Contestações <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Quantidade de contestações registradas pelos motoristas</TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                    <TableHead className="text-center font-bold italic">
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Pendentes <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Contestações ainda não resolvidas pela gestão da unidade</TooltipContent>
+                      </Tooltip>
+                    </TableHead>
+                    <TableHead className="text-right font-bold italic">
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center justify-end gap-1 cursor-help">Score <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
+                        <TooltipContent>Índice de eficiência: razão entre contestações e viagens (quanto menor, melhor)</TooltipContent>
+                      </Tooltip>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
