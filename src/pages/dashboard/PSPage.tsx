@@ -1281,30 +1281,47 @@ const PSPage = () => {
                 </Select>
               </div>
 
-              {/* Photo capture */}
+              {/* Photo capture — 3 slots */}
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold">Foto</label>
-                {!cameraActive && !photoPreview && (
-                  <Button variant="outline" size="sm" className="w-full gap-2" onClick={startCamera}>
-                    <Camera className="h-4 w-4" /> Tirar Foto
-                  </Button>
-                )}
+                <label className="text-xs font-semibold">Fotos (até 3)</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[0, 1, 2].map((slotIndex) => (
+                    <div key={slotIndex} className="space-y-1">
+                      {photoPreviews[slotIndex] ? (
+                        <div className="relative">
+                          <img src={photoPreviews[slotIndex]!} alt={`Foto ${slotIndex + 1}`} className="w-full rounded-md border aspect-square object-cover" />
+                          <Button
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-1 right-1 h-5 w-5"
+                            onClick={() => clearPhotoSlot(slotIndex)}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full aspect-square flex flex-col gap-1"
+                          onClick={() => startCamera(slotIndex)}
+                          disabled={cameraActive}
+                        >
+                          <Camera className="h-4 w-4" />
+                          <span className="text-[10px]">Foto {slotIndex + 1}</span>
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
                 {cameraActive && (
                   <div className="space-y-2">
                     <video ref={videoRef} className="w-full rounded-md border" autoPlay playsInline muted />
                     <canvas ref={canvasRef} className="hidden" />
                     <div className="flex gap-2">
                       <Button size="sm" className="flex-1" onClick={capturePhoto}>Capturar</Button>
-                      <Button variant="outline" size="sm" onClick={stopCamera}>Cancelar</Button>
+                      <Button variant="outline" size="sm" onClick={() => { stopCamera(); setActivePhotoSlot(null); }}>Cancelar</Button>
                     </div>
-                  </div>
-                )}
-                {photoPreview && (
-                  <div className="space-y-2">
-                    <img src={photoPreview} alt="Preview" className="w-full rounded-md border max-h-48 object-cover" />
-                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={retakePhoto}>
-                      <RefreshCw className="h-3 w-3" /> Refazer
-                    </Button>
                   </div>
                 )}
               </div>
