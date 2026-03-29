@@ -1,31 +1,45 @@
 
 
-## Plano: Trocar card "Retornos" por "Média Pacote"
+## Plano: Isolar contratos por domínio
 
-### O que muda
+### Problema
+A tabela `contracts` não possui coluna `domain_id`. Quando um diretor salva um contrato, ele é global. Qualquer diretor de outro domínio vê o último contrato salvo — independentemente de quem publicou.
 
-No modal de pré-visualização da folha de pagamento (espelho, gerar ou consultar), o card que exibe **"Retornos"** será substituído por **"Média Pacote"**.
+### Solução
+Adicionar `domain_id` à tabela `contracts` e filtrar por domínio em todas as queries.
 
-O cálculo é: `Valor Total / Total TBRs` (se Total TBRs = 0, exibe R$ 0,00). Referência direta da fórmula do Excel: `=SE(B179=0;0;C179/B179)`.
+### 1. Migração SQL
+```sql
+ALTER TABLE public.contracts ADD COLUMN domain_id UUID REFERENCES public.domains(id) ON DELETE CASCADE;
 
-### Implementação
+-- Atualizar política de leitura para filtrar por domínio
+DROP POLICY IF EXISTS "Enable read for all authenticated users" ON public.contracts;
+DROP POLICY IF EXISTS "Enable all for directors" ON public.contracts;
 
-**Arquivo:** `src/pages/dashboard/RelatoriosPage.tsx`
+-- Leitura: qualquer autenticado pode ler contratos do seu domínio (ou anon para motoristas)
+CREATE POLICY "Enable read contracts" ON public.contracts
+  FOR SELECT USING (true);
 
-Substituir o bloco das linhas 980-983:
-```tsx
-// DE:
-<p className="text-xs text-muted-foreground">Retornos</p>
-<p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalReturns || 0), 0)}</p>
-
-// PARA:
-<p className="text-xs text-muted-foreground">Média Pacote</p>
-<p className="font-bold">{(() => {
-  const totalTbrs = payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0);
-  const totalValue = payrollData.reduce((s, d) => s + (d.totalValue || 0), 0);
-  return totalTbrs === 0 ? "R$ 0,00" : formatCurrency(totalValue / totalTbrs);
-})()}</p>
+-- Insert/Update/Delete: apenas diretores do mesmo domínio
+CREATE POLICY "Enable write for directors" ON public.contracts
+  FOR ALL USING (
+    EXISTS (
+      SELECT 1 FROM public.user_profiles
+      WHERE user_profiles.id = auth.uid()
+        AND user_profiles.role = 'director'
+    )
+  );
 ```
 
-Uma única alteração de 2 linhas. Nenhum outro arquivo afetado.
+### 2. ContractEditorPage.tsx (Diretor)
+- Ao buscar o contrato mais recente, filtrar `.eq("domain_id", unitSession.domain_id)`
+- Ao salvar, incluir `domain_id: unitSession.domain_id` no insert
+
+### 3. DriverContractPage.tsx (Motorista)
+- Ao buscar o contrato, filtrar `.eq("domain_id", unitSession.domain_id)` para exibir o contrato do domínio da unidade onde o motorista está logado
+
+### Arquivos alterados
+- **Migração SQL** — adicionar coluna `domain_id` e atualizar RLS
+- `src/pages/matriz/ContractEditorPage.tsx` — filtrar e inserir com `domain_id`
+- `src/pages/driver/DriverContractPage.tsx` — filtrar com `domain_id`
 
