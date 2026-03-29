@@ -130,10 +130,10 @@ const PSPage = () => {
   const [showNewReason, setShowNewReason] = useState(false);
   const [newReasonInput, setNewReasonInput] = useState("");
 
-  // Photo capture
-  const [cameraActive, setCameraActive] = useState(false);
-  const [capturedPhoto, setCapturedPhoto] = useState<Blob | null>(null);
-  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  // Photo capture — 3 slots
+  const [activePhotoSlot, setActivePhotoSlot] = useState<number | null>(null);
+  const [capturedPhotos, setCapturedPhotos] = useState<(Blob | null)[]>([null, null, null]);
+  const [photoPreviews, setPhotoPreviews] = useState<(string | null)[]>([null, null, null]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
 
   useEffect(() => {
@@ -173,7 +173,7 @@ const PSPage = () => {
     const data = await fetchAllRows<any>((from, to) => {
       let query = supabase
         .from("ps_entries")
-        .select("id, tbr_code, driver_name, route, description, reason, photo_url, status, created_at, conferente_id, is_seller, observations")
+        .select("id, tbr_code, driver_name, route, description, reason, photo_url, photo_url_2, photo_url_3, status, created_at, conferente_id, is_seller, observations")
         .eq("unit_id", unitSession.id)
         .gte("created_at", startDate.toISOString())
         .lte("created_at", endDate.toISOString())
@@ -199,6 +199,8 @@ const PSPage = () => {
         ...e,
         reason: e.reason ?? null,
         photo_url: e.photo_url ?? null,
+        photo_url_2: e.photo_url_2 ?? null,
+        photo_url_3: e.photo_url_3 ?? null,
         conferente_name: e.conferente_id ? confMap[e.conferente_id] : undefined,
         is_seller: (e as any).is_seller ?? false,
         observations: (e as any).observations ?? null,
