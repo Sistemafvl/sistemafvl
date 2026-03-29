@@ -24,12 +24,14 @@ const DriverContractPage = () => {
 
   const fetchData = async () => {
     // Get latest contract
-    const { data: latestContract } = await supabase
+    const domainId = unitSession?.domain_id;
+    const query = supabase
       .from("contracts")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+    if (domainId) query.eq("domain_id", domainId);
+    const { data: latestContract } = await query.single();
 
     if (latestContract) {
       setContract(latestContract);

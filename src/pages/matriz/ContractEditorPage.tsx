@@ -71,6 +71,7 @@ d) O aceite digital deste contrato tem a mesma validade jurídica da assinatura 
 Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.`;
 
 const ContractEditorPage = () => {
+  const { unitSession } = useAuthStore();
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("Contrato de Prestação de Serviços - Favela Llog");
   const [preview, setPreview] = useState(false);
@@ -83,11 +84,13 @@ const ContractEditorPage = () => {
 
   const fetchLatestContract = async () => {
     setFetching(true);
-    const { data } = await (supabase.from("contracts" as any) as any)
+    const domainId = unitSession?.domain_id;
+    const query = (supabase.from("contracts" as any) as any)
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+    if (domainId) query.eq("domain_id", domainId);
+    const { data } = await query.single();
 
     if (data) {
       setContent(data.content);
@@ -104,7 +107,7 @@ const ContractEditorPage = () => {
       return;
     }
     setLoading(true);
-    const { error } = await (supabase.from("contracts" as any) as any).insert([{ title, content }]);
+    const { error } = await (supabase.from("contracts" as any) as any).insert([{ title, content, domain_id: unitSession?.domain_id }]);
     setLoading(false);
 
     if (error) {
