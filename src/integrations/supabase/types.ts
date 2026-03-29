@@ -294,6 +294,35 @@ export type Database = {
         }
         Relationships: []
       }
+      driver_contracts: {
+        Row: {
+          accepted_at: string
+          contract_id: string
+          driver_id: string
+          id: string
+        }
+        Insert: {
+          accepted_at?: string
+          contract_id: string
+          driver_id: string
+          id?: string
+        }
+        Update: {
+          accepted_at?: string
+          contract_id?: string
+          driver_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_contracts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       driver_custom_values: {
         Row: {
           created_at: string
