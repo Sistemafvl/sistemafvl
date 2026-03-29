@@ -14,6 +14,10 @@ const ContractEditorPage = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
 
+  useEffect(() => {
+    fetchLatestContract();
+  }, []);
+
   const fetchLatestContract = async () => {
     setFetching(true);
     const { data } = await (supabase.from("contracts" as any) as any)
