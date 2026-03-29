@@ -189,6 +189,7 @@ const GeneralAnalysisPage = () => {
                   )}
                 </TableBody>
               </Table>
+              </TooltipProvider>
             )}
           </CardContent>
         </Card>
