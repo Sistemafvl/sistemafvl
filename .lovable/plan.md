@@ -1,30 +1,19 @@
 
 
-## Plano: Tooltips explicativos nas colunas da Tabela Comparativa
+## Plano: 3 correções
 
-### O que muda
+### 1. Corrigir erro de build em `GeneralAnalysisPage.tsx`
+O arquivo ainda usa `RadixTooltip` no JSX (linhas 140-167) mas esse nome não está importado. Solução: substituir todas as ocorrências de `<RadixTooltip>` e `</RadixTooltip>` por `<Tooltip>` e `</Tooltip>` (do import UI na linha 7). O `RechartsTooltip` na linha 208 está correto.
 
-Substituir o ícone `<Info>` isolado (que não faz nada) por tooltips individuais em cada cabeçalho de coluna da tabela. Ao passar o mouse sobre o nome da coluna, um balão aparece explicando o significado.
+### 2. Aceitar qualquer tipo de arquivo no upload de NF (`DriverRecebiveis.tsx`)
+O input atual tem `accept=".pdf,.jpg,.jpeg,.png"`. Remover o atributo `accept` para permitir qualquer formato de arquivo.
 
-### Implementação
+### 3. Adicionar tabela resumo no Excel + remover abas extras (`generatePayrollExcel.ts`)
+- **Tabela resumo a partir da coluna Z, linha 7**: 3 colunas — Nome do Motorista, Total Tabela 1 (TOTAL GERAL da seção fixa), Total Tabela 2 (TOTAL GERAL da seção mínimo 60), e Total. Com totais ao final das colunas.
+- **Remover**: chamada de `createIndicadoresSheet` e todo o loop de criação de abas individuais por motorista. Manter apenas a aba "Fechamento".
 
-**Arquivo:** `src/pages/matriz/GeneralAnalysisPage.tsx`
-
-1. Importar `Tooltip, TooltipTrigger, TooltipContent, TooltipProvider` de `@/components/ui/tooltip`
-2. Remover o ícone `<Info>` solto no header do card (linha 128)
-3. Envolver a tabela com `<TooltipProvider>`
-4. Em cada `<TableHead>`, adicionar um `<Tooltip>` com o texto do nome da coluna + ícone `<Info>` pequeno ao lado, e um `<TooltipContent>` com a explicação:
-
-| Coluna | Explicação |
-|--------|-----------|
-| Unidade | Código identificador da unidade operacional |
-| Viagens | Total de viagens (TBRs) realizadas no período selecionado |
-| Contestações | Quantidade de contestações registradas pelos motoristas |
-| Pendentes | Contestações ainda não resolvidas pela gestão da unidade |
-| Score | Índice de eficiência: razão entre contestações e viagens (quanto menor, melhor) |
-
-### Detalhes técnicos
-- Usar `<Tooltip>` do Radix (já existe no projeto) para hover nativo em desktop
-- Cada header terá: `Nome da coluna` + pequeno ícone `Info` (h-3 w-3) envolto em `TooltipTrigger`
-- O balão aparece ao passar o mouse, sem necessidade de clicar
+### Arquivos alterados
+- `src/pages/matriz/GeneralAnalysisPage.tsx` — corrigir `RadixTooltip` → `Tooltip`
+- `src/pages/driver/DriverRecebiveis.tsx` — remover atributo `accept` dos inputs de arquivo
+- `src/pages/dashboard/reports/generatePayrollExcel.ts` — adicionar resumo na coluna Z e remover abas Indicadores e individuais
 
