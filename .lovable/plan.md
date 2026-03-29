@@ -1,25 +1,30 @@
 
 
-## Plano: Contrato Padrão Pré-preenchido + Simplificar Painel Lateral
+## Plano: Tooltips explicativos nas colunas da Tabela Comparativa
 
 ### O que muda
 
-**1. Contrato padrão já preenchido ao abrir a página**
-- Se não houver contrato salvo no banco, o textarea já virá preenchido com o `DEFAULT_CONTRACT` completo (texto legal detalhado) em vez de ficar vazio
-- O diretor só precisa revisar/ajustar e clicar "Salvar e Publicar"
+Substituir o ícone `<Info>` isolado (que não faz nada) por tooltips individuais em cada cabeçalho de coluna da tabela. Ao passar o mouse sobre o nome da coluna, um balão aparece explicando o significado.
 
-**2. Expandir o texto do contrato padrão**
-- O `DEFAULT_CONTRACT` atual tem 7 cláusulas básicas. Vou expandi-lo com mais cláusulas relevantes (confidencialidade, proteção de dados/LGPD, uso do sistema digital, penalidades, disposições gerais) para ficar mais completo e profissional
+### Implementação
 
-**3. Simplificar o painel "Instruções de Edição"**
-- Remover toda menção a "Markdown"
-- Trocar as instruções técnicas por dicas simples e acessíveis, tipo:
-  - "Edite o texto diretamente na área ao lado"
-  - "Após editar, clique em Salvar e Publicar"
-  - "O contrato será enviado automaticamente aos motoristas"
-- Manter o botão "Carregar Modelo Padrão" para restaurar o texto original
-- Manter o card "Impacto Legal" como está
+**Arquivo:** `src/pages/matriz/GeneralAnalysisPage.tsx`
 
-### Arquivo alterado
-- `src/pages/matriz/ContractEditorPage.tsx`
+1. Importar `Tooltip, TooltipTrigger, TooltipContent, TooltipProvider` de `@/components/ui/tooltip`
+2. Remover o ícone `<Info>` solto no header do card (linha 128)
+3. Envolver a tabela com `<TooltipProvider>`
+4. Em cada `<TableHead>`, adicionar um `<Tooltip>` com o texto do nome da coluna + ícone `<Info>` pequeno ao lado, e um `<TooltipContent>` com a explicação:
+
+| Coluna | Explicação |
+|--------|-----------|
+| Unidade | Código identificador da unidade operacional |
+| Viagens | Total de viagens (TBRs) realizadas no período selecionado |
+| Contestações | Quantidade de contestações registradas pelos motoristas |
+| Pendentes | Contestações ainda não resolvidas pela gestão da unidade |
+| Score | Índice de eficiência: razão entre contestações e viagens (quanto menor, melhor) |
+
+### Detalhes técnicos
+- Usar `<Tooltip>` do Radix (já existe no projeto) para hover nativo em desktop
+- Cada header terá: `Nome da coluna` + pequeno ícone `Info` (h-3 w-3) envolto em `TooltipTrigger`
+- O balão aparece ao passar o mouse, sem necessidade de clicar
 
