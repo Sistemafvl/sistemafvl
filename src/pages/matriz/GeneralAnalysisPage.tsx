@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { BarChart3, Scale, Info, LayoutTemplate, Filter, Download } from "lucide-react";
-import { Tooltip as RadixTooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import { format, subDays, startOfDay, endOfDay, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { fetchAllRows } from "@/lib/supabase-helpers";
@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell } from 'recharts';
 
 const GeneralAnalysisPage = () => {
   const { unitSession } = useAuthStore();
@@ -137,34 +137,34 @@ const GeneralAnalysisPage = () => {
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
                     <TableHead className="font-bold italic">
-                      <RadixTooltip>
+                      <Tooltip>
                         <TooltipTrigger className="flex items-center gap-1 cursor-help">Unidade <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Código identificador da unidade operacional</TooltipContent>
-                      </RadixTooltip>
+                      </Tooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <RadixTooltip>
+                      <Tooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Viagens <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Total de viagens (TBRs) realizadas no período selecionado</TooltipContent>
-                      </RadixTooltip>
+                      </Tooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <RadixTooltip>
+                      <Tooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Contestações <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Quantidade de contestações registradas pelos motoristas</TooltipContent>
-                      </RadixTooltip>
+                      </Tooltip>
                     </TableHead>
                     <TableHead className="text-center font-bold italic">
-                      <RadixTooltip>
+                      <Tooltip>
                         <TooltipTrigger className="flex items-center justify-center gap-1 cursor-help">Pendentes <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Contestações ainda não resolvidas pela gestão da unidade</TooltipContent>
-                      </RadixTooltip>
+                      </Tooltip>
                     </TableHead>
                     <TableHead className="text-right font-bold italic">
-                      <RadixTooltip>
+                      <Tooltip>
                         <TooltipTrigger className="flex items-center justify-end gap-1 cursor-help">Score <Info className="h-3 w-3 text-muted-foreground" /></TooltipTrigger>
                         <TooltipContent>Índice de eficiência: razão entre contestações e viagens (quanto menor, melhor)</TooltipContent>
-                      </RadixTooltip>
+                      </Tooltip>
                     </TableHead>
                   </TableRow>
                 </TableHeader>
@@ -205,7 +205,7 @@ const GeneralAnalysisPage = () => {
                   <BarChart data={comparisonData.sort((a,b) => b.rides - a.rides).slice(0, 7)} layout="vertical">
                     <XAxis type="number" hide />
                     <YAxis dataKey="name" type="category" width={80} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 'bold' }} axisLine={false} tickLine={false} />
-                    <Tooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
+                    <RechartsTooltip cursor={{ fill: 'transparent' }} contentStyle={{ borderRadius: '8px' }} />
                     <Bar dataKey="rides" radius={[0, 4, 4, 0]}>
                       {comparisonData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={`hsl(200, 70%, ${Math.max(30, 80 - (index * 10))}%)`} />
