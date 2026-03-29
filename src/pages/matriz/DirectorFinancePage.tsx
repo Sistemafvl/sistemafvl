@@ -121,7 +121,7 @@ const DirectorFinancePage = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loading || loadingReports ? (
+        {loadingReports ? (
           <div className="col-span-full flex flex-col items-center justify-center py-24 animate-in fade-in">
             <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
             <p className="text-sm font-bold italic text-muted-foreground animate-pulse">Consolidando dados financeiros...</p>
