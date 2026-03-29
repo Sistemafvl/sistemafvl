@@ -335,8 +335,9 @@ const PSPage = () => {
     setIncludeMode(true);
     setSelectedReason("");
     setSelectedConferente("");
-    setCapturedPhoto(null);
-    setPhotoPreview(null);
+    setCapturedPhotos([null, null, null]);
+    setPhotoPreviews([null, null, null]);
+    setActivePhotoSlot(null);
     setIsSeller(false);
     setObservations("");
     setEditingEntry(null);
@@ -349,8 +350,9 @@ const PSPage = () => {
     setSelectedConferente(entry.conferente_id ?? "");
     setIsSeller(entry.is_seller ?? false);
     setObservations(entry.observations ?? "");
-    setPhotoPreview(entry.photo_url ?? null);
-    setCapturedPhoto(null);
+    setPhotoPreviews([entry.photo_url ?? null, entry.photo_url_2 ?? null, entry.photo_url_3 ?? null]);
+    setCapturedPhotos([null, null, null]);
+    setActivePhotoSlot(null);
     setHistory(null);
     setIncludeMode(true);
     setHistoryModalOpen(true);
