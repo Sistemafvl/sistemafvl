@@ -797,7 +797,7 @@ const PSPage = () => {
     let entryIndex = 0;
     for (const e of entries) {
       entryIndex++;
-      const needsSpace = e.photo_url ? 90 : 30;
+      const needsSpace = [e.photo_url, (e as any).photo_url_2, (e as any).photo_url_3].filter(Boolean).length > 0 ? 90 : 30;
       if (y + needsSpace > pageH - 20) {
         // Footer before new page
         addFooter(doc, pageW, pageH);
@@ -860,19 +860,27 @@ const PSPage = () => {
       }
       y += 3;
 
-      if (e.photo_url) {
-        const imgData = await loadImageAsBase64(e.photo_url);
-        if (imgData) {
-          if (y + 65 > pageH - 20) {
-            addFooter(doc, pageW, pageH);
-            doc.addPage();
-            y = 15;
-          }
-          doc.setDrawColor(200, 200, 200);
-          doc.roundedRect(margin + 4, y, 82, 62, 1, 1, "S");
-          doc.addImage(imgData, "JPEG", margin + 5, y + 1, 80, 60);
-          y += 64;
+      // Photos — up to 3
+      const photoUrls = [e.photo_url, (e as any).photo_url_2, (e as any).photo_url_3].filter(Boolean) as string[];
+      if (photoUrls.length > 0) {
+        const imgWidth = photoUrls.length === 1 ? 80 : photoUrls.length === 2 ? 55 : 38;
+        const imgHeight = Math.round(imgWidth * 0.75);
+        if (y + imgHeight + 4 > pageH - 20) {
+          addFooter(doc, pageW, pageH);
+          doc.addPage();
+          y = 15;
         }
+        let imgX = margin + 4;
+        for (const url of photoUrls) {
+          const imgData = await loadImageAsBase64(url);
+          if (imgData) {
+            doc.setDrawColor(200, 200, 200);
+            doc.roundedRect(imgX, y, imgWidth + 2, imgHeight + 2, 1, 1, "S");
+            doc.addImage(imgData, "JPEG", imgX + 1, y + 1, imgWidth, imgHeight);
+            imgX += imgWidth + 4;
+          }
+        }
+        y += imgHeight + 4;
       }
 
       // Separator
