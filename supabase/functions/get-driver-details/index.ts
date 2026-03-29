@@ -15,12 +15,62 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const { driver_id, driver_ids, include_password, self_access, bypass_key, list_all } = await req.json();
+    const { action, driver_id, driver_ids, include_password, self_access, bypass_key, list_all } = await req.json();
 
     // Verify bypass key (Opt-in security)
     const internalBypassKey = Deno.env.get("INTERNAL_BYPASS_KEY");
     if (self_access && internalBypassKey && bypass_key !== internalBypassKey) {
       return new Response(JSON.stringify({ error: "Unauthorized bypass attempt" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ======== DELETE ACTION ========
+    if (action === "delete" && driver_id) {
+      console.log(`Deleting driver ${driver_id} and all related data...`);
+
+      // 1. Get all ride IDs for this driver (needed for ride_tbrs)
+      const { data: rides } = await supabase.from("driver_rides").select("id").eq("driver_id", driver_id);
+      const rideIds = (rides || []).map((r: { id: string }) => r.id);
+
+      // 2. Delete ride_tbrs for all driver's rides
+      if (rideIds.length > 0) {
+        await supabase.from("ride_tbrs").delete().in("ride_id", rideIds);
+      }
+
+      // 3. Delete from all related tables
+      const tables = [
+        "driver_rides",
+        "driver_documents",
+        "driver_invoices",
+        "driver_bonus",
+        "driver_fixed_values",
+        "driver_custom_values",
+        "driver_minimum_packages",
+        "queue_entries",
+        "unit_predefined_drivers",
+        "unit_reviews",
+        "ride_disputes",
+        "dnr_entries",
+        "reativo_entries",
+      ];
+
+      for (const table of tables) {
+        const { error } = await supabase.from(table).delete().eq("driver_id", driver_id);
+        if (error) console.warn(`Warning deleting from ${table}:`, error.message);
+      }
+
+      // 4. Delete rescue_entries (both as original and rescuer)
+      await supabase.from("rescue_entries").delete().eq("original_driver_id", driver_id);
+      await supabase.from("rescue_entries").delete().eq("rescuer_driver_id", driver_id);
+
+      // 5. Delete the driver record itself
+      const { error: delErr } = await supabase.from("drivers").delete().eq("id", driver_id);
+      if (delErr) {
+        console.error("Error deleting driver:", delErr);
+        return new Response(JSON.stringify({ error: "Failed to delete driver", details: delErr.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      console.log(`Driver ${driver_id} deleted successfully`);
+      return new Response(JSON.stringify({ success: true }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
     if (!driver_id && !list_all && (!driver_ids || !Array.isArray(driver_ids))) {

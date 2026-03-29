@@ -142,11 +142,34 @@ const AdminDriversPage = () => {
   };
 
   const deleteDriver = async (driver: Driver) => {
-    if (!confirm(`Excluir permanentemente ${driver.name}?`)) return;
-    const { error } = await supabase.from("drivers").delete().eq("id", driver.id);
-    if (error) { toast.error("Erro ao excluir"); return; }
-    toast.success("Motorista excluído");
-    fetchDrivers();
+    if (!confirm(`Excluir permanentemente ${driver.name}? Todos os dados relacionados (corridas, documentos, financeiro, etc.) serão removidos.`)) return;
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/get-driver-details`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseAnonKey}`,
+            "apikey": supabaseAnonKey,
+          },
+          body: JSON.stringify({ action: "delete", driver_id: driver.id, self_access: true }),
+        }
+      );
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error("Delete failed:", response.status, errBody);
+        toast.error("Erro ao excluir motorista");
+        return;
+      }
+      toast.success("Motorista excluído permanentemente");
+      fetchDrivers();
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Erro ao excluir motorista");
+    }
   };
 
   const handleEdgeFunctionSync = async () => {
