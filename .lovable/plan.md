@@ -1,45 +1,36 @@
 
 
-## Plano: Isolar contratos por domínio
+## Plano: Criar tabela `driver_contracts` e painel de aceites para diretores
 
 ### Problema
-A tabela `contracts` não possui coluna `domain_id`. Quando um diretor salva um contrato, ele é global. Qualquer diretor de outro domínio vê o último contrato salvo — independentemente de quem publicou.
+A tabela `driver_contracts` não existe no banco de dados, causando o erro ao motorista tentar aceitar o contrato. Além disso, o diretor não tem visibilidade sobre quais motoristas aceitaram ou não.
 
-### Solução
-Adicionar `domain_id` à tabela `contracts` e filtrar por domínio em todas as queries.
+### 1. Migração SQL — criar tabela `driver_contracts`
 
-### 1. Migração SQL
 ```sql
-ALTER TABLE public.contracts ADD COLUMN domain_id UUID REFERENCES public.domains(id) ON DELETE CASCADE;
+CREATE TABLE public.driver_contracts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  driver_id UUID NOT NULL,
+  contract_id UUID NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
+  accepted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (driver_id, contract_id)
+);
 
--- Atualizar política de leitura para filtrar por domínio
-DROP POLICY IF EXISTS "Enable read for all authenticated users" ON public.contracts;
-DROP POLICY IF EXISTS "Enable all for directors" ON public.contracts;
+ALTER TABLE public.driver_contracts ENABLE ROW LEVEL SECURITY;
 
--- Leitura: qualquer autenticado pode ler contratos do seu domínio (ou anon para motoristas)
-CREATE POLICY "Enable read contracts" ON public.contracts
-  FOR SELECT USING (true);
-
--- Insert/Update/Delete: apenas diretores do mesmo domínio
-CREATE POLICY "Enable write for directors" ON public.contracts
-  FOR ALL USING (
-    EXISTS (
-      SELECT 1 FROM public.user_profiles
-      WHERE user_profiles.id = auth.uid()
-        AND user_profiles.role = 'director'
-    )
-  );
+CREATE POLICY "Anyone can read driver_contracts" ON public.driver_contracts FOR SELECT USING (true);
+CREATE POLICY "Anyone can insert driver_contracts" ON public.driver_contracts FOR INSERT WITH CHECK (true);
 ```
 
-### 2. ContractEditorPage.tsx (Diretor)
-- Ao buscar o contrato mais recente, filtrar `.eq("domain_id", unitSession.domain_id)`
-- Ao salvar, incluir `domain_id: unitSession.domain_id` no insert
+### 2. ContractEditorPage.tsx — adicionar painel de aceites
 
-### 3. DriverContractPage.tsx (Motorista)
-- Ao buscar o contrato, filtrar `.eq("domain_id", unitSession.domain_id)` para exibir o contrato do domínio da unidade onde o motorista está logado
+Abaixo do editor de contrato, adicionar uma seção "Aceites dos Motoristas" que:
+- Busca todos os motoristas vinculados às unidades do domínio do diretor (via `unit_predefined_drivers` ou `driver_rides`)
+- Cruza com `driver_contracts` para o contrato atual
+- Exibe lista com nome do motorista, status (aceito/pendente) e data do aceite
+- Contadores: X aceitos / Y pendentes
 
-### Arquivos alterados
-- **Migração SQL** — adicionar coluna `domain_id` e atualizar RLS
-- `src/pages/matriz/ContractEditorPage.tsx` — filtrar e inserir com `domain_id`
-- `src/pages/driver/DriverContractPage.tsx` — filtrar com `domain_id`
+### 3. Arquivos alterados
+- **Nova migração SQL** — criar tabela `driver_contracts`
+- `src/pages/matriz/ContractEditorPage.tsx` — adicionar seção de aceites dos motoristas
 
