@@ -1,0 +1,1 @@
+ALTER TABLE public.contracts ADD COLUMN domain_id UUID REFERENCES public.domains(id) ON DELETE CASCADE;

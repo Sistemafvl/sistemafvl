@@ -42,22 +42,33 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          domain_id: string | null
           id: string
           title: string
         }
         Insert: {
           content: string
           created_at?: string | null
+          domain_id?: string | null
           id?: string
           title: string
         }
         Update: {
           content?: string
           created_at?: string | null
+          domain_id?: string | null
           id?: string
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contracts_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cycle_records: {
         Row: {
