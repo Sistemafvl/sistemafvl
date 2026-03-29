@@ -1017,7 +1017,7 @@ const RelatoriosPage = () => {
                       </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
                       <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.totalTbrs || 0}</strong></div>
-                      <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns || 0}</strong></div>
+                      
                       <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked || 0}</strong></div>
                       <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed || 0)}</strong></div>
                       {(d.dnrDiscount ?? 0) > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount!)}</strong></div>}
@@ -1036,7 +1036,7 @@ const RelatoriosPage = () => {
                                 <TableHead className="text-xs h-8 px-2">Data</TableHead>
                                 <TableHead className="text-xs h-8 px-2">Login</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">TBRs</TableHead>
-                                <TableHead className="text-xs h-8 px-2 text-right">Retornos</TableHead>
+                                
                                 <TableHead className="text-xs h-8 px-2 text-right">Concluídos</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">Valor</TableHead>
                               </TableRow>
@@ -1047,7 +1047,7 @@ const RelatoriosPage = () => {
                                   <TableCell className="text-xs px-2 py-1.5">{formatDateFullBR(day.date)}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5">{day.login || "—"}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
-                                  <TableCell className="text-xs px-2 py-1.5 text-right">{day.returns}</TableCell>
+                                  
                                   <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.completed}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right">{formatCurrency(day.value)}</TableCell>
                                 </TableRow>
