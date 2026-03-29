@@ -7,6 +7,69 @@ import { Button } from "@/components/ui/button";
 import { Scale, Save, Eye, Edit3, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
+const DEFAULT_CONTRACT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
+
+CONTRATANTE: FAVELA LLOG Prestação de Serviços Logísticos Ltda.
+
+CONTRATADO(A): Motorista Parceiro(a) devidamente cadastrado no sistema digital da CONTRATANTE.
+
+---
+
+1. DO OBJETO
+O presente instrumento tem por objeto a prestação de serviços de transporte e entrega de mercadorias (última milha/last-mile) pelo CONTRATADO à CONTRATANTE, de forma eventual e sem exclusividade, conforme demandas operacionais disponibilizadas pelo sistema digital da CONTRATANTE.
+
+2. DA AUTONOMIA E VÍNCULO EMPREGATÍCIO
+As partes declaram expressamente que este contrato não estabelece qualquer vínculo empregatício entre o CONTRATADO e a CONTRATANTE, nos termos da Lei nº 11.442/2007 e da Lei nº 13.467/2017 (Reforma Trabalhista). O CONTRATADO é profissional autônomo, detendo plena liberdade na execução de suas atividades, podendo inclusive prestar serviços a terceiros.
+
+3. DAS OBRIGAÇÕES DO CONTRATADO
+a) Manter o veículo em perfeitas condições de uso, segurança e higiene;
+b) Portar CNH válida (categoria compatível) e toda a documentação do veículo em dia;
+c) Utilizar os equipamentos de proteção individual (EPIs) quando exigido pela operação;
+d) Zelar pela integridade das mercadorias transportadas durante todo o percurso;
+e) Efetuar a baixa das entregas em tempo real via sistema mobile da CONTRATANTE;
+f) Comparecer ao ponto de carregamento nos horários estipulados pela unidade operacional;
+g) Comunicar imediatamente qualquer ocorrência, avaria ou extravio de mercadorias;
+h) Manter seus dados cadastrais atualizados no sistema.
+
+4. DAS OBRIGAÇÕES DA CONTRATANTE
+a) Disponibilizar as rotas e pacotes para entrega por meio do sistema digital;
+b) Efetuar os pagamentos nos prazos e valores acordados;
+c) Fornecer acesso ao sistema de gestão de entregas e conferência;
+d) Prestar suporte operacional por meio da equipe da unidade.
+
+5. DA REMUNERAÇÃO
+A remuneração será composta por valor fixo por pacote entregue com sucesso (TBR), conforme tabela vigente no sistema. Os pagamentos serão realizados quinzenalmente, após a conciliação dos relatórios gerados pelo sistema e aprovação da diretoria da unidade. Valores referentes a DNR (Devoluções Não Realizadas) e Reativos poderão ser descontados conforme regras operacionais vigentes.
+
+6. DA RESPONSABILIDADE CIVIL
+O CONTRATADO responde civilmente por eventuais danos causados a terceiros ou às mercadorias durante a execução dos serviços, bem como por multas de trânsito decorrentes de sua conduta. Em caso de extravio ou dano às mercadorias por culpa comprovada, o CONTRATADO poderá ter os valores correspondentes descontados de sua remuneração.
+
+7. DA CONFIDENCIALIDADE
+O CONTRATADO compromete-se a manter sigilo absoluto sobre todas as informações obtidas em razão da prestação dos serviços, incluindo dados de clientes, rotas, volumes e demais informações operacionais da CONTRATANTE, sob pena de responsabilização civil e criminal.
+
+8. DA PROTEÇÃO DE DADOS (LGPD)
+Em conformidade com a Lei nº 13.709/2018 (LGPD), o CONTRATADO autoriza a coleta e tratamento de seus dados pessoais exclusivamente para fins operacionais, cadastrais e financeiros relacionados à prestação dos serviços. A CONTRATANTE compromete-se a proteger os dados pessoais do CONTRATADO, utilizando-os apenas para as finalidades previstas neste contrato.
+
+9. DO USO DO SISTEMA DIGITAL
+O CONTRATADO receberá credenciais de acesso ao sistema digital da CONTRATANTE, sendo de sua inteira responsabilidade a guarda e o uso adequado dessas credenciais. O login é pessoal e intransferível. O uso indevido do sistema poderá acarretar o desligamento imediato e responsabilização nas esferas cível e criminal.
+
+10. DAS PENALIDADES
+O descumprimento das obrigações previstas neste contrato poderá acarretar:
+a) Advertência verbal ou por escrito;
+b) Suspensão temporária do acesso ao sistema e às rotas;
+c) Rescisão imediata do contrato, sem aviso prévio, em casos graves.
+
+11. DA RESCISÃO
+Este contrato poderá ser rescindido por qualquer uma das partes, a qualquer tempo, mediante aviso prévio de 24 (vinte e quatro) horas, sem ônus, exceto em casos de má conduta, fraude ou descumprimento grave das cláusulas aqui pactuadas, hipóteses em que a rescisão será imediata.
+
+12. DAS DISPOSIÇÕES GERAIS
+a) Este contrato é regido pelas leis da República Federativa do Brasil;
+b) Os casos omissos serão resolvidos de comum acordo entre as partes;
+c) A tolerância de qualquer das partes quanto ao descumprimento de cláusulas não implica renúncia ao direito de exigi-las;
+d) O aceite digital deste contrato tem a mesma validade jurídica da assinatura física, nos termos da MP 2.200-2/2001.
+
+13. DO FORO
+Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.`;
+
 const ContractEditorPage = () => {
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("Contrato de Prestação de Serviços - Favela Llog");
@@ -29,42 +92,11 @@ const ContractEditorPage = () => {
     if (data) {
       setContent(data.content);
       setTitle(data.title);
+    } else {
+      setContent(DEFAULT_CONTRACT);
     }
     setFetching(false);
   };
-
-  const DEFAULT_CONTRACT = `# CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
-
-**CONTRATANTE:** FAVELA LLOG Prestação de Serviços Logísticos Ltda.
-
-**CONTRATADO(A):** Motorista Parceiro(a) devidamente cadastrado no sistema digital da CONTRATANTE.
-
----
-
-### 1. DO OBJETO
-O presente instrumento tem por objeto a prestação de serviços de transporte e entrega de mercadorias (última milha/last-mile) pelo CONTRATADO à CONTRATANTE, de forma eventual e sem exclusividade.
-
-### 2. DA AUTONOMIA E VÍNCULO EMPREGATÍCIO
-As partes declaram expressamente que este contrato não estabelece qualquer vínculo empregatício entre o CONTRATADO e a CONTRATANTE, nos termos da Lei nº 11.442/2007. O CONTRATADO é profissional autônomo, detendo plena liberdade na execução de suas atividades.
-
-### 3. DAS OBRIGAÇÕES DO CONTRATADO
-- Manter o veículo em perfeitas condições de uso, segurança e higiene.
-- Portar CNH válida e toda a documentação do veículo em dia.
-- Utilizar os equipamentos de proteção individual (EPIs) quando exigido.
-- Zelar pela integridade das mercadorias transportadas.
-- Efetuar a baixa das entregas em tempo real via sistema mobile.
-
-### 4. DA REMUNERAÇÃO
-A remuneração será composta por valor fixo por pacote entregue com sucesso, conforme tabela vigente no sistema. Os pagamentos serão realizados quinzenalmente após a conciliação dos relatórios gerados pelo sistema e aprovação da diretoria.
-
-### 5. DA RESPONSABILIDADE CIVIL
-O CONTRATADO responde civilmente por eventuais danos causados a terceiros ou às mercadorias durante a execução dos serviços, bem como por multas de trânsito decorrentes de sua conduta.
-
-### 6. DA RESCISÃO
-Este contrato poderá ser rescindido por qualquer uma das partes, a qualquer tempo, mediante aviso prévio de 24 (vinte e quatro) horas, sem ônus, exceto em casos de má conduta ou descumprimento grave das cláusulas aqui pactuadas.
-
-### 7. DO FORO
-Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato.`;
 
   const handleSave = async () => {
     if (!content.trim()) {
@@ -143,15 +175,14 @@ Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúv
         <div className="space-y-4">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader>
-              <CardTitle className="text-sm font-bold italic">Instruções de Edição</CardTitle>
-              <CardDescription className="text-xs">Utilize Markdown para formatar o texto.</CardDescription>
+              <CardTitle className="text-sm font-bold italic">Como Editar</CardTitle>
+              <CardDescription className="text-xs">Simples e rápido!</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3 text-xs">
-              <p><strong># Título Principal</strong></p>
-              <p><strong>## Subtítulo</strong></p>
-              <p><strong>- Lista de itens</strong></p>
-              <p><strong>**Negrito**</strong></p>
-              <p><strong>---</strong> (Linha divisória)</p>
+            <CardContent className="space-y-3 text-xs text-muted-foreground">
+              <p>✏️ Edite o texto diretamente na área ao lado</p>
+              <p>👁️ Use o botão "Prévia" para visualizar como ficará</p>
+              <p>💾 Clique em "Salvar e Publicar" quando estiver pronto</p>
+              <p>📲 O contrato será enviado automaticamente aos motoristas</p>
               
               <Button 
                 variant="ghost" 
@@ -159,7 +190,7 @@ Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúv
                 className="w-full mt-4 text-[10px] uppercase font-black tracking-widest text-primary hover:bg-primary/10"
                 onClick={() => setContent(DEFAULT_CONTRACT)}
               >
-                Carregar Modelo Padrão
+                Restaurar Modelo Padrão
               </Button>
             </CardContent>
           </Card>
