@@ -4,8 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { Scale, Save, Eye, Edit3, Loader2, CheckCircle2 } from "lucide-react";
+import { Scale, Save, Eye, Edit3, Loader2, CheckCircle2, Users, Clock, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { format } from "date-fns";
 
 const getDefaultContract = (domainName: string) => `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
 
@@ -70,6 +73,12 @@ d) O aceite digital deste contrato tem a mesma validade jurídica da assinatura 
 13. DO FORO
 Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.`;
 
+interface DriverAcceptance {
+  driver_id: string;
+  driver_name: string;
+  accepted_at: string | null;
+}
+
 const ContractEditorPage = () => {
   const { unitSession } = useAuthStore();
   const [content, setContent] = useState("");
@@ -78,10 +87,20 @@ const ContractEditorPage = () => {
   const [preview, setPreview] = useState(false);
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [currentContractId, setCurrentContractId] = useState<string | null>(null);
+  const [acceptances, setAcceptances] = useState<DriverAcceptance[]>([]);
+  const [searchFilter, setSearchFilter] = useState("");
+  const [loadingAcceptances, setLoadingAcceptances] = useState(false);
 
   useEffect(() => {
     fetchLatestContract();
   }, []);
+
+  useEffect(() => {
+    if (currentContractId) {
+      fetchAcceptances();
+    }
+  }, [currentContractId]);
 
   const fetchLatestContract = async () => {
     setFetching(true);
@@ -96,10 +115,65 @@ const ContractEditorPage = () => {
     if (data) {
       setContent(data.content);
       setTitle(data.title);
+      setCurrentContractId(data.id);
     } else {
       setContent(getDefaultContract(domainName));
     }
     setFetching(false);
+  };
+
+  const fetchAcceptances = async () => {
+    if (!currentContractId || !unitSession?.domain_id) return;
+    setLoadingAcceptances(true);
+
+    // Get all units from the same domain
+    const { data: domainUnits } = await supabase
+      .from("units")
+      .select("id")
+      .eq("domain_id", unitSession.domain_id);
+
+    if (!domainUnits?.length) { setLoadingAcceptances(false); return; }
+    const unitIds = domainUnits.map(u => u.id);
+
+    // Get unique drivers from driver_rides in those units
+    const { data: rides } = await supabase
+      .from("driver_rides")
+      .select("driver_id")
+      .in("unit_id", unitIds);
+
+    const uniqueDriverIds = [...new Set((rides || []).map(r => r.driver_id))];
+    if (!uniqueDriverIds.length) { setLoadingAcceptances(false); return; }
+
+    // Get driver names
+    const { data: drivers } = await supabase
+      .from("drivers_public")
+      .select("id, name")
+      .in("id", uniqueDriverIds);
+
+    // Get acceptances for current contract
+    const { data: contractAcceptances } = await (supabase as any)
+      .from("driver_contracts")
+      .select("driver_id, accepted_at")
+      .eq("contract_id", currentContractId);
+
+    const acceptanceMap = new Map<string, string>();
+    (contractAcceptances || []).forEach((a: any) => acceptanceMap.set(a.driver_id, a.accepted_at));
+
+    const result: DriverAcceptance[] = (drivers || []).map((d: any) => ({
+      driver_id: d.id,
+      driver_name: d.name || "Sem nome",
+      accepted_at: acceptanceMap.get(d.id) || null,
+    }));
+
+    // Sort: pending first, then by name
+    result.sort((a, b) => {
+      if (!a.accepted_at && b.accepted_at) return -1;
+      if (a.accepted_at && !b.accepted_at) return 1;
+      return a.driver_name.localeCompare(b.driver_name);
+    });
+
+    setAcceptances(result);
+    setLoadingAcceptances(false);
   };
 
   const handleSave = async () => {
@@ -108,15 +182,24 @@ const ContractEditorPage = () => {
       return;
     }
     setLoading(true);
-    const { error } = await (supabase.from("contracts" as any) as any).insert([{ title, content, domain_id: unitSession?.domain_id }]);
+    const { data, error } = await (supabase.from("contracts" as any) as any).insert([{ title, content, domain_id: unitSession?.domain_id }]).select().single();
     setLoading(false);
 
     if (error) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Contrato salvo!", description: "Uma nova versão do contrato foi publicada para os motoristas." });
+      if (data) {
+        setCurrentContractId(data.id);
+      }
     }
   };
+
+  const acceptedCount = acceptances.filter(a => a.accepted_at).length;
+  const pendingCount = acceptances.filter(a => !a.accepted_at).length;
+  const filteredAcceptances = acceptances.filter(a =>
+    a.driver_name.toLowerCase().includes(searchFilter.toLowerCase())
+  );
 
   if (fetching) return <div className="flex h-64 items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-primary" /></div>;
 
@@ -175,7 +258,6 @@ const ContractEditorPage = () => {
           )}
         </div>
 
-
         <div className="space-y-4">
           <Card className="bg-primary/5 border-primary/20">
             <CardHeader>
@@ -213,6 +295,66 @@ const ContractEditorPage = () => {
           </Card>
         </div>
       </div>
+
+      {/* Painel de Aceites dos Motoristas */}
+      {currentContractId && (
+        <Card className="border-2 border-muted">
+          <CardHeader className="pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <CardTitle className="text-lg font-bold italic">Aceites dos Motoristas</CardTitle>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant="default" className="bg-green-600 text-white gap-1">
+                  <CheckCircle2 className="h-3 w-3" /> {acceptedCount} aceitos
+                </Badge>
+                <Badge variant="outline" className="border-amber-500 text-amber-700 gap-1">
+                  <Clock className="h-3 w-3" /> {pendingCount} pendentes
+                </Badge>
+              </div>
+            </div>
+            <div className="relative mt-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar motorista..."
+                value={searchFilter}
+                onChange={(e) => setSearchFilter(e.target.value)}
+                className="pl-9 h-9 text-sm"
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingAcceptances ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="animate-spin h-6 w-6 text-primary" />
+              </div>
+            ) : filteredAcceptances.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6 italic">
+                {acceptances.length === 0 ? "Nenhum motorista encontrado nas unidades deste domínio." : "Nenhum resultado para a busca."}
+              </p>
+            ) : (
+              <div className="divide-y divide-border max-h-[400px] overflow-y-auto">
+                {filteredAcceptances.map((driver) => (
+                  <div key={driver.driver_id} className="flex items-center justify-between py-2.5 px-1">
+                    <span className="text-sm font-medium truncate max-w-[200px]">{driver.driver_name}</span>
+                    {driver.accepted_at ? (
+                      <div className="flex items-center gap-1.5 text-green-600">
+                        <CheckCircle2 className="h-4 w-4" />
+                        <span className="text-xs font-semibold">{format(new Date(driver.accepted_at), "dd/MM/yy HH:mm")}</span>
+                      </div>
+                    ) : (
+                      <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600 font-bold">
+                        PENDENTE
+                      </Badge>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
       
       <style>{`
         .markdown-content h1 { font-size: 1.5rem; font-weight: 800; border-bottom: 2px solid #e2e8f0; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
