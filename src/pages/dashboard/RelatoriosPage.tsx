@@ -974,8 +974,12 @@ const RelatoriosPage = () => {
             {/* Summary totals */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
               <div className="rounded-lg border p-2 text-center">
-                <p className="text-xs text-muted-foreground">Total TBRs</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0)}</p>
+                <p className="text-xs text-muted-foreground">Carros / Motos</p>
+                <p className="font-bold">{(() => {
+                  const carros = payrollData.filter(d => (d.tbrValueUsed || 0) >= 3.35).length;
+                  const motos = payrollData.filter(d => (d.tbrValueUsed || 0) < 3.35).length;
+                  return `${carros} / ${motos}`;
+                })()}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Média Pacote</p>
