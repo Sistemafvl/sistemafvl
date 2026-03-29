@@ -7,35 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Scale, Save, Eye, Edit3, Loader2, CheckCircle2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
-const ContractEditorPage = () => {
-  const [content, setContent] = useState("");
-  const [title, setTitle] = useState("Contrato de Prestação de Serviços - Favela Llog");
-  const [preview, setPreview] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [fetching, setFetching] = useState(true);
-
-  useEffect(() => {
-    fetchLatestContract();
-  }, []);
-
-  const fetchLatestContract = async () => {
-    setFetching(true);
-    const { data } = await (supabase.from("contracts" as any) as any)
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
-
-    if (data) {
-      setContent(data.content);
-      setTitle(data.title);
-    } else {
-      setContent(DEFAULT_CONTRACT);
-    }
-    setFetching(false);
-  };
-
-  const DEFAULT_CONTRACT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
+const DEFAULT_CONTRACT = `CONTRATO DE PRESTAÇÃO DE SERVIÇOS DE TRANSPORTE E ENTREGAS
 
 CONTRATANTE: FAVELA LLOG Prestação de Serviços Logísticos Ltda.
 
@@ -97,6 +69,34 @@ d) O aceite digital deste contrato tem a mesma validade jurídica da assinatura 
 
 13. DO FORO
 Fica eleito o Foro da Comarca da Sede da Contratante para dirimir quaisquer dúvidas oriundas deste contrato, com renúncia expressa a qualquer outro, por mais privilegiado que seja.`;
+
+const ContractEditorPage = () => {
+  const [content, setContent] = useState("");
+  const [title, setTitle] = useState("Contrato de Prestação de Serviços - Favela Llog");
+  const [preview, setPreview] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(true);
+
+  useEffect(() => {
+    fetchLatestContract();
+  }, []);
+
+  const fetchLatestContract = async () => {
+    setFetching(true);
+    const { data } = await (supabase.from("contracts" as any) as any)
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    if (data) {
+      setContent(data.content);
+      setTitle(data.title);
+    } else {
+      setContent(DEFAULT_CONTRACT);
+    }
+    setFetching(false);
+  };
 
   const handleSave = async () => {
     if (!content.trim()) {
