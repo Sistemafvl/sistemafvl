@@ -55,6 +55,8 @@ interface PsEntry {
   description: string;
   reason: string | null;
   photo_url: string | null;
+  photo_url_2: string | null;
+  photo_url_3: string | null;
   status: string;
   created_at: string;
   conferente_id: string | null;
