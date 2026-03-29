@@ -992,539 +992,115 @@ export function generatePayrollExcel(
     );
   }
 
+  // ══════════════ SUMMARY TABLE AT COLUMN Z ══════════════
+  const COL_SUMMARY_START = 25; // Column Z (0-indexed)
+  const COL_SUMMARY_NAME = COL_SUMMARY_START;
+  const COL_SUMMARY_T1 = COL_SUMMARY_START + 1;
+  const COL_SUMMARY_T2 = COL_SUMMARY_START + 2;
+  const COL_SUMMARY_TOTAL = COL_SUMMARY_START + 3;
+
+  // Title row (row 5, 0-indexed)
+  const summaryTitleRow = 5;
+  const summaryAddr0 = XLSX.utils.encode_cell({ r: summaryTitleRow, c: COL_SUMMARY_NAME });
+  ws[summaryAddr0] = { v: "RESUMO DE PAGAMENTOS", t: "s" };
+  ws[summaryAddr0].s = { font: boldFontLg, fill: lightBlueFill, alignment: centerAlign, border: borderThin };
+  if (!ws["!merges"]) ws["!merges"] = [];
+  ws["!merges"].push({ s: { r: summaryTitleRow, c: COL_SUMMARY_NAME }, e: { r: summaryTitleRow, c: COL_SUMMARY_TOTAL } });
+
+  // Header row (row 6, 0-indexed)
+  const summaryHeaderRow = 6;
+  const summaryHeaders = ["Motorista", "Tabela 1", "Tabela 2", "Total"];
+  summaryHeaders.forEach((h, i) => {
+    const addr = XLSX.utils.encode_cell({ r: summaryHeaderRow, c: COL_SUMMARY_START + i });
+    ws[addr] = { v: h, t: "s" };
+    ws[addr].s = { font: boldFont, fill: yellowFill, alignment: centerAlign, border: borderThin };
+  });
+
+  // Data rows — one per sorted driver
+  const summaryDataStartRow = 7;
+  sortedData.forEach((d, idx) => {
+    const r = summaryDataStartRow + idx;
+    const excelRow = r + 1;
+
+    // Name
+    const nameAddr = XLSX.utils.encode_cell({ r, c: COL_SUMMARY_NAME });
+    ws[nameAddr] = { v: d.driver.name, t: "s" };
+    ws[nameAddr].s = { font: { sz: 11 }, alignment: leftAlign, border: borderThin };
+
+    // Tabela 1 — reference TOTAL GERAL from main table for this driver
+    const mainDataRow = rowTracker.dataStartRow + idx + 1; // Excel 1-indexed
+    setCellFormula(ws, r, COL_SUMMARY_T1, `${colLetter(COL_TOTAL_GERAL)}${mainDataRow}`, {
+      font: { sz: 11 }, alignment: centerAlign, border: borderThin,
+    });
+
+    // Tabela 2 — reference TOTAL GERAL from min packages table for this driver
+    const minDataRow = rowTracker.minDataStartRow + idx + 1; // Excel 1-indexed
+    setCellFormula(ws, r, COL_SUMMARY_T2, `${colLetter(COL_TOTAL_GERAL)}${minDataRow}`, {
+      font: { sz: 11 }, alignment: centerAlign, border: borderThin,
+    });
+
+    // Total = T1 + T2
+    const t1Cell = `${colLetter(COL_SUMMARY_T1)}${excelRow}`;
+    const t2Cell = `${colLetter(COL_SUMMARY_T2)}${excelRow}`;
+    setCellFormula(ws, r, COL_SUMMARY_TOTAL, `${t1Cell}+${t2Cell}`, {
+      font: { sz: 11, bold: true }, alignment: centerAlign, border: borderThin,
+    });
+  });
+
+  // Totals row
+  const summaryTotalRow = summaryDataStartRow + sortedData.length;
+  const summaryTotalExcel = summaryTotalRow + 1;
+  const summaryStartExcel = summaryDataStartRow + 1;
+  const summaryEndExcel = summaryTotalRow; // last data row in Excel 1-indexed
+
+  const totalLabelAddr = XLSX.utils.encode_cell({ r: summaryTotalRow, c: COL_SUMMARY_NAME });
+  ws[totalLabelAddr] = { v: "TOTAL", t: "s" };
+  ws[totalLabelAddr].s = { font: boldFont, fill: greenFill, alignment: centerAlign, border: borderThin };
+
+  [COL_SUMMARY_T1, COL_SUMMARY_T2, COL_SUMMARY_TOTAL].forEach((col) => {
+    setCellFormula(
+      ws,
+      summaryTotalRow,
+      col,
+      `SUM(${colLetter(col)}${summaryStartExcel}:${colLetter(col)}${summaryEndExcel})`,
+      { font: boldFont, fill: greenFill, alignment: centerAlign, border: borderThin },
+    );
+  });
+
+  // Currency format for summary columns
+  const currencyFmt = '"R$" #,##0.00';
+  for (let r = summaryDataStartRow; r <= summaryTotalRow; r++) {
+    for (const col of [COL_SUMMARY_T1, COL_SUMMARY_T2, COL_SUMMARY_TOTAL]) {
+      const addr = XLSX.utils.encode_cell({ r, c: col });
+      if (ws[addr]) {
+        ws[addr].z = currencyFmt;
+        ws[addr].s = { ...(ws[addr].s || {}), numFmt: currencyFmt };
+      }
+    }
+  }
+
+  // Set column widths for summary columns
+  if (!ws["!cols"]) ws["!cols"] = colWidths;
+  while (ws["!cols"].length <= COL_SUMMARY_TOTAL) {
+    ws["!cols"].push({ wch: 8 });
+  }
+  ws["!cols"][COL_SUMMARY_NAME] = { wch: 35 };
+  ws["!cols"][COL_SUMMARY_T1] = { wch: 18 };
+  ws["!cols"][COL_SUMMARY_T2] = { wch: 18 };
+  ws["!cols"][COL_SUMMARY_TOTAL] = { wch: 18 };
+
+  // Update sheet range to include summary columns
+  const lastSummaryRow = summaryTotalRow;
+  const currentRange = XLSX.utils.decode_range(ws["!ref"] || "A1");
+  if (COL_SUMMARY_TOTAL > currentRange.e.c) currentRange.e.c = COL_SUMMARY_TOTAL;
+  if (lastSummaryRow > currentRange.e.r) currentRange.e.r = lastSummaryRow;
+  ws["!ref"] = XLSX.utils.encode_range(currentRange);
+
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Fechamento");
 
-  // ══════════════ CREATE INDICADORES SHEET ══════════════
-  createIndicadoresSheet(wb, data);
-
-  // ══════════════ CREATE INDIVIDUAL DRIVER SHEETS ══════════════
-  const allDrivers = [
-    ...data,
-    ...minPkgPayrollData.filter(
-      (mp) => !data.some((d) => d.driver.id === mp.driver.id),
-    ),
-  ];
-
-  const usedSheetNames = new Set<string>();
-  usedSheetNames.add("fechamento");
-  usedSheetNames.add("indicadores");
-
-  allDrivers.forEach((d) => {
-    let baseName = sanitizeSheetName(d.driver.name || "Motorista");
-    if (!baseName) baseName = "Motorista";
-
-    let sheetName = baseName;
-    let counter = 1;
-    while (usedSheetNames.has(sheetName.toLowerCase())) {
-      const suffix = ` (${counter})`;
-      sheetName = `${baseName.substring(0, 31 - suffix.length)}${suffix}`;
-      counter++;
-    }
-    usedSheetNames.add(sheetName.toLowerCase());
-
-    const driverWsData: (string | number)[][] = [];
-
-    driverWsData.push(["RESUMO DO MOTORISTA"]);
-    driverWsData.push([]);
-    driverWsData.push(["Nome", d.driver.name]);
-    driverWsData.push([]); // Removed CPF row
-    const tbrVal = d.tbrValueUsed ?? 0;
-    driverWsData.push(["Veículo", tbrVal <= 2.5 ? "MOTO" : "CARRO"]);
-    driverWsData.push(["Chave PIX", d.driver.pixKey ?? ""]);
-    driverWsData.push(["Valor por Pacote", tbrVal]);
-    driverWsData.push([]);
-
-    driverWsData.push(["DETALHAMENTO DIÁRIO"]);
-    driverWsData.push(["Data", "Pacotes", "Retornos", "Concluídos"]);
-
-    const dailyStartRow = driverWsData.length;
-
-    if (d.days.length > 0) {
-      d.days.forEach((day) => {
-        driverWsData.push([
-          format(new Date(day.date + "T12:00:00"), "dd/MM/yyyy"),
-          day.tbrCount,
-          day.returns,
-          0,
-        ]);
-      });
-    } else {
-      for (let i = 0; i < 15; i++) {
-        driverWsData.push(["", 0, 0, 0]);
-      }
-    }
-
-    const dailyEndRow = driverWsData.length - 1;
-
-    driverWsData.push(["TOTAL", 0, 0, 0]);
-    const totalDailyRow = driverWsData.length - 1;
-
-    driverWsData.push([]);
-
-    driverWsData.push(["RESUMO FINANCEIRO"]);
-    driverWsData.push(["Total Pacotes Concluídos", 0]);
-    driverWsData.push(["Valor por Pacote", tbrVal]);
-    driverWsData.push(["Subtotal (Pacotes × Valor)", 0]);
-    driverWsData.push(["Descontos (DNR)", d.dnrDiscount ?? 0]);
-    driverWsData.push([
-      "Adicional (Bônus + Reativo)",
-      (d.bonus ?? 0) + (d.reativoTotal ?? 0),
-    ]);
-    driverWsData.push(["TOTAL A PAGAR", 0]);
-    driverWsData.push(["Média Pacote (Custo/Pacote)", 0]); // NEW: average package cost
-
-    const driverWs = XLSX.utils.aoa_to_sheet(driverWsData);
-
-    // Daily rows formulas
-    for (let r = dailyStartRow; r <= dailyEndRow; r++) {
-      const excelRow = r + 1;
-      setCellFormula(
-        driverWs,
-        r,
-        3,
-        `IF(B${excelRow}=0,0,B${excelRow}-C${excelRow})`,
-      );
-    }
-
-    // Total row formulas
-    const totalExcel = totalDailyRow + 1;
-    const startExcel = dailyStartRow + 1;
-    const endExcel = dailyEndRow + 1;
-    setCellFormula(
-      driverWs,
-      totalDailyRow,
-      1,
-      `SUM(B${startExcel}:B${endExcel})`,
-    );
-    setCellFormula(
-      driverWs,
-      totalDailyRow,
-      2,
-      `SUM(C${startExcel}:C${endExcel})`,
-    );
-    setCellFormula(
-      driverWs,
-      totalDailyRow,
-      3,
-      `SUM(D${startExcel}:D${endExcel})`,
-    );
-
-    // Financial summary formulas
-    const finStartRow = totalDailyRow + 3;
-    setCellFormula(driverWs, finStartRow, 1, `D${totalExcel}`);
-    setCellFormula(
-      driverWs,
-      finStartRow + 2,
-      1,
-      `B${finStartRow + 1}*B${finStartRow + 2}`,
-    );
-    const subtotalRow = finStartRow + 3;
-    const discountsRow = finStartRow + 4;
-    const additionalRow = finStartRow + 5;
-    const totalPayRow = finStartRow + 6;
-    const mediaPackRow = finStartRow + 7; // Média Pacote row
-    setCellFormula(
-      driverWs,
-      totalPayRow - 1,
-      1,
-      `B${subtotalRow}-B${discountsRow}+B${additionalRow}`,
-    );
-    // Média Pacote = TOTAL A PAGAR / Total Pacotes Concluídos
-    setCellFormula(
-      driverWs,
-      mediaPackRow - 1,
-      1,
-      `IF(B${finStartRow + 1}=0,0,B${totalPayRow}/B${finStartRow + 1})`,
-    );
-
-    // Set column widths for driver sheet
-    driverWs["!cols"] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 15 }];
-
-    // Apply styles
-    applyStyleToRow(driverWs, 0, 0, 3, {
-      font: boldFontLg,
-      fill: lightBlueFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-    mergeRow(driverWs, 0, 0, 3);
-
-    for (let r = 2; r <= 6; r++) {
-      applyStyleToRow(driverWs, r, 0, 1, {
-        font: { sz: 11 },
-        alignment: leftAlign,
-        border: borderThin,
-      });
-      const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
-      if (driverWs[labelAddr]) {
-        driverWs[labelAddr].s = { ...driverWs[labelAddr].s, font: boldFont };
-      }
-    }
-
-    applyStyleToRow(driverWs, 8, 0, 3, {
-      font: boldFont,
-      fill: lightBlueFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-    mergeRow(driverWs, 8, 0, 3);
-
-    applyStyleToRow(driverWs, 9, 0, 3, {
-      font: boldFont,
-      fill: yellowFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-
-    for (let r = dailyStartRow; r <= dailyEndRow; r++) {
-      applyStyleToRow(driverWs, r, 0, 3, {
-        font: { sz: 11 },
-        alignment: centerAlign,
-        border: borderThin,
-      });
-    }
-
-    applyStyleToRow(driverWs, totalDailyRow, 0, 3, {
-      font: boldFont,
-      fill: greenFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-
-    applyStyleToRow(driverWs, totalDailyRow + 2, 0, 1, {
-      font: boldFont,
-      fill: lightBlueFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-    mergeRow(driverWs, totalDailyRow + 2, 0, 1);
-
-    // Financial rows (including the new Média Pacote row)
-    for (let r = finStartRow; r <= mediaPackRow - 1; r++) {
-      applyStyleToRow(driverWs, r, 0, 1, {
-        font: { sz: 11 },
-        alignment: leftAlign,
-        border: borderThin,
-      });
-      const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
-      if (driverWs[labelAddr]) {
-        driverWs[labelAddr].s = { ...driverWs[labelAddr].s, font: boldFont };
-      }
-    }
-
-    // TOTAL A PAGAR row
-    applyStyleToRow(driverWs, totalPayRow - 1, 0, 1, {
-      font: boldFontLg,
-      fill: greenFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-
-    // Média Pacote row style
-    applyStyleToRow(driverWs, mediaPackRow - 1, 0, 1, {
-      font: boldFont,
-      fill: orangeFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-
-    // Apply currency formatting
-    applyCurrencyFormat(driverWs, 1, 6, 6);
-    applyCurrencyFormat(driverWs, 1, finStartRow + 1, mediaPackRow - 1);
-
-    XLSX.utils.book_append_sheet(wb, driverWs, sheetName);
-  });
-
   // ══════════════ SAVE FILE ══════════════
   const fileName = `folha_pagamento_${unitName.replace(/\s+/g, "_")}_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.xlsx`;
   XLSX.writeFile(wb, fileName);
-}
-
-// ══════════════ INDICADORES SHEET ══════════════
-function createIndicadoresSheet(wb: XLSX.WorkBook, data: DriverPayrollData[]) {
-  const wsData: (string | number)[][] = [];
-
-  // Calculate metrics for each driver
-  const metrics = data
-    .map((d) => {
-      const totalPaid =
-        d.totalCompleted * (d.tbrValueUsed ?? 0) -
-        (d.dnrDiscount ?? 0) +
-        (d.bonus ?? 0) +
-        (d.reativoTotal ?? 0);
-      const avgPerPackage =
-        d.totalCompleted > 0 ? totalPaid / d.totalCompleted : 0;
-      const tbrVal = d.tbrValueUsed ?? 0;
-      return {
-        name: d.driver.name,
-        vehicle: tbrVal <= 2.5 ? "MOTO" : "CARRO",
-        packages: d.totalCompleted,
-        totalPaid,
-        avgPerPackage,
-        daysWorked: d.daysWorked,
-      };
-    })
-    .filter((m) => m.packages > 0);
-
-  // Sort by avg package cost (cheapest first)
-  const byAvg = [...metrics].sort((a, b) => a.avgPerPackage - b.avgPerPackage);
-  // Sort by volume (highest first)
-  const byVolume = [...metrics].sort((a, b) => b.packages - a.packages);
-  // Sort by total cost (highest first)
-  const byCost = [...metrics].sort((a, b) => b.totalPaid - a.totalPaid);
-
-  // ── RESUMO GERAL ──
-  wsData.push(["INDICADORES E MÉTRICAS"]);
-  wsData.push([]);
-  wsData.push(["RESUMO GERAL"]);
-
-  const totalDrivers = metrics.length;
-  const totalPackages = metrics.reduce((s, m) => s + m.packages, 0);
-  const totalCost = metrics.reduce((s, m) => s + m.totalPaid, 0);
-  const avgGeneral = totalPackages > 0 ? totalCost / totalPackages : 0;
-  const cheapest = byAvg[0];
-  const mostExpensive = byAvg[byAvg.length - 1];
-  const highestVolume = byVolume[0];
-  const lowestVolume = byVolume[byVolume.length - 1];
-
-  wsData.push(["Total de Motoristas", totalDrivers]);
-  wsData.push(["Total de Pacotes", totalPackages]);
-  wsData.push(["Custo Total", totalCost]);
-  wsData.push(["Média Geral por Pacote", avgGeneral]);
-  wsData.push([]);
-  wsData.push([
-    "Motorista Mais Barato",
-    cheapest?.name ?? "-",
-    "",
-    cheapest ? cheapest.avgPerPackage : 0,
-  ]);
-  wsData.push([
-    "Motorista Mais Caro",
-    mostExpensive?.name ?? "-",
-    "",
-    mostExpensive ? mostExpensive.avgPerPackage : 0,
-  ]);
-  wsData.push([
-    "Maior Volume",
-    highestVolume?.name ?? "-",
-    "",
-    highestVolume ? highestVolume.packages : 0,
-  ]);
-  wsData.push([
-    "Menor Volume",
-    lowestVolume?.name ?? "-",
-    "",
-    lowestVolume ? lowestVolume.packages : 0,
-  ]);
-
-  wsData.push([]);
-  wsData.push([]);
-
-  // ── RANKING POR MÉDIA PACOTE ──
-  wsData.push(["RANKING POR MÉDIA DE PACOTE (MAIS BARATO → MAIS CARO)"]);
-  const rankAvgHeaderRow = wsData.length;
-  wsData.push([
-    "#",
-    "Nome",
-    "Veículo",
-    "Pacotes",
-    "Valor Total",
-    "Média/Pacote",
-  ]);
-  const rankAvgStartRow = wsData.length;
-  byAvg.forEach((m, i) => {
-    wsData.push([
-      i + 1,
-      m.name,
-      m.vehicle,
-      m.packages,
-      m.totalPaid,
-      m.avgPerPackage,
-    ]);
-  });
-  const rankAvgEndRow = wsData.length - 1;
-
-  wsData.push([]);
-  wsData.push([]);
-
-  // ── RANKING POR VOLUME ──
-  wsData.push(["RANKING POR VOLUME DE PACOTES (MAIS → MENOS)"]);
-  const rankVolHeaderRow = wsData.length;
-  wsData.push([
-    "#",
-    "Nome",
-    "Veículo",
-    "Pacotes",
-    "Valor Total",
-    "Média/Pacote",
-  ]);
-  const rankVolStartRow = wsData.length;
-  byVolume.forEach((m, i) => {
-    wsData.push([
-      i + 1,
-      m.name,
-      m.vehicle,
-      m.packages,
-      m.totalPaid,
-      m.avgPerPackage,
-    ]);
-  });
-  const rankVolEndRow = wsData.length - 1;
-
-  wsData.push([]);
-  wsData.push([]);
-
-  // ── RANKING POR CUSTO TOTAL ──
-  wsData.push(["RANKING POR CUSTO TOTAL (MAIS CARO → MAIS BARATO)"]);
-  const rankCostHeaderRow = wsData.length;
-  wsData.push([
-    "#",
-    "Nome",
-    "Veículo",
-    "Pacotes",
-    "Valor Total",
-    "Média/Pacote",
-  ]);
-  const rankCostStartRow = wsData.length;
-  byCost.forEach((m, i) => {
-    wsData.push([
-      i + 1,
-      m.name,
-      m.vehicle,
-      m.packages,
-      m.totalPaid,
-      m.avgPerPackage,
-    ]);
-  });
-  const rankCostEndRow = wsData.length - 1;
-
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
-
-  ws["!cols"] = [
-    { wch: 30 },
-    { wch: 35 },
-    { wch: 12 },
-    { wch: 12 },
-    { wch: 18 },
-    { wch: 18 },
-  ];
-
-  // Title style
-  applyStyleToRow(ws, 0, 0, 5, {
-    font: boldFontLg,
-    fill: lightBlueFill,
-    alignment: centerAlign,
-    border: borderThin,
-  });
-  mergeRow(ws, 0, 0, 5);
-
-  // Resumo Geral header
-  applyStyleToRow(ws, 2, 0, 5, {
-    font: boldFont,
-    fill: grayFill,
-    alignment: leftAlign,
-    border: borderThin,
-  });
-  mergeRow(ws, 2, 0, 5);
-
-  // Resumo rows
-  for (let r = 3; r <= 10; r++) {
-    applyStyleToRow(ws, r, 0, 3, {
-      font: { sz: 11 },
-      alignment: leftAlign,
-      border: borderThin,
-    });
-    const labelAddr = XLSX.utils.encode_cell({ r, c: 0 });
-    if (ws[labelAddr]) ws[labelAddr].s = { ...ws[labelAddr].s, font: boldFont };
-  }
-
-  // Currency format for resumo
-  applyCurrencyFormat(ws, 1, 5, 6); // Custo Total, Média Geral
-  applyCurrencyFormat(ws, 3, 8, 9); // cheapest/expensive avg
-
-  // Style ranking sections
-  const rankingSections = [
-    {
-      titleRow: rankAvgHeaderRow - 1,
-      headerRow: rankAvgHeaderRow,
-      startRow: rankAvgStartRow,
-      endRow: rankAvgEndRow,
-    },
-    {
-      titleRow: rankVolHeaderRow - 1,
-      headerRow: rankVolHeaderRow,
-      startRow: rankVolStartRow,
-      endRow: rankVolEndRow,
-    },
-    {
-      titleRow: rankCostHeaderRow - 1,
-      headerRow: rankCostHeaderRow,
-      startRow: rankCostStartRow,
-      endRow: rankCostEndRow,
-    },
-  ];
-
-  for (const section of rankingSections) {
-    // Section title
-    applyStyleToRow(ws, section.titleRow, 0, 5, {
-      font: boldFont,
-      fill: lightBlueFill,
-      alignment: leftAlign,
-      border: borderThin,
-    });
-    mergeRow(ws, section.titleRow, 0, 5);
-
-    // Header row
-    applyStyleToRow(ws, section.headerRow, 0, 5, {
-      font: boldFont,
-      fill: yellowFill,
-      alignment: centerAlign,
-      border: borderThin,
-    });
-
-    // Data rows
-    for (let r = section.startRow; r <= section.endRow; r++) {
-      applyStyleToRow(ws, r, 0, 5, {
-        font: { sz: 11 },
-        alignment: centerAlign,
-        border: borderThin,
-      });
-      // Name left-aligned
-      const nameAddr = XLSX.utils.encode_cell({ r, c: 1 });
-      if (ws[nameAddr])
-        ws[nameAddr].s = { ...ws[nameAddr].s, alignment: leftAlign };
-
-      // Highlight top 3
-      if (r - section.startRow < 3) {
-        applyStyleToRow(ws, r, 0, 5, {
-          font: { sz: 11, bold: true },
-          fill: {
-            fgColor: {
-              rgb:
-                r - section.startRow === 0
-                  ? "FFD700"
-                  : r - section.startRow === 1
-                    ? "C0C0C0"
-                    : "CD7F32",
-            },
-          },
-          alignment: centerAlign,
-          border: borderThin,
-        });
-        const nameAddr2 = XLSX.utils.encode_cell({ r, c: 1 });
-        if (ws[nameAddr2])
-          ws[nameAddr2].s = { ...ws[nameAddr2].s, alignment: leftAlign };
-      }
-    }
-
-    // Currency columns
-    applyCurrencyFormat(ws, 4, section.startRow, section.endRow); // Valor Total
-    applyCurrencyFormat(ws, 5, section.startRow, section.endRow); // Média/Pacote
-  }
-
-  XLSX.utils.book_append_sheet(wb, ws, "Indicadores");
-  
-  return wb;
 }
