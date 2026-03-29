@@ -682,10 +682,20 @@ const RelatoriosPage = () => {
 
         const netReturns = new Set<string>();
         returnCodesForDay.forEach(codeUpper => {
-          // Se o TBR ainda está na carga ativa, não é retorno efetivo
+          // TBR ainda está no carregamento → não é retorno efetivo
           if (activeTbrCodes.has(codeUpper)) return;
-          // Se saiu da carga (trigger deletou) e tem registro de insucesso, é retorno
-          netReturns.add(codeUpper);
+          let lastRideId: string | null = null;
+          for (const ride of sortedDayRides) {
+            if (rTbrs.some((t: any) => t.ride_id === ride.id && t.code && t.code.toString().toUpperCase() === codeUpper)) {
+              lastRideId = ride.id;
+            }
+          }
+          if (lastRideId) {
+            const hasReturnInLast = [...allPiso, ...allPs, ...allRto].some(
+              (p: any) => p.ride_id === lastRideId && p.tbr_code && p.tbr_code.toString().toUpperCase() === codeUpper
+            );
+            if (hasReturnInLast) netReturns.add(codeUpper);
+          }
         });
 
         let tbrCount = rTbrs.length;
