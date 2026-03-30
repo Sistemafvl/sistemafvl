@@ -66,7 +66,8 @@ const ConfiguracoesPage = () => {
   const [logins, setLogins] = useState<{ id: string; login: string; password: string }[]>([]);
   const [newLogin, setNewLogin] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [loginsLoading, setLoginsLoading] = useState(false);
+  const [loginsLoading, setLoginsLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loginsPage, setLoginsPage] = useState(1);
   const loginsPerPage = 10;
   const [editingLoginId, setEditingLoginId] = useState<string | null>(null);
@@ -218,7 +219,14 @@ const ConfiguracoesPage = () => {
     })));
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); fetchPredefinedDrivers(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues, fetchPredefinedDrivers]);
+  useEffect(() => { 
+    const loadAll = async () => {
+      setInitialLoading(true);
+      await Promise.all([fetchLogins(), fetchTbrValue(), fetchCustomValues(), fetchBonuses(), fetchMinPackages(), fetchFixedValues(), fetchPredefinedDrivers()]);
+      setInitialLoading(false);
+    };
+    loadAll();
+  }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues, fetchPredefinedDrivers]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
