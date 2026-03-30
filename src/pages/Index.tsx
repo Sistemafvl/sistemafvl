@@ -3,6 +3,7 @@ import LogoHeader from "@/components/LogoHeader";
 import UnitLoginForm from "@/components/UnitLoginForm";
 import DriverRegistrationModal from "@/components/DriverRegistrationModal";
 import AdminLoginModal from "@/components/AdminLoginModal";
+import VersionSyncControl from "@/components/VersionSyncControl";
 import { useAuthStore } from "@/stores/auth-store";
 import { Navigate, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -34,7 +35,10 @@ const Index = () => {
   const showBanner = (canInstall || !isInstalled) && !dismissedBanner;
 
   return (
-    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8">
+    <div className="flex min-h-[100dvh] flex-col items-center justify-center bg-background px-5 py-8 relative">
+      <div className="absolute top-4 right-4">
+        <VersionSyncControl />
+      </div>
       <div className="w-full max-w-sm space-y-6 sm:space-y-8">
         <LogoHeader size="xl" onTripleClick={handleTripleClick} />
 

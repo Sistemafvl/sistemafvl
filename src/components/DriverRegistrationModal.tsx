@@ -134,6 +134,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       email: form.email.trim() || null,
       whatsapp: form.whatsapp.replace(/\D/g, "") || null,
       password: form.password,
+      active: true,
     });
 
     if (error) {
@@ -143,6 +144,9 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
         msg = "CPF ou placa já cadastrado.";
       } else if (error.message.includes("row-level security") || error.code === "42501") {
         msg = "Erro de permissão no servidor. Tente novamente em instantes.";
+      } else {
+        // Show specific error if it's something else contextually relevant
+        msg = `Erro: ${error.message || "Falha na comunicação com o banco"}`;
       }
       toast({ title: "Erro ao cadastrar", description: msg, variant: "destructive" });
       setLoading(false);
