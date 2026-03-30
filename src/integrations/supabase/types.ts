@@ -42,22 +42,33 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          domain_id: string | null
           id: string
           title: string
         }
         Insert: {
           content: string
           created_at?: string | null
+          domain_id?: string | null
           id?: string
           title: string
         }
         Update: {
           content?: string
           created_at?: string | null
+          domain_id?: string | null
           id?: string
           title?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "contracts_domain_id_fkey"
+            columns: ["domain_id"]
+            isOneToOne: false
+            referencedRelation: "domains"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       cycle_records: {
         Row: {
@@ -282,6 +293,35 @@ export type Database = {
           unit_id?: string
         }
         Relationships: []
+      }
+      driver_contracts: {
+        Row: {
+          accepted_at: string
+          contract_id: string
+          driver_id: string
+          id: string
+        }
+        Insert: {
+          accepted_at?: string
+          contract_id: string
+          driver_id: string
+          id?: string
+        }
+        Update: {
+          accepted_at?: string
+          contract_id?: string
+          driver_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "driver_contracts_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       driver_custom_values: {
         Row: {
@@ -783,6 +823,8 @@ export type Database = {
           is_seller: boolean
           observations: string | null
           photo_url: string | null
+          photo_url_2: string | null
+          photo_url_3: string | null
           reason: string | null
           reversa_at: string | null
           reversa_batch_id: string | null
@@ -802,6 +844,8 @@ export type Database = {
           is_seller?: boolean
           observations?: string | null
           photo_url?: string | null
+          photo_url_2?: string | null
+          photo_url_3?: string | null
           reason?: string | null
           reversa_at?: string | null
           reversa_batch_id?: string | null
@@ -821,6 +865,8 @@ export type Database = {
           is_seller?: boolean
           observations?: string | null
           photo_url?: string | null
+          photo_url_2?: string | null
+          photo_url_3?: string | null
           reason?: string | null
           reversa_at?: string | null
           reversa_batch_id?: string | null

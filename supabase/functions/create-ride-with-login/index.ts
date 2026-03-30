@@ -45,8 +45,17 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Business Logic
-    const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+    // Business Logic — sequence resets daily (Brazil timezone UTC-3)
+    const now = new Date();
+    const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+    const br = new Date(brStr);
+    const yyyy = br.getFullYear();
+    const mm = String(br.getMonth() + 1).padStart(2, "0");
+    const dd = String(br.getDate()).padStart(2, "0");
+    const dayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
+    const dayEnd = new Date(new Date(dayStart).getTime() + 86400000 - 1).toISOString();
+
+    const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).neq("loading_status", "cancelled").gte("completed_at", dayStart).lte("completed_at", dayEnd).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
     const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
     let loginValue = null, passwordValue = null;

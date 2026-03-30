@@ -9,7 +9,7 @@ import { format } from "date-fns";
 
 const DriverContractPage = () => {
   const { unitSession } = useAuthStore();
-  const driverId = unitSession?.id; // Assuming unitSession.id is the driver profile ID when type is 'driver'
+  const driverId = unitSession?.user_profile_id;
 
   const [contract, setContract] = useState<any>(null);
   const [acceptance, setAcceptance] = useState<any>(null);
@@ -24,12 +24,14 @@ const DriverContractPage = () => {
 
   const fetchData = async () => {
     // Get latest contract
-    const { data: latestContract } = await supabase
+    const domainId = unitSession?.domain_id;
+    const query = supabase
       .from("contracts")
       .select("*")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+    if (domainId) query.eq("domain_id", domainId);
+    const { data: latestContract } = await query.single();
 
     if (latestContract) {
       setContract(latestContract);
@@ -60,7 +62,7 @@ const DriverContractPage = () => {
     if (error) {
       toast({ title: "Erro ao aceitar", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Contrato Aceito!", description: "Obrigado por sua parceria com a Favela Llog." });
+      toast({ title: "Contrato Aceito!", description: "Obrigado por sua parceria." });
       fetchData();
     }
     setSubmitting(false);

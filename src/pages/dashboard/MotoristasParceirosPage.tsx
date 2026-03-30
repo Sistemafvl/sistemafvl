@@ -297,7 +297,7 @@ const MotoristasParceirosPage = () => {
         >
           <CardContent className="p-4 text-center space-y-1">
             <Truck className="h-4 w-4 mx-auto text-primary" />
-            <p className="text-2xl font-bold">{totalDrivers}</p>
+            {loading ? <Skeleton className="h-8 w-16 mx-auto" /> : <p className="text-2xl font-bold">{totalDrivers}</p>}
             <p className="text-[10px] text-muted-foreground">Total Cadastrados</p>
           </CardContent>
         </Card>
@@ -307,7 +307,7 @@ const MotoristasParceirosPage = () => {
         >
           <CardContent className="p-4 text-center space-y-1">
             <Eye className="h-4 w-4 mx-auto text-green-600" />
-            <p className="text-2xl font-bold text-green-600">{activeDrivers}</p>
+            {loading ? <Skeleton className="h-8 w-16 mx-auto" /> : <p className="text-2xl font-bold text-green-600">{activeDrivers}</p>}
             <p className="text-[10px] text-muted-foreground">Ativos (15d)</p>
           </CardContent>
         </Card>
@@ -317,14 +317,14 @@ const MotoristasParceirosPage = () => {
         >
           <CardContent className="p-4 text-center space-y-1">
             <Truck className="h-4 w-4 mx-auto text-muted-foreground" />
-            <p className="text-2xl font-bold text-muted-foreground">{inactiveDrivers}</p>
+            {loading ? <Skeleton className="h-8 w-16 mx-auto" /> : <p className="text-2xl font-bold text-muted-foreground">{inactiveDrivers}</p>}
             <p className="text-[10px] text-muted-foreground">Inativos (15d)</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center space-y-1">
             <Search className="h-4 w-4 mx-auto text-primary" />
-            <p className="text-2xl font-bold">{uniqueStates}</p>
+            {loading ? <Skeleton className="h-8 w-16 mx-auto" /> : <p className="text-2xl font-bold">{uniqueStates}</p>}
             <p className="text-[10px] text-muted-foreground">Estados</p>
           </CardContent>
         </Card>

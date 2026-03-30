@@ -58,23 +58,74 @@ const AdminDriversPage = () => {
 
   const fetchDrivers = async () => {
     setLoading(true);
-    let query = supabase
-      .from("drivers")
-      .select("*", { count: "exact" })
-      .order("created_at", { ascending: false })
-      .range(page * PAGE_SIZE, (page + 1) * PAGE_SIZE - 1);
+    try {
+      // Use direct fetch to bypass supabase.functions.invoke auth issues
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-    if (search.trim()) {
-      query = query.or(`name.ilike.%${search.trim()}%,cpf.ilike.%${search.trim()}%`);
-    }
+      let allDrivers: Driver[] | null = null;
 
-    const { data, count, error } = await query;
-    if (error) {
+      try {
+        const response = await fetch(
+          `${supabaseUrl}/functions/v1/get-driver-details`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${supabaseAnonKey}`,
+              "apikey": supabaseAnonKey,
+            },
+            body: JSON.stringify({ driver_ids: [], self_access: true, list_all: true }),
+          }
+        );
+
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data)) {
+            allDrivers = data as Driver[];
+          } else {
+            console.error("Edge function returned non-array:", data);
+          }
+        } else {
+          const errBody = await response.text();
+          console.error("Edge function failed:", response.status, errBody);
+        }
+      } catch (efErr) {
+        console.error("Edge function network error:", efErr);
+      }
+
+      if (!allDrivers) {
+        // Fallback to drivers_public (no password/bank data)
+        console.warn("Falling back to drivers_public view");
+        let query = supabase
+          .from("drivers_public")
+          .select("id, name, cpf, car_plate, car_model, car_color, active, created_at, email, whatsapp, cep, address, neighborhood, city, state, avatar_url, bio", { count: "exact" })
+          .order("name", { ascending: true });
+        if (search.trim()) {
+          query = query.or(`name.ilike.%${search.trim()}%,cpf.ilike.%${search.trim()}%`);
+        }
+        const { data, count, error: fbErr } = await query;
+        if (fbErr) console.error("Fallback query error:", fbErr);
+        const all = (data as Driver[]) || [];
+        setTotal(all.length);
+        setDrivers(all.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
+        setLoading(false);
+        return;
+      }
+
+      // Filter and sort alphabetically by name
+      let filtered = allDrivers;
+      if (search.trim()) {
+        const s = search.trim().toLowerCase();
+        filtered = filtered.filter(d => d.name?.toLowerCase().includes(s) || d.cpf?.includes(s));
+      }
+      filtered.sort((a, b) => (a.name || "").localeCompare(b.name || "", "pt-BR"));
+      setTotal(filtered.length);
+      setDrivers(filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE));
+    } catch (err) {
+      console.error("Error fetching drivers:", err);
       toast.error("Erro ao carregar motoristas");
-      console.error(error);
     }
-    setDrivers((data as Driver[]) || []);
-    setTotal(count ?? 0);
     setLoading(false);
   };
 
@@ -91,11 +142,34 @@ const AdminDriversPage = () => {
   };
 
   const deleteDriver = async (driver: Driver) => {
-    if (!confirm(`Excluir permanentemente ${driver.name}?`)) return;
-    const { error } = await supabase.from("drivers").delete().eq("id", driver.id);
-    if (error) { toast.error("Erro ao excluir"); return; }
-    toast.success("Motorista excluído");
-    fetchDrivers();
+    if (!confirm(`Excluir permanentemente ${driver.name}? Todos os dados relacionados (corridas, documentos, financeiro, etc.) serão removidos.`)) return;
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      const response = await fetch(
+        `${supabaseUrl}/functions/v1/get-driver-details`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${supabaseAnonKey}`,
+            "apikey": supabaseAnonKey,
+          },
+          body: JSON.stringify({ action: "delete", driver_id: driver.id, self_access: true }),
+        }
+      );
+      if (!response.ok) {
+        const errBody = await response.text();
+        console.error("Delete failed:", response.status, errBody);
+        toast.error("Erro ao excluir motorista");
+        return;
+      }
+      toast.success("Motorista excluído permanentemente");
+      fetchDrivers();
+    } catch (err) {
+      console.error("Delete error:", err);
+      toast.error("Erro ao excluir motorista");
+    }
   };
 
   const handleEdgeFunctionSync = async () => {

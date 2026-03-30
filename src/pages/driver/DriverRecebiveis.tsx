@@ -225,7 +225,6 @@ const DriverRecebiveis = () => {
                           <input
                             type="file"
                             className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) handleUpload(entry.reportId, file);
@@ -249,7 +248,6 @@ const DriverRecebiveis = () => {
                           <input
                             type="file"
                             className="hidden"
-                            accept=".pdf,.jpg,.jpeg,.png"
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) handleUpload(entry.reportId, file);

@@ -410,7 +410,7 @@ const RelatoriosPage = () => {
 
       const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
       const [driversRes, pisoRaw, psRankData, rtoRankData] = await Promise.all([
-        (supabase.from("drivers" as any) as any).select("id, name").in("id", driverIds),
+        supabase.from("drivers_public").select("id, name").in("id", driverIds),
         fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
           (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
           rideIds
@@ -478,7 +478,7 @@ const RelatoriosPage = () => {
 
     const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
     const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes, dnrRes, reativoRes] = await Promise.all([
-      (supabase.from("drivers" as any) as any).select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
+      supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
         (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
         rideIds
@@ -552,12 +552,12 @@ const RelatoriosPage = () => {
           });
         }
 
-        // Fallback: fetch directly from drivers table for missing ones (can be bypassed by RLS, but Edge Function is primary)
+        // Fallback: fetch from drivers_public for missing driver info (no pix_key here, edge function is primary for that)
         const missingPixIds = driverIdsToFetch.filter(id => !pixByDriver.has(id));
         if (missingPixIds.length > 0) {
-          const { data: directDrivers } = await (supabase
-            .from("drivers" as any) as any)
-            .select("id, pix_key, name, cpf, car_plate, car_model, car_color")
+          const { data: directDrivers } = await supabase
+            .from("drivers_public")
+            .select("id, name, cpf, car_plate, car_model, car_color")
             .in("id", missingPixIds);
           
           if (directDrivers) {
@@ -974,12 +974,20 @@ const RelatoriosPage = () => {
             {/* Summary totals */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
               <div className="rounded-lg border p-2 text-center">
-                <p className="text-xs text-muted-foreground">Total TBRs</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0)}</p>
+                <p className="text-xs text-muted-foreground">Carros / Motos</p>
+                <p className="font-bold">{(() => {
+                  const carros = payrollData.filter(d => (d.tbrValueUsed || 0) >= 3.35).length;
+                  const motos = payrollData.filter(d => (d.tbrValueUsed || 0) < 3.35).length;
+                  return `${carros} / ${motos}`;
+                })()}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
-                <p className="text-xs text-muted-foreground">Retornos</p>
-                <p className="font-bold">{payrollData.reduce((s, d) => s + (d.totalReturns || 0), 0)}</p>
+                <p className="text-xs text-muted-foreground">Média Pacote</p>
+                <p className="font-bold">{(() => {
+                  const totalTbrs = payrollData.reduce((s, d) => s + (d.totalTbrs || 0), 0);
+                  const totalValue = payrollData.reduce((s, d) => s + (d.totalValue || 0), 0);
+                  return totalTbrs === 0 ? "R$ 0,00" : formatCurrency(totalValue / totalTbrs);
+                })()}</p>
               </div>
               <div className="rounded-lg border p-2 text-center">
                 <p className="text-xs text-muted-foreground">Concluídos</p>
@@ -1009,7 +1017,7 @@ const RelatoriosPage = () => {
                       </div>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 text-xs">
                       <div><span className="text-muted-foreground">TBRs:</span> <strong>{d.totalTbrs || 0}</strong></div>
-                      <div><span className="text-muted-foreground">Retornos:</span> <strong>{d.totalReturns || 0}</strong></div>
+                      
                       <div><span className="text-muted-foreground">Dias:</span> <strong>{d.daysWorked || 0}</strong></div>
                       <div><span className="text-muted-foreground">Valor/TBR:</span> <strong>{formatCurrency(d.tbrValueUsed || 0)}</strong></div>
                       {(d.dnrDiscount ?? 0) > 0 && <div><span className="text-destructive">DNR:</span> <strong className="text-destructive">-{formatCurrency(d.dnrDiscount!)}</strong></div>}
@@ -1028,7 +1036,7 @@ const RelatoriosPage = () => {
                                 <TableHead className="text-xs h-8 px-2">Data</TableHead>
                                 <TableHead className="text-xs h-8 px-2">Login</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">TBRs</TableHead>
-                                <TableHead className="text-xs h-8 px-2 text-right">Retornos</TableHead>
+                                
                                 <TableHead className="text-xs h-8 px-2 text-right">Concluídos</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">Valor</TableHead>
                               </TableRow>
@@ -1039,7 +1047,7 @@ const RelatoriosPage = () => {
                                   <TableCell className="text-xs px-2 py-1.5">{formatDateFullBR(day.date)}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5">{day.login || "—"}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
-                                  <TableCell className="text-xs px-2 py-1.5 text-right">{day.returns}</TableCell>
+                                  
                                   <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.completed}</TableCell>
                                   <TableCell className="text-xs px-2 py-1.5 text-right">{formatCurrency(day.value)}</TableCell>
                                 </TableRow>

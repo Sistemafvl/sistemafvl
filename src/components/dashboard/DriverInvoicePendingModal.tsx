@@ -26,11 +26,12 @@ const DriverInvoicePendingModal = () => {
             // const today = new Date().toISOString().slice(0, 10);
             // if (lastShown === today) return;
 
-            // Fetch reports for this unit
+            // Only check reports that have been published (sent to drivers)
             const { data: reports, error: reportsError } = await supabase
                 .from("payroll_reports" as any)
                 .select("id, report_data")
-                .eq("unit_id", unitSession!.id);
+                .eq("unit_id", unitSession!.id)
+                .eq("status", "published");
 
             if (reportsError || !reports || reports.length === 0) return;
 

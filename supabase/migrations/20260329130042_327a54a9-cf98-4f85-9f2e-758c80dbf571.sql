@@ -1,0 +1,1 @@
+ALTER TABLE public.ps_entries ADD COLUMN photo_url_2 TEXT, ADD COLUMN photo_url_3 TEXT;
