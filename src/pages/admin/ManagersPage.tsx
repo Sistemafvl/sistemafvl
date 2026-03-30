@@ -59,7 +59,10 @@ const ManagersPage = () => {
       password: form.password,
       manager_password: form.manager_password || form.password,
     });
-    if (error) { toast.error("Erro ao criar gerente"); return; }
+    if (error) { 
+      toast.error(`Erro ao criar gerente: ${error.message || JSON.stringify(error)}`); 
+      return; 
+    }
     toast.success("Gerente criado");
     setForm({ name: "", cnpj: "", password: "", manager_password: "" });
     setModalOpen(false);

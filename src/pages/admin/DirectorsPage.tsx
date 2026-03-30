@@ -59,7 +59,10 @@ const DirectorsPage = () => {
       cpf: form.cpf.replace(/\D/g, ""),
       password: form.password,
     });
-    if (error) { toast.error("Erro ao criar diretor"); return; }
+    if (error) { 
+      toast.error(`Erro ao criar diretor: ${error.message || JSON.stringify(error)}`); 
+      return; 
+    }
     toast.success("Diretor criado");
     setForm({ name: "", cpf: "", password: "" });
     setModalOpen(false);
