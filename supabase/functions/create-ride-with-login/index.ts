@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     const dayStart = `${yyyy}-${mm}-${dd}T03:00:00.000Z`;
     const dayEnd = new Date(new Date(dayStart).getTime() + 86400000 - 1).toISOString();
 
-    const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).gte("completed_at", dayStart).lte("completed_at", dayEnd).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
+    const { data: maxData } = await supabase.from("driver_rides").select("sequence_number").eq("unit_id", unit_id).neq("loading_status", "cancelled").gte("completed_at", dayStart).lte("completed_at", dayEnd).order("sequence_number", { ascending: false }).limit(1).maybeSingle();
     const sequenceNumber = (maxData?.sequence_number ?? 0) + 1;
 
     let loginValue = null, passwordValue = null;
