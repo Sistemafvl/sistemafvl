@@ -1209,51 +1209,36 @@ const ConferenciaCarregamentoPage = () => {
           playErrorBeep();
 
           let errorMsg = (rpcRes as any)?.error || rpcError?.message;
+          console.log("Scan error received:", errorMsg);
+
           if (
-            errorMsg === "TBR already exists in another active loading" ||
-            errorMsg?.includes("outro carregamento")
+            errorMsg?.includes("already exists") ||
+            errorMsg?.includes("outro carregamento") ||
+            errorMsg?.includes("Duplicate")
           ) {
             try {
-              const { data: conflictData } = await (supabase as any)
-                .from('ride_tbrs')
-                .select('ride_id, scanned_at, driver_rides!inner(id, started_at, driver_id, conferente_id)')
-                .ilike('code', code)
-                .eq('driver_rides.unit_id', unitId)
-                .in('driver_rides.loading_status', ['pending', 'loading'])
-                .neq('ride_id', rideId)
-                .order('scanned_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+              console.log("Fetching conflict context for code:", code);
+              const { data: conflictRes, error: contextError } = await (supabase as any).rpc('get_tbr_conflict_context', {
+                p_code: code,
+                p_unit_id: unitId
+              });
 
-              if (conflictData) {
-                 const drInfo = conflictData.driver_rides as any;
-                 
-                 // Fallbacks
-                 let dName = "Motorista Desconhecido";
-                 let cName = "Conferente Desconhecido";
-                 
-                 if (drInfo.conferente_id) {
-                     const {data: cd} = await (supabase as any).from('user_profiles').select('name').eq('id', drInfo.conferente_id).maybeSingle();
-                     if (cd) cName = cd.name;
-                 }
-                 if (drInfo.driver_id) {
-                     const {data: dd} = await (supabase as any).from('drivers_public').select('name').eq('id', drInfo.driver_id).maybeSingle();
-                     if (dd) dName = dd.name;
-                 }
-
+              if (!contextError && conflictRes?.success) {
                  setTransferData({
                    code: code.toUpperCase(),
                    newRideId: rideId,
-                   oldRideId: conflictData.ride_id,
-                   driverName: dName,
-                   conferenteName: cName,
-                   date: format(new Date(conflictData.scanned_at || drInfo.started_at || new Date()), "dd/MM/yyyy HH:mm"),
+                   oldRideId: conflictRes.ride_id,
+                   driverName: conflictRes.driver_name || "Motorista Desconhecido",
+                   conferenteName: conflictRes.conferente_name || "Conferente Desconhecido",
+                   date: format(new Date(conflictRes.scanned_at || conflictRes.started_at || new Date()), "dd/MM/yyyy HH:mm"),
                  });
                  setShowTransferModal(true);
                  return;
+              } else {
+                 console.log("RPC get_tbr_conflict_context didn't return context:", contextError || conflictRes?.error);
               }
             } catch (e) {
-               console.error("Failed to fetch conflicting TBR info", e);
+               console.error("Failed to fetch conflicting TBR info via RPC", e);
             }
             
             errorMsg = "Este TBR já foi bipado em outro carregamento ativo.";
