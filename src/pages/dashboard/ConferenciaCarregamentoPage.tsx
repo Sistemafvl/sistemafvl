@@ -1211,38 +1211,55 @@ const ConferenciaCarregamentoPage = () => {
           let errorMsg = (rpcRes as any)?.error || rpcError?.message;
           console.log("Scan error received:", errorMsg);
 
-          if (
+          const isConflictError = 
             errorMsg?.includes("already exists") ||
             errorMsg?.includes("outro carregamento") ||
-            errorMsg?.includes("Duplicate")
-          ) {
+            errorMsg?.includes("Duplicate") ||
+            errorMsg?.includes("ja esta vinculado") ||
+            errorMsg?.includes("já está vinculado");
+
+          if (isConflictError) {
+            // Default context in case the RPC fails
+            let conflictRideId = "unknown";
+            let driverName = "outro motorista";
+            let conferenteName = "outro conferente";
+            let conflictDate = format(new Date(), "dd/MM/yyyy HH:mm");
+
             try {
-              console.log("Fetching conflict context for code:", code);
-              const { data: conflictRes, error: contextError } = await (supabase as any).rpc('get_tbr_conflict_context', {
+              console.log("Fetching conflict context via RPC for code:", code);
+              const { data: ctx } = await (supabase as any).rpc('get_tbr_conflict_context', {
                 p_code: code,
                 p_unit_id: unitId
               });
 
-              if (!contextError && conflictRes?.success) {
-                 setTransferData({
-                   code: code.toUpperCase(),
-                   newRideId: rideId,
-                   oldRideId: conflictRes.ride_id,
-                   driverName: conflictRes.driver_name || "Motorista Desconhecido",
-                   conferenteName: conflictRes.conferente_name || "Conferente Desconhecido",
-                   date: format(new Date(conflictRes.scanned_at || conflictRes.started_at || new Date()), "dd/MM/yyyy HH:mm"),
-                 });
-                 setShowTransferModal(true);
-                 return;
+              if (ctx?.success) {
+                console.log("Got conflict context:", ctx);
+                conflictRideId = ctx.ride_id ?? conflictRideId;
+                driverName = ctx.driver_name || driverName;
+                conferenteName = ctx.conferente_name || conferenteName;
+                if (ctx.scanned_at || ctx.started_at) {
+                  conflictDate = format(new Date(ctx.scanned_at || ctx.started_at), "dd/MM/yyyy HH:mm");
+                }
               } else {
-                 console.log("RPC get_tbr_conflict_context didn't return context:", contextError || conflictRes?.error);
+                console.log("Context RPC returned no success, showing modal with defaults");
               }
             } catch (e) {
-               console.error("Failed to fetch conflicting TBR info via RPC", e);
+              console.error("Context RPC threw exception, showing modal with defaults:", e);
             }
-            
-            errorMsg = "Este TBR já foi bipado em outro carregamento ativo.";
+
+            // Always open the modal regardless of whether context fetch succeeded
+            setTransferData({
+              code: code.toUpperCase(),
+              newRideId: rideId,
+              oldRideId: conflictRideId,
+              driverName,
+              conferenteName,
+              date: conflictDate,
+            });
+            setShowTransferModal(true);
+            return;
           }
+
           const { toast } = await import("@/hooks/use-toast");
           toast({ title: "Erro ao salvar TBR", description: errorMsg, variant: "destructive" });
           return;
