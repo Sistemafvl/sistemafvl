@@ -1018,47 +1018,22 @@ const ConferenciaCarregamentoPage = () => {
     if (!transferData || !unitId) return;
     setTransferLoading(true);
 
-    // Find the specific TBR id in the old ride's in-memory data
-    const oldRideTbrs = tbrs[transferData.oldRideId] ?? [];
-    const conflictingTbr = oldRideTbrs.find(
-      t => t.code.toUpperCase().trim() === transferData.code.toUpperCase().trim()
-    );
+    // Always use the SECURITY DEFINER RPC — direct client updates are blocked by RLS
+    const { data: rpcResult, error: rpcError } = await (supabase as any).rpc("transfer_tbr_to_ride", {
+      p_code: transferData.code,
+      p_new_ride_id: transferData.newRideId,
+      p_unit_id: unitId,
+    });
 
-    let success = false;
+    console.log("Transfer RPC result:", rpcResult, "error:", rpcError);
 
-    if (conflictingTbr?.id) {
-      // Fast path: directly update the specific ride_tbrs record
-      const { error: updateError } = await (supabase as any)
-        .from('ride_tbrs')
-        .update({ ride_id: transferData.newRideId, scanned_at: new Date().toISOString() })
-        .eq('id', conflictingTbr.id);
-
-      if (!updateError) {
-        success = true;
-      } else {
-        console.warn("Direct update failed, falling back to RPC:", updateError);
-        // Fallback to RPC
-        const { data: rpcResult } = await (supabase as any).rpc("transfer_tbr_to_ride", {
-          p_code: transferData.code,
-          p_new_ride_id: transferData.newRideId,
-          p_unit_id: unitId,
-        });
-        success = rpcResult?.success === true;
-        if (!success) console.error("RPC fallback also failed:", rpcResult);
-      }
-    } else {
-      // No in-memory tbr id: use RPC directly
-      const { data: rpcResult } = await (supabase as any).rpc("transfer_tbr_to_ride", {
-        p_code: transferData.code,
-        p_new_ride_id: transferData.newRideId,
-        p_unit_id: unitId,
-      });
-      success = rpcResult?.success === true;
-    }
-
-    if (!success) {
+    if (rpcError || !rpcResult?.success) {
       const { toast } = await import("@/hooks/use-toast");
-      toast({ title: "Erro na transferência", description: "Não foi possível transferir o TBR. Tente novamente.", variant: "destructive" });
+      toast({
+        title: "Erro na transferência",
+        description: rpcResult?.error || rpcError?.message || "Não foi possível transferir o TBR.",
+        variant: "destructive",
+      });
       setTransferLoading(false);
       return;
     }
@@ -1072,7 +1047,6 @@ const ConferenciaCarregamentoPage = () => {
     const { toast } = await import("@/hooks/use-toast");
     toast({ title: "✅ TBR transferido com sucesso!" });
 
-    // Refresh and focus
     realtimeLockUntil.current = Date.now() + 5000;
     await fetchRides();
     setTimeout(() => {
