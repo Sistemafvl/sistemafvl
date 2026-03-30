@@ -63,7 +63,10 @@ const DomainsUnitsPage = () => {
       password: newUnitPassword.trim(),
       domain_id: selectedDomain,
     });
-    if (error) { toast.error("Erro ao criar unidade"); return; }
+    if (error) { 
+      toast.error(`Erro ao criar unidade: ${error.message || JSON.stringify(error)}`); 
+      return; 
+    }
     toast.success("Unidade criada");
     setNewUnitName("");
     setNewUnitPassword("");
