@@ -518,8 +518,17 @@ const ConfiguracoesPage = () => {
 
   if (!unitId) return null;
 
-  return (
-    <div className="p-4 md:p-6 space-y-6">
+  if (initialLoading) {
+    return (
+      <div className="p-4 md:p-6 space-y-6">
+        <h1 className="text-2xl font-bold italic">Configurações</h1>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
       <h1 className="text-2xl font-bold italic">Configurações</h1>
 
       {/* Logins */}
