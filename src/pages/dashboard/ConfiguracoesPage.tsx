@@ -551,7 +551,7 @@ const ConfiguracoesPage = () => {
           </div>
           {logins.length === 0 && !loginsLoading ? (
             <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado.</p>
-          ) : loginsLoading ? (
+          ) : (
             <div className="space-y-2">
               {logins.slice((loginsPage - 1) * loginsPerPage, loginsPage * loginsPerPage).map((l) => (
                 <div key={l.id} className="flex items-center gap-3 p-2 rounded-md border border-border bg-card text-sm">
