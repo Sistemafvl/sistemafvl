@@ -288,6 +288,17 @@ const ConferenciaCarregamentoPage = () => {
   // Camera scanner state
   const [cameraOpen, setCameraOpen] = useState<string | null>(null); // rideId or null
   const [lastScannedCode, setLastScannedCode] = useState<string>("");
+  // Transfer TBR modal
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferData, setTransferData] = useState<{
+    code: string;
+    newRideId: string;
+    oldRideId: string;
+    driverName: string;
+    date: string;
+    conferenteName: string;
+  } | null>(null);
+  const [transferLoading, setTransferLoading] = useState(false);
   // Search/locate mode per ride
   const [searchLocateMode, setSearchLocateMode] = useState<Record<string, boolean>>({});
   const [searchLocateInput, setSearchLocateInput] = useState<Record<string, string>>({});
@@ -1003,6 +1014,45 @@ const ConferenciaCarregamentoPage = () => {
     toast({ title: `${selectedTbrItems.length} TBR(s) enviado(s) para insucessos` });
   };
 
+  const handleConfirmTransfer = async () => {
+    if (!transferData || !unitId) return;
+    setTransferLoading(true);
+    const { data: result, error } = await (supabase as any).rpc("transfer_tbr_to_ride", {
+      p_code: transferData.code,
+      p_new_ride_id: transferData.newRideId,
+      p_unit_id: unitId,
+    });
+
+    if (error || !result?.success) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({
+        title: "Erro na transferência",
+        description: result?.error || error?.message,
+        variant: "destructive",
+      });
+      setTransferLoading(false);
+      return;
+    }
+
+    playSuccessBeep();
+    setShowTransferModal(false);
+    setTransferData(null);
+    setTransferLoading(false);
+
+    const { toast } = await import("@/hooks/use-toast");
+    toast({ title: "TBR transferido com sucesso!" });
+
+    // Lock and refresh
+    realtimeLockUntil.current = Date.now() + 5000;
+    await fetchRides();
+    
+    // Auto-focus the input of the new ride
+    setTimeout(() => {
+        inputRefs.current[transferData.newRideId]?.focus();
+        scrollTbrList(transferData.newRideId);
+    }, 100);
+  };
+
   const scrollTbrList = (rideId: string) => {
     setTimeout(() => {
       const el = tbrListRefs.current[rideId];
@@ -1159,7 +1209,53 @@ const ConferenciaCarregamentoPage = () => {
           playErrorBeep();
 
           let errorMsg = (rpcRes as any)?.error || rpcError?.message;
-          if (errorMsg === "TBR already exists in another active loading") {
+          if (
+            errorMsg === "TBR already exists in another active loading" ||
+            errorMsg?.includes("outro carregamento")
+          ) {
+            try {
+              const { data: conflictData } = await (supabase as any)
+                .from('ride_tbrs')
+                .select('ride_id, scanned_at, driver_rides!inner(id, started_at, driver_id, conferente_id)')
+                .ilike('code', code)
+                .eq('driver_rides.unit_id', unitId)
+                .in('driver_rides.loading_status', ['pending', 'loading'])
+                .neq('ride_id', rideId)
+                .order('scanned_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (conflictData) {
+                 const drInfo = conflictData.driver_rides as any;
+                 
+                 // Fallbacks
+                 let dName = "Motorista Desconhecido";
+                 let cName = "Conferente Desconhecido";
+                 
+                 if (drInfo.conferente_id) {
+                     const {data: cd} = await (supabase as any).from('user_profiles').select('name').eq('id', drInfo.conferente_id).maybeSingle();
+                     if (cd) cName = cd.name;
+                 }
+                 if (drInfo.driver_id) {
+                     const {data: dd} = await (supabase as any).from('drivers_public').select('name').eq('id', drInfo.driver_id).maybeSingle();
+                     if (dd) dName = dd.name;
+                 }
+
+                 setTransferData({
+                   code: code.toUpperCase(),
+                   newRideId: rideId,
+                   oldRideId: conflictData.ride_id,
+                   driverName: dName,
+                   conferenteName: cName,
+                   date: format(new Date(conflictData.scanned_at || drInfo.started_at || new Date()), "dd/MM/yyyy HH:mm"),
+                 });
+                 setShowTransferModal(true);
+                 return;
+              }
+            } catch (e) {
+               console.error("Failed to fetch conflicting TBR info", e);
+            }
+            
             errorMsg = "Este TBR já foi bipado em outro carregamento ativo.";
           }
           const { toast } = await import("@/hooks/use-toast");
@@ -3606,6 +3702,54 @@ const ConferenciaCarregamentoPage = () => {
               Confirmar Chamada
             </Button>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer TBR Modal */}
+      <Dialog open={showTransferModal} onOpenChange={setShowTransferModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-bold italic flex items-center gap-2 text-primary">
+              <ArrowRightLeft className="h-5 w-5" /> Transferir TBR
+            </DialogTitle>
+            <DialogDescription>
+              Este pacote já pertence a outro carregamento ativo. Deseja transferi-lo?
+            </DialogDescription>
+          </DialogHeader>
+          {transferData && (
+            <div className="space-y-4 pt-2">
+              <div className="rounded-lg border p-4 bg-muted/30 space-y-3">
+                <div className="flex justify-between items-center border-b pb-2">
+                  <span className="text-xs font-semibold text-muted-foreground uppercase">Pacote</span>
+                  <span className="font-mono font-bold text-lg">{transferData.code}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Motorista Atual</p>
+                    <p className="text-sm font-semibold italic">{transferData.driverName}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Conferente</p>
+                    <p className="text-sm font-semibold italic">{transferData.conferenteName}</p>
+                  </div>
+                  <div className="space-y-1 col-span-2">
+                    <p className="text-[10px] font-bold text-muted-foreground uppercase">Data/Hora Leitura</p>
+                    <p className="text-sm font-mono">{transferData.date}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" className="flex-1" onClick={() => { setShowTransferModal(false); setTransferData(null); }} disabled={transferLoading}>
+                  Não, cancelar
+                </Button>
+                <Button className="flex-1 font-bold italic gap-2" onClick={handleConfirmTransfer} disabled={transferLoading}>
+                  {transferLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  Sim, transferir
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
