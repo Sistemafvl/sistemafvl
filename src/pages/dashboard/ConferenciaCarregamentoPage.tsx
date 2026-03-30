@@ -1017,40 +1017,68 @@ const ConferenciaCarregamentoPage = () => {
   const handleConfirmTransfer = async () => {
     if (!transferData || !unitId) return;
     setTransferLoading(true);
-    const { data: result, error } = await (supabase as any).rpc("transfer_tbr_to_ride", {
-      p_code: transferData.code,
-      p_new_ride_id: transferData.newRideId,
-      p_unit_id: unitId,
-    });
 
-    if (error || !result?.success) {
-      const { toast } = await import("@/hooks/use-toast");
-      toast({
-        title: "Erro na transferência",
-        description: result?.error || error?.message,
-        variant: "destructive",
+    // Find the specific TBR id in the old ride's in-memory data
+    const oldRideTbrs = tbrs[transferData.oldRideId] ?? [];
+    const conflictingTbr = oldRideTbrs.find(
+      t => t.code.toUpperCase().trim() === transferData.code.toUpperCase().trim()
+    );
+
+    let success = false;
+
+    if (conflictingTbr?.id) {
+      // Fast path: directly update the specific ride_tbrs record
+      const { error: updateError } = await (supabase as any)
+        .from('ride_tbrs')
+        .update({ ride_id: transferData.newRideId, scanned_at: new Date().toISOString() })
+        .eq('id', conflictingTbr.id);
+
+      if (!updateError) {
+        success = true;
+      } else {
+        console.warn("Direct update failed, falling back to RPC:", updateError);
+        // Fallback to RPC
+        const { data: rpcResult } = await (supabase as any).rpc("transfer_tbr_to_ride", {
+          p_code: transferData.code,
+          p_new_ride_id: transferData.newRideId,
+          p_unit_id: unitId,
+        });
+        success = rpcResult?.success === true;
+        if (!success) console.error("RPC fallback also failed:", rpcResult);
+      }
+    } else {
+      // No in-memory tbr id: use RPC directly
+      const { data: rpcResult } = await (supabase as any).rpc("transfer_tbr_to_ride", {
+        p_code: transferData.code,
+        p_new_ride_id: transferData.newRideId,
+        p_unit_id: unitId,
       });
+      success = rpcResult?.success === true;
+    }
+
+    if (!success) {
+      const { toast } = await import("@/hooks/use-toast");
+      toast({ title: "Erro na transferência", description: "Não foi possível transferir o TBR. Tente novamente.", variant: "destructive" });
       setTransferLoading(false);
       return;
     }
 
     playSuccessBeep();
+    const savedNewRideId = transferData.newRideId;
     setShowTransferModal(false);
     setTransferData(null);
     setTransferLoading(false);
 
     const { toast } = await import("@/hooks/use-toast");
-    toast({ title: "TBR transferido com sucesso!" });
+    toast({ title: "✅ TBR transferido com sucesso!" });
 
-    // Lock and refresh
+    // Refresh and focus
     realtimeLockUntil.current = Date.now() + 5000;
     await fetchRides();
-    
-    // Auto-focus the input of the new ride
     setTimeout(() => {
-        inputRefs.current[transferData.newRideId]?.focus();
-        scrollTbrList(transferData.newRideId);
-    }, 100);
+      inputRefs.current[savedNewRideId]?.focus();
+      scrollTbrList(savedNewRideId);
+    }, 200);
   };
 
   const scrollTbrList = (rideId: string) => {
@@ -1219,37 +1247,30 @@ const ConferenciaCarregamentoPage = () => {
             errorMsg?.includes("já está vinculado");
 
           if (isConflictError) {
-            // Default context in case the RPC fails
+            // Use in-memory rides/tbrs data to find the conflict (no RPC needed)
+            const upperCode = code.toUpperCase().trim();
             let conflictRideId = "unknown";
             let driverName = "outro motorista";
             let conferenteName = "outro conferente";
             let conflictDate = format(new Date(), "dd/MM/yyyy HH:mm");
 
-            try {
-              console.log("Fetching conflict context via RPC for code:", code);
-              const { data: ctx } = await (supabase as any).rpc('get_tbr_conflict_context', {
-                p_code: code,
-                p_unit_id: unitId
-              });
-
-              if (ctx?.success) {
-                console.log("Got conflict context:", ctx);
-                conflictRideId = ctx.ride_id ?? conflictRideId;
-                driverName = ctx.driver_name || driverName;
-                conferenteName = ctx.conferente_name || conferenteName;
-                if (ctx.scanned_at || ctx.started_at) {
-                  conflictDate = format(new Date(ctx.scanned_at || ctx.started_at), "dd/MM/yyyy HH:mm");
-                }
-              } else {
-                console.log("Context RPC returned no success, showing modal with defaults");
+            // Search across all currently loaded rides for the conflicting TBR
+            for (const otherRide of rides) {
+              if (otherRide.id === rideId) continue;
+              const otherRideTbrs = tbrs[otherRide.id] ?? [];
+              const found = otherRideTbrs.find(t => t.code.toUpperCase().trim() === upperCode);
+              if (found) {
+                conflictRideId = otherRide.id;
+                driverName = otherRide.driver_name || "Motorista Desconhecido";
+                const conf = conferentes.find(c => c.id === otherRide.conferente_id);
+                conferenteName = conf?.name || "Conferente Desconhecido";
+                conflictDate = format(new Date(found.scanned_at || new Date()), "dd/MM/yyyy HH:mm");
+                break;
               }
-            } catch (e) {
-              console.error("Context RPC threw exception, showing modal with defaults:", e);
             }
 
-            // Always open the modal regardless of whether context fetch succeeded
             setTransferData({
-              code: code.toUpperCase(),
+              code: upperCode,
               newRideId: rideId,
               oldRideId: conflictRideId,
               driverName,
