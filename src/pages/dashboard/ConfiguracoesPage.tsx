@@ -66,7 +66,8 @@ const ConfiguracoesPage = () => {
   const [logins, setLogins] = useState<{ id: string; login: string; password: string }[]>([]);
   const [newLogin, setNewLogin] = useState("");
   const [newPassword, setNewPassword] = useState("");
-  const [loginsLoading, setLoginsLoading] = useState(false);
+  const [loginsLoading, setLoginsLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [loginsPage, setLoginsPage] = useState(1);
   const loginsPerPage = 10;
   const [editingLoginId, setEditingLoginId] = useState<string | null>(null);
@@ -218,7 +219,14 @@ const ConfiguracoesPage = () => {
     })));
   }, [unitId]);
 
-  useEffect(() => { fetchLogins(); fetchTbrValue(); fetchCustomValues(); fetchBonuses(); fetchMinPackages(); fetchFixedValues(); fetchPredefinedDrivers(); }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues, fetchPredefinedDrivers]);
+  useEffect(() => { 
+    const loadAll = async () => {
+      setInitialLoading(true);
+      await Promise.all([fetchLogins(), fetchTbrValue(), fetchCustomValues(), fetchBonuses(), fetchMinPackages(), fetchFixedValues(), fetchPredefinedDrivers()]);
+      setInitialLoading(false);
+    };
+    loadAll();
+  }, [fetchLogins, fetchTbrValue, fetchCustomValues, fetchBonuses, fetchMinPackages, fetchFixedValues, fetchPredefinedDrivers]);
 
   // Search drivers that have been to this unit
   const searchDrivers = async (term: string, setter: (v: DriverOption[]) => void) => {
@@ -510,6 +518,17 @@ const ConfiguracoesPage = () => {
 
   if (!unitId) return null;
 
+  if (initialLoading) {
+    return (
+      <div className="p-4 md:p-6 space-y-6">
+        <h1 className="text-2xl font-bold italic">Configurações</h1>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       <h1 className="text-2xl font-bold italic">Configurações</h1>
@@ -530,7 +549,7 @@ const ConfiguracoesPage = () => {
               <Plus className="h-4 w-4" />
             </Button>
           </div>
-          {logins.length === 0 ? (
+          {logins.length === 0 && !loginsLoading ? (
             <p className="text-sm text-muted-foreground italic">Nenhum login cadastrado.</p>
           ) : (
             <div className="space-y-2">
