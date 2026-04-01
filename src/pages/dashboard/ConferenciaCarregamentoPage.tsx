@@ -2063,7 +2063,7 @@ const ConferenciaCarregamentoPage = () => {
             className="gap-1.5 shrink-0"
             onClick={() => {
               setShowRetroModal(true);
-              setRetroDate(startDate);
+              setRetroDate(startDate); // Ensure it matches the dashboard view
               setRetroDriverSearch("");
               setRetroDriverResults([]);
               setRetroSelectedDriver(null);

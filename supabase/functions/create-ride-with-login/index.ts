@@ -68,10 +68,25 @@ Deno.serve(async (req) => {
       await supabase.from("queue_entries").update({ status: "completed", completed_at: new Date().toISOString(), called_at: null, called_by_name: null }).eq("id", queue_entry_id);
     }
 
+    // New Logic for retroactive loads: auto-finish them
+    // If override_date is provided, we treat it as a retroactive entry
+    const isRetroactive = !!override_date;
+    const finalStatus = isRetroactive ? "finished" : "pending";
+    const startedAt = isRetroactive ? override_date : null;
+    const finishedAt = isRetroactive ? new Date().toISOString() : null;
+
     const { data: ride, error: rideError } = await supabase.from("driver_rides").insert({
-      driver_id, unit_id, queue_entry_id: queue_entry_id || null, route: route || null,
-      login: loginValue, password: passwordValue, sequence_number: sequenceNumber,
-      completed_at: override_date || null
+      driver_id, 
+      unit_id, 
+      queue_entry_id: queue_entry_id || null, 
+      route: route || null,
+      login: loginValue, 
+      password: passwordValue, 
+      sequence_number: sequenceNumber,
+      completed_at: override_date || null,
+      loading_status: finalStatus,
+      started_at: startedAt,
+      finished_at: finishedAt
     }).select("id, sequence_number, route").single();
 
     if (rideError) throw rideError;
