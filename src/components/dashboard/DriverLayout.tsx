@@ -9,7 +9,6 @@ import DriverDailyNotices from "./DriverDailyNotices";
 import DriverInvoicePendingModal from "./DriverInvoicePendingModal";
 import DriverMissingFieldsModal from "./DriverMissingFieldsModal";
 import VersionSyncControl from "@/components/VersionSyncControl";
-import DriverProfileCompletionGuard from "./DriverProfileCompletionGuard";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
@@ -43,7 +42,7 @@ const DriverLayout = () => {
       <DriverCallAlert />
       <DriverDailyNotices />
       <DriverInvoicePendingModal />
-      <DriverProfileCompletionGuard />
+      <DriverMissingFieldsModal />
     </SidebarProvider>
   );
 };
