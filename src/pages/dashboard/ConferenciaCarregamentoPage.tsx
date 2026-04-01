@@ -1745,8 +1745,36 @@ const ConferenciaCarregamentoPage = () => {
     fetchRides();
   };
 
-  const handleSaveEdit = async (rideId: string, field: string, value: string) => {
-    if (field === "login" && value && unitId) {
+  const handleSaveEdit = async (rideId: string, field: "route" | "login" | "password" | "started_at" | "finished_at", value: string) => {
+    let finalValue: string | null = value || null;
+
+    // Handle date parsing for started_at / finished_at
+    if (field === "started_at" || field === "finished_at") {
+      if (!value) {
+        finalValue = null;
+      } else {
+        // Expected format: DD/MM/YYYY HH:MM
+        const regex = /^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})$/;
+        const match = value.match(regex);
+        if (!match) {
+          const { toast } = await import("@/hooks/use-toast");
+          toast({ title: "Formato de data inválido", description: "Use o formato: DD/MM/YYYY HH:MM (ex: 31/03/2026 15:30)", variant: "destructive" });
+          setEditingField(null);
+          return;
+        }
+        const [_, d, m, y, h, min] = match;
+        const dateObj = new Date(parseInt(y), parseInt(m) - 1, parseInt(d), parseInt(h), parseInt(min), 0);
+        if (isNaN(dateObj.getTime())) {
+          const { toast } = await import("@/hooks/use-toast");
+          toast({ title: "Data inválida", description: "Verifique os valores informados.", variant: "destructive" });
+          setEditingField(null);
+          return;
+        }
+        finalValue = dateObj.toISOString();
+      }
+    }
+
+    if (field === "login" && finalValue && unitId) {
       const now = new Date();
       const brasiliaStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
       const brasiliaDate = new Date(brasiliaStr);
@@ -1765,7 +1793,7 @@ const ConferenciaCarregamentoPage = () => {
         .from("driver_rides")
         .select("id")
         .eq("unit_id", unitId)
-        .eq("login", value)
+        .eq("login", finalValue)
         .gte("completed_at", startUtc)
         .lte("completed_at", endUtc)
         .neq("id", rideId)
@@ -1775,7 +1803,7 @@ const ConferenciaCarregamentoPage = () => {
         const { toast } = await import("@/hooks/use-toast");
         toast({
           title: "Login já em uso",
-          description: `O login "${value}" já foi atribuído a outro carregamento hoje. Ele será liberado após 00:00 (horário de Brasília).`,
+          description: `O login "${finalValue}" já foi atribuído a outro carregamento hoje. Ele será liberado após 00:00 (horário de Brasília).`,
           variant: "destructive",
         });
         return;
@@ -1784,9 +1812,16 @@ const ConferenciaCarregamentoPage = () => {
 
     setEditingField(null);
     setRides((prev) =>
-      prev.map((r) => (r.id === rideId ? { ...r, [field]: value || null } : r))
+      prev.map((r) => (r.id === rideId ? { ...r, [field]: finalValue } : r))
     );
-    await supabase.from("driver_rides").update({ [field]: value || null } as any).eq("id", rideId);
+    
+    // For retroactive rides, if we update started_at, also update completed_at to match the date part
+    const updateObj: any = { [field]: finalValue };
+    if (field === "started_at" && finalValue) {
+       updateObj.completed_at = finalValue;
+    }
+
+    await supabase.from("driver_rides").update(updateObj).eq("id", rideId);
     fetchRides();
   };
 
@@ -1850,8 +1885,14 @@ const ConferenciaCarregamentoPage = () => {
     fetchRides();
   };
 
-  const renderEditableField = (ride: RideWithDriver, field: "route" | "login" | "password", icon: React.ReactNode, label: string) => {
-    const value = ride[field];
+  const renderEditableField = (ride: RideWithDriver, field: "route" | "login" | "password" | "started_at" | "finished_at", icon: React.ReactNode, label: string) => {
+    let value = ride[field];
+    
+    // Format date for editing if necessary
+    if (field === "started_at" || field === "finished_at") {
+      value = value ? format(new Date(value), "dd/MM/yyyy HH:mm") : "";
+    }
+
     const isEditing = editingField?.rideId === ride.id && editingField?.field === field;
 
     if (isEditing && field === "login") {
@@ -2392,6 +2433,7 @@ const ConferenciaCarregamentoPage = () => {
                 const isFinished = status === "finished";
                 const isCancelled = status === "cancelled";
                 const isMyRide = !!managerSession || ride.conferente_id === conferenteSession?.id;
+                const isRetroactive = !ride.queue_entry_id;
 
                 return (
                   <div 
@@ -2519,17 +2561,26 @@ const ConferenciaCarregamentoPage = () => {
                               <span className="font-mono font-bold text-foreground">{ride.car_plate}</span>
                             </div>
                           )}
-                          {ride.started_at && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Clock className="h-4 w-4 shrink-0 text-green-600" />
-                              <span className="text-xs"><strong>Início:</strong> {format(new Date(ride.started_at), "dd/MM/yyyy HH:mm")}</span>
-                            </div>
-                          )}
-                          {ride.finished_at && (
-                            <div className="flex items-center gap-2 text-muted-foreground">
-                              <Clock className="h-4 w-4 shrink-0 text-red-600" />
-                              <span className="text-xs"><strong>Término:</strong> {format(new Date(ride.finished_at), "dd/MM/yyyy HH:mm")}</span>
-                            </div>
+                          {isRetroactive ? (
+                            <>
+                              {renderEditableField(ride, "started_at", <Clock className="h-4 w-4 shrink-0 text-green-600" />, "Início")}
+                              {renderEditableField(ride, "finished_at", <Clock className="h-4 w-4 shrink-0 text-red-600" />, "Término")}
+                            </>
+                          ) : (
+                            <>
+                              {ride.started_at && (
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <Clock className="h-4 w-4 shrink-0 text-green-600" />
+                                  <span className="text-xs"><strong>Início:</strong> {format(new Date(ride.started_at), "dd/MM/yyyy HH:mm")}</span>
+                                </div>
+                              )}
+                              {ride.finished_at && (
+                                <div className="flex items-center gap-2 text-muted-foreground">
+                                  <Clock className="h-4 w-4 shrink-0 text-red-600" />
+                                  <span className="text-xs"><strong>Término:</strong> {format(new Date(ride.finished_at), "dd/MM/yyyy HH:mm")}</span>
+                                </div>
+                              )}
+                            </>
                           )}
                           {ride.started_at && ride.finished_at && (
                             <div className="flex items-center gap-2 text-muted-foreground">

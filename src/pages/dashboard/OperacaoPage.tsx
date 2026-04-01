@@ -219,12 +219,12 @@ const OperacaoPage = () => {
   const performanceRate = totalBipadosParaPerformance > 0 ? ((totalTbrsAtual / totalBipadosParaPerformance) * 100).toFixed(1) : "100";
 
   const filteredCards = tbrSearch.trim()
-    ? cards.filter((c) =>
+    ? activeCards.filter((c) =>
         c.driver_name.toLowerCase().includes(tbrSearch.toLowerCase()) ||
         c.car_plate.toLowerCase().includes(tbrSearch.toLowerCase()) ||
         c.route?.toLowerCase().includes(tbrSearch.toLowerCase())
       )
-    : cards;
+    : activeCards;
 
   return (
     <div className="space-y-4">
