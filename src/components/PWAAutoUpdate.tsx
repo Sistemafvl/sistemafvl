@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import VersionUpdateModal from "./VersionUpdateModal";
 
 declare const __BUILD_VERSION__: string;
 
@@ -6,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-18-30"; // Update this to force a global reset
+const GLOBAL_SYNC_STAMP = "2026-04-01-18-45"; // Forces a hard reset for all
 
 const isPreviewHost =
   typeof window !== "undefined" &&
@@ -23,6 +24,7 @@ const isInIframe = (() => {
 
 const PWAAutoUpdate = () => {
   const hasRun = useRef(false);
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
 
   // Build version check — works in all environments
   useEffect(() => {
@@ -58,6 +60,7 @@ const PWAAutoUpdate = () => {
     if (saved && saved !== current && !alreadyReloaded) {
       localStorage.setItem(VERSION_KEY, current);
       sessionStorage.setItem(RELOAD_FLAG, "1");
+      // For on-load difference, we'll still auto-reload once to ensure they start fresh
       window.location.reload();
       return;
     }
@@ -68,34 +71,26 @@ const PWAAutoUpdate = () => {
     // Periodic check for new versions on server
     const checkNewVersion = async () => {
       try {
-        // Fetch index.html with a cache-buster param
         const res = await fetch(`/?v=${Date.now()}`, { cache: "no-cache" });
+        if (!res.ok) return;
         const html = await res.text();
-        
-        // Search for the __BUILD_VERSION__ string in the response
-        // Regex looks for: __BUILD_VERSION__:"timestamp"
         const match = html.match(/__BUILD_VERSION__:"(\d+)"/);
         const remoteVersion = match ? match[1] : null;
 
         if (remoteVersion && remoteVersion !== current) {
-          console.log("New version detected!", { current, remoteVersion });
-          localStorage.setItem(VERSION_KEY, remoteVersion);
-          // Reload to get the new code
-          window.location.reload();
+          console.log("New version available on server:", remoteVersion);
+          setShowUpdateModal(true);
         }
       } catch (err) {
         console.warn("Failed to check for new version:", err);
       }
     };
 
-    // Check every 5 minutes
+    // Check periodically
     const interval = setInterval(checkNewVersion, 5 * 60 * 1000);
 
-    // Check when tab becomes visible (user returns to app)
     const handleVisibility = () => {
-      if (document.visibilityState === "visible") {
-        checkNewVersion();
-      }
+      if (document.visibilityState === "visible") checkNewVersion();
     };
     document.addEventListener("visibilitychange", handleVisibility);
 
@@ -104,6 +99,12 @@ const PWAAutoUpdate = () => {
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
+
+  const handleUpdate = () => {
+    // Clear storage version so it picks up the new one on reload
+    localStorage.removeItem(VERSION_KEY);
+    window.location.reload();
+  };
 
   // In preview/iframe: clean up any stale SWs + caches once per session
   useEffect(() => {
@@ -159,7 +160,7 @@ const PWAAutoUpdate = () => {
     }
   }, []);
 
-  return null;
+  return <VersionUpdateModal isOpen={showUpdateModal} onUpdate={handleUpdate} />;
 };
 
 export default PWAAutoUpdate;

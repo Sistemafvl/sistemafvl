@@ -133,24 +133,24 @@ const DriverProfile = () => {
       toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
     }
     setSaving(true);
-    const { error } = await supabase.from("drivers").update({
-      name: form.name.trim(),
-      cpf: form.cpf.replace(/\D/g, ""),
-      email: form.email.trim() || null,
-      whatsapp: form.whatsapp.replace(/\D/g, "") || null,
-      bio: form.bio.trim() || null,
-      car_plate: form.car_plate.trim().toUpperCase(),
-      car_model: form.car_model.trim(),
-      car_color: form.car_color.trim() || null,
-      address: form.address.trim() || null,
-      neighborhood: form.neighborhood.trim() || null,
-      city: form.city.trim() || null,
-      state: form.state.trim() || null,
-      cep: form.cep.trim() || null,
-      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, "") || null,
-      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, "") || null,
-      birth_date: form.birth_date || null,
-    } as any).eq("id", driverId);
+    const { error } = await (supabase.rpc as any)("update_driver_profile", {
+      p_driver_id: driverId,
+      p_name: form.name.trim(),
+      p_email: form.email.trim() || null,
+      p_whatsapp: form.whatsapp.replace(/\D/g, "") || null,
+      p_birth_date: form.birth_date || null,
+      p_emergency_contact_1: form.emergency_contact_1.replace(/\D/g, "") || null,
+      p_emergency_contact_2: form.emergency_contact_2.replace(/\D/g, "") || null,
+      p_bio: form.bio.trim() || null,
+      p_car_plate: form.car_plate.trim().toUpperCase(),
+      p_car_model: form.car_model.trim(),
+      p_car_color: form.car_color.trim() || null,
+      p_address: form.address.trim() || null,
+      p_neighborhood: form.neighborhood.trim() || null,
+      p_city: form.city.trim() || null,
+      p_state: form.state.trim() || null,
+      p_cep: form.cep.trim() || null,
+    });
     setSaving(false);
     if (error) {
       console.error("Error updating driver profile:", error);

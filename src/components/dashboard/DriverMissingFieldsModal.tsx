@@ -40,6 +40,10 @@ const DriverMissingFieldsModal = () => {
     }
 
     const checkMissingFields = async () => {
+      // Add a small 500ms delay to ensure the database has "settled" 
+      // if the user just came from the profile save.
+      await new Promise(resolve => setTimeout(resolve, 500));
+
       try {
         setLoading(true);
         // Use edge function to bypass RLS and accurately check fields
