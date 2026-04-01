@@ -7,6 +7,7 @@ import DriverSidebar from "./DriverSidebar";
 import DriverCallAlert from "./DriverCallAlert";
 import DriverDailyNotices from "./DriverDailyNotices";
 import DriverInvoicePendingModal from "./DriverInvoicePendingModal";
+import DriverMissingFieldsModal from "./DriverMissingFieldsModal";
 import VersionSyncControl from "@/components/VersionSyncControl";
 import DriverProfileCompletionGuard from "./DriverProfileCompletionGuard";
 

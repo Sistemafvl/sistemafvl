@@ -12,6 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   User, Camera, Loader2, Save, KeyRound, Eye, EyeOff,
   Mail, Phone, MapPin, Car, Palette, FileText, CalendarDays, ShieldAlert,
+
 } from "lucide-react";
 
 const capitalize = (v: string) =>
@@ -48,6 +49,7 @@ const DriverProfile = () => {
     address: "", neighborhood: "", city: "", state: "", cep: "",
     avatar_url: "",
     emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
+
   });
 
   // Password
@@ -62,24 +64,25 @@ const DriverProfile = () => {
       setLoading(true);
       const { data } = await supabase
         .from("drivers")
-        .select("id, name, cpf, email, whatsapp, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
+        .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
+
         .eq("id", driverId)
         .single();
       if (data) {
         setForm({
-          name: data.name ?? "",
-          cpf: maskCPF(data.cpf ?? ""),
-          email: data.email ?? "",
-          whatsapp: data.whatsapp ?? "",
+          name: (data as any).name ?? "",
+          cpf: maskCPF((data as any).cpf ?? ""),
+          email: (data as any).email ?? "",
+          whatsapp: maskPhone((data as any).whatsapp ?? ""),
           bio: (data as any).bio ?? "",
-          car_plate: data.car_plate ?? "",
-          car_model: data.car_model ?? "",
-          car_color: data.car_color ?? "",
-          address: data.address ?? "",
-          neighborhood: data.neighborhood ?? "",
-          city: data.city ?? "",
-          state: data.state ?? "",
-          cep: data.cep ?? "",
+          car_plate: (data as any).car_plate ?? "",
+          car_model: (data as any).car_model ?? "",
+          car_color: (data as any).car_color ?? "",
+          address: (data as any).address ?? "",
+          neighborhood: (data as any).neighborhood ?? "",
+          city: (data as any).city ?? "",
+          state: (data as any).state ?? "",
+          cep: (data as any).cep ?? "",
           avatar_url: (data as any).avatar_url ?? "",
           emergency_contact_1: maskPhone((data as any).emergency_contact_1 ?? ""),
           emergency_contact_2: maskPhone((data as any).emergency_contact_2 ?? ""),
@@ -110,7 +113,7 @@ const DriverProfile = () => {
       name: form.name.trim(),
       cpf: form.cpf.replace(/\D/g, ""),
       email: form.email.trim() || null,
-      whatsapp: form.whatsapp.replace(/\D/g, ""),
+      whatsapp: form.whatsapp.replace(/\D/g, "") || null,
       bio: form.bio.trim() || null,
       car_plate: form.car_plate.trim().toUpperCase(),
       car_model: form.car_model.trim(),
@@ -120,8 +123,8 @@ const DriverProfile = () => {
       city: form.city.trim() || null,
       state: form.state.trim() || null,
       cep: form.cep.trim() || null,
-      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, ""),
-      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, ""),
+      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, "") || null,
+      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, "") || null,
       birth_date: form.birth_date || null,
     } as any).eq("id", driverId);
     setSaving(false);
@@ -230,7 +233,7 @@ const DriverProfile = () => {
             <Avatar className="h-24 w-24">
               <AvatarImage src={form.avatar_url} alt={form.name} />
               <AvatarFallback className="text-2xl font-bold bg-primary/10 text-primary">
-                {initials}
+                {initials || <User className="h-10 w-10" />}
               </AvatarFallback>
             </Avatar>
             <button
@@ -249,7 +252,7 @@ const DriverProfile = () => {
               onChange={handleAvatarUpload}
             />
           </div>
-          <p className="font-bold italic text-lg">{form.name}</p>
+          <p className="font-bold italic text-lg">{form.name || unitSession?.user_name || "—"}</p>
         </CardContent>
       </Card>
 
@@ -294,11 +297,15 @@ const DriverProfile = () => {
               <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" className="h-10" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> WhatsApp *</Label>
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <Phone className="h-3 w-3" /> WhatsApp <span className="text-destructive">*</span>
+              </Label>
               <Input value={form.whatsapp} onChange={(e) => set("whatsapp", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Data de Nascimento *</Label>
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" /> Data de Nascimento <span className="text-destructive">*</span>
+              </Label>
               <Input type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} className="h-10" />
             </div>
           </div>
@@ -315,11 +322,15 @@ const DriverProfile = () => {
         <CardContent className="space-y-3">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Contato 1 *</Label>
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <Phone className="h-3 w-3" /> Contato 1 <span className="text-destructive">*</span>
+              </Label>
               <Input value={form.emergency_contact_1} onChange={(e) => set("emergency_contact_1", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold">Contato 2 *</Label>
+              <Label className="text-xs font-semibold flex items-center gap-1">
+                <Phone className="h-3 w-3" /> Contato 2 <span className="text-destructive">*</span>
+              </Label>
               <Input value={form.emergency_contact_2} onChange={(e) => set("emergency_contact_2", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
             </div>
           </div>
