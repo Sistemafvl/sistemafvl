@@ -116,6 +116,18 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     const rawCpf = form.cpf.replace(/\D/g, "");
     if (rawCpf.length !== 11) return;
     if (!form.name || !form.car_plate || !form.car_model || !form.password) return;
+    if (!form.whatsapp.replace(/\D/g, "")) {
+      toast({ title: "WhatsApp é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_1.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 1 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_2.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 2 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.birth_date) {
+      toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
+    }
 
     setLoading(true);
 
