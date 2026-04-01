@@ -3712,7 +3712,6 @@ const ConferenciaCarregamentoPage = () => {
                 // Fetch with explicit dates to bypass state delay
                 await fetchRides(true, finalSDate, finalEDate);
                 
-                const { toast } = await import("@/hooks/use-toast");
                 toast({ 
                   title: "Carregamento retroativo criado!", 
                   description: `Motorista ${retroSelectedDriver.name} adicionado com sucesso em ${format(retroDate, "dd/MM/yyyy")}` 
