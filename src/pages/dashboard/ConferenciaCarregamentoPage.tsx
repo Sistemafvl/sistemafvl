@@ -3131,6 +3131,9 @@ const ConferenciaCarregamentoPage = () => {
                 <div><strong>Email:</strong> {driverModalData.driver.email || "—"}</div>
                 <div><strong>WhatsApp:</strong> {driverModalData.driver.whatsapp || "—"}</div>
                 <div><strong>Endereço:</strong> {driverModalData.driver.address || "—"}</div>
+                <div><strong>Nascimento:</strong> {driverModalData.driver.birth_date ? new Date(driverModalData.driver.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</div>
+                <div><strong>Emergência 1:</strong> {driverModalData.driver.emergency_contact_1 || "—"}</div>
+                <div><strong>Emergência 2:</strong> {driverModalData.driver.emergency_contact_2 || "—"}</div>
               </div>
               <div className="border-t pt-3 flex gap-6">
                 <div className="text-center">

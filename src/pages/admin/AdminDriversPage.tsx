@@ -302,7 +302,21 @@ const AdminDriversPage = () => {
                   <DetailRow label="CPF" value={selectedDriver.cpf} />
                   <DetailRow label="Email" value={selectedDriver.email} />
                   <DetailRow label="WhatsApp" value={selectedDriver.whatsapp} />
+                  <DetailRow label="Data de Nascimento" value={selectedDriver.birth_date ? new Date(selectedDriver.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : null} />
                   <DetailRow label="Bio" value={selectedDriver.bio} />
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Emergency Contacts */}
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-1 mb-1">
+                  <Phone className="h-3 w-3" /> Contatos de Emergência
+                </p>
+                <div className="rounded-md border p-3 space-y-0.5">
+                  <DetailRow label="Contato 1" value={selectedDriver.emergency_contact_1} />
+                  <DetailRow label="Contato 2" value={selectedDriver.emergency_contact_2} />
                 </div>
               </div>
 

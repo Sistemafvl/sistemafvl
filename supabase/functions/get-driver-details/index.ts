@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
 
     // 1. Check for bypass access (Dashboard/Internal)
     if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {
-      let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio";
+      let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio, emergency_contact_1, emergency_contact_2, birth_date";
       if (list_all) {
         selectFields += ", password";
         const { data, error } = await supabase.from("drivers").select(selectFields).order("created_at", { ascending: false });
