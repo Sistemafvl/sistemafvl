@@ -22,7 +22,9 @@ Deno.serve(async (req) => {
       await supabase.auth.getUser(token);
     }
 
-    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret, session_token, override_date } = await req.json();
+    const body = await req.json();
+    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret, session_token } = body;
+    const override_date = body.override_date || body.overrideDate;
 
     if (!driver_id || !unit_id) return new Response(JSON.stringify({ error: "driver_id and unit_id are required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
@@ -85,7 +87,7 @@ Deno.serve(async (req) => {
 
     if (rideError) throw rideError;
 
-    return new Response(JSON.stringify({ success: true, ride }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ success: true, ride, debug_override_date: override_date }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "Internal server error", details: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }

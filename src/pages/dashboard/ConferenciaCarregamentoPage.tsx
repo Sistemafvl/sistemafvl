@@ -2450,8 +2450,8 @@ const ConferenciaCarregamentoPage = () => {
                             const rideDate = new Date(ride.completed_at);
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
-                            // Only show "Retroativo" if it was manually created (no queue_entry_id) AND it's a past date
-                            if (rideDate < today && !ride.queue_entry_id) {
+                            // Simple "Retroativo" logic: if it has no queue_entry_id, it is a manual entry
+                            if (!ride.queue_entry_id) {
                               return (
                                 <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-primary text-primary bg-primary/5 gap-1">
                                   <History className="h-3 w-3" /> Retroativo
@@ -3664,14 +3664,26 @@ const ConferenciaCarregamentoPage = () => {
                   .limit(1);
                 const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
 
-                const { data: rideResult, error: insertError } = await supabase.functions.invoke("create-ride-with-login", {
-                  body: {
+                // Use direct fetch to bypass supabase.functions.invoke payload issues
+                const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
+                const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+                
+                const response = await fetch(`${supabaseUrl}/functions/v1/create-ride-with-login`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${supabaseAnonKey}`
+                  },
+                  body: JSON.stringify({
                     driver_id: retroSelectedDriver.id,
                     unit_id: unitId,
                     override_date: retroDateStr,
                     session_token: conferenteSession?.session_token
-                  }
+                  })
                 });
+
+                const rideResult = await response.json();
+                const insertError = !response.ok ? { message: rideResult.error || "Erro desconhecido" } : null;
 
                 if (insertError || rideResult?.error) {
                   const { toast } = await import("@/hooks/use-toast");
