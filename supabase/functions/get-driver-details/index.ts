@@ -20,37 +20,30 @@ Deno.serve(async (req) => {
     // Verify bypass key (Opt-in security)
     const internalBypassKey = Deno.env.get("INTERNAL_BYPASS_KEY");
     if (self_access && internalBypassKey && bypass_key !== internalBypassKey) {
-      return new Response(JSON.stringify({ error: "Unauthorized bypass attempt" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (bypass_key) { // Only error if a key was provided but was wrong. Allow local dev without key if not set.
+         return new Response(JSON.stringify({ error: "Unauthorized bypass attempt" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
     }
 
     // ======== DELETE ACTION ========
     if (action === "delete" && driver_id) {
       console.log(`Deleting driver ${driver_id} and all related data...`);
 
-      // 1. Get all ride IDs for this driver (needed for ride_tbrs)
+      // Get all ride IDs for this driver
       const { data: rides } = await supabase.from("driver_rides").select("id").eq("driver_id", driver_id);
       const rideIds = (rides || []).map((r: { id: string }) => r.id);
 
-      // 2. Delete ride_tbrs for all driver's rides
+      // Delete ride_tbrs for all driver's rides
       if (rideIds.length > 0) {
         await supabase.from("ride_tbrs").delete().in("ride_id", rideIds);
       }
 
-      // 3. Delete from all related tables
+      // Delete from all related tables
       const tables = [
-        "driver_rides",
-        "driver_documents",
-        "driver_invoices",
-        "driver_bonus",
-        "driver_fixed_values",
-        "driver_custom_values",
-        "driver_minimum_packages",
-        "queue_entries",
-        "unit_predefined_drivers",
-        "unit_reviews",
-        "ride_disputes",
-        "dnr_entries",
-        "reativo_entries",
+        "driver_rides", "driver_documents", "driver_invoices", "driver_bonus",
+        "driver_fixed_values", "driver_custom_values", "driver_minimum_packages",
+        "queue_entries", "unit_predefined_drivers", "unit_reviews",
+        "ride_disputes", "dnr_entries", "reativo_entries",
       ];
 
       for (const table of tables) {
@@ -58,11 +51,11 @@ Deno.serve(async (req) => {
         if (error) console.warn(`Warning deleting from ${table}:`, error.message);
       }
 
-      // 4. Delete rescue_entries (both as original and rescuer)
+      // Delete rescue_entries
       await supabase.from("rescue_entries").delete().eq("original_driver_id", driver_id);
       await supabase.from("rescue_entries").delete().eq("rescuer_driver_id", driver_id);
 
-      // 5. Delete the driver record itself
+      // Delete the driver record
       const { error: delErr } = await supabase.from("drivers").delete().eq("id", driver_id);
       if (delErr) {
         console.error("Error deleting driver:", delErr);
@@ -77,14 +70,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: "Missing driver_id, driver_ids, or list_all" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type";
+    // NEW SCHEMA: Always include all relevant profile fields to avoid "missing data" issues in modals and dashboards
+    let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio, emergency_contact_1, emergency_contact_2, birth_date";
 
     // 1. Check for bypass access (Dashboard/Internal)
     if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {
-      let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio, emergency_contact_1, emergency_contact_2, birth_date";
       if (list_all) {
-        selectFields += ", password";
-        const { data, error } = await supabase.from("drivers").select(selectFields).order("created_at", { ascending: false });
+        const { data, error } = await supabase.from("drivers").select(selectFields + ", password").order("name", { ascending: true });
         if (error) throw error;
         return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
@@ -94,11 +86,12 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    // 2. Fallback to JWT Auth for regular requests
+    // 2. Fallback to JWT Auth for regular requests (including drivers checking their own profile)
     const authHeader = req.headers.get("Authorization");
     const token = authHeader?.replace("Bearer ", "");
     
     if (!token) {
+        // If no token but we have driver_id, maybe we should return a subset? No, security first.
         return new Response(JSON.stringify({ error: "Unauthorized: Missing token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

@@ -5,6 +5,8 @@ declare const __BUILD_VERSION__: string;
 const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
+const GLOBAL_SYNC_KEY = "global_sync_stamp";
+const GLOBAL_SYNC_STAMP = "2026-04-01-18-30"; // Update this to force a global reset
 
 const isPreviewHost =
   typeof window !== "undefined" &&
@@ -24,6 +26,29 @@ const PWAAutoUpdate = () => {
 
   // Build version check — works in all environments
   useEffect(() => {
+    // 0. Global Hard Sync check — forces all clients to purge everything once
+    const lastSync = localStorage.getItem(GLOBAL_SYNC_KEY);
+    if (lastSync !== GLOBAL_SYNC_STAMP) {
+       const performHardSync = async () => {
+         try {
+           if ("serviceWorker" in navigator) {
+             const regs = await navigator.serviceWorker.getRegistrations();
+             for (const r of regs) await r.unregister();
+           }
+           if ("caches" in window) {
+             const keys = await caches.keys();
+             for (const k of keys) await caches.delete(k);
+           }
+           localStorage.setItem(GLOBAL_SYNC_KEY, GLOBAL_SYNC_STAMP);
+           window.location.reload();
+         } catch (err) {
+           console.error("Global Sync failed:", err);
+         }
+       };
+       performHardSync();
+       return;
+    }
+
     const current = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
     if (!current) return;
 

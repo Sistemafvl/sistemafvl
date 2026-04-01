@@ -75,11 +75,15 @@ const DriverProfile = () => {
         // 2. Fallback to Edge Function if direct fetch is missing data (e.g. name or CPF)
         if (!profileData || !profileData.name || !profileData.cpf) {
           const { data: edgeData, error: edgeError } = await supabase.functions.invoke("get-driver-details", {
-            body: { driver_ids: [driverId], self_access: true }
+            body: { driver_id: driverId, self_access: true }
           });
           
-          if (!edgeError && Array.isArray(edgeData) && edgeData.length > 0) {
-            profileData = { ...profileData, ...edgeData[0] };
+          if (!edgeError && driverId && edgeData) {
+            // Handle both single object and array response from edge function
+            const edgeProfile = Array.isArray(edgeData) ? edgeData[0] : edgeData;
+            if (edgeProfile) {
+              profileData = { ...profileData, ...edgeProfile };
+            }
           }
         }
 
@@ -149,7 +153,8 @@ const DriverProfile = () => {
     } as any).eq("id", driverId);
     setSaving(false);
     if (error) {
-      toast({ title: "Erro ao salvar", variant: "destructive" });
+      console.error("Error updating driver profile:", error);
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Perfil atualizado com sucesso!" });
     }
