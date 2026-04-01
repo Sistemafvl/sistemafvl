@@ -8,6 +8,7 @@ import DriverCallAlert from "./DriverCallAlert";
 import DriverDailyNotices from "./DriverDailyNotices";
 import DriverInvoicePendingModal from "./DriverInvoicePendingModal";
 import VersionSyncControl from "@/components/VersionSyncControl";
+import DriverProfileCompletionGuard from "./DriverProfileCompletionGuard";
 
 const DriverLayout = () => {
   const { unitSession } = useAuthStore();
