@@ -49,7 +49,6 @@ const DriverProfile = () => {
     address: "", neighborhood: "", city: "", state: "", cep: "",
     avatar_url: "",
     emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
-
   });
 
   // Password
@@ -58,64 +57,64 @@ const DriverProfile = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
-  useEffect(() => {
+  const loadDriverProfile = async () => {
     if (!driverId) return;
-    const load = async () => {
-      setLoading(true);
-      try {
-        // 1. Try direct fetch from drivers table (primary)
-        const { data, error } = await supabase
-          .from("drivers")
-          .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
-          .eq("id", driverId)
-          .maybeSingle();
-        
-        let profileData = data;
+    setLoading(true);
+    try {
+      // 1. Try direct fetch from drivers table (primary)
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
+        .eq("id", driverId)
+        .maybeSingle();
+      
+      let profileData = data;
 
-        // 2. Fallback to Edge Function if direct fetch is missing data (e.g. name or CPF)
-        if (!profileData || !profileData.name || !profileData.cpf) {
-          const { data: edgeData, error: edgeError } = await supabase.functions.invoke("get-driver-details", {
-            body: { driver_id: driverId, self_access: true }
-          });
-          
-          if (!edgeError && driverId && edgeData) {
-            // Handle both single object and array response from edge function
-            const edgeProfile = Array.isArray(edgeData) ? edgeData[0] : edgeData;
-            if (edgeProfile) {
-              profileData = { ...profileData, ...edgeProfile };
-            }
+      // 2. Fallback to Edge Function if direct fetch is missing data (e.g. name or CPF)
+      if (!profileData || !profileData.name || !profileData.cpf) {
+        const { data: edgeData, error: edgeError } = await supabase.functions.invoke("get-driver-details", {
+          body: { driver_id: driverId, self_access: true }
+        });
+        
+        if (!edgeError && driverId && edgeData) {
+          const edgeProfile = Array.isArray(edgeData) ? edgeData[0] : edgeData;
+          if (edgeProfile) {
+            profileData = { ...profileData, ...edgeProfile };
           }
         }
-
-        if (profileData) {
-          setForm({
-            name: profileData.name ?? "",
-            cpf: maskCPF(profileData.cpf ?? ""),
-            email: profileData.email ?? "",
-            whatsapp: maskPhone(profileData.whatsapp ?? ""),
-            bio: profileData.bio ?? "",
-            car_plate: profileData.car_plate ?? "",
-            car_model: profileData.car_model ?? "",
-            car_color: profileData.car_color ?? "",
-            address: profileData.address ?? "",
-            neighborhood: profileData.neighborhood ?? "",
-            city: profileData.city ?? "",
-            state: profileData.state ?? "",
-            cep: profileData.cep ?? "",
-            avatar_url: profileData.avatar_url ?? "",
-            emergency_contact_1: maskPhone(profileData.emergency_contact_1 ?? ""),
-            emergency_contact_2: maskPhone(profileData.emergency_contact_2 ?? ""),
-            birth_date: profileData.birth_date ?? "",
-          });
-        }
-      } catch (err) {
-        console.error("Error loading driver profile:", err);
-        toast({ title: "Erro ao carregar perfil", variant: "destructive" });
-      } finally {
-        setLoading(false);
       }
-    };
-    load();
+
+      if (profileData) {
+        setForm({
+          name: profileData.name ?? "",
+          cpf: maskCPF(profileData.cpf ?? ""),
+          email: profileData.email ?? "",
+          whatsapp: maskPhone(profileData.whatsapp ?? ""),
+          bio: profileData.bio ?? "",
+          car_plate: profileData.car_plate ?? "",
+          car_model: profileData.car_model ?? "",
+          car_color: profileData.car_color ?? "",
+          address: profileData.address ?? "",
+          neighborhood: profileData.neighborhood ?? "",
+          city: profileData.city ?? "",
+          state: profileData.state ?? "",
+          cep: profileData.cep ?? "",
+          avatar_url: profileData.avatar_url ?? "",
+          emergency_contact_1: maskPhone(profileData.emergency_contact_1 ?? ""),
+          emergency_contact_2: maskPhone(profileData.emergency_contact_2 ?? ""),
+          birth_date: profileData.birth_date ?? "",
+        });
+      }
+    } catch (err) {
+      console.error("Error loading driver profile:", err);
+      toast({ title: "Erro ao carregar perfil", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDriverProfile();
   }, [driverId]);
 
   const handleSave = async () => {
@@ -132,8 +131,11 @@ const DriverProfile = () => {
     if (!form.birth_date) {
       toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
     }
+    
     setSaving(true);
-    const { error } = await (supabase.rpc as any)("update_driver_profile", {
+    console.log("DEBUG - Starting RPC call for driver:", driverId);
+
+    const { data: rpcResult, error } = await (supabase.rpc as any)("update_driver_profile", {
       p_driver_id: String(driverId),
       p_name: form.name.trim(),
       p_email: form.email.trim() || null,
@@ -151,14 +153,20 @@ const DriverProfile = () => {
       p_state: form.state.trim() || null,
       p_cep: form.cep.trim() || null,
     });
+
     setSaving(false);
+
     if (error) {
-      console.error("Error updating driver profile:", error);
+      console.error("DEBUG - RPC Error:", error);
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
+      console.log("DEBUG - RPC Result:", rpcResult);
       toast({ title: "Perfil atualizado com sucesso!" });
-      // Reload on success to sync everything properly
-      loadDriverProfile();
+      
+      // Delay reload to ensure DB propagation
+      setTimeout(() => {
+        loadDriverProfile();
+      }, 1500);
     }
   };
 

@@ -40,9 +40,9 @@ const DriverMissingFieldsModal = () => {
     }
 
     const checkMissingFields = async () => {
-      // Add a small 500ms delay to ensure the database has "settled" 
+      // Add a 1500ms delay to ensure the database has "settled" 
       // if the user just came from the profile save.
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
       try {
         setLoading(true);

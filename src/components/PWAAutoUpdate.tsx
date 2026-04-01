@@ -7,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-18-45"; // Forces a hard reset for all
+const GLOBAL_SYNC_STAMP = "2026-04-01-19-05"; // Forces a hard reset for all
 
 const isPreviewHost =
   typeof window !== "undefined" &&
