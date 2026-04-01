@@ -93,12 +93,24 @@ const DriverProfile = () => {
 
   const handleSave = async () => {
     if (!driverId) return;
+    if (!form.whatsapp.replace(/\D/g, "")) {
+      toast({ title: "WhatsApp é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_1.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 1 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_2.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 2 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.birth_date) {
+      toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
+    }
     setSaving(true);
     const { error } = await supabase.from("drivers").update({
       name: form.name.trim(),
       cpf: form.cpf.replace(/\D/g, ""),
       email: form.email.trim() || null,
-      whatsapp: form.whatsapp.trim() || null,
+      whatsapp: form.whatsapp.replace(/\D/g, ""),
       bio: form.bio.trim() || null,
       car_plate: form.car_plate.trim().toUpperCase(),
       car_model: form.car_model.trim(),
@@ -108,6 +120,9 @@ const DriverProfile = () => {
       city: form.city.trim() || null,
       state: form.state.trim() || null,
       cep: form.cep.trim() || null,
+      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, ""),
+      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, ""),
+      birth_date: form.birth_date || null,
     } as any).eq("id", driverId);
     setSaving(false);
     if (error) {
