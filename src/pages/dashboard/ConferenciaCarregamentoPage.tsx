@@ -2428,7 +2428,8 @@ const ConferenciaCarregamentoPage = () => {
                             const rideDate = new Date(ride.completed_at);
                             const today = new Date();
                             today.setHours(0, 0, 0, 0);
-                            if (rideDate < today) {
+                            // Only show "Retroativo" if it was manually created (no queue_entry_id) AND it's a past date
+                            if (rideDate < today && !ride.queue_entry_id) {
                               return (
                                 <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-primary text-primary bg-primary/5 gap-1">
                                   <History className="h-3 w-3" /> Retroativo
@@ -3658,16 +3659,31 @@ const ConferenciaCarregamentoPage = () => {
 
                 setRetroLoading(false);
                 setShowRetroModal(false);
+                
+                // Clear filters to ensure the card is visible
+                setDriverNameFilter("");
+                setLoginFilter("");
+                setConferenteFilter("");
+                setRouteFilter("");
+
                 // Navigate to the retroactive date
                 const finalSDate = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0);
                 const finalEDate = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999);
                 setStartDate(finalSDate);
                 setEndDate(finalEDate);
+                
                 // Fetch with explicit dates to bypass state delay
-                fetchRides(true, finalSDate, finalEDate);
+                await fetchRides(true, finalSDate, finalEDate);
                 
                 const { toast } = await import("@/hooks/use-toast");
-                toast({ title: "Carregamento retroativo criado!", description: `Motorista ${retroSelectedDriver.name} adicionado em ${format(retroDate, "dd/MM/yyyy")}` });
+                toast({ 
+                  title: "Carregamento retroativo criado!", 
+                  description: `Motorista ${retroSelectedDriver.name} adicionado com sucesso em ${format(retroDate, "dd/MM/yyyy")}` 
+                });
+                
+                // Reset driver selection
+                setRetroSearch("");
+                setRetroSelectedDriver(null);
               }}
               disabled={retroLoading || !retroSelectedDriver || !retroDate}
               className="w-full font-bold italic gap-2"
