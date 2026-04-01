@@ -36,6 +36,9 @@ type Driver = {
   pix_key_name: string | null;
   avatar_url: string | null;
   bio: string | null;
+  emergency_contact_1: string | null;
+  emergency_contact_2: string | null;
+  birth_date: string | null;
 };
 
 const PAGE_SIZE = 20;
