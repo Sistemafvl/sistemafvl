@@ -1901,6 +1901,10 @@ export type Database = {
           tbr_count: number
         }[]
       }
+      get_tbr_conflict_context: {
+        Args: { p_code: string; p_unit_id: string }
+        Returns: Json
+      }
       get_top_drivers_by_tbrs: {
         Args: { p_since: string; p_unit_id: string; p_until?: string }
         Returns: {
@@ -1935,6 +1939,10 @@ export type Database = {
       }
       process_tbr_scan: {
         Args: { p_code: string; p_ride_id: string; p_unit_id: string }
+        Returns: Json
+      }
+      transfer_tbr_to_ride: {
+        Args: { p_code: string; p_new_ride_id: string; p_unit_id: string }
         Returns: Json
       }
     }
