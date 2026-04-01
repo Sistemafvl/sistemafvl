@@ -593,6 +593,7 @@ export type Database = {
           bank_agency: string | null
           bank_name: string | null
           bio: string | null
+          birth_date: string | null
           car_color: string | null
           car_model: string
           car_plate: string
@@ -601,6 +602,8 @@ export type Database = {
           cpf: string
           created_at: string
           email: string | null
+          emergency_contact_1: string | null
+          emergency_contact_2: string | null
           house_number: string | null
           id: string
           name: string
@@ -620,6 +623,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model: string
           car_plate: string
@@ -628,6 +632,8 @@ export type Database = {
           cpf: string
           created_at?: string
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           house_number?: string | null
           id?: string
           name: string
@@ -647,6 +653,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model?: string
           car_plate?: string
@@ -655,6 +662,8 @@ export type Database = {
           cpf?: string
           created_at?: string
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           house_number?: string | null
           id?: string
           name?: string
@@ -1868,6 +1877,7 @@ export type Database = {
           bank_agency: string | null
           bank_name: string | null
           bio: string | null
+          birth_date: string | null
           car_color: string | null
           car_model: string
           car_plate: string
@@ -1876,6 +1886,8 @@ export type Database = {
           cpf: string
           created_at: string
           email: string | null
+          emergency_contact_1: string | null
+          emergency_contact_2: string | null
           house_number: string | null
           id: string
           name: string
