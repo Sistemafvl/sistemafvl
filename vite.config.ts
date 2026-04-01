@@ -4,6 +4,10 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import fs from "fs";
 
+// Single timestamp shared between __BUILD_VERSION__ (JS) and version.json (polling)
+// This ensures they always match on the same build.
+const BUILD_VERSION = Date.now().toString();
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
   server: {
@@ -16,23 +20,25 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    // Generate a version.json in /public at build time for reliable update detection
-    {
+    // Only runs during `vite build` (production), NOT during dev server
+    mode === "production" && {
       name: "generate-version-json",
+      apply: "build" as const,
       buildStart() {
-        const version = Date.now().toString();
         const publicDir = path.resolve(__dirname, "public");
         if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
         fs.writeFileSync(
           path.join(publicDir, "version.json"),
-          JSON.stringify({ version }),
+          JSON.stringify({ version: BUILD_VERSION }),
           "utf-8"
         );
+        console.log(`[version] version.json → ${BUILD_VERSION}`);
       },
     },
   ].filter(Boolean),
   define: {
-    __BUILD_VERSION__: JSON.stringify(Date.now().toString()),
+    // Same timestamp injected into the JS bundle
+    __BUILD_VERSION__: JSON.stringify(BUILD_VERSION),
   },
   resolve: {
     alias: {
