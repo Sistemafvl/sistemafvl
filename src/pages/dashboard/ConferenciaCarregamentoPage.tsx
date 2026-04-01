@@ -3664,6 +3664,9 @@ const ConferenciaCarregamentoPage = () => {
                   .limit(1);
                 const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
 
+                const { toast } = await import("@/hooks/use-toast");
+                toast({ title: "Criando retroativo...", description: `Enviando data: ${format(new Date(retroDateStr), "dd/MM/yyyy HH:mm")}` });
+
                 // Use direct fetch to bypass supabase.functions.invoke payload issues
                 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || "";
                 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
@@ -3686,7 +3689,6 @@ const ConferenciaCarregamentoPage = () => {
                 const insertError = !response.ok ? { message: rideResult.error || "Erro desconhecido" } : null;
 
                 if (insertError || rideResult?.error) {
-                  const { toast } = await import("@/hooks/use-toast");
                   toast({ title: "Erro ao criar carregamento", description: insertError?.message || rideResult?.error, variant: "destructive" });
                   setRetroLoading(false);
                   return;

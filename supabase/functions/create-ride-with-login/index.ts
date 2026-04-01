@@ -71,6 +71,10 @@ Deno.serve(async (req) => {
     const startedAt = isRetroactive ? override_date : null;
     const finishedAt = null; // Always null on creation
 
+    if (isRetroactive && !override_date) {
+      return new Response(JSON.stringify({ error: "No retroactive date provided but intent was retroactive." }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
     const { data: ride, error: rideError } = await supabase.from("driver_rides").insert({
       driver_id, 
       unit_id, 
@@ -83,11 +87,29 @@ Deno.serve(async (req) => {
       loading_status: finalStatus,
       started_at: startedAt,
       finished_at: finishedAt
-    }).select("id, sequence_number, route").single();
+    }).select("id, sequence_number, route, completed_at, started_at").single();
 
     if (rideError) throw rideError;
 
-    return new Response(JSON.stringify({ success: true, ride, debug_override_date: override_date }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    // FORCED UPDATE: Re-enforce the retroactive date after insertion
+    // This bypasses any potential "DEFAULT now()" trigger behavior for initial inserts
+    if (isRetroactive && ride?.id) {
+       await supabase.from("driver_rides")
+         .update({ 
+           completed_at: override_date, 
+           started_at: startedAt 
+         })
+         .eq("id", ride.id);
+       
+       // Re-fetch the record for confirming in debug
+       const { data: updatedRide } = await supabase.from("driver_rides").select("completed_at, started_at").eq("id", ride.id).single();
+       if (updatedRide) {
+          ride.completed_at = updatedRide.completed_at;
+          ride.started_at = updatedRide.started_at;
+       }
+    }
+
+    return new Response(JSON.stringify({ success: true, ride, debug_received_date: override_date }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "Internal server error", details: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
