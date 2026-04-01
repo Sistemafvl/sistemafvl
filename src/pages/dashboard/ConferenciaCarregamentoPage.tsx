@@ -3641,18 +3641,18 @@ const ConferenciaCarregamentoPage = () => {
                   .limit(1);
                 const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
 
-                const { error: insertError } = await supabase.from("driver_rides").insert({
-                  driver_id: retroSelectedDriver.id,
-                  unit_id: unitId,
-                  completed_at: retroDateStr,
-                  sequence_number: nextSeq,
-                  loading_status: "pending",
-                  conferente_id: conferenteSession?.id || null,
-                } as any);
+                const { data: rideResult, error: insertError } = await supabase.functions.invoke("create-ride-with-login", {
+                  body: {
+                    driver_id: retroSelectedDriver.id,
+                    unit_id: unitId,
+                    override_date: retroDateStr,
+                    session_token: conferenteSession?.session_token
+                  }
+                });
 
-                if (insertError) {
+                if (insertError || rideResult?.error) {
                   const { toast } = await import("@/hooks/use-toast");
-                  toast({ title: "Erro ao criar carregamento", description: insertError.message, variant: "destructive" });
+                  toast({ title: "Erro ao criar carregamento", description: insertError?.message || rideResult?.error, variant: "destructive" });
                   setRetroLoading(false);
                   return;
                 }

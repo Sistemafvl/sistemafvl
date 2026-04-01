@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
       await supabase.auth.getUser(token);
     }
 
-    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret, session_token } = await req.json();
+    const { driver_id, unit_id, queue_entry_id, route, unit_login_id, internal_secret, session_token, override_date } = await req.json();
 
     // Verify internal secret for ride creation (Opt-in security)
     const expectedSecret = Deno.env.get("INTERNAL_SECRET");
@@ -46,8 +46,8 @@ Deno.serve(async (req) => {
     }
 
     // Business Logic — sequence resets daily (Brazil timezone UTC-3)
-    const now = new Date();
-    const brStr = now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
+    const brDate = override_date ? new Date(override_date) : new Date();
+    const brStr = brDate.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" });
     const br = new Date(brStr);
     const yyyy = br.getFullYear();
     const mm = String(br.getMonth() + 1).padStart(2, "0");
@@ -71,6 +71,7 @@ Deno.serve(async (req) => {
     const { data: ride, error: rideError } = await supabase.from("driver_rides").insert({
       driver_id, unit_id, queue_entry_id: queue_entry_id || null, route: route || null,
       login: loginValue, password: passwordValue, sequence_number: sequenceNumber,
+      completed_at: override_date || null
     }).select("id, sequence_number, route").single();
 
     if (rideError) throw rideError;
