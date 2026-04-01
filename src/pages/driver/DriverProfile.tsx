@@ -294,8 +294,33 @@ const DriverProfile = () => {
               <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" className="h-10" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> WhatsApp</Label>
-              <Input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} className="h-10" />
+              <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> WhatsApp *</Label>
+              <Input value={form.whatsapp} onChange={(e) => set("whatsapp", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Data de Nascimento *</Label>
+              <Input type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} className="h-10" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Emergency Contacts */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold italic flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-primary" /> Contatos de Emergência
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Contato 1 *</Label>
+              <Input value={form.emergency_contact_1} onChange={(e) => set("emergency_contact_1", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Contato 2 *</Label>
+              <Input value={form.emergency_contact_2} onChange={(e) => set("emergency_contact_2", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
             </div>
           </div>
         </CardContent>
