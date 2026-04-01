@@ -81,6 +81,9 @@ const DriverProfile = () => {
           state: data.state ?? "",
           cep: data.cep ?? "",
           avatar_url: (data as any).avatar_url ?? "",
+          emergency_contact_1: maskPhone((data as any).emergency_contact_1 ?? ""),
+          emergency_contact_2: maskPhone((data as any).emergency_contact_2 ?? ""),
+          birth_date: (data as any).birth_date ?? "",
         });
       }
       setLoading(false);
