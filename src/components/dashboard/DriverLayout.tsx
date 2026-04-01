@@ -42,6 +42,7 @@ const DriverLayout = () => {
       <DriverCallAlert />
       <DriverDailyNotices />
       <DriverInvoicePendingModal />
+      <DriverProfileCompletionGuard />
     </SidebarProvider>
   );
 };
