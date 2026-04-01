@@ -140,7 +140,7 @@ const MotoristasParceirosPage = () => {
     setLoading(true);
     const { data: driversData } = await supabase
       .from("drivers_public")
-      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at")
+      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, emergency_contact_1, emergency_contact_2, birth_date")
       .order("name");
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
