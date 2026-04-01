@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Truck, Eye, Search, Loader2, Trash2, ToggleLeft, ToggleRight, EyeOff, User, Car, MapPin, Landmark, KeyRound } from "lucide-react";
+import { Truck, Eye, Search, Loader2, Trash2, ToggleLeft, ToggleRight, EyeOff, User, Car, MapPin, Landmark, KeyRound, Phone } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
