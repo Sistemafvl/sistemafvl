@@ -157,6 +157,8 @@ const DriverProfile = () => {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "Perfil atualizado com sucesso!" });
+      // Reload on success to sync everything properly
+      loadDriverProfile();
     }
   };
 

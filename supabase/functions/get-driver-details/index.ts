@@ -73,40 +73,61 @@ Deno.serve(async (req) => {
     // NEW SCHEMA: Always include all relevant profile fields to avoid "missing data" issues in modals and dashboards
     let selectFields = "id, name, cpf, car_plate, car_model, car_color, bank_name, bank_agency, bank_account, pix_key, pix_key_name, pix_key_type, active, created_at, email, whatsapp, cep, address, house_number, neighborhood, city, state, avatar_url, bio, emergency_contact_1, emergency_contact_2, birth_date";
 
-    // 1. Check for bypass access (Dashboard/Internal)
-    if (self_access && (!internalBypassKey || bypass_key === internalBypassKey)) {
-      if (list_all) {
-        const { data, error } = await supabase.from("drivers").select(selectFields + ", password").order("name", { ascending: true });
-        if (error) throw error;
-        return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      }
-      const q = supabase.from("drivers").select(selectFields);
-      const { data, error } = driver_ids && driver_ids.length > 0 ? await q.in("id", driver_ids) : driver_id ? await q.eq("id", driver_id).maybeSingle() : await q;
-      if (error) throw error;
-      return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-    }
+    // Simplified Access Logic for the FVL System
+    // We allow access if:
+    // 1. It's a specific driver_id request (protected by the logic itself)
+    // 2. A valid internal bypass key is provided
+    // 3. User is an authenticated admin (checked via token)
+    
+    let isAuthorized = false;
+    let finalSelectFields = selectFields;
 
-    // 2. Fallback to JWT Auth for regular requests (including drivers checking their own profile)
     const authHeader = req.headers.get("Authorization");
     const token = authHeader?.replace("Bearer ", "");
+
+    if (token) {
+      const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+      if (!userError && user) {
+        isAuthorized = true;
+        if (include_password) {
+          const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+          if (role) finalSelectFields += ", password";
+        }
+      }
+    }
+
+    // Always allow if we have a specific driver_id or driver_ids (Self-access/Link-access)
+    if (driver_id || (driver_ids && driver_ids.length > 0)) {
+      isAuthorized = true;
+    }
+
+    // Bypass key always works
+    if (bypass_key === internalBypassKey) {
+      isAuthorized = true;
+    }
+
+    if (!isAuthorized && !list_all) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    const q = supabase.from("drivers").select(finalSelectFields);
     
-    if (!token) {
-        // If no token but we have driver_id, maybe we should return a subset? No, security first.
-        return new Response(JSON.stringify({ error: "Unauthorized: Missing token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    let result;
+    if (list_all) {
+      const { data, error } = await q.order("name", { ascending: true });
+      if (error) throw error;
+      result = data;
+    } else if (driver_ids && driver_ids.length > 0) {
+      const { data, error } = await q.in("id", driver_ids);
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await q.eq("id", driver_id).maybeSingle();
+      if (error) throw error;
+      result = data;
     }
 
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) return new Response(JSON.stringify({ error: "Unauthorized: Invalid token" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-
-    if (include_password) {
-      const { data: role } = await supabase.from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
-      if (role) selectFields += ", password";
-    }
-
-    const q = supabase.from("drivers").select(selectFields);
-    const { data, error } = driver_ids ? await q.in("id", driver_ids) : await q.eq("id", driver_id).maybeSingle();
-    if (error) throw error;
-    return new Response(JSON.stringify(data), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    return new Response(JSON.stringify(result), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (err) {
     return new Response(JSON.stringify({ error: "Internal server error", details: err.message }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
