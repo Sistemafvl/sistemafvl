@@ -47,6 +47,7 @@ const DriverProfile = () => {
     car_plate: "", car_model: "", car_color: "",
     address: "", neighborhood: "", city: "", state: "", cep: "",
     avatar_url: "",
+    emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
   });
 
   // Password
