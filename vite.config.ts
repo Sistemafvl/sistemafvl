@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import fs from "fs";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -15,6 +16,20 @@ export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    // Generate a version.json in /public at build time for reliable update detection
+    {
+      name: "generate-version-json",
+      buildStart() {
+        const version = Date.now().toString();
+        const publicDir = path.resolve(__dirname, "public");
+        if (!fs.existsSync(publicDir)) fs.mkdirSync(publicDir, { recursive: true });
+        fs.writeFileSync(
+          path.join(publicDir, "version.json"),
+          JSON.stringify({ version }),
+          "utf-8"
+        );
+      },
+    },
   ].filter(Boolean),
   define: {
     __BUILD_VERSION__: JSON.stringify(Date.now().toString()),

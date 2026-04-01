@@ -7,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-19-05"; // Forces a hard reset for all
+const GLOBAL_SYNC_STAMP = "2026-04-01-22-30"; // Bump this to force a one-time hard reset for all clients
 
 const isPreviewHost =
   typeof window !== "undefined" &&
@@ -60,7 +60,6 @@ const PWAAutoUpdate = () => {
     if (saved && saved !== current && !alreadyReloaded) {
       localStorage.setItem(VERSION_KEY, current);
       sessionStorage.setItem(RELOAD_FLAG, "1");
-      // For on-load difference, we'll still auto-reload once to ensure they start fresh
       window.location.reload();
       return;
     }
@@ -68,27 +67,32 @@ const PWAAutoUpdate = () => {
     localStorage.setItem(VERSION_KEY, current);
     sessionStorage.removeItem(RELOAD_FLAG);
 
-    // Periodic check for new versions on server
+    // Periodic check for new versions via /version.json (reliable — never cached by browser)
     const checkNewVersion = async () => {
       try {
-        const res = await fetch(`/?v=${Date.now()}`, { cache: "no-cache" });
+        const res = await fetch(`/version.json?t=${Date.now()}`, {
+          cache: "no-store",
+          headers: { "Cache-Control": "no-cache, no-store" },
+        });
         if (!res.ok) return;
-        const html = await res.text();
-        const match = html.match(/__BUILD_VERSION__:"(\d+)"/);
-        const remoteVersion = match ? match[1] : null;
+
+        const data = await res.json();
+        const remoteVersion: string | undefined = data?.version;
 
         if (remoteVersion && remoteVersion !== current) {
-          console.log("New version available on server:", remoteVersion);
+          console.log("[PWA] Nova versão detectada:", remoteVersion, "atual:", current);
           setShowUpdateModal(true);
         }
       } catch (err) {
-        console.warn("Failed to check for new version:", err);
+        console.warn("[PWA] Falha ao verificar versão:", err);
       }
     };
 
-    // Check periodically
-    const interval = setInterval(checkNewVersion, 5 * 60 * 1000);
+    // Check immediately on mount, then every 2 minutes
+    checkNewVersion();
+    const interval = setInterval(checkNewVersion, 2 * 60 * 1000);
 
+    // Also check when user comes back to the tab
     const handleVisibility = () => {
       if (document.visibilityState === "visible") checkNewVersion();
     };
@@ -101,7 +105,6 @@ const PWAAutoUpdate = () => {
   }, []);
 
   const handleUpdate = () => {
-    // Clear storage version so it picks up the new one on reload
     localStorage.removeItem(VERSION_KEY);
     window.location.reload();
   };
@@ -146,13 +149,11 @@ const PWAAutoUpdate = () => {
         if (res.ok) {
           navigator.serviceWorker.register("/sw.js", { type: "classic" }).catch(console.error);
         } else {
-          // No sw.js — clean up stale registrations
           navigator.serviceWorker.getRegistrations().then((regs) => {
             regs.forEach((r) => r.unregister());
           });
         }
       }).catch(() => {
-        // Network error fetching sw.js — clean up
         navigator.serviceWorker.getRegistrations().then((regs) => {
           regs.forEach((r) => r.unregister());
         });
