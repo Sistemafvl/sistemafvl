@@ -247,7 +247,7 @@ const ConferenciaCarregamentoPage = () => {
 
   // Retroactive loading
   const [showRetroModal, setShowRetroModal] = useState(false);
-  const [retroDate, setRetroDate] = useState<Date | undefined>(undefined);
+  const [retroDate, setRetroDate] = useState<Date | undefined>(startDate);
   const [retroDriverSearch, setRetroDriverSearch] = useState("");
   const [retroDriverResults, setRetroDriverResults] = useState<SwapDriver[]>([]);
   const [retroSelectedDriver, setRetroSelectedDriver] = useState<SwapDriver | null>(null);
@@ -759,22 +759,44 @@ const ConferenciaCarregamentoPage = () => {
     }
 
     const conferenteId = currentRide?.conferente_id || conferenteSession?.id;
-    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId || r.conferente_id } : r));
+    
+    // Check if it's a retroactive ride (no queue_entry_id) to preserve its day
+    const ride = rides.find(r => r.id === rideId);
+    const now = new Date();
+    let startAt = now.toISOString();
+
+    if (ride && !ride.queue_entry_id && ride.completed_at) {
+      const cDate = new Date(ride.completed_at);
+      const sAt = new Date(cDate.getFullYear(), cDate.getMonth(), cDate.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+      startAt = sAt.toISOString();
+    }
+
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "loading", started_at: startAt, conferente_id: conferenteId || r.conferente_id } : r));
     if (conferenteId) setLockedConferenteIds((prev) => new Set(prev).add(rideId));
     setFocusedRideId(rideId);
     
     if (conferenteId && !currentRide?.conferente_id) {
-      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString(), conferente_id: conferenteId } as any).eq("id", rideId);
+      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: startAt, conferente_id: conferenteId } as any).eq("id", rideId);
     } else {
-      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: new Date().toISOString() } as any).eq("id", rideId);
+      await supabase.from("driver_rides").update({ loading_status: "loading", started_at: startAt } as any).eq("id", rideId);
     }
     fetchRides();
   };
 
   const handleFinalizar = async (rideId: string) => {
     setFocusedRideId(null);
-    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "finished", finished_at: new Date().toISOString() } : r));
-    await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: new Date().toISOString() } as any).eq("id", rideId);
+    const ride = rides.find(r => r.id === rideId);
+    const now = new Date();
+    let finishAt = now.toISOString();
+
+    if (ride && !ride.queue_entry_id && ride.completed_at) {
+      const cDate = new Date(ride.completed_at);
+      const fAt = new Date(cDate.getFullYear(), cDate.getMonth(), cDate.getDate(), now.getHours(), now.getMinutes(), now.getSeconds());
+      finishAt = fAt.toISOString();
+    }
+
+    setRides((prev) => prev.map((r) => r.id === rideId ? { ...r, loading_status: "finished", finished_at: finishAt } : r));
+    await supabase.from("driver_rides").update({ loading_status: "finished", finished_at: finishAt } as any).eq("id", rideId);
     fetchRides();
     
     // Trigger dispute modal check after finishing a ride
@@ -2041,7 +2063,7 @@ const ConferenciaCarregamentoPage = () => {
             className="gap-1.5 shrink-0"
             onClick={() => {
               setShowRetroModal(true);
-              setRetroDate(undefined);
+              setRetroDate(startDate);
               setRetroDriverSearch("");
               setRetroDriverResults([]);
               setRetroSelectedDriver(null);
