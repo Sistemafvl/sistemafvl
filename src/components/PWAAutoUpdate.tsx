@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import VersionUpdateModal from "./VersionUpdateModal";
+import { RefreshCw } from "lucide-react";
 
 declare const __BUILD_VERSION__: string;
 
@@ -7,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-22-30"; // Bump this to force a one-time hard reset for all clients
+const GLOBAL_SYNC_STAMP = "2026-04-01-22-36"; // Bump to force a one-time hard reset for all clients
 
 const isPreviewHost =
   typeof window !== "undefined" &&
@@ -22,33 +22,41 @@ const isInIframe = (() => {
   }
 })();
 
+/**
+ * PWAAutoUpdate
+ *
+ * Detects new deployments by polling /version.json every 2 minutes
+ * and whenever the user returns to the tab. When a new version is
+ * found, shows a small bottom-right toast for 3 seconds, then
+ * auto-reloads the page — no user interaction required.
+ */
 const PWAAutoUpdate = () => {
   const hasRun = useRef(false);
-  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [updating, setUpdating] = useState(false);
 
-  // Build version check — works in all environments
+  // Build version check
   useEffect(() => {
-    // 0. Global Hard Sync check — forces all clients to purge everything once
+    // 0. Global Hard Sync — forces all clients to purge cache once after a GLOBAL_SYNC_STAMP bump
     const lastSync = localStorage.getItem(GLOBAL_SYNC_KEY);
     if (lastSync !== GLOBAL_SYNC_STAMP) {
-       const performHardSync = async () => {
-         try {
-           if ("serviceWorker" in navigator) {
-             const regs = await navigator.serviceWorker.getRegistrations();
-             for (const r of regs) await r.unregister();
-           }
-           if ("caches" in window) {
-             const keys = await caches.keys();
-             for (const k of keys) await caches.delete(k);
-           }
-           localStorage.setItem(GLOBAL_SYNC_KEY, GLOBAL_SYNC_STAMP);
-           window.location.reload();
-         } catch (err) {
-           console.error("Global Sync failed:", err);
-         }
-       };
-       performHardSync();
-       return;
+      const performHardSync = async () => {
+        try {
+          if ("serviceWorker" in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            for (const r of regs) await r.unregister();
+          }
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            for (const k of keys) await caches.delete(k);
+          }
+          localStorage.setItem(GLOBAL_SYNC_KEY, GLOBAL_SYNC_STAMP);
+          window.location.reload();
+        } catch (err) {
+          console.error("[PWA] Global Sync failed:", err);
+        }
+      };
+      performHardSync();
+      return;
     }
 
     const current = typeof __BUILD_VERSION__ !== "undefined" ? __BUILD_VERSION__ : null;
@@ -57,6 +65,7 @@ const PWAAutoUpdate = () => {
     const saved = localStorage.getItem(VERSION_KEY);
     const alreadyReloaded = sessionStorage.getItem(RELOAD_FLAG);
 
+    // If version changed since last load, auto-reload once immediately
     if (saved && saved !== current && !alreadyReloaded) {
       localStorage.setItem(VERSION_KEY, current);
       sessionStorage.setItem(RELOAD_FLAG, "1");
@@ -67,8 +76,19 @@ const PWAAutoUpdate = () => {
     localStorage.setItem(VERSION_KEY, current);
     sessionStorage.removeItem(RELOAD_FLAG);
 
-    // Periodic check for new versions via /version.json (reliable — never cached by browser)
+    // Polls /version.json for new deployments
+    const triggerUpdate = () => {
+      setUpdating(true);
+      // Show banner for 3 seconds then reload
+      setTimeout(() => {
+        localStorage.removeItem(VERSION_KEY);
+        window.location.reload();
+      }, 3000);
+    };
+
     const checkNewVersion = async () => {
+      // Don't check again if already updating
+      if (updating) return;
       try {
         const res = await fetch(`/version.json?t=${Date.now()}`, {
           cache: "no-store",
@@ -80,8 +100,8 @@ const PWAAutoUpdate = () => {
         const remoteVersion: string | undefined = data?.version;
 
         if (remoteVersion && remoteVersion !== current) {
-          console.log("[PWA] Nova versão detectada:", remoteVersion, "atual:", current);
-          setShowUpdateModal(true);
+          console.log("[PWA] Nova versão detectada:", remoteVersion, "→ atualizando...");
+          triggerUpdate();
         }
       } catch (err) {
         console.warn("[PWA] Falha ao verificar versão:", err);
@@ -102,14 +122,9 @@ const PWAAutoUpdate = () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleUpdate = () => {
-    localStorage.removeItem(VERSION_KEY);
-    window.location.reload();
-  };
-
-  // In preview/iframe: clean up any stale SWs + caches once per session
+  // In preview/iframe: clean up stale SWs + caches once per session
   useEffect(() => {
     if (hasRun.current) return;
     hasRun.current = true;
@@ -135,9 +150,7 @@ const PWAAutoUpdate = () => {
           }
         }
         sessionStorage.setItem(PREVIEW_CLEANUP_FLAG, "1");
-        if (didClean) {
-          window.location.reload();
-        }
+        if (didClean) window.location.reload();
       };
       cleanup().catch(console.error);
       return;
@@ -145,23 +158,41 @@ const PWAAutoUpdate = () => {
 
     // Production: only register SW if /sw.js actually exists
     if ("serviceWorker" in navigator) {
-      fetch("/sw.js", { method: "HEAD" }).then((res) => {
-        if (res.ok) {
-          navigator.serviceWorker.register("/sw.js", { type: "classic" }).catch(console.error);
-        } else {
-          navigator.serviceWorker.getRegistrations().then((regs) => {
-            regs.forEach((r) => r.unregister());
-          });
-        }
-      }).catch(() => {
-        navigator.serviceWorker.getRegistrations().then((regs) => {
-          regs.forEach((r) => r.unregister());
+      fetch("/sw.js", { method: "HEAD" })
+        .then((res) => {
+          if (res.ok) {
+            navigator.serviceWorker.register("/sw.js", { type: "classic" }).catch(console.error);
+          } else {
+            navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
+          }
+        })
+        .catch(() => {
+          navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister()));
         });
-      });
     }
   }, []);
 
-  return <VersionUpdateModal isOpen={showUpdateModal} onUpdate={handleUpdate} />;
+  // Auto-update banner — appears for 3 seconds then page reloads
+  if (!updating) return null;
+
+  return (
+    <div
+      className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-xl bg-primary px-5 py-3.5 text-primary-foreground shadow-2xl"
+      style={{ animation: "slideInRight 0.4s ease-out" }}
+    >
+      <RefreshCw className="h-5 w-5 animate-spin shrink-0" />
+      <div>
+        <p className="font-bold text-sm leading-tight">Atualizando o sistema...</p>
+        <p className="text-xs text-primary-foreground/70 leading-tight mt-0.5">A página será recarregada em instantes</p>
+      </div>
+      <style>{`
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(100%); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+    </div>
+  );
 };
 
 export default PWAAutoUpdate;
