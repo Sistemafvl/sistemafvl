@@ -147,8 +147,11 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       car_model: form.car_model.trim(),
       car_color: form.car_color.trim() || null,
       email: form.email.trim() || null,
-      whatsapp: form.whatsapp.replace(/\D/g, "") || null,
+      whatsapp: form.whatsapp.replace(/\D/g, ""),
       password: form.password,
+      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, ""),
+      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, ""),
+      birth_date: form.birth_date,
       active: true,
     });
 
