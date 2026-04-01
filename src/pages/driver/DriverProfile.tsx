@@ -61,28 +61,13 @@ const DriverProfile = () => {
     if (!driverId) return;
     setLoading(true);
     try {
-      // 1. Try direct fetch from drivers table (primary)
-      const { data, error } = await supabase
-        .from("drivers")
-        .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
-        .eq("id", driverId)
-        .maybeSingle();
+      // Use the Safe RPC to bypass all security/cache layers
+      const { data, error } = await (supabase.rpc as any)("get_driver_profile_safe", {
+        p_driver_id: driverId
+      });
       
-      let profileData = data;
-
-      // 2. Fallback to Edge Function if direct fetch is missing data (e.g. name or CPF)
-      if (!profileData || !profileData.name || !profileData.cpf) {
-        const { data: edgeData, error: edgeError } = await supabase.functions.invoke("get-driver-details", {
-          body: { driver_id: driverId, self_access: true }
-        });
-        
-        if (!edgeError && driverId && edgeData) {
-          const edgeProfile = Array.isArray(edgeData) ? edgeData[0] : edgeData;
-          if (edgeProfile) {
-            profileData = { ...profileData, ...edgeProfile };
-          }
-        }
-      }
+      if (error) throw error;
+      const profileData = data as any;
 
       if (profileData) {
         setForm({
@@ -135,7 +120,7 @@ const DriverProfile = () => {
     setSaving(true);
     console.log("DEBUG - Starting RPC call for driver:", driverId);
 
-    const { data: rpcResult, error } = await (supabase.rpc as any)("update_driver_profile", {
+    const { data: rpcResult, error } = await (supabase.rpc as any)("update_driver_profile_v2", {
       p_driver_id: String(driverId),
       p_name: form.name.trim(),
       p_email: form.email.trim() || null,

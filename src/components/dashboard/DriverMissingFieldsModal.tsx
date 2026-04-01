@@ -40,15 +40,14 @@ const DriverMissingFieldsModal = () => {
     }
 
     const checkMissingFields = async () => {
-      // Add a 1500ms delay to ensure the database has "settled" 
-      // if the user just came from the profile save.
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      // Add a 2s delay to ensure the database has "settled" 
+      await new Promise(resolve => setTimeout(resolve, 2000));
 
       try {
         setLoading(true);
-        // Use edge function to bypass RLS and accurately check fields
-        const { data: driverData, error } = await supabase.functions.invoke("get-driver-details", {
-          body: { driver_id: driverId, self_access: true }
+        // Use recursive safe RPC to bypass all RLS/cache
+        const { data: driverData, error } = await (supabase.rpc as any)("get_driver_profile_safe", {
+          p_driver_id: driverId
         });
 
         if (error || !driverData) {
