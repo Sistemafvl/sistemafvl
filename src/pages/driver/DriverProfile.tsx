@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   User, Camera, Loader2, Save, KeyRound, Eye, EyeOff,
-  Mail, Phone, MapPin, Car, Palette, FileText,
+  Mail, Phone, MapPin, Car, Palette, FileText, CalendarDays, ShieldAlert,
 } from "lucide-react";
 
 const capitalize = (v: string) =>
