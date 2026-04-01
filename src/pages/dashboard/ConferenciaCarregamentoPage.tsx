@@ -430,10 +430,13 @@ const ConferenciaCarregamentoPage = () => {
   const [searchRides, setSearchRides] = useState<RideWithDriver[]>([]);
   const [searchTbrs, setSearchTbrs] = useState<Record<string, Tbr[]>>({});
 
-  const fetchRides = useCallback(async (showLoading = true) => {
+  const fetchRides = useCallback(async (showLoading = true, overrideStartDate?: Date, overrideEndDate?: Date) => {
     if (!unitId) return;
 
     if (showLoading) setIsLoading(true);
+
+    const sDate = overrideStartDate || startDate;
+    const eDate = overrideEndDate || endDate;
 
     // Concurrency control: only apply results from the latest request
     const thisRequestId = ++requestIdRef.current;
@@ -442,8 +445,8 @@ const ConferenciaCarregamentoPage = () => {
       .from("driver_rides")
       .select("id, unit_id, route, login, password, sequence_number, driver_id, conferente_id, loading_status, started_at, finished_at, completed_at, queue_entry_id")
       .eq("unit_id", unitId)
-      .gte("completed_at", startDate.toISOString())
-      .lte("completed_at", endDate.toISOString())
+      .gte("completed_at", sDate.toISOString())
+      .lte("completed_at", eDate.toISOString())
       .order("completed_at", { ascending: true })
       .order("sequence_number", { ascending: true });
 
@@ -2420,6 +2423,20 @@ const ConferenciaCarregamentoPage = () => {
                           {isCancelled && (
                             <Badge variant="destructive" className="text-[10px] px-2 py-0.5">Cancelado</Badge>
                           )}
+                          {(() => {
+                            if (!ride.completed_at) return null;
+                            const rideDate = new Date(ride.completed_at);
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            if (rideDate < today) {
+                              return (
+                                <Badge variant="outline" className="text-[10px] px-2 py-0.5 border-primary text-primary bg-primary/5 gap-1">
+                                  <History className="h-3 w-3" /> Retroativo
+                                </Badge>
+                              );
+                            }
+                            return null;
+                          })()}
                           {isFinished && (
                             <CheckCircle className="h-5 w-5 text-green-600" />
                           )}
@@ -3623,7 +3640,7 @@ const ConferenciaCarregamentoPage = () => {
                   .limit(1);
                 const nextSeq = ((existingRides ?? [])[0]?.sequence_number ?? 0) + 1;
 
-                await supabase.from("driver_rides").insert({
+                const { error: insertError } = await supabase.from("driver_rides").insert({
                   driver_id: retroSelectedDriver.id,
                   unit_id: unitId,
                   completed_at: retroDateStr,
@@ -3632,12 +3649,23 @@ const ConferenciaCarregamentoPage = () => {
                   conferente_id: conferenteSession?.id || null,
                 } as any);
 
+                if (insertError) {
+                  const { toast } = await import("@/hooks/use-toast");
+                  toast({ title: "Erro ao criar carregamento", description: insertError.message, variant: "destructive" });
+                  setRetroLoading(false);
+                  return;
+                }
+
                 setRetroLoading(false);
                 setShowRetroModal(false);
                 // Navigate to the retroactive date
-                setStartDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0));
-                setEndDate(new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999));
-                fetchRides();
+                const finalSDate = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0);
+                const finalEDate = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999);
+                setStartDate(finalSDate);
+                setEndDate(finalEDate);
+                // Fetch with explicit dates to bypass state delay
+                fetchRides(true, finalSDate, finalEDate);
+                
                 const { toast } = await import("@/hooks/use-toast");
                 toast({ title: "Carregamento retroativo criado!", description: `Motorista ${retroSelectedDriver.name} adicionado em ${format(retroDate, "dd/MM/yyyy")}` });
               }}
