@@ -39,6 +39,45 @@ const PWAAutoUpdate = () => {
 
     localStorage.setItem(VERSION_KEY, current);
     sessionStorage.removeItem(RELOAD_FLAG);
+
+    // Periodic check for new versions on server
+    const checkNewVersion = async () => {
+      try {
+        // Fetch index.html with a cache-buster param
+        const res = await fetch(`/?v=${Date.now()}`, { cache: "no-cache" });
+        const html = await res.text();
+        
+        // Search for the __BUILD_VERSION__ string in the response
+        // Regex looks for: __BUILD_VERSION__:"timestamp"
+        const match = html.match(/__BUILD_VERSION__:"(\d+)"/);
+        const remoteVersion = match ? match[1] : null;
+
+        if (remoteVersion && remoteVersion !== current) {
+          console.log("New version detected!", { current, remoteVersion });
+          localStorage.setItem(VERSION_KEY, remoteVersion);
+          // Reload to get the new code
+          window.location.reload();
+        }
+      } catch (err) {
+        console.warn("Failed to check for new version:", err);
+      }
+    };
+
+    // Check every 5 minutes
+    const interval = setInterval(checkNewVersion, 5 * 60 * 1000);
+
+    // Check when tab becomes visible (user returns to app)
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        checkNewVersion();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   // In preview/iframe: clean up any stale SWs + caches once per session
