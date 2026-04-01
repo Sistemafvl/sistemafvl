@@ -1906,7 +1906,7 @@ const ConferenciaCarregamentoPage = () => {
     setDriverModalOpen(true);
     setDriverModalLoading(true);
     setDriverModalData(null);
-    const { data: driver } = await supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color, cpf, whatsapp").eq("id", driverId).maybeSingle();
+    const { data: driver } = await supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color, cpf, whatsapp, email, address, emergency_contact_1, emergency_contact_2, birth_date").eq("id", driverId).maybeSingle();
     const { count: ridesCount } = await supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("driver_id", driverId);
     const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
     let tbrsCount = 0;
@@ -3131,6 +3131,9 @@ const ConferenciaCarregamentoPage = () => {
                 <div><strong>Email:</strong> {driverModalData.driver.email || "—"}</div>
                 <div><strong>WhatsApp:</strong> {driverModalData.driver.whatsapp || "—"}</div>
                 <div><strong>Endereço:</strong> {driverModalData.driver.address || "—"}</div>
+                <div><strong>Nascimento:</strong> {driverModalData.driver.birth_date ? new Date(driverModalData.driver.birth_date + "T12:00:00").toLocaleDateString("pt-BR") : "—"}</div>
+                <div><strong>Emergência 1:</strong> {driverModalData.driver.emergency_contact_1 || "—"}</div>
+                <div><strong>Emergência 2:</strong> {driverModalData.driver.emergency_contact_2 || "—"}</div>
               </div>
               <div className="border-t pt-3 flex gap-6">
                 <div className="text-center">

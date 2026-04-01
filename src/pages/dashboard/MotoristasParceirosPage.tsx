@@ -140,7 +140,7 @@ const MotoristasParceirosPage = () => {
     setLoading(true);
     const { data: driversData } = await supabase
       .from("drivers_public")
-      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at")
+      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, emergency_contact_1, emergency_contact_2, birth_date")
       .order("name");
 
     if (!driversData) { setAllDrivers([]); setLoading(false); return; }
@@ -479,6 +479,9 @@ const MotoristasParceirosPage = () => {
               </div>
               {viewDriver.email && <div><span className="font-semibold text-muted-foreground">Email:</span> {viewDriver.email}</div>}
               {viewDriver.whatsapp && <div><span className="font-semibold text-muted-foreground">WhatsApp:</span> {maskWhatsApp(viewDriver.whatsapp)}</div>}
+              {(viewDriver as any).birth_date && (
+                <div><span className="font-semibold text-muted-foreground">Data de Nascimento:</span> {new Date((viewDriver as any).birth_date + "T12:00:00").toLocaleDateString("pt-BR")}</div>
+              )}
               {(viewDriver.address || viewDriver.city) && (
                 <div>
                   <span className="font-semibold text-muted-foreground">Endereço:</span>{" "}
@@ -486,6 +489,13 @@ const MotoristasParceirosPage = () => {
                   {viewDriver.cep && ` - CEP: ${viewDriver.cep}`}
                 </div>
               )}
+              <div className="pt-2 border-t space-y-1">
+                <p className="font-bold text-xs uppercase text-muted-foreground">Contatos de Emergência</p>
+                <div className="grid grid-cols-2 gap-1 text-xs">
+                  <div><span className="text-muted-foreground">Contato 1:</span> {(viewDriver as any).emergency_contact_1 ? maskWhatsApp((viewDriver as any).emergency_contact_1) : "—"}</div>
+                  <div><span className="text-muted-foreground">Contato 2:</span> {(viewDriver as any).emergency_contact_2 ? maskWhatsApp((viewDriver as any).emergency_contact_2) : "—"}</div>
+                </div>
+              </div>
               <div><span className="font-semibold text-muted-foreground">Última Operação:</span> {viewDriver.lastOperation ? new Date(viewDriver.lastOperation).toLocaleDateString("pt-BR") : "Sem registros"}</div>
 
               <div><span className="font-semibold text-muted-foreground">Cadastrado em:</span> {new Date(viewDriver.created_at).toLocaleString("pt-BR")}</div>
