@@ -32,7 +32,7 @@ const maskCEP = (v: string) => {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 };
 
-const maskWhatsApp = (v: string) => {
+const maskPhone = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 2) return d.length ? `(${d}` : "";
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
