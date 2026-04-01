@@ -16,8 +16,10 @@ interface PayrollEntry {
   generatedBy: string;
   createdAt: string;
   driverData: any;
-  invoiceUploaded: boolean;
-  invoiceFileName?: string;
+  totalCommon: number;
+  totalMinimum: number;
+  commonInvoice?: any;
+  minimumInvoice?: any;
 }
 
 const formatCurrency = (val: number) => val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -68,23 +70,35 @@ const DriverRecebiveis = () => {
 
     if (!reports) { setLoading(false); return; }
 
-    // Get invoices for this driver
+    // Get all invoices for this driver
     const { data: invoiceData } = await supabase
       .from("driver_invoices" as any)
-      .select("payroll_report_id, file_name, file_url")
+      .select("id, payroll_report_id, file_name, file_url")
       .eq("driver_id", driverId);
 
-    const invoiceMap = new Map<string, { file_name: string; file_url: string }>();
+    // Map invoices by payroll_report_id and type (determined by file_name prefix)
+    const invoiceMap = new Map<string, { common?: any; minimum?: any }>();
     ((invoiceData as any[]) ?? []).forEach((inv: any) => {
-      if (inv.file_url) invoiceMap.set(inv.payroll_report_id, { file_name: inv.file_name, file_url: inv.file_url });
+      const existing = invoiceMap.get(inv.payroll_report_id) || {};
+      if (inv.file_name?.startsWith("MIN_")) {
+        existing.minimum = inv;
+      } else {
+        existing.common = inv;
+      }
+      invoiceMap.set(inv.payroll_report_id, existing);
     });
 
-    const result: PayrollEntry[] = [];
+    const result: any[] = [];
     (reports as any[]).forEach((r: any) => {
       const drivers = r.report_data as any[];
       const myData = drivers.find((d: any) => d.driver?.id === driverId);
       if (myData) {
-        const inv = invoiceMap.get(r.id);
+        const invs = invoiceMap.get(r.id);
+        
+        // Calculate split totals
+        const totalCommon = myData.days.reduce((s: number, day: any) => s + (day.minPkgApplied ? 0 : day.value), 0);
+        const totalMinimum = myData.days.reduce((s: number, day: any) => s + (day.minPkgApplied ? day.value : 0), 0);
+
         result.push({
           reportId: r.id,
           periodStart: r.period_start,
@@ -92,8 +106,10 @@ const DriverRecebiveis = () => {
           generatedBy: r.generated_by,
           createdAt: r.created_at,
           driverData: myData,
-          invoiceUploaded: !!inv,
-          invoiceFileName: inv?.file_name,
+          totalCommon,
+          totalMinimum,
+          commonInvoice: invs?.common,
+          minimumInvoice: invs?.minimum,
         });
       }
     });
@@ -102,11 +118,15 @@ const DriverRecebiveis = () => {
     setLoading(false);
   };
 
-  const handleUpload = async (reportId: string, file: File) => {
+  const handleUpload = async (reportId: string, file: File, type: "common" | "minimum") => {
     if (!driverId || !unitSession) return;
-    setUploading(reportId);
+    const uploadKey = `${reportId}_${type}`;
+    setUploading(uploadKey);
 
-    const filePath = `${driverId}/nf_${reportId}_${Date.now()}_${file.name}`;
+    const prefix = type === "minimum" ? "MIN_" : "COM_";
+    const fileName = `${prefix}${file.name}`;
+    const filePath = `${driverId}/nf_${reportId}_${type}_${Date.now()}_${file.name}`;
+    
     const { error: uploadError } = await supabase.storage.from("driver-documents").upload(filePath, file);
 
     if (uploadError) {
@@ -115,37 +135,36 @@ const DriverRecebiveis = () => {
       return;
     }
 
-    const { data: urlData } = await supabase.functions.invoke("get-signed-url", {
-      body: { bucket: "driver-documents", path: filePath, driver_id: driverId },
-    });
-
-    // Store only the storage path, not the signed URL (signed URLs expire)
     const fileUrl = filePath;
 
-    // Check if invoice record already exists
-    const { data: existing } = await supabase
+    // Check if invoice record of this type already exists
+    // Since we use the prefix in file_name to distinguish, we fetch based on report and prefix
+    const { data: allInvoices } = await supabase
       .from("driver_invoices" as any)
-      .select("id")
+      .select("id, file_name")
       .eq("payroll_report_id", reportId)
-      .eq("driver_id", driverId)
-      .maybeSingle();
+      .eq("driver_id", driverId);
+    
+    const existing = allInvoices?.find(inv => 
+      type === "minimum" ? inv.file_name?.startsWith("MIN_") : !inv.file_name?.startsWith("MIN_")
+    );
 
     if (existing) {
       await supabase.from("driver_invoices" as any)
-        .update({ file_url: fileUrl, file_name: file.name, uploaded_at: new Date().toISOString() } as any)
-        .eq("id", (existing as any).id);
+        .update({ file_url: fileUrl, file_name: fileName, uploaded_at: new Date().toISOString() } as any)
+        .eq("id", existing.id);
     } else {
       await supabase.from("driver_invoices" as any).insert({
         payroll_report_id: reportId,
         driver_id: driverId,
         unit_id: unitSession.id,
         file_url: fileUrl,
-        file_name: file.name,
+        file_name: fileName,
         uploaded_at: new Date().toISOString(),
       } as any);
     }
 
-    toast({ title: "NF Anexada!", description: "Nota fiscal enviada com sucesso." });
+    toast({ title: "NF Anexada!", description: `Nota fiscal (${type === 'minimum' ? 'Mínimo' : 'Comum'}) enviada com sucesso.` });
     setUploading(null);
     loadEntries();
   };
@@ -191,9 +210,76 @@ const DriverRecebiveis = () => {
         <div className="space-y-4">
           {entries.map((entry) => {
             const d = entry.driverData;
+            // Only show split if both exist
+            const hasCommon = entry.totalCommon > 0;
+            const hasMinimum = entry.totalMinimum > 0;
+
+            const renderNfField = (type: "common" | "minimum", value: number, invoice: any) => (
+              <div className="flex flex-col gap-2 p-3 rounded-lg border bg-muted/30">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-muted-foreground font-semibold">
+                    {type === "minimum" ? "TBRs Mínimo" : "TBRs Comuns"}
+                  </span>
+                  <span className="font-bold text-primary">{formatCurrency(value)}</span>
+                </div>
+                
+                <div className="flex items-center gap-2 pt-2 border-t border-dashed">
+                  {invoice ? (
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center gap-2 overflow-hidden">
+                        <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                        <span className="text-[10px] text-green-600 font-medium truncate">
+                           {invoice.file_name?.replace(/^(MIN_|COM_)/, "")}
+                        </span>
+                      </div>
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUpload(entry.reportId, file, type);
+                          }}
+                        />
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!!uploading}>
+                          {uploading === `${entry.reportId}_${type}` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Pencil className="h-3 w-3 text-muted-foreground" />
+                          )}
+                        </Button>
+                      </label>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between w-full">
+                      <Badge variant="outline" className="text-[10px] py-0 h-5 border-yellow-500/50 text-yellow-600 bg-yellow-50/50">Pendente</Badge>
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleUpload(entry.reportId, file, type);
+                          }}
+                        />
+                        <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2" disabled={!!uploading}>
+                          {uploading === `${entry.reportId}_${type}` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Upload className="h-3 w-3" />
+                          )}
+                          Anexar NF
+                        </Button>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+
             return (
               <Card key={entry.reportId}>
-                <CardContent className="p-4 space-y-3">
+                <CardContent className="p-4 space-y-4">
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-bold text-sm">
@@ -208,64 +294,14 @@ const DriverRecebiveis = () => {
                     <div>TBRs: <strong>{d.totalTbrs}</strong></div>
                     <div>Retornos: <strong>{d.totalReturns}</strong></div>
                     <div>Dias: <strong>{d.daysWorked}</strong></div>
-                    <div>Valor/TBR: <strong>{formatCurrency(d.tbrValueUsed ?? 0)}</strong></div>
                     {d.dnrDiscount > 0 && <div className="text-destructive">DNR: <strong>-{formatCurrency(d.dnrDiscount)}</strong></div>}
                     {d.bonus > 0 && <div className="text-primary">Bônus: <strong>+{formatCurrency(d.bonus)}</strong></div>}
                     {(d.reativoTotal ?? 0) > 0 && <div className="text-amber-600">Reativo: <strong>+{formatCurrency(d.reativoTotal)}</strong></div>}
                   </div>
 
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    {entry.invoiceUploaded ? (
-                      <div className="flex items-center justify-between w-full">
-                        <div className="flex items-center gap-2">
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                          <span className="text-xs text-green-600 font-semibold">NF Enviada: {entry.invoiceFileName}</span>
-                        </div>
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleUpload(entry.reportId, file);
-                            }}
-                          />
-                          <Button variant="ghost" size="sm" asChild disabled={uploading === entry.reportId}>
-                            <span>
-                              {uploading === entry.reportId ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Pencil className="h-3 w-3" />
-                              )}
-                            </span>
-                          </Button>
-                        </label>
-                      </div>
-                    ) : (
-                      <>
-                        <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">NF Pendente</Badge>
-                        <label className="ml-auto cursor-pointer">
-                          <input
-                            type="file"
-                            className="hidden"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) handleUpload(entry.reportId, file);
-                            }}
-                          />
-                          <Button variant="outline" size="sm" asChild disabled={uploading === entry.reportId}>
-                            <span>
-                              {uploading === entry.reportId ? (
-                                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                              ) : (
-                                <Upload className="h-3 w-3 mr-1" />
-                              )}
-                              Anexar NF
-                            </span>
-                          </Button>
-                        </label>
-                      </>
-                    )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                    {hasCommon && renderNfField("common", entry.totalCommon, entry.commonInvoice)}
+                    {hasMinimum && renderNfField("minimum", entry.totalMinimum, entry.minimumInvoice)}
                   </div>
                 </CardContent>
               </Card>

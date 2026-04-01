@@ -823,16 +823,6 @@ const RelatoriosPage = () => {
       <div className="p-4 md:p-6 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <h1 className="text-2xl font-bold italic">Relatórios</h1>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="gap-2 text-[10px] text-muted-foreground h-7 px-2 hover:bg-destructive/10 hover:text-destructive transition-colors"
-            onClick={handleClearCache}
-            disabled={loading === "cache"}
-          >
-            {loading === "cache" ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />}
-            LIMPAR CACHE E SINCRONIZAR
-          </Button>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center">

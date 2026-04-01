@@ -235,7 +235,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                     fontWeight: 700,
                   }}
                 >
-                  MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES
+                  MOTORISTAS - PACOTES MÍNIMO CONFIGURADOS
                 </div>
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
@@ -332,7 +332,7 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                     <td style={compactCellStyle()}>{standardPackages > 0 ? formatCurrency(standardValue / standardPackages) : "—"}</td>
                   </tr>
                   <tr>
-                    <td style={compactCellStyle({ textAlign: "left", fontWeight: 600 })}>Motoristas - Mínimo de 60 Pacotes</td>
+                    <td style={compactCellStyle({ textAlign: "left", fontWeight: 600 })}>Motoristas - Pacotes Mínimo Configurados</td>
                     <td style={compactCellStyle()}>{minPackagesCount}</td>
                     <td style={compactCellStyle()}>{formatCurrency(minPackagesValue)}</td>
                     <td style={compactCellStyle()}>{minPackagesCount > 0 ? formatCurrency(minPackagesValue / minPackagesCount) : "—"}</td>

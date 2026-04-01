@@ -298,7 +298,7 @@ export function generatePayrollExcel(
 
   // ── SECTION 2: MINIMUM PACKAGES — repeat ALL main drivers + 10 blank rows ──
   rowTracker.minTitleRow = wsData.length;
-  wsData.push(["MOTORISTAS - MÍNIMO DE 60 (SESSENTA) PACOTES"]);
+  wsData.push(["MOTORISTAS - PACOTES MÍNIMO CONFIGURADOS"]);
 
   rowTracker.minDataFinRow = wsData.length;
   wsData.push(["DADOS FINANCEIROS"]);
@@ -393,7 +393,7 @@ export function generatePayrollExcel(
 
   rowTracker.consolidadoRows.push(wsData.length);
   wsData.push([
-    "MOTORISTAS - MÍNIMO DE 60 PACOTES",
+    "MOTORISTAS - PACOTES MÍNIMO CONFIGURADOS",
     "",
     "",
     ...allDates.map(() => 0),
@@ -428,7 +428,7 @@ export function generatePayrollExcel(
   wsData.push(["MOTORISTAS POR PACOTES", 0, 0, 0]);
 
   rowTracker.resumoRows.push(wsData.length);
-  wsData.push(["MOTORISTAS - MÍNIMO DE 60 PACOTES", 0, 0, 0]);
+  wsData.push(["MOTORISTAS - PACOTES MÍNIMO CONFIGURADOS", 0, 0, 0]);
 
   rowTracker.resumoRows.push(wsData.length);
   wsData.push(["CUSTO POR PACOTE", 0, 0, 0]);

@@ -138,13 +138,33 @@ const MotoristasParceirosPage = () => {
 
   const loadDrivers = async () => {
     setLoading(true);
-    const { data: driversData } = await supabase
-      .from("drivers_public")
-      .select("id, name, cpf, car_model, car_plate, car_color, avatar_url, email, whatsapp, cep, address, neighborhood, city, state, active, created_at, emergency_contact_1, emergency_contact_2, birth_date")
-      .order("name");
+    try {
+      // Use edge function to bypass RLS and get all drivers reliably for managers
+      const { data: driversData, error: driverError } = await supabase.functions.invoke("get-driver-details", {
+        body: { list_all: true, self_access: true }
+      });
 
-    if (!driversData) { setAllDrivers([]); setLoading(false); return; }
+      if (driverError || !driversData) {
+        console.error("Error loading drivers via edge function:", driverError);
+        // Fallback to direct supabase fetch if edge function fails
+        const { data: fallbackData } = await supabase.from("drivers_public").select("*").order("name");
+        if (fallbackData) {
+          processDrivers(fallbackData);
+        } else {
+          setAllDrivers([]);
+        }
+      } else {
+        processDrivers(driversData);
+      }
+    } catch (err) {
+      console.error("Critical error loading drivers:", err);
+      toast({ title: "Erro", description: "Falha ao carregar lista de motoristas.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const processDrivers = async (driversData: any[]) => {
     // Fetch ALL last operations (since driver count is small)
     const { data: lastOps } = await supabase
       .from("driver_rides")
@@ -167,7 +187,6 @@ const MotoristasParceirosPage = () => {
       created_at: d.created_at!,
       lastOperation: lastOpMap.get(d.id!) || null,
     })));
-    setLoading(false);
   };
 
 

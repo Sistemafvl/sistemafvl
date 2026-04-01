@@ -1972,17 +1972,37 @@ const ConferenciaCarregamentoPage = () => {
     setDriverModalOpen(true);
     setDriverModalLoading(true);
     setDriverModalData(null);
-    const { data: driver } = await supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color, cpf, whatsapp, email, address, emergency_contact_1, emergency_contact_2, birth_date").eq("id", driverId).maybeSingle();
-    const { count: ridesCount } = await supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("driver_id", driverId);
-    const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
-    let tbrsCount = 0;
-    if (driverRides && driverRides.length > 0) {
-      const rIds = driverRides.map(r => r.id);
-      const { count } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rIds);
-      tbrsCount = count ?? 0;
+    
+    try {
+      // Use edge function to bypass RLS and get full driver details reliably
+      const { data: driverData, error: driverError } = await supabase.functions.invoke("get-driver-details", {
+        body: { driver_ids: [driverId], self_access: true }
+      });
+
+      let driver = null;
+      if (!driverError && Array.isArray(driverData) && driverData.length > 0) {
+        driver = driverData[0];
+      } else {
+        // Fallback to direct supabase search if edge function fails
+        const { data: directDriver } = await supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color, cpf, whatsapp, email, address, emergency_contact_1, emergency_contact_2, birth_date").eq("id", driverId).maybeSingle();
+        driver = directDriver;
+      }
+
+      const { count: ridesCount } = await supabase.from("driver_rides").select("id", { count: "exact", head: true }).eq("driver_id", driverId);
+      const { data: driverRides } = await supabase.from("driver_rides").select("id").eq("driver_id", driverId);
+      let tbrsCount = 0;
+      if (driverRides && driverRides.length > 0) {
+        const rIds = driverRides.map(r => r.id);
+        const { count } = await supabase.from("ride_tbrs").select("id", { count: "exact", head: true }).in("ride_id", rIds);
+        tbrsCount = count ?? 0;
+      }
+      setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
+    } catch (err) {
+      console.error("Error opening driver modal:", err);
+      toast({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
+    } finally {
+      setDriverModalLoading(false);
     }
-    setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
-    setDriverModalLoading(false);
   };
 
   // Track which TBR codes have piso entries (for red highlighting)

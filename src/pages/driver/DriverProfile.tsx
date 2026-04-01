@@ -62,34 +62,54 @@ const DriverProfile = () => {
     if (!driverId) return;
     const load = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from("drivers")
-        .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
+      try {
+        // 1. Try direct fetch from drivers table (primary)
+        const { data, error } = await supabase
+          .from("drivers")
+          .select("id, name, cpf, email, whatsapp, bio, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
+          .eq("id", driverId)
+          .maybeSingle();
+        
+        let profileData = data;
 
-        .eq("id", driverId)
-        .single();
-      if (data) {
-        setForm({
-          name: (data as any).name ?? "",
-          cpf: maskCPF((data as any).cpf ?? ""),
-          email: (data as any).email ?? "",
-          whatsapp: maskPhone((data as any).whatsapp ?? ""),
-          bio: (data as any).bio ?? "",
-          car_plate: (data as any).car_plate ?? "",
-          car_model: (data as any).car_model ?? "",
-          car_color: (data as any).car_color ?? "",
-          address: (data as any).address ?? "",
-          neighborhood: (data as any).neighborhood ?? "",
-          city: (data as any).city ?? "",
-          state: (data as any).state ?? "",
-          cep: (data as any).cep ?? "",
-          avatar_url: (data as any).avatar_url ?? "",
-          emergency_contact_1: maskPhone((data as any).emergency_contact_1 ?? ""),
-          emergency_contact_2: maskPhone((data as any).emergency_contact_2 ?? ""),
-          birth_date: (data as any).birth_date ?? "",
-        });
+        // 2. Fallback to Edge Function if direct fetch is missing data (e.g. name or CPF)
+        if (!profileData || !profileData.name || !profileData.cpf) {
+          const { data: edgeData, error: edgeError } = await supabase.functions.invoke("get-driver-details", {
+            body: { driver_ids: [driverId], self_access: true }
+          });
+          
+          if (!edgeError && Array.isArray(edgeData) && edgeData.length > 0) {
+            profileData = { ...profileData, ...edgeData[0] };
+          }
+        }
+
+        if (profileData) {
+          setForm({
+            name: profileData.name ?? "",
+            cpf: maskCPF(profileData.cpf ?? ""),
+            email: profileData.email ?? "",
+            whatsapp: maskPhone(profileData.whatsapp ?? ""),
+            bio: profileData.bio ?? "",
+            car_plate: profileData.car_plate ?? "",
+            car_model: profileData.car_model ?? "",
+            car_color: profileData.car_color ?? "",
+            address: profileData.address ?? "",
+            neighborhood: profileData.neighborhood ?? "",
+            city: profileData.city ?? "",
+            state: profileData.state ?? "",
+            cep: profileData.cep ?? "",
+            avatar_url: profileData.avatar_url ?? "",
+            emergency_contact_1: maskPhone(profileData.emergency_contact_1 ?? ""),
+            emergency_contact_2: maskPhone(profileData.emergency_contact_2 ?? ""),
+            birth_date: profileData.birth_date ?? "",
+          });
+        }
+      } catch (err) {
+        console.error("Error loading driver profile:", err);
+        toast({ title: "Erro ao carregar perfil", variant: "destructive" });
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     load();
   }, [driverId]);
