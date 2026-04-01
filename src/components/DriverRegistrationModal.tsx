@@ -77,6 +77,9 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     email: "",
     whatsapp: "",
     password: "",
+    emergency_contact_1: "",
+    emergency_contact_2: "",
+    birth_date: "",
   });
 
   // Document uploads
