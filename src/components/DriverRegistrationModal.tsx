@@ -178,6 +178,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       name: "", cpf: "", cep: "", address: "", house_number: "", neighborhood: "",
       city: "", state: "", car_plate: "", car_model: "", car_color: "",
       email: "", whatsapp: "", password: "",
+      emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
     });
     const pendingDocs = { ...docFiles };
     setDocFiles({});
