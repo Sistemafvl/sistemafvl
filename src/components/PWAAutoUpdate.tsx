@@ -7,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-22-36"; // Bump to force a one-time hard reset for all clients
+const GLOBAL_SYNC_STAMP = "2026-04-01-22-59"; // Bump to force a one-time hard reset for all clients
 
 // Don't run version polling in local dev — version.json doesn't exist in dev mode
 const IS_DEV = import.meta.env.DEV;
@@ -25,17 +25,15 @@ const isInIframe = (() => {
   }
 })();
 
-/**
- * PWAAutoUpdate
- *
- * Detects new deployments by polling /version.json every 2 minutes
- * and whenever the user returns to the tab. When a new version is
- * found, shows a small bottom-right toast for 3 seconds, then
- * auto-reloads the page — no user interaction required.
- */
 const PWAAutoUpdate = () => {
   const hasRun = useRef(false);
   const [updating, setUpdating] = useState(false);
+
+  // --- useRef guards to avoid stale closure bugs ---
+  // isUpdatingRef: prevents multiple simultaneous update triggers
+  const isUpdatingRef = useRef(false);
+  // knownVersionRef: stores the version seen on initial load (in-memory baseline)
+  const knownVersionRef = useRef<string | null>(null);
 
   // Build version check
   useEffect(() => {
@@ -82,8 +80,11 @@ const PWAAutoUpdate = () => {
     localStorage.setItem(VERSION_KEY, current);
     sessionStorage.removeItem(RELOAD_FLAG);
 
-    // Polls /version.json for new deployments
+    // On first check, store the remote version as baseline in memory
+    // Only trigger update if the remote version CHANGES compared to this baseline
     const triggerUpdate = () => {
+      if (isUpdatingRef.current) return; // GUARD: never trigger twice
+      isUpdatingRef.current = true;
       setUpdating(true);
       // Show banner for 3 seconds then reload
       setTimeout(() => {
@@ -93,8 +94,7 @@ const PWAAutoUpdate = () => {
     };
 
     const checkNewVersion = async () => {
-      // Don't check again if already updating
-      if (updating) return;
+      if (isUpdatingRef.current) return; // GUARD: stop all checks once updating
       try {
         const res = await fetch(`/version.json?t=${Date.now()}`, {
           cache: "no-store",
@@ -104,9 +104,18 @@ const PWAAutoUpdate = () => {
 
         const data = await res.json();
         const remoteVersion: string | undefined = data?.version;
+        if (!remoteVersion) return;
 
-        if (remoteVersion && remoteVersion !== current) {
-          console.log("[PWA] Nova versão detectada:", remoteVersion, "→ atualizando...");
+        // On first successful check, store this as the baseline — don't trigger yet
+        if (knownVersionRef.current === null) {
+          knownVersionRef.current = remoteVersion;
+          console.log("[PWA] Versão base registrada:", remoteVersion);
+          return;
+        }
+
+        // Only trigger if the remote version has changed since the baseline
+        if (remoteVersion !== knownVersionRef.current) {
+          console.log("[PWA] Nova versão detectada:", remoteVersion, "base:", knownVersionRef.current);
           triggerUpdate();
         }
       } catch (err) {
@@ -114,7 +123,7 @@ const PWAAutoUpdate = () => {
       }
     };
 
-    // Check immediately on mount, then every 2 minutes
+    // Check immediately on mount to establish baseline, then every 2 minutes
     checkNewVersion();
     const interval = setInterval(checkNewVersion, 2 * 60 * 1000);
 
@@ -178,7 +187,7 @@ const PWAAutoUpdate = () => {
     }
   }, []);
 
-  // Auto-update banner — appears for 3 seconds then page reloads
+  // Auto-update banner — appears ONCE for 3 seconds then page reloads
   if (!updating) return null;
 
   return (

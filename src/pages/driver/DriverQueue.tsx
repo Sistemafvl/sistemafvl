@@ -90,18 +90,29 @@ const DriverQueue = () => {
   const domainName = unitSession?.domain_name ?? "—";
   const unitName = unitSession?.name ?? "—";
 
-  // Fetch driver birth_date and name to detect birthday
+  // Fetch driver birth_date and name to detect birthday via safe RPC
   useEffect(() => {
     if (!driverId) return;
     const fetchBirthday = async () => {
-      const { data } = await supabase
-        .from("drivers")
-        .select("name, birth_date")
-        .eq("id", driverId)
-        .maybeSingle();
-      if (!data) return;
-      setDriverName(data.name ?? null);
-      setIsBirthday(checkIsBirthday((data as any).birth_date ?? null));
+      // Use the same safe RPC that works for profile data
+      const { data, error } = await (supabase.rpc as any)("get_driver_profile_safe", {
+        p_driver_id: driverId,
+      });
+      if (error || !data) {
+        // Fallback to direct query
+        const { data: fallback } = await supabase
+          .from("drivers")
+          .select("name, birth_date")
+          .eq("id", driverId)
+          .maybeSingle();
+        if (!fallback) return;
+        setDriverName((fallback as any).name ?? null);
+        setIsBirthday(checkIsBirthday((fallback as any).birth_date ?? null));
+        return;
+      }
+      const profile = data as any;
+      setDriverName(profile.name ?? null);
+      setIsBirthday(checkIsBirthday(profile.birth_date ?? null));
     };
     fetchBirthday();
   }, [driverId]);
