@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, X } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, X, PartyPopper } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +40,28 @@ const formatElapsed = (totalSeconds: number) => {
   return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 };
 
+// Birthday messages — randomized each time the page renders
+const BIRTHDAY_MESSAGES = [
+  (name: string) => `🎂 Hoje é seu dia, ${name}! Toda a equipe da Favela LLog deseja a você um aniversário repleto de alegria, saúde e muitas conquistas. Continue arrasando!`,
+  (name: string) => `🎉 Parabéns, ${name}! A Favela LLog celebra mais um ano da sua vida com muito orgulho. Que esse novo ciclo traga ainda mais realizações!`,
+  (name: string) => `🥳 Feliz Aniversário, ${name}! Você é peça fundamental da nossa equipe. A Favela LLog deseja tudo de melhor nessa data tão especial!`,
+  (name: string) => `🎊 Que dia especial! ${name}, a Favela LLog parabeniza você com todo o carinho. Que Deus abençoe cada km da sua jornada!`,
+  (name: string) => `🌟 Hoje é o aniversário do nosso motorista ${name}! A Favela LLog agradece por fazer parte do nosso time. Parabéns e muitas felicidades!`,
+  (name: string) => `🎁 ${name}, a Favela LLog tem muito orgulho de ter você no time! Feliz Aniversário — que sua vida seja tão cheia de entregas no endereço certo quanto a sua dedicação!`,
+];
 
+const checkIsBirthday = (birthDate: string | null): boolean => {
+  if (!birthDate) return false;
+  try {
+    const brt = new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
+    const todayMonth = brt.getUTCMonth() + 1;
+    const todayDay = brt.getUTCDate();
+    const [, month, day] = birthDate.split("-").map(Number);
+    return todayMonth === month && todayDay === day;
+  } catch {
+    return false;
+  }
+};
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
@@ -57,11 +78,33 @@ const DriverQueue = () => {
   const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [activeConferente, setActiveConferente] = useState<string | null>(null);
+  const [driverName, setDriverName] = useState<string | null>(null);
+  const [isBirthday, setIsBirthday] = useState(false);
+  // Pick one random birthday message for the session
+  const birthdayMsgRef = useRef<((name: string) => string)>(
+    BIRTHDAY_MESSAGES[Math.floor(Math.random() * BIRTHDAY_MESSAGES.length)]
+  );
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
   const domainName = unitSession?.domain_name ?? "—";
   const unitName = unitSession?.name ?? "—";
+
+  // Fetch driver birth_date and name to detect birthday
+  useEffect(() => {
+    if (!driverId) return;
+    const fetchBirthday = async () => {
+      const { data } = await supabase
+        .from("drivers")
+        .select("name, birth_date")
+        .eq("id", driverId)
+        .maybeSingle();
+      if (!data) return;
+      setDriverName(data.name ?? null);
+      setIsBirthday(checkIsBirthday((data as any).birth_date ?? null));
+    };
+    fetchBirthday();
+  }, [driverId]);
 
   const inQueue = !!myEntry;
   const isApproved = myEntry?.status === "approved";
@@ -326,6 +369,33 @@ const DriverQueue = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-4 px-4">
+            {/* Birthday Banner — shown only on the driver's birthday */}
+            {isBirthday && driverName && (
+              <div
+                className="relative overflow-hidden rounded-xl px-4 py-4 flex items-start gap-3"
+                style={{
+                  background: "linear-gradient(135deg, #f59e0b22 0%, #ec489922 50%, #8b5cf622 100%)",
+                  border: "1.5px solid #f59e0b66",
+                  animation: "bdFadeIn 0.6s ease-out",
+                }}
+              >
+                <span className="absolute top-1 right-12 text-2xl select-none pointer-events-none" style={{ animation: "bdFloat 3s ease-in-out infinite" }}>🎈</span>
+                <span className="absolute top-2 right-6 text-xl select-none pointer-events-none" style={{ animation: "bdFloat 3s ease-in-out infinite", animationDelay: "0.7s" }}>🎉</span>
+                <span className="absolute top-0 right-1 text-lg select-none pointer-events-none" style={{ animation: "bdFloat 3s ease-in-out infinite", animationDelay: "1.4s" }}>🎂</span>
+                <PartyPopper className="h-6 w-6 text-amber-500 flex-shrink-0 mt-0.5" />
+                <div className="min-w-0 pr-10">
+                  <p className="font-black text-sm text-amber-600 dark:text-amber-400 mb-1 uppercase tracking-wide">🎊 Feliz Aniversário!</p>
+                  <p className="text-sm text-foreground/90 leading-relaxed">
+                    {birthdayMsgRef.current(driverName)}
+                  </p>
+                </div>
+                <style>{`
+                  @keyframes bdFadeIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: translateY(0); } }
+                  @keyframes bdFloat { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-7px); } }
+                `}</style>
+              </div>
+            )}
+
             {/* Banner do conferente bipando */}
             {activeRide.loading_status === "loading" && activeConferente && (
               <div className="flex items-center gap-2 rounded-md bg-primary/10 border border-primary/20 px-3 py-2">
