@@ -1701,6 +1701,7 @@ export type Database = {
           address: string | null
           avatar_url: string | null
           bio: string | null
+          birth_date: string | null
           car_color: string | null
           car_model: string | null
           car_plate: string | null
@@ -1709,6 +1710,8 @@ export type Database = {
           cpf: string | null
           created_at: string | null
           email: string | null
+          emergency_contact_1: string | null
+          emergency_contact_2: string | null
           id: string | null
           name: string | null
           neighborhood: string | null
@@ -1720,6 +1723,7 @@ export type Database = {
           address?: string | null
           avatar_url?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model?: string | null
           car_plate?: string | null
@@ -1728,6 +1732,8 @@ export type Database = {
           cpf?: string | null
           created_at?: string | null
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           id?: string | null
           name?: string | null
           neighborhood?: string | null
@@ -1739,6 +1745,7 @@ export type Database = {
           address?: string | null
           avatar_url?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model?: string | null
           car_plate?: string | null
@@ -1747,6 +1754,8 @@ export type Database = {
           cpf?: string | null
           created_at?: string | null
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           id?: string | null
           name?: string | null
           neighborhood?: string | null
