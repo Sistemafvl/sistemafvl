@@ -134,7 +134,7 @@ const DriverProfile = () => {
     }
     setSaving(true);
     const { error } = await (supabase.rpc as any)("update_driver_profile", {
-      p_driver_id: driverId,
+      p_driver_id: String(driverId),
       p_name: form.name.trim(),
       p_email: form.email.trim() || null,
       p_whatsapp: form.whatsapp.replace(/\D/g, "") || null,

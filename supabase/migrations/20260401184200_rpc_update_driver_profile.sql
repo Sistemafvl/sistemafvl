@@ -1,10 +1,10 @@
--- Create a secure RPC function to update driver profile data bypassing RLS
+-- Create a more resilient RPC function to update driver profile data
 CREATE OR REPLACE FUNCTION public.update_driver_profile(
-  p_driver_id UUID,
+  p_driver_id TEXT,
   p_name TEXT,
   p_email TEXT,
   p_whatsapp TEXT,
-  p_birth_date DATE,
+  p_birth_date TEXT,
   p_emergency_contact_1 TEXT,
   p_emergency_contact_2 TEXT,
   p_bio TEXT,
@@ -23,7 +23,7 @@ BEGIN
     name = COALESCE(p_name, name),
     email = p_email,
     whatsapp = p_whatsapp,
-    birth_date = p_birth_date,
+    birth_date = p_birth_date::DATE,
     emergency_contact_1 = p_emergency_contact_1,
     emergency_contact_2 = p_emergency_contact_2,
     bio = p_bio,
@@ -35,10 +35,13 @@ BEGIN
     city = p_city,
     state = p_state,
     cep = p_cep
-  WHERE id = p_driver_id;
+  WHERE id = p_driver_id::UUID;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Grant execution permission to anonymous and authenticated users
+-- Clear PostgREST cache (hint)
+NOTIFY pgrst, 'reload schema';
+
+-- Grant execution permission
 GRANT EXECUTE ON FUNCTION public.update_driver_profile TO anon;
 GRANT EXECUTE ON FUNCTION public.update_driver_profile TO authenticated;
