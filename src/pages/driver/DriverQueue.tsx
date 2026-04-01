@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, QrCode, X } from "lucide-react";
+import { Users, Clock, Hash, Timer, Truck, MapPin, LogIn, KeyRound, ScanBarcode, Info, RotateCcw, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuthStore } from "@/stores/auth-store";
 import { toast } from "sonner";
-import QrViewfinder from "@/components/ui/QrViewfinder";
 
 interface QueueEntry {
   id: string;
@@ -42,88 +41,6 @@ const formatElapsed = (totalSeconds: number) => {
 };
 
 
-const QrCameraOverlay = ({ onDetect, onClose }: { onDetect: (code: string) => void; onClose: () => void }) => {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const scanIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const detectedRef = useRef(false);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const start = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } },
-        });
-        if (cancelled) { stream.getTracks().forEach(t => t.stop()); return; }
-        streamRef.current = stream;
-
-        await new Promise(r => setTimeout(r, 100));
-        if (videoRef.current && streamRef.current) {
-          videoRef.current.srcObject = streamRef.current;
-          await videoRef.current.play();
-        }
-
-        if (!("BarcodeDetector" in window)) return;
-
-        const detector = new (window as any).BarcodeDetector({ formats: ["qr_code"] });
-
-        scanIntervalRef.current = setInterval(async () => {
-          if (!videoRef.current || videoRef.current.readyState < 2 || detectedRef.current) return;
-          try {
-            const barcodes = await detector.detect(videoRef.current);
-            if (barcodes.length === 0) return;
-
-            const vw = videoRef.current.videoWidth;
-            const vh = videoRef.current.videoHeight;
-            const inset = 0.2;
-
-            const inside = barcodes.filter((b: any) => {
-              const bb = b.boundingBox;
-              if (!bb) return false;
-              return bb.x >= vw * inset && bb.y >= vh * inset &&
-                bb.x + bb.width <= vw * (1 - inset) && bb.y + bb.height <= vh * (1 - inset);
-            });
-
-            if (inside.length > 0 && inside[0].rawValue) {
-              detectedRef.current = true;
-              onDetect(inside[0].rawValue.trim());
-            }
-          } catch {}
-        }, 150);
-      } catch {
-        onClose();
-      }
-    };
-
-    start();
-
-    return () => {
-      cancelled = true;
-      if (scanIntervalRef.current) clearInterval(scanIntervalRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    };
-  }, [onDetect, onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-black/80 z-10">
-        <span className="text-white font-semibold text-sm">Escanear QR Code da Fila</span>
-        <button onClick={onClose} className="text-white/80 hover:text-white p-1">
-          <X className="h-6 w-6" />
-        </button>
-      </div>
-      {/* Camera */}
-      <div className="flex-1 relative overflow-hidden">
-        <video ref={videoRef} className="absolute inset-0 w-full h-full object-cover" playsInline muted />
-        <QrViewfinder />
-      </div>
-    </div>
-  );
-};
 
 const DriverQueue = () => {
   const { unitSession } = useAuthStore();
@@ -140,8 +57,6 @@ const DriverQueue = () => {
   const [lastTbrCount, setLastTbrCount] = useState(0);
   const [queuePosition, setQueuePosition] = useState<number | null>(null);
   const [activeConferente, setActiveConferente] = useState<string | null>(null);
-  const [showQrScanner, setShowQrScanner] = useState(false);
-  const qrProcessedRef = useRef(false);
 
   const driverId = unitSession?.user_profile_id;
   const unitId = unitSession?.id;
@@ -351,39 +266,6 @@ const DriverQueue = () => {
     fetchQueue();
   };
 
-  const validateQrAndJoin = useCallback((qrUrl: string) => {
-    try {
-      const url = new URL(qrUrl);
-      const turno = url.searchParams.get("qr_turno");
-      const qrUnit = url.searchParams.get("qr_unit");
-      const qrDate = url.searchParams.get("qr_date");
-      if (!turno || !qrUnit || !qrDate) { toast.error("QR Code inválido"); return; }
-      const now = new Date();
-      const brt = new Date(now.getTime() - 3 * 60 * 60 * 1000);
-      const todayStr = brt.toISOString().slice(0, 10);
-      if (qrDate !== todayStr) { toast.error("QR Code expirado"); return; }
-      if (qrUnit !== unitId) { toast.error("QR Code de outra unidade"); return; }
-      const totalMin = brt.getUTCHours() * 60 + brt.getUTCMinutes();
-      if (turno === "madrugada" && totalMin > 300) { toast.error("QR Madrugada válido somente de 00:00 às 05:00"); return; }
-      if (turno === "diurno" && totalMin <= 300) { toast.error("QR Diurno válido somente a partir das 05:01"); return; }
-      if (myEntry) { toast.info("Você já está na fila!"); return; }
-      toast.success("QR válido! Entrando na fila...");
-      joinQueue();
-    } catch { toast.error("QR Code inválido"); }
-  }, [unitId, myEntry, joinQueue]);
-
-  useEffect(() => {
-    if (qrProcessedRef.current) return;
-    const turno = searchParams.get("qr_turno");
-    if (!turno || !unitId || !driverId) return;
-    qrProcessedRef.current = true;
-    const fullUrl = window.location.href;
-    searchParams.delete("qr_turno");
-    searchParams.delete("qr_unit");
-    searchParams.delete("qr_date");
-    setSearchParams(searchParams, { replace: true });
-    setTimeout(() => validateQrAndJoin(fullUrl), 1500);
-  }, [searchParams, unitId, driverId, validateQrAndJoin, setSearchParams]);
 
   const leaveQueue = async () => {
     if (!myEntry) return;
@@ -580,16 +462,6 @@ const DriverQueue = () => {
           >
             {loading ? "Entrando..." : "ENTRAR NA FILA"}
           </Button>
-          <Button
-            onClick={() => setShowQrScanner(true)}
-            disabled={loading}
-            variant="outline"
-            className="w-full h-12 text-base font-semibold gap-2"
-            size="lg"
-          >
-            <QrCode className="h-5 w-5" />
-            ENTRAR VIA QR CODE
-          </Button>
         </>
       ) : !isApproved ? (
         <>
@@ -721,16 +593,6 @@ const DriverQueue = () => {
       )}
     </div>
 
-      {/* QR Scanner Fullscreen Overlay */}
-      {showQrScanner && (
-        <QrCameraOverlay
-          onDetect={(code) => {
-            setShowQrScanner(false);
-            validateQrAndJoin(code);
-          }}
-          onClose={() => setShowQrScanner(false)}
-        />
-      )}
     </>
   );
 };
