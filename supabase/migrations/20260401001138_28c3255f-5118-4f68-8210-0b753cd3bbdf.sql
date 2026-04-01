@@ -5,3 +5,6 @@ SELECT
   email, whatsapp, name, cpf, car_model, car_plate, car_color, avatar_url,
   emergency_contact_1, emergency_contact_2, birth_date
 FROM public.drivers;
+
+-- Re-grant SELECT on the updated view
+GRANT SELECT ON public.drivers_public TO anon, authenticated;
