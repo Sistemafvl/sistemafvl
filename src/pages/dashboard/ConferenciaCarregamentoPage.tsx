@@ -3649,7 +3649,8 @@ const ConferenciaCarregamentoPage = () => {
               onClick={async () => {
                 if (!retroSelectedDriver || !retroDate || !unitId) return;
                 setRetroLoading(true);
-                const retroDateStr = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 6, 0, 0).toISOString();
+                const now = new Date();
+                const retroDateStr = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
                 // Get next sequence number for that date
                 const dayStart = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 0, 0, 0).toISOString();
                 const dayEnd = new Date(retroDate.getFullYear(), retroDate.getMonth(), retroDate.getDate(), 23, 59, 59, 999).toISOString();
