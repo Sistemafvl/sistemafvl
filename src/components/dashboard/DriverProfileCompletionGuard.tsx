@@ -48,7 +48,7 @@ const DriverProfileCompletionGuard = () => {
 
   return (
     <Dialog open={showModal} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-md" hideCloseButton>
+      <DialogContent className="sm:max-w-md [&>button]:hidden">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <ShieldAlert className="h-5 w-5" />
