@@ -32,7 +32,7 @@ const maskCEP = (v: string) => {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 };
 
-const maskWhatsApp = (v: string) => {
+const maskPhone = (v: string) => {
   const d = v.replace(/\D/g, "").slice(0, 11);
   if (d.length <= 2) return d.length ? `(${d}` : "";
   if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
@@ -77,6 +77,9 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     email: "",
     whatsapp: "",
     password: "",
+    emergency_contact_1: "",
+    emergency_contact_2: "",
+    birth_date: "",
   });
 
   // Document uploads
@@ -113,6 +116,18 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
     const rawCpf = form.cpf.replace(/\D/g, "");
     if (rawCpf.length !== 11) return;
     if (!form.name || !form.car_plate || !form.car_model || !form.password) return;
+    if (!form.whatsapp.replace(/\D/g, "")) {
+      toast({ title: "WhatsApp é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_1.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 1 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_2.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 2 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.birth_date) {
+      toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
+    }
 
     setLoading(true);
 
@@ -132,8 +147,11 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       car_model: form.car_model.trim(),
       car_color: form.car_color.trim() || null,
       email: form.email.trim() || null,
-      whatsapp: form.whatsapp.replace(/\D/g, "") || null,
+      whatsapp: form.whatsapp.replace(/\D/g, ""),
       password: form.password,
+      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, ""),
+      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, ""),
+      birth_date: form.birth_date,
       active: true,
     });
 
@@ -160,6 +178,7 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
       name: "", cpf: "", cep: "", address: "", house_number: "", neighborhood: "",
       city: "", state: "", car_plate: "", car_model: "", car_color: "",
       email: "", whatsapp: "", password: "",
+      emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
     });
     const pendingDocs = { ...docFiles };
     setDocFiles({});
@@ -268,8 +287,26 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
               <Input id="dr-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="dr-whatsapp">WhatsApp</Label>
-              <Input id="dr-whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", maskWhatsApp(e.target.value))} placeholder="(00) 00000-0000" />
+              <Label htmlFor="dr-whatsapp">WhatsApp *</Label>
+              <Input id="dr-whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
+            </div>
+          </div>
+
+          {/* Data de Nascimento */}
+          <div className="space-y-1">
+            <Label htmlFor="dr-birth-date">Data de Nascimento *</Label>
+            <Input id="dr-birth-date" type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} required />
+          </div>
+
+          {/* Contatos de Emergência */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="dr-emergency1">Contato 1 de Emergência *</Label>
+              <Input id="dr-emergency1" value={form.emergency_contact_1} onChange={(e) => set("emergency_contact_1", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="dr-emergency2">Contato 2 de Emergência *</Label>
+              <Input id="dr-emergency2" value={form.emergency_contact_2} onChange={(e) => set("emergency_contact_2", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
             </div>
           </div>
 

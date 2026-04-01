@@ -593,6 +593,7 @@ export type Database = {
           bank_agency: string | null
           bank_name: string | null
           bio: string | null
+          birth_date: string | null
           car_color: string | null
           car_model: string
           car_plate: string
@@ -601,6 +602,8 @@ export type Database = {
           cpf: string
           created_at: string
           email: string | null
+          emergency_contact_1: string | null
+          emergency_contact_2: string | null
           house_number: string | null
           id: string
           name: string
@@ -620,6 +623,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model: string
           car_plate: string
@@ -628,6 +632,8 @@ export type Database = {
           cpf: string
           created_at?: string
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           house_number?: string | null
           id?: string
           name: string
@@ -647,6 +653,7 @@ export type Database = {
           bank_agency?: string | null
           bank_name?: string | null
           bio?: string | null
+          birth_date?: string | null
           car_color?: string | null
           car_model?: string
           car_plate?: string
@@ -655,6 +662,8 @@ export type Database = {
           cpf?: string
           created_at?: string
           email?: string | null
+          emergency_contact_1?: string | null
+          emergency_contact_2?: string | null
           house_number?: string | null
           id?: string
           name?: string
@@ -1868,6 +1877,7 @@ export type Database = {
           bank_agency: string | null
           bank_name: string | null
           bio: string | null
+          birth_date: string | null
           car_color: string | null
           car_model: string
           car_plate: string
@@ -1876,6 +1886,8 @@ export type Database = {
           cpf: string
           created_at: string
           email: string | null
+          emergency_contact_1: string | null
+          emergency_contact_2: string | null
           house_number: string | null
           id: string
           name: string
@@ -1900,6 +1912,10 @@ export type Database = {
           ride_id: string
           tbr_count: number
         }[]
+      }
+      get_tbr_conflict_context: {
+        Args: { p_code: string; p_unit_id: string }
+        Returns: Json
       }
       get_top_drivers_by_tbrs: {
         Args: { p_since: string; p_unit_id: string; p_until?: string }
@@ -1935,6 +1951,10 @@ export type Database = {
       }
       process_tbr_scan: {
         Args: { p_code: string; p_ride_id: string; p_unit_id: string }
+        Returns: Json
+      }
+      transfer_tbr_to_ride: {
+        Args: { p_code: string; p_new_ride_id: string; p_unit_id: string }
         Returns: Json
       }
     }

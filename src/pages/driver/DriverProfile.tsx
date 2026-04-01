@@ -11,7 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
   User, Camera, Loader2, Save, KeyRound, Eye, EyeOff,
-  Mail, Phone, MapPin, Car, Palette, FileText,
+  Mail, Phone, MapPin, Car, Palette, FileText, CalendarDays, ShieldAlert,
 } from "lucide-react";
 
 const capitalize = (v: string) =>
@@ -23,6 +23,13 @@ const maskCPF = (v: string) => {
   if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`;
   if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`;
   return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`;
+};
+
+const maskPhone = (v: string) => {
+  const d = v.replace(/\D/g, "").slice(0, 11);
+  if (d.length <= 2) return d.length ? `(${d}` : "";
+  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
 };
 
 const DriverProfile = () => {
@@ -40,6 +47,7 @@ const DriverProfile = () => {
     car_plate: "", car_model: "", car_color: "",
     address: "", neighborhood: "", city: "", state: "", cep: "",
     avatar_url: "",
+    emergency_contact_1: "", emergency_contact_2: "", birth_date: "",
   });
 
   // Password
@@ -54,7 +62,7 @@ const DriverProfile = () => {
       setLoading(true);
       const { data } = await supabase
         .from("drivers")
-        .select("id, name, cpf, email, whatsapp, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url")
+        .select("id, name, cpf, email, whatsapp, car_plate, car_model, car_color, address, neighborhood, city, state, cep, avatar_url, emergency_contact_1, emergency_contact_2, birth_date")
         .eq("id", driverId)
         .single();
       if (data) {
@@ -73,6 +81,9 @@ const DriverProfile = () => {
           state: data.state ?? "",
           cep: data.cep ?? "",
           avatar_url: (data as any).avatar_url ?? "",
+          emergency_contact_1: maskPhone((data as any).emergency_contact_1 ?? ""),
+          emergency_contact_2: maskPhone((data as any).emergency_contact_2 ?? ""),
+          birth_date: (data as any).birth_date ?? "",
         });
       }
       setLoading(false);
@@ -82,12 +93,24 @@ const DriverProfile = () => {
 
   const handleSave = async () => {
     if (!driverId) return;
+    if (!form.whatsapp.replace(/\D/g, "")) {
+      toast({ title: "WhatsApp é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_1.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 1 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.emergency_contact_2.replace(/\D/g, "")) {
+      toast({ title: "Contato de emergência 2 é obrigatório", variant: "destructive" }); return;
+    }
+    if (!form.birth_date) {
+      toast({ title: "Data de nascimento é obrigatória", variant: "destructive" }); return;
+    }
     setSaving(true);
     const { error } = await supabase.from("drivers").update({
       name: form.name.trim(),
       cpf: form.cpf.replace(/\D/g, ""),
       email: form.email.trim() || null,
-      whatsapp: form.whatsapp.trim() || null,
+      whatsapp: form.whatsapp.replace(/\D/g, ""),
       bio: form.bio.trim() || null,
       car_plate: form.car_plate.trim().toUpperCase(),
       car_model: form.car_model.trim(),
@@ -97,6 +120,9 @@ const DriverProfile = () => {
       city: form.city.trim() || null,
       state: form.state.trim() || null,
       cep: form.cep.trim() || null,
+      emergency_contact_1: form.emergency_contact_1.replace(/\D/g, ""),
+      emergency_contact_2: form.emergency_contact_2.replace(/\D/g, ""),
+      birth_date: form.birth_date || null,
     } as any).eq("id", driverId);
     setSaving(false);
     if (error) {
@@ -268,8 +294,33 @@ const DriverProfile = () => {
               <Input value={form.email} onChange={(e) => set("email", e.target.value)} type="email" className="h-10" />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> WhatsApp</Label>
-              <Input value={form.whatsapp} onChange={(e) => set("whatsapp", e.target.value)} className="h-10" />
+              <Label className="text-xs font-semibold flex items-center gap-1"><Phone className="h-3 w-3" /> WhatsApp *</Label>
+              <Input value={form.whatsapp} onChange={(e) => set("whatsapp", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold flex items-center gap-1"><CalendarDays className="h-3 w-3" /> Data de Nascimento *</Label>
+              <Input type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} className="h-10" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Emergency Contacts */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-bold italic flex items-center gap-2">
+            <ShieldAlert className="h-4 w-4 text-primary" /> Contatos de Emergência
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Contato 1 *</Label>
+              <Input value={form.emergency_contact_1} onChange={(e) => set("emergency_contact_1", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Contato 2 *</Label>
+              <Input value={form.emergency_contact_2} onChange={(e) => set("emergency_contact_2", maskPhone(e.target.value))} className="h-10" placeholder="(00) 00000-0000" />
             </div>
           </div>
         </CardContent>
