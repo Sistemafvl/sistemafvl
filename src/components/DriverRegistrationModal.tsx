@@ -287,8 +287,26 @@ const DriverRegistrationModal = ({ open, onOpenChange }: Props) => {
               <Input id="dr-email" type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="dr-whatsapp">WhatsApp</Label>
-              <Input id="dr-whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", maskWhatsApp(e.target.value))} placeholder="(00) 00000-0000" />
+              <Label htmlFor="dr-whatsapp">WhatsApp *</Label>
+              <Input id="dr-whatsapp" value={form.whatsapp} onChange={(e) => set("whatsapp", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
+            </div>
+          </div>
+
+          {/* Data de Nascimento */}
+          <div className="space-y-1">
+            <Label htmlFor="dr-birth-date">Data de Nascimento *</Label>
+            <Input id="dr-birth-date" type="date" value={form.birth_date} onChange={(e) => set("birth_date", e.target.value)} required />
+          </div>
+
+          {/* Contatos de Emergência */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="space-y-1">
+              <Label htmlFor="dr-emergency1">Contato 1 de Emergência *</Label>
+              <Input id="dr-emergency1" value={form.emergency_contact_1} onChange={(e) => set("emergency_contact_1", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="dr-emergency2">Contato 2 de Emergência *</Label>
+              <Input id="dr-emergency2" value={form.emergency_contact_2} onChange={(e) => set("emergency_contact_2", maskPhone(e.target.value))} placeholder="(00) 00000-0000" required />
             </div>
           </div>
 
