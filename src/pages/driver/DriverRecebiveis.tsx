@@ -143,9 +143,9 @@ const DriverRecebiveis = () => {
       .from("driver_invoices" as any)
       .select("id, file_name")
       .eq("payroll_report_id", reportId)
-      .eq("driver_id", driverId);
+      .eq("driver_id", driverId) as { data: any[] | null };
     
-    const existing = allInvoices?.find(inv => 
+    const existing = allInvoices?.find((inv: any) => 
       type === "minimum" ? inv.file_name?.startsWith("MIN_") : !inv.file_name?.startsWith("MIN_")
     );
 

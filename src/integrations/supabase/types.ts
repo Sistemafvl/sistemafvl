@@ -599,6 +599,8 @@ export type Database = {
           car_plate: string
           cep: string | null
           city: string | null
+          contact_1: string | null
+          contact_2: string | null
           cpf: string
           created_at: string
           email: string | null
@@ -629,6 +631,8 @@ export type Database = {
           car_plate: string
           cep?: string | null
           city?: string | null
+          contact_1?: string | null
+          contact_2?: string | null
           cpf: string
           created_at?: string
           email?: string | null
@@ -659,6 +663,8 @@ export type Database = {
           car_plate?: string
           cep?: string | null
           city?: string | null
+          contact_1?: string | null
+          contact_2?: string | null
           cpf?: string
           created_at?: string
           email?: string | null
@@ -1707,11 +1713,11 @@ export type Database = {
           car_plate: string | null
           cep: string | null
           city: string | null
+          contact_1: string | null
+          contact_2: string | null
           cpf: string | null
           created_at: string | null
           email: string | null
-          emergency_contact_1: string | null
-          emergency_contact_2: string | null
           id: string | null
           name: string | null
           neighborhood: string | null
@@ -1729,11 +1735,11 @@ export type Database = {
           car_plate?: string | null
           cep?: string | null
           city?: string | null
+          contact_1?: string | null
+          contact_2?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
-          emergency_contact_1?: string | null
-          emergency_contact_2?: string | null
           id?: string | null
           name?: string | null
           neighborhood?: string | null
@@ -1751,11 +1757,11 @@ export type Database = {
           car_plate?: string | null
           cep?: string | null
           city?: string | null
+          contact_1?: string | null
+          contact_2?: string | null
           cpf?: string | null
           created_at?: string | null
           email?: string | null
-          emergency_contact_1?: string | null
-          emergency_contact_2?: string | null
           id?: string | null
           name?: string | null
           neighborhood?: string | null
@@ -1876,6 +1882,7 @@ export type Database = {
       }
     }
     Functions: {
+      get_driver_profile_safe: { Args: { p_driver_id: string }; Returns: Json }
       get_driver_registry: {
         Args: { p_driver_ids: string[] }
         Returns: {
@@ -1892,6 +1899,8 @@ export type Database = {
           car_plate: string
           cep: string | null
           city: string | null
+          contact_1: string | null
+          contact_2: string | null
           cpf: string
           created_at: string
           email: string | null
@@ -1965,6 +1974,48 @@ export type Database = {
       transfer_tbr_to_ride: {
         Args: { p_code: string; p_new_ride_id: string; p_unit_id: string }
         Returns: Json
+      }
+      update_driver_profile: {
+        Args: {
+          p_address: string
+          p_bio: string
+          p_birth_date: string
+          p_car_color: string
+          p_car_model: string
+          p_car_plate: string
+          p_cep: string
+          p_city: string
+          p_driver_id: string
+          p_email: string
+          p_emergency_contact_1: string
+          p_emergency_contact_2: string
+          p_name: string
+          p_neighborhood: string
+          p_state: string
+          p_whatsapp: string
+        }
+        Returns: string
+      }
+      update_driver_profile_v2: {
+        Args: {
+          p_address?: string
+          p_bio?: string
+          p_birth_date: string
+          p_car_color?: string
+          p_car_model?: string
+          p_car_plate?: string
+          p_cep?: string
+          p_city?: string
+          p_driver_id: string
+          p_email?: string
+          p_emergency_contact_1: string
+          p_emergency_contact_2: string
+          p_name: string
+          p_neighborhood?: string
+          p_state?: string
+          p_whatsapp: string
+        }
+        Returns: string
       }
     }
     Enums: {

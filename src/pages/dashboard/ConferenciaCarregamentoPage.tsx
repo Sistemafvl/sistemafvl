@@ -1999,7 +1999,8 @@ const ConferenciaCarregamentoPage = () => {
       setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
     } catch (err) {
       console.error("Error opening driver modal:", err);
-      toast({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
+      const { toast: t } = await import("@/hooks/use-toast");
+      t({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
     } finally {
       setDriverModalLoading(false);
     }
@@ -3752,7 +3753,7 @@ const ConferenciaCarregamentoPage = () => {
                     driver_id: retroSelectedDriver.id,
                     unit_id: unitId,
                     override_date: retroDateStr,
-                    session_token: conferenteSession?.session_token
+                    conferente_id: conferenteSession?.id
                   })
                 });
 
@@ -3789,7 +3790,7 @@ const ConferenciaCarregamentoPage = () => {
                 });
                 
                 // Reset driver selection
-                setRetroSearch("");
+                setRetroDriverSearch("");
                 setRetroSelectedDriver(null);
               }}
               disabled={retroLoading || !retroSelectedDriver || !retroDate}
