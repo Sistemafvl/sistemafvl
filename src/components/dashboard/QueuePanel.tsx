@@ -24,6 +24,7 @@ interface QueueEntry {
   car_model?: string;
   car_plate?: string;
   car_color?: string;
+  birth_date?: string | null;
 }
 
 interface FoundDriver {
