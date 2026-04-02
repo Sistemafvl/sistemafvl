@@ -686,12 +686,16 @@ const QueuePanel = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-xs truncate">
+                    <p className="font-semibold text-xs truncate flex items-center gap-1">
                       {idx + 1}º — {entry.driver_name}
+                      {checkIsBirthday(entry.birth_date) && <span title="Aniversariante do dia! 🎂">🎂</span>}
                     </p>
                     <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {formatTime(entry.joined_at)}
+                      {checkIsBirthday(entry.birth_date) && (
+                        <span className="text-amber-500 font-semibold ml-1">· Aniversário!</span>
+                      )}
                     </p>
                   </div>
                   {entry.status === "waiting" ? (
