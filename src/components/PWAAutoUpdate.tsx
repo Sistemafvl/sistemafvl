@@ -7,7 +7,7 @@ const VERSION_KEY = "app_build_version";
 const RELOAD_FLAG = "app_version_reloaded";
 const PREVIEW_CLEANUP_FLAG = "preview_sw_cleaned";
 const GLOBAL_SYNC_KEY = "global_sync_stamp";
-const GLOBAL_SYNC_STAMP = "2026-04-01-22-59"; // Bump to force a one-time hard reset for all clients
+const GLOBAL_SYNC_STAMP = "2026-04-02-force-v2"; // Bump to force a one-time hard reset for all clients
 
 // Don't run version polling in local dev — version.json doesn't exist in dev mode
 const IS_DEV = import.meta.env.DEV;
