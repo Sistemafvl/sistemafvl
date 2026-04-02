@@ -3790,7 +3790,7 @@ const ConferenciaCarregamentoPage = () => {
                 });
                 
                 // Reset driver selection
-                setRetroSearch("");
+                setRetroDriverSearch("");
                 setRetroSelectedDriver(null);
               }}
               disabled={retroLoading || !retroSelectedDriver || !retroDate}
