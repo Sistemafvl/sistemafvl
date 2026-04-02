@@ -47,6 +47,7 @@ interface RideWithDriver {
   finished_at?: string | null;
   completed_at?: string;
   queue_entry_id?: string | null;
+  birth_date?: string | null;
 }
 
 interface Conferente {
