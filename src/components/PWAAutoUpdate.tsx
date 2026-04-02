@@ -87,11 +87,7 @@ const PWAAutoUpdate = () => {
       if (isUpdatingRef.current) return; // GUARD: never trigger twice
       isUpdatingRef.current = true;
       setUpdating(true);
-      // Show banner for 3 seconds then reload
-      setTimeout(() => {
-        localStorage.removeItem(VERSION_KEY);
-        window.location.reload();
-      }, 3000);
+      // Show modal — user must click "Atualizar Agora"
     };
 
     const checkNewVersion = async () => {
