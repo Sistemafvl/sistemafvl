@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import VersionUpdateModal from "./VersionUpdateModal";
 
 declare const __BUILD_VERSION__: string;
 
