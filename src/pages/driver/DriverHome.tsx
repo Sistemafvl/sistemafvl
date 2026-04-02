@@ -6,12 +6,37 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap, Bell } from "lucide-react";
+import { Car, Package, DollarSign, CalendarDays, RotateCcw, TrendingUp, MapPin, Lightbulb, FileWarning, CheckCircle, CheckCircle2, Zap, Bell, PartyPopper } from "lucide-react";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import { format, parseISO, eachDayOfInterval } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { getBrazilTodayStr, getBrazilDayRange, toBrazilDateStr, getBrazilNow, formatBRL } from "@/lib/utils";
 
+const BIRTHDAY_MESSAGES_HOME = [
+  (name: string) => `🎂 Hoje é seu dia, ${name}! Toda a equipe da Favela LLog deseja a você um aniversário repleto de alegria, saúde e muitas conquistas. Continue arrasando!`,
+  (name: string) => `🎉 Parabéns, ${name}! A Favela LLog celebra mais um ano da sua vida com muito orgulho. Que esse novo ciclo traga ainda mais realizações!`,
+  (name: string) => `🥳 Feliz Aniversário, ${name}! Você é peça fundamental da nossa equipe. A Favela LLog deseja tudo de melhor nessa data tão especial!`,
+  (name: string) => `🎊 Que dia especial! ${name}, a Favela LLog parabeniza você com todo o carinho. Que Deus abençoe cada km da sua jornada!`,
+  (name: string) => `🌟 Hoje é o aniversário do nosso motorista ${name}! A Favela LLog agradece por fazer parte do nosso time. Parabéns e muitas felicidades!`,
+  (name: string) => `🎁 ${name}, a Favela LLog tem muito orgulho de ter você no time! Feliz Aniversário — que sua vida seja tão cheia de entregas no endereço certo quanto a sua dedicação!`,
+];
+
+const BIRTHDAY_MSG_HOME = BIRTHDAY_MESSAGES_HOME[Math.floor(Math.random() * BIRTHDAY_MESSAGES_HOME.length)];
+
+const checkIsBirthdayHome = (birthDate: string | null): boolean => {
+  if (!birthDate) return false;
+  try {
+    // Use Intl for proper BRT timezone detection
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).formatToParts(now);
+    const todayDay = parseInt(parts.find(p => p.type === "day")?.value ?? "0");
+    const todayMonth = parseInt(parts.find(p => p.type === "month")?.value ?? "0");
+    const [, month, day] = birthDate.split("-").map(Number);
+    return todayMonth === month && todayDay === day;
+  } catch {
+    return false;
+  }
+};
 
 const COLORS = ["#f59e0b", "#3b82f6", "#ef4444"];
 const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
@@ -19,6 +44,29 @@ const DAY_NAMES = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
 const DriverHome = () => {
   const { unitSession } = useAuthStore();
   const driverId = unitSession?.user_profile_id;
+
+  const [isBirthday, setIsBirthday] = useState(false);
+  const [bdName, setBdName] = useState<string | null>(null);
+
+  // Fetch birth_date to detect birthday on login
+  useEffect(() => {
+    if (!driverId) return;
+    const fetchBd = async () => {
+      const { data, error } = await (supabase.rpc as any)("get_driver_profile_safe", { p_driver_id: driverId });
+      const profile = (!error && data) ? (data as any) : null;
+      if (profile) {
+        setBdName(profile.name ?? null);
+        setIsBirthday(checkIsBirthdayHome(profile.birth_date ?? null));
+        return;
+      }
+      // Fallback
+      const { data: fb } = await supabase.from("drivers").select("name, birth_date").eq("id", driverId).maybeSingle();
+      if (!fb) return;
+      setBdName((fb as any).name ?? null);
+      setIsBirthday(checkIsBirthdayHome((fb as any).birth_date ?? null));
+    };
+    fetchBd();
+  }, [driverId]);
 
   const [startDate, setStartDate] = useState(() => getBrazilTodayStr());
   const [endDate, setEndDate] = useState(() => getBrazilTodayStr());
@@ -447,6 +495,38 @@ const DriverHome = () => {
         <TrendingUp className="h-5 w-5 text-primary" />
         Visão Geral
       </h1>
+
+      {/* Birthday Banner */}
+      {isBirthday && bdName && (
+        <div
+          className="relative overflow-hidden rounded-xl px-5 py-5 flex items-start gap-4"
+          style={{
+            background: "linear-gradient(135deg, #f59e0b33 0%, #ec489933 50%, #8b5cf633 100%)",
+            border: "2px solid #f59e0b88",
+            animation: "bdFadeInHome 0.7s ease-out",
+          }}
+        >
+          {/* Decorative floating emojis */}
+          <span className="absolute top-2 right-16 text-3xl select-none pointer-events-none" style={{ animation: "bdFloatHome 3s ease-in-out infinite" }}>🎈</span>
+          <span className="absolute top-3 right-8 text-2xl select-none pointer-events-none" style={{ animation: "bdFloatHome 3s ease-in-out infinite", animationDelay: "0.8s" }}>🎉</span>
+          <span className="absolute top-1 right-2 text-2xl select-none pointer-events-none" style={{ animation: "bdFloatHome 3s ease-in-out infinite", animationDelay: "1.5s" }}>🎂</span>
+          <span className="absolute bottom-2 right-6 text-xl select-none pointer-events-none" style={{ animation: "bdFloatHome 3.5s ease-in-out infinite", animationDelay: "0.4s" }}>⭐</span>
+          <div className="h-12 w-12 rounded-full shrink-0 flex items-center justify-center" style={{ background: "linear-gradient(135deg, #f59e0b, #ec4899)" }}>
+            <PartyPopper className="h-7 w-7 text-white" />
+          </div>
+          <div className="min-w-0 pr-20">
+            <p className="font-black text-base text-amber-600 dark:text-amber-400 mb-1 uppercase tracking-wide">🎊 Feliz Aniversário!</p>
+            <p className="text-sm text-foreground/90 leading-relaxed font-medium">
+              {BIRTHDAY_MSG_HOME(bdName)}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">❤️ Com carinho, Favela LLog</p>
+          </div>
+          <style>{`
+            @keyframes bdFadeInHome { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+            @keyframes bdFloatHome { 0%, 100% { transform: translateY(0px); } 50% { transform: translateY(-8px); } }
+          `}</style>
+        </div>
+      )}
 
       {notifPermission === "default" && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">

@@ -53,9 +53,10 @@ const BIRTHDAY_MESSAGES = [
 const checkIsBirthday = (birthDate: string | null): boolean => {
   if (!birthDate) return false;
   try {
-    const brt = new Date(new Date().getTime() - 3 * 60 * 60 * 1000);
-    const todayMonth = brt.getUTCMonth() + 1;
-    const todayDay = brt.getUTCDate();
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit" }).formatToParts(now);
+    const todayDay = parseInt(parts.find(p => p.type === "day")?.value ?? "0");
+    const todayMonth = parseInt(parts.find(p => p.type === "month")?.value ?? "0");
     const [, month, day] = birthDate.split("-").map(Number);
     return todayMonth === month && todayDay === day;
   } catch {
@@ -552,8 +553,24 @@ const DriverQueue = () => {
             className="w-full h-14 text-lg font-bold border-yellow-500 text-yellow-600 bg-yellow-50 dark:bg-yellow-950/20"
             size="lg"
           >
-            AGUARDANDO APROVAÇÃO
+            {isBirthday ? "🎂 " : ""}AGUARDANDO APROVAÇÃO
           </Button>
+
+          {/* Birthday mini-banner in queue */}
+          {isBirthday && driverName && (
+            <div
+              className="flex items-center gap-3 rounded-xl px-4 py-3"
+              style={{
+                background: "linear-gradient(135deg, #f59e0b22 0%, #ec489922 100%)",
+                border: "1.5px solid #f59e0b55",
+              }}
+            >
+              <span className="text-2xl">🎂</span>
+              <p className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                Feliz Aniversário, <span className="font-black">{driverName}</span>! A Favela LLog deseja um ótimo dia! 🎉
+              </p>
+            </div>
+          )}
 
           <Button
             onClick={leaveQueue}
