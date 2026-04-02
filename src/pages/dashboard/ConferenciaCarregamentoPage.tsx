@@ -2994,7 +2994,7 @@ const ConferenciaCarregamentoPage = () => {
                         {(ride.driver_name ?? "M")[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <h3 className="text-lg font-bold">{shortName(ride.driver_name)}</h3>
+                    <h3 className="text-lg font-bold flex items-center gap-1.5">{shortName(ride.driver_name)} {checkIsBirthday(ride.birth_date) && <span title="Aniversariante do dia!">🎂</span>}</h3>
                   </div>
 
                   {/* Vehicle & details */}
