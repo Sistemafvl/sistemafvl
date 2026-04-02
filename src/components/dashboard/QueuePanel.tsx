@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap, Monitor } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap, Monitor, Cake } from "lucide-react";
+import { checkIsBirthday } from "@/lib/birthday-utils";
 
 interface QueueEntry {
   id: string;
