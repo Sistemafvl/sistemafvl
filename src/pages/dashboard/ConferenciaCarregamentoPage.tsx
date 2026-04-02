@@ -466,12 +466,13 @@ const ConferenciaCarregamentoPage = () => {
     const driverIds = [...new Set(rawRides.map((r) => r.driver_id))];
     const rideIds = rawRides.map((r) => r.id);
 
-    // Fetch drivers and TBR data in parallel
-    const [driversResult, tbrsResult] = await Promise.all([
+    // Fetch drivers, birth dates, and TBR data in parallel
+    const [driversResult, driversRegistryResult, tbrsResult] = await Promise.all([
       supabase
         .from("drivers_public")
         .select("id, name, avatar_url, car_model, car_plate, car_color")
         .in("id", driverIds),
+      supabase.rpc("get_driver_registry", { p_driver_ids: driverIds }),
       rideIds.length > 0 
         ? (async () => {
             const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
@@ -491,6 +492,7 @@ const ConferenciaCarregamentoPage = () => {
     if (thisRequestId !== requestIdRef.current) return;
 
     const driverMap = new Map((driversResult.data ?? []).map((d) => [d.id, d]));
+    const birthMap = new Map((driversRegistryResult.data ?? []).map((d: any) => [d.id, d.birth_date]));
     
     // Process rides
     const mappedRides = rawRides.map((r) => {
@@ -505,6 +507,7 @@ const ConferenciaCarregamentoPage = () => {
         car_model: d?.car_model ?? undefined,
         car_plate: d?.car_plate ?? undefined,
         car_color: d?.car_color ?? undefined,
+        birth_date: birthMap.get(r.driver_id) ?? null,
       };
     });
 
