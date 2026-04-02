@@ -154,12 +154,13 @@ const QueuePanel = () => {
     if (!data) { setEntries([]); return; }
 
     const driverIds = data.map((e) => e.driver_id);
-    const { data: drivers } = await supabase
-      .from("drivers_public")
-      .select("id, name, avatar_url, car_model, car_plate, car_color")
-      .in("id", driverIds);
+    const [driversPublicResult, driversRegistryResult] = await Promise.all([
+      supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color").in("id", driverIds),
+      supabase.rpc("get_driver_registry", { p_driver_ids: driverIds }),
+    ]);
 
-    const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
+    const driverMap = new Map((driversPublicResult.data ?? []).map((d) => [d.id, d]));
+    const birthMap = new Map((driversRegistryResult.data ?? []).map((d: any) => [d.id, d.birth_date]));
     const newEntries = data.map((e) => {
       const d = driverMap.get(e.driver_id);
       return {
@@ -169,6 +170,7 @@ const QueuePanel = () => {
         car_model: d?.car_model ?? undefined,
         car_plate: d?.car_plate ?? undefined,
         car_color: d?.car_color ?? undefined,
+        birth_date: birthMap.get(e.driver_id) ?? null,
       };
     });
 
