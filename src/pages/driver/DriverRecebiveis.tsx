@@ -214,68 +214,58 @@ const DriverRecebiveis = () => {
             const hasCommon = entry.totalCommon > 0;
             const hasMinimum = entry.totalMinimum > 0;
 
-            const renderNfField = (type: "common" | "minimum", value: number, invoice: any) => (
-              <div className="flex flex-col gap-2 p-3 rounded-lg border bg-muted/30">
-                <div className="flex justify-between items-center text-xs">
-                  <span className="text-muted-foreground font-semibold">
-                    {type === "minimum" ? "TBRs Mínimo" : "TBRs Comuns"}
-                  </span>
-                  <span className="font-bold text-primary">{formatCurrency(value)}</span>
-                </div>
-                
-                <div className="flex items-center gap-2 pt-2 border-t border-dashed">
-                  {invoice ? (
-                    <div className="flex items-center justify-between w-full">
-                      <div className="flex items-center gap-2 overflow-hidden">
-                        <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                        <span className="text-[10px] text-green-600 font-medium truncate">
-                           {invoice.file_name?.replace(/^(MIN_|COM_)/, "")}
-                        </span>
-                      </div>
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUpload(entry.reportId, file, type);
-                          }}
-                        />
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!!uploading}>
-                          {uploading === `${entry.reportId}_${type}` ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Pencil className="h-3 w-3 text-muted-foreground" />
-                          )}
+            const renderNfField = (type: "common" | "minimum", value: number, invoice: any) => {
+              const inputId = `file-${entry.reportId}-${type}`;
+              const isUploading = uploading === `${entry.reportId}_${type}`;
+              
+              const triggerFileInput = () => {
+                if (uploading) return;
+                const el = document.getElementById(inputId) as HTMLInputElement;
+                if (el) { el.value = ""; el.click(); }
+              };
+
+              const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                if (file) handleUpload(entry.reportId, file, type);
+              };
+
+              return (
+                <div className="flex flex-col gap-2 p-3 rounded-lg border bg-muted/30">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-muted-foreground font-semibold">
+                      {type === "minimum" ? "TBRs Mínimo" : "TBRs Comuns"}
+                    </span>
+                    <span className="font-bold text-primary">{formatCurrency(value)}</span>
+                  </div>
+
+                  <input id={inputId} type="file" className="hidden" onChange={onFileChange} />
+                  
+                  <div className="flex items-center gap-2 pt-2 border-t border-dashed">
+                    {invoice ? (
+                      <div className="flex items-center justify-between w-full">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <CheckCircle className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                          <span className="text-[10px] text-green-600 font-medium truncate">
+                             {invoice.file_name?.replace(/^(MIN_|COM_)/, "")}
+                          </span>
+                        </div>
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" disabled={!!uploading} onClick={triggerFileInput} type="button">
+                          {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Pencil className="h-3 w-3 text-muted-foreground" />}
                         </Button>
-                      </label>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between w-full">
-                      <Badge variant="outline" className="text-[10px] py-0 h-5 border-yellow-500/50 text-yellow-600 bg-yellow-50/50">Pendente</Badge>
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleUpload(entry.reportId, file, type);
-                          }}
-                        />
-                        <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2" disabled={!!uploading}>
-                          {uploading === `${entry.reportId}_${type}` ? (
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                          ) : (
-                            <Upload className="h-3 w-3" />
-                          )}
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between w-full">
+                        <Badge variant="outline" className="text-[10px] py-0 h-5 border-yellow-500/50 text-yellow-600 bg-yellow-50/50">Pendente</Badge>
+                        <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1 px-2" disabled={!!uploading} onClick={triggerFileInput} type="button">
+                          {isUploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
                           Anexar NF
                         </Button>
-                      </label>
-                    </div>
-                  )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
+              );
+            };
 
             return (
               <Card key={entry.reportId}>
