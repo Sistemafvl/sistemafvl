@@ -1999,7 +1999,8 @@ const ConferenciaCarregamentoPage = () => {
       setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
     } catch (err) {
       console.error("Error opening driver modal:", err);
-      toast({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
+      const { toast: t } = await import("@/hooks/use-toast");
+      t({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
     } finally {
       setDriverModalLoading(false);
     }
