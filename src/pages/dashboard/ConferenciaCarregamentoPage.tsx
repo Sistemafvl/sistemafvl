@@ -25,6 +25,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import QrViewfinder from "@/components/ui/QrViewfinder";
+import { checkIsBirthday } from "@/lib/birthday-utils";
 
 
 interface RideWithDriver {
