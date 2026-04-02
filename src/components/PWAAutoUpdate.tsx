@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { RefreshCw } from "lucide-react";
+import VersionUpdateModal from "./VersionUpdateModal";
 
 declare const __BUILD_VERSION__: string;
 
@@ -86,11 +87,7 @@ const PWAAutoUpdate = () => {
       if (isUpdatingRef.current) return; // GUARD: never trigger twice
       isUpdatingRef.current = true;
       setUpdating(true);
-      // Show banner for 3 seconds then reload
-      setTimeout(() => {
-        localStorage.removeItem(VERSION_KEY);
-        window.location.reload();
-      }, 3000);
+      // Show modal — user must click "Atualizar Agora"
     };
 
     const checkNewVersion = async () => {
@@ -187,26 +184,13 @@ const PWAAutoUpdate = () => {
     }
   }, []);
 
-  // Auto-update banner — appears ONCE for 3 seconds then page reloads
-  if (!updating) return null;
+  const handleUpdate = () => {
+    localStorage.removeItem(VERSION_KEY);
+    window.location.reload();
+  };
 
   return (
-    <div
-      className="fixed bottom-6 right-6 z-[9999] flex items-center gap-3 rounded-xl bg-primary px-5 py-3.5 text-primary-foreground shadow-2xl"
-      style={{ animation: "slideInRight 0.4s ease-out" }}
-    >
-      <RefreshCw className="h-5 w-5 animate-spin shrink-0" />
-      <div>
-        <p className="font-bold text-sm leading-tight">Atualizando o sistema...</p>
-        <p className="text-xs text-primary-foreground/70 leading-tight mt-0.5">A página será recarregada em instantes</p>
-      </div>
-      <style>{`
-        @keyframes slideInRight {
-          from { opacity: 0; transform: translateX(100%); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-      `}</style>
-    </div>
+    <VersionUpdateModal isOpen={updating} onUpdate={handleUpdate} />
   );
 };
 
