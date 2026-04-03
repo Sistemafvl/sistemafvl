@@ -137,7 +137,7 @@ const AmazonPackagesModal = () => {
       }));
 
       const { error } = await (supabase.from("amazon_daily_packages" as any) as any).upsert(inserts, {
-        onConflict: "unit_id, reference_date"
+        onConflict: "unit_id,reference_date"
       });
 
       if (error) throw error;
@@ -152,9 +152,9 @@ const AmazonPackagesModal = () => {
         if (savedItem) return { ...d, isFilled: true };
         return d;
       }));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      toast({ title: "Erro", description: "Não foi possível salvar os dados.", variant: "destructive" });
+      toast({ title: "Erro", description: err.message || "Não foi possível salvar os dados.", variant: "destructive" });
     } finally {
       setSaving(false);
     }
