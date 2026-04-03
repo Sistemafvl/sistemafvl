@@ -10,7 +10,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap, Monitor } from "lucide-react";
+import { Users, Clock, CalendarCheck, Plus, Search, Loader2, Check, ChevronUp, ChevronDown, X, ChevronsUpDown, Sparkles, Zap, Monitor, Cake } from "lucide-react";
+import { checkIsBirthday } from "@/lib/birthday-utils";
 
 interface QueueEntry {
   id: string;
@@ -23,6 +24,7 @@ interface QueueEntry {
   car_model?: string;
   car_plate?: string;
   car_color?: string;
+  birth_date?: string | null;
 }
 
 interface FoundDriver {
@@ -152,12 +154,13 @@ const QueuePanel = () => {
     if (!data) { setEntries([]); return; }
 
     const driverIds = data.map((e) => e.driver_id);
-    const { data: drivers } = await supabase
-      .from("drivers_public")
-      .select("id, name, avatar_url, car_model, car_plate, car_color")
-      .in("id", driverIds);
+    const [driversPublicResult, driversRegistryResult] = await Promise.all([
+      supabase.from("drivers_public").select("id, name, avatar_url, car_model, car_plate, car_color").in("id", driverIds),
+      supabase.rpc("get_driver_registry", { p_driver_ids: driverIds }),
+    ]);
 
-    const driverMap = new Map((drivers ?? []).map((d) => [d.id, d]));
+    const driverMap = new Map((driversPublicResult.data ?? []).map((d) => [d.id, d]));
+    const birthMap = new Map((driversRegistryResult.data ?? []).map((d: any) => [d.id, d.birth_date]));
     const newEntries = data.map((e) => {
       const d = driverMap.get(e.driver_id);
       return {
@@ -167,6 +170,7 @@ const QueuePanel = () => {
         car_model: d?.car_model ?? undefined,
         car_plate: d?.car_plate ?? undefined,
         car_color: d?.car_color ?? undefined,
+        birth_date: birthMap.get(e.driver_id) ?? null,
       };
     });
 
@@ -682,12 +686,16 @@ const QueuePanel = () => {
                     </AvatarFallback>
                   </Avatar>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-xs truncate">
+                    <p className="font-semibold text-xs truncate flex items-center gap-1">
                       {idx + 1}º — {entry.driver_name}
+                      {checkIsBirthday(entry.birth_date) && <span title="Aniversariante do dia! 🎂">🎂</span>}
                     </p>
                     <p className="text-[11px] text-muted-foreground flex items-center gap-1">
                       <Clock className="h-3 w-3" />
                       {formatTime(entry.joined_at)}
+                      {checkIsBirthday(entry.birth_date) && (
+                        <span className="text-amber-500 font-semibold ml-1">· Aniversário!</span>
+                      )}
                     </p>
                   </div>
                   {entry.status === "waiting" ? (

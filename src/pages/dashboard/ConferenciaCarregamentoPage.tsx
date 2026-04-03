@@ -25,6 +25,7 @@ import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, Command
 import { cn, isValidTbrCode } from "@/lib/utils";
 import { isBarcodeInsideViewfinder } from "@/lib/scanner-utils";
 import QrViewfinder from "@/components/ui/QrViewfinder";
+import { checkIsBirthday } from "@/lib/birthday-utils";
 
 
 interface RideWithDriver {
@@ -46,6 +47,7 @@ interface RideWithDriver {
   finished_at?: string | null;
   completed_at?: string;
   queue_entry_id?: string | null;
+  birth_date?: string | null;
 }
 
 interface Conferente {
@@ -464,12 +466,13 @@ const ConferenciaCarregamentoPage = () => {
     const driverIds = [...new Set(rawRides.map((r) => r.driver_id))];
     const rideIds = rawRides.map((r) => r.id);
 
-    // Fetch drivers and TBR data in parallel
-    const [driversResult, tbrsResult] = await Promise.all([
+    // Fetch drivers, birth dates, and TBR data in parallel
+    const [driversResult, driversRegistryResult, tbrsResult] = await Promise.all([
       supabase
         .from("drivers_public")
         .select("id, name, avatar_url, car_model, car_plate, car_color")
         .in("id", driverIds),
+      supabase.rpc("get_driver_registry", { p_driver_ids: driverIds }),
       rideIds.length > 0 
         ? (async () => {
             const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
@@ -489,6 +492,7 @@ const ConferenciaCarregamentoPage = () => {
     if (thisRequestId !== requestIdRef.current) return;
 
     const driverMap = new Map((driversResult.data ?? []).map((d) => [d.id, d]));
+    const birthMap = new Map((driversRegistryResult.data ?? []).map((d: any) => [d.id, d.birth_date]));
     
     // Process rides
     const mappedRides = rawRides.map((r) => {
@@ -503,6 +507,7 @@ const ConferenciaCarregamentoPage = () => {
         car_model: d?.car_model ?? undefined,
         car_plate: d?.car_plate ?? undefined,
         car_color: d?.car_color ?? undefined,
+        birth_date: birthMap.get(r.driver_id) ?? null,
       };
     });
 
@@ -1999,7 +2004,8 @@ const ConferenciaCarregamentoPage = () => {
       setDriverModalData({ driver, ridesCount: ridesCount ?? 0, tbrsCount });
     } catch (err) {
       console.error("Error opening driver modal:", err);
-      toast({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
+      const { toast: t } = await import("@/hooks/use-toast");
+      t({ title: "Erro", description: "Falha ao carregar dados do motorista.", variant: "destructive" });
     } finally {
       setDriverModalLoading(false);
     }
@@ -2560,7 +2566,7 @@ const ConferenciaCarregamentoPage = () => {
                               {(ride.driver_name ?? "M")[0].toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
-                          <h3 className="text-lg font-bold">{shortName(ride.driver_name)}</h3>
+                          <h3 className="text-lg font-bold flex items-center gap-1.5">{shortName(ride.driver_name)} {checkIsBirthday(ride.birth_date) && <span title="Aniversariante do dia!">🎂</span>}</h3>
                         </div>
                         {isSearchActive && ride.unit_id !== unitId && (
                           <Badge className="bg-orange-500 text-white hover:bg-orange-600 text-[10px]">
@@ -2988,7 +2994,7 @@ const ConferenciaCarregamentoPage = () => {
                         {(ride.driver_name ?? "M")[0].toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
-                    <h3 className="text-lg font-bold">{shortName(ride.driver_name)}</h3>
+                    <h3 className="text-lg font-bold flex items-center gap-1.5">{shortName(ride.driver_name)} {checkIsBirthday(ride.birth_date) && <span title="Aniversariante do dia!">🎂</span>}</h3>
                   </div>
 
                   {/* Vehicle & details */}
@@ -3752,7 +3758,7 @@ const ConferenciaCarregamentoPage = () => {
                     driver_id: retroSelectedDriver.id,
                     unit_id: unitId,
                     override_date: retroDateStr,
-                    session_token: conferenteSession?.session_token
+                    conferente_id: conferenteSession?.id
                   })
                 });
 
@@ -3789,7 +3795,7 @@ const ConferenciaCarregamentoPage = () => {
                 });
                 
                 // Reset driver selection
-                setRetroSearch("");
+                setRetroDriverSearch("");
                 setRetroSelectedDriver(null);
               }}
               disabled={retroLoading || !retroSelectedDriver || !retroDate}
