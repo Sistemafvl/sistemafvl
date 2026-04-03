@@ -8,7 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { FileText, FileSpreadsheet, Loader2 } from "lucide-react";
 
-export type FormatOptionType = "pdf" | "excel" | "pdf_resumo";
+export type FormatOptionType = "pdf" | "excel" | "pdf_resumo" | "pdf_completo";
 
 interface FormatOption {
   id: FormatOptionType;
@@ -35,8 +35,9 @@ const FormatChoiceModal = ({
   options = ["pdf", "excel"],
 }: FormatChoiceModalProps) => {
   const availableOptions: Record<FormatOptionType, FormatOption> = {
-    pdf: { id: "pdf", label: "PDF Completo", icon: <FileText className="h-6 w-6 text-destructive" />, colorClass: "text-destructive" },
+    pdf: { id: "pdf", label: "PDF", icon: <FileText className="h-6 w-6 text-destructive" />, colorClass: "text-destructive" },
     pdf_resumo: { id: "pdf_resumo", label: "PDF Resumido", icon: <FileText className="h-6 w-6 text-orange-500" />, colorClass: "text-orange-500" },
+    pdf_completo: { id: "pdf_completo", label: "PDF Completo", icon: <FileText className="h-6 w-6 text-destructive" />, colorClass: "text-destructive" },
     excel: { id: "excel", label: "Excel", icon: <FileSpreadsheet className="h-6 w-6 text-green-600" />, colorClass: "text-green-600" }
   };
 

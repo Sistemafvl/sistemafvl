@@ -87,8 +87,8 @@ function applyCurrencyFormat(
   for (let r = rowStart; r <= rowEnd; r++) {
     const addr = XLSX.utils.encode_cell({ r, c: col });
     if (ws[addr]) {
-      ws[addr].z = currencyFmt;
-      ws[addr].s = { ...(ws[addr].s || {}), numFmt: currencyFmt };
+      ws[addr].z = '"R$" #,##0.00';
+      ws[addr].s = { ...(ws[addr].s || {}), numFmt: '"R$" #,##0.00' };
     }
   }
 }
@@ -129,9 +129,10 @@ export function generatePayrollExcel(
     format(new Date(d + "T12:00:00"), "dd/MM"),
   );
   
+  const currencyFmt = '"R$" #,##0.00';
+
   const headers = [
     "NOME COMPLETO",
-    "CPF",
     "Veículo",
     ...dateHeaders,
     "TOTAL",
@@ -139,6 +140,7 @@ export function generatePayrollExcel(
     "ADICIONAL",
     "DESCONTOS",
     "TOTAL GERAL",
+    "CPF",
     "CHAVE PIX",
   ];
   
@@ -147,15 +149,15 @@ export function generatePayrollExcel(
   const numDates = allDates.length;
 
   const COL_NAME = 0;
-  const COL_CPF = 1;
-  const COL_VEHICLE = 2;
-  const COL_DATES_START = 3;
+  const COL_VEHICLE = 1;
+  const COL_DATES_START = 2;
   const COL_TOTAL = COL_DATES_START + numDates;
   const COL_VALUE = COL_TOTAL + 1;
   const COL_ADDITIONAL = COL_TOTAL + 2;
   const COL_DISCOUNTS = COL_TOTAL + 3;
   const COL_TOTAL_GERAL = COL_TOTAL + 4;
-  const COL_PIX = COL_TOTAL + 5;
+  const COL_CPF = COL_TOTAL + 5;
+  const COL_PIX = COL_TOTAL + 6;
   const COL_PACKAGES = COL_TOTAL; // Alias para compatibilidade com fórmulas existentes
 
   // ── Build minPackage DriverPayrollData entries ──
@@ -234,7 +236,9 @@ export function generatePayrollExcel(
     const tbrVal = d.tbrValueUsed ?? 0;
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     const descontos = d.dnrDiscount ?? 0;
-    const adicional = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
+    const adicionalManual = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
+    const totalDiffVal = d.days.reduce((sum, day) => sum + (((day as any).minPkgDifference || 0) * tbrVal), 0);
+    const adicionalTotal = adicionalManual + totalDiffVal;
 
     const dailyValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
@@ -248,14 +252,14 @@ export function generatePayrollExcel(
 
     wsData.push([
       d.driver.name,
-      d.driver.cpf || "",
       vehicleType,
       ...dailyValues,
       0, // COL_TOTAL
       tbrVal, // COL_VALUE
-      adicional > 0 ? adicional : "", // COL_ADDITIONAL
-      descontos > 0 ? descontos : "", // COL_DISCOUNTS
+      adicionalTotal > 0 ? adicionalTotal : "", // COL_ADDITIONAL
+      descontos > 0 ? descontos : "", // COL_DESCONTOS
       0, // COL_TOTAL_GERAL
+      d.driver.cpf || "", // COL_CPF
       d.driver.pixKey ?? "", // COL_PIX
     ]);
   });
@@ -265,13 +269,13 @@ export function generatePayrollExcel(
   wsData.push([
     "TOTAL",
     "",
-    "",
     ...allDates.map(() => 0),
     0, // COL_TOTAL
     "", // COL_VALUE
     0, // COL_ADDITIONAL
     0, // COL_DISCOUNTS
     0, // COL_TOTAL_GERAL
+    "", // COL_CPF
     "", // COL_PIX
   ]);
   rowTracker.totalRow = wsData.length - 1;
@@ -283,10 +287,9 @@ export function generatePayrollExcel(
   wsData.push([
     "Total Pacotes Amazon",
     "",
-    "",
     ...allDates.map((date) => amazonPackages?.[date] ?? ""),
     "",
-    ...emptyColsEndTable1
+    ...Array(6).fill("")
   ]);
 
   // Diferença (Rosa)
@@ -294,10 +297,9 @@ export function generatePayrollExcel(
   wsData.push([
     "Diferença",
     "",
-    "",
     ...allDates.map(() => 0),
     0,
-    ...emptyColsEndTable1
+    ...Array(6).fill("")
   ]);
 
   wsData.push([]);
@@ -326,16 +328,18 @@ export function generatePayrollExcel(
       return "";
     });
 
+    // For Tabela 2, we show the adjustment difference value in ADDITIONAL column too?
+    // Actually Anexo 2 shows Tabela 2 having the adjustment quantities in the dates.
     wsData.push([
       d.driver.name,
-      d.driver.cpf || "",
       vehicleType,
       ...minPkgValues,
       0, // COL_TOTAL formula placeholder
       tbrVal, // COL_VALUE
-      "", // COL_ADDITIONAL
+      "", // COL_ADDITIONAL 
       "", // COL_DISCOUNTS
       0, // COL_TOTAL_GERAL
+      d.driver.cpf || "", // COL_CPF
       d.driver.pixKey ?? "", // COL_PIX
     ]);
   });
@@ -345,13 +349,13 @@ export function generatePayrollExcel(
     wsData.push([
       "",
       "",
-      "",
       ...allDates.map(() => ""),
       0,
-      0,
       "",
       "",
+      "",
       0,
+      "",
       "",
     ]);
   }
@@ -637,20 +641,29 @@ export function generatePayrollExcel(
     );
   }
 
-  // Total Pacotes Amazon — blank (manual), no formulas needed
-  // Diferença = Total Pacotes - Total Pacotes Amazon
-  const amazonRow = rowTracker.totalPacotesAmazonRow;
-  const diffRow = rowTracker.diferencaRow;
-  const amazonExcel = amazonRow + 1;
-  const diffExcel = diffRow + 1;
-  for (let c = COL_DATES_START; c < COL_TOTAL; c++) {
+  // Diferença (Rosa) = Green - Orange
+  allDates.forEach((_, dateIdx) => {
+    const col = COL_DATES_START + dateIdx;
+    const greenCell = `${colLetter(col)}${rowTracker.totalRow + 1}`;
+    const orangeCell = `${colLetter(col)}${rowTracker.totalPacotesAmazonRow + 1}`;
     setCellFormula(
       ws,
-      diffRow,
-      c,
-      `${colLetter(c)}${consRow3Excel}-IF(${colLetter(c)}${amazonExcel}="",0,${colLetter(c)}${amazonExcel})`,
+      rowTracker.diferencaRow,
+      col,
+      `${greenCell}-${orangeCell}`,
+      { font: { bold: true, color: { rgb: "CC0000" } }, fill: redLightFill, border: borderThin, alignment: centerAlign }
     );
-  }
+  });
+
+  const totalGreenCell = `${colLetter(COL_TOTAL)}${rowTracker.totalRow + 1}`;
+  const totalAmazonCell = `${colLetter(COL_TOTAL)}${rowTracker.totalPacotesAmazonRow + 1}`;
+  setCellFormula(
+    ws,
+    rowTracker.diferencaRow,
+    COL_TOTAL,
+    `${totalGreenCell}-${totalAmazonCell}`,
+    { font: { bold: true, color: { rgb: "CC0000" } }, fill: redLightFill, border: borderThin, alignment: centerAlign }
+  );
 
   // Resumo formulas
   const resumoRow1 = rowTracker.resumoRows[0];
@@ -707,7 +720,6 @@ export function generatePayrollExcel(
   // Set column widths
   const colWidths = [
     { wch: 35 }, // NOME COMPLETO
-    { wch: 15 }, // CPF
     { wch: 10 }, // Veículo
     ...allDates.map(() => ({ wch: 8 })), // Dates
     { wch: 10 }, // TOTAL
@@ -715,6 +727,7 @@ export function generatePayrollExcel(
     { wch: 15 }, // ADICIONAL
     { wch: 15 }, // DESCONTOS
     { wch: 18 }, // TOTAL GERAL
+    { wch: 15 }, // CPF
     { wch: 25 }, // CHAVE PIX
   ];
   ws["!cols"] = colWidths;
@@ -855,25 +868,25 @@ export function generatePayrollExcel(
   });
 
   // Total Pacotes Amazon row style
-  applyStyleToRow(ws, amazonRow, 0, lastCol, {
+  applyStyleToRow(ws, rowTracker.totalPacotesAmazonRow, 0, lastCol, {
     font: boldFont,
     fill: orangeFill,
     alignment: centerAlign,
     border: borderThin,
   });
-  const amazonLabelAddr = XLSX.utils.encode_cell({ r: amazonRow, c: 0 });
+  const amazonLabelAddr = XLSX.utils.encode_cell({ r: rowTracker.totalPacotesAmazonRow, c: 0 });
   if (ws[amazonLabelAddr]) {
     ws[amazonLabelAddr].s = { ...ws[amazonLabelAddr].s, alignment: leftAlign };
   }
 
   // Diferença row style
-  applyStyleToRow(ws, diffRow, 0, lastCol, {
+  applyStyleToRow(ws, rowTracker.diferencaRow, 0, lastCol, {
     font: boldFont,
     fill: redLightFill,
     alignment: centerAlign,
     border: borderThin,
   });
-  const diffLabelAddr = XLSX.utils.encode_cell({ r: diffRow, c: 0 });
+  const diffLabelAddr = XLSX.utils.encode_cell({ r: rowTracker.diferencaRow, c: 0 });
   if (ws[diffLabelAddr]) {
     ws[diffLabelAddr].s = { ...ws[diffLabelAddr].s, alignment: leftAlign };
   }
@@ -998,113 +1011,110 @@ export function generatePayrollExcel(
     );
   }
 
-  // ══════════════ SUMMARY TABLE AT COLUMN Z ══════════════
-  const COL_SUMMARY_START = 25; // Column Z (0-indexed)
-  const COL_SUMMARY_NAME = COL_SUMMARY_START;
-  const COL_SUMMARY_T1 = COL_SUMMARY_START + 1;
-  const COL_SUMMARY_T2 = COL_SUMMARY_START + 2;
-  const COL_SUMMARY_TOTAL = COL_SUMMARY_START + 3;
+  // ══════════════ CREATE SUMMARY SHEET ("Resumo") ══════════════
+  const wsSummaryData: any[][] = [
+    ["", "", "", ""],
+    ["", "", "", ""],
+    ["", "", "", ""],
+  ];
+  const wsSummary = XLSX.utils.aoa_to_sheet(wsSummaryData);
 
-  // Title row (row 5, 0-indexed)
-  const summaryTitleRow = 5;
-  const summaryAddr0 = XLSX.utils.encode_cell({ r: summaryTitleRow, c: COL_SUMMARY_NAME });
-  ws[summaryAddr0] = { v: "RESUMO DE PAGAMENTOS", t: "s" };
-  ws[summaryAddr0].s = { font: boldFontLg, fill: lightBlueFill, alignment: centerAlign, border: borderThin };
-  if (!ws["!merges"]) ws["!merges"] = [];
-  ws["!merges"].push({ s: { r: summaryTitleRow, c: COL_SUMMARY_NAME }, e: { r: summaryTitleRow, c: COL_SUMMARY_TOTAL } });
+  const COL_S_NAME = 0;
+  const COL_S_T1 = 1;
+  const COL_S_T2 = 2;
+  const COL_S_TOTAL = 3;
 
-  // Header row (row 6, 0-indexed)
-  const summaryHeaderRow = 6;
-  const summaryHeaders = ["Motorista", "Tabela 1", "Tabela 2", "Total"];
-  summaryHeaders.forEach((h, i) => {
-    const addr = XLSX.utils.encode_cell({ r: summaryHeaderRow, c: COL_SUMMARY_START + i });
-    ws[addr] = { v: h, t: "s" };
-    ws[addr].s = { font: boldFont, fill: yellowFill, alignment: centerAlign, border: borderThin };
+  // Title row (Resumo de Pagamentos)
+  const sTitleRow = 1;
+  const sAddr0 = XLSX.utils.encode_cell({ r: sTitleRow, c: COL_S_NAME });
+  wsSummary[sAddr0] = { v: "RESUMO DE PAGAMENTOS", t: "s" };
+  wsSummary[sAddr0].s = { font: boldFontLg, fill: lightBlueFill, alignment: centerAlign, border: borderThin };
+  if (!wsSummary["!merges"]) wsSummary["!merges"] = [];
+  wsSummary["!merges"].push({ s: { r: sTitleRow, c: COL_S_NAME }, e: { r: sTitleRow, c: COL_S_TOTAL } });
+
+  // Header row
+  const sHeaderRow = 2;
+  const sHeaders = ["Motorista", "Tabela 1", "Tabela 2", "Total"];
+  sHeaders.forEach((h, i) => {
+    const addr = XLSX.utils.encode_cell({ r: sHeaderRow, c: COL_S_NAME + i });
+    wsSummary[addr] = { v: h, t: "s" };
+    wsSummary[addr].s = { font: boldFont, fill: yellowFill, alignment: centerAlign, border: borderThin };
   });
 
-  // Data rows — one per sorted driver
-  const summaryDataStartRow = 7;
+  // Data rows
+  const sDataStartRow = 3;
   sortedData.forEach((d, idx) => {
-    const r = summaryDataStartRow + idx;
+    const r = sDataStartRow + idx;
     const excelRow = r + 1;
 
     // Name
-    const nameAddr = XLSX.utils.encode_cell({ r, c: COL_SUMMARY_NAME });
-    ws[nameAddr] = { v: d.driver.name, t: "s" };
-    ws[nameAddr].s = { font: { sz: 11 }, alignment: leftAlign, border: borderThin };
+    const nameAddr = XLSX.utils.encode_cell({ r, c: COL_S_NAME });
+    wsSummary[nameAddr] = { v: d.driver.name, t: "s" };
+    wsSummary[nameAddr].s = { font: { sz: 11 }, alignment: leftAlign, border: borderThin };
 
-    // Tabela 1 — reference TOTAL GERAL from main table for this driver
-    const mainDataRow = rowTracker.dataStartRow + idx + 1; // Excel 1-indexed
-    setCellFormula(ws, r, COL_SUMMARY_T1, `${colLetter(COL_TOTAL_GERAL)}${mainDataRow}`, {
+    // Tabela 1 — cross-sheet reference
+    const mainDataRow = rowTracker.dataStartRow + idx + 1;
+    setCellFormula(wsSummary, r, COL_S_T1, `'Fechamento'!${colLetter(COL_TOTAL_GERAL)}${mainDataRow}`, {
       font: { sz: 11 }, alignment: centerAlign, border: borderThin,
     });
 
-    // Tabela 2 — reference TOTAL GERAL from min packages table for this driver
-    const minDataRow = rowTracker.minDataStartRow + idx + 1; // Excel 1-indexed
-    setCellFormula(ws, r, COL_SUMMARY_T2, `${colLetter(COL_TOTAL_GERAL)}${minDataRow}`, {
+    // Tabela 2 — cross-sheet reference
+    const minDataRow = rowTracker.minDataStartRow + idx + 1;
+    setCellFormula(wsSummary, r, COL_S_T2, `'Fechamento'!${colLetter(COL_TOTAL_GERAL)}${minDataRow}`, {
       font: { sz: 11 }, alignment: centerAlign, border: borderThin,
     });
 
     // Total = T1 + T2
-    const t1Cell = `${colLetter(COL_SUMMARY_T1)}${excelRow}`;
-    const t2Cell = `${colLetter(COL_SUMMARY_T2)}${excelRow}`;
-    setCellFormula(ws, r, COL_SUMMARY_TOTAL, `${t1Cell}+${t2Cell}`, {
+    const t1Cell = `${colLetter(COL_S_T1)}${excelRow}`;
+    const t2Cell = `${colLetter(COL_S_T2)}${excelRow}`;
+    setCellFormula(wsSummary, r, COL_S_TOTAL, `${t1Cell}+${t2Cell}`, {
       font: { sz: 11, bold: true }, alignment: centerAlign, border: borderThin,
     });
   });
 
-  // Totals row
-  const summaryTotalRow = summaryDataStartRow + sortedData.length;
-  const summaryTotalExcel = summaryTotalRow + 1;
-  const summaryStartExcel = summaryDataStartRow + 1;
-  const summaryEndExcel = summaryTotalRow; // last data row in Excel 1-indexed
+  // Totals row for summary
+  const sTotalRow = sDataStartRow + sortedData.length;
+  const sTotalExcel = sTotalRow + 1;
+  const sStartExcel = sDataStartRow + 1;
+  const sEndExcel = sTotalRow;
 
-  const totalLabelAddr = XLSX.utils.encode_cell({ r: summaryTotalRow, c: COL_SUMMARY_NAME });
-  ws[totalLabelAddr] = { v: "TOTAL", t: "s" };
-  ws[totalLabelAddr].s = { font: boldFont, fill: greenFill, alignment: centerAlign, border: borderThin };
+  const sTotalLabelAddr = XLSX.utils.encode_cell({ r: sTotalRow, c: COL_S_NAME });
+  wsSummary[sTotalLabelAddr] = { v: "TOTAL", t: "s" };
+  wsSummary[sTotalLabelAddr].s = { font: boldFont, fill: greenFill, alignment: centerAlign, border: borderThin };
 
-  [COL_SUMMARY_T1, COL_SUMMARY_T2, COL_SUMMARY_TOTAL].forEach((col) => {
+  [COL_S_T1, COL_S_T2, COL_S_TOTAL].forEach((col) => {
     setCellFormula(
-      ws,
-      summaryTotalRow,
+      wsSummary,
+      sTotalRow,
       col,
-      `SUM(${colLetter(col)}${summaryStartExcel}:${colLetter(col)}${summaryEndExcel})`,
+      `SUM(${colLetter(col)}${sStartExcel}:${colLetter(col)}${sEndExcel})`,
       { font: boldFont, fill: greenFill, alignment: centerAlign, border: borderThin },
     );
   });
 
-  // Currency format for summary columns
-  const currencyFmt = '"R$" #,##0.00';
-  for (let r = summaryDataStartRow; r <= summaryTotalRow; r++) {
-    for (const col of [COL_SUMMARY_T1, COL_SUMMARY_T2, COL_SUMMARY_TOTAL]) {
+  // Apply currency formatting to summary sheet
+  for (let r = sDataStartRow; r <= sTotalRow; r++) {
+    for (const col of [COL_S_T1, COL_S_T2, COL_S_TOTAL]) {
       const addr = XLSX.utils.encode_cell({ r, c: col });
-      if (ws[addr]) {
-        ws[addr].z = currencyFmt;
-        ws[addr].s = { ...(ws[addr].s || {}), numFmt: currencyFmt };
+      if (wsSummary[addr]) {
+        wsSummary[addr].z = currencyFmt;
+        wsSummary[addr].s = { ...(wsSummary[addr].s || {}), numFmt: currencyFmt };
       }
     }
   }
 
-  // Set column widths for summary columns
-  if (!ws["!cols"]) ws["!cols"] = colWidths;
-  while (ws["!cols"].length <= COL_SUMMARY_TOTAL) {
-    ws["!cols"].push({ wch: 8 });
-  }
-  ws["!cols"][COL_SUMMARY_NAME] = { wch: 35 };
-  ws["!cols"][COL_SUMMARY_T1] = { wch: 18 };
-  ws["!cols"][COL_SUMMARY_T2] = { wch: 18 };
-  ws["!cols"][COL_SUMMARY_TOTAL] = { wch: 18 };
-
-  // Update sheet range to include summary columns
-  const lastSummaryRow = summaryTotalRow;
-  const currentRange = XLSX.utils.decode_range(ws["!ref"] || "A1");
-  if (COL_SUMMARY_TOTAL > currentRange.e.c) currentRange.e.c = COL_SUMMARY_TOTAL;
-  if (lastSummaryRow > currentRange.e.r) currentRange.e.r = lastSummaryRow;
-  ws["!ref"] = XLSX.utils.encode_range(currentRange);
+  // Set widths for summary sheet
+  wsSummary["!cols"] = [
+    { wch: 35 }, // Nome
+    { wch: 18 }, // Tabela 1
+    { wch: 18 }, // Tabela 2
+    { wch: 18 }, // Total
+  ];
 
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Fechamento");
+  XLSX.utils.book_append_sheet(wb, wsSummary, "Resumo");
 
   // ══════════════ SAVE FILE ══════════════
   const fileName = `folha_pagamento_${unitName.replace(/\s+/g, "_")}_${format(startDate, "dd-MM-yyyy")}_a_${format(endDate, "dd-MM-yyyy")}.xlsx`;

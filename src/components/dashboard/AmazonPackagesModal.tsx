@@ -181,9 +181,19 @@ const AmazonPackagesModal = () => {
               <Package className="h-5 w-5" />
               Pacotes Enviados pela Amazon
             </DialogTitle>
-            <DialogDescription>
-              A Amazon enviou o relatório de pacotes enviados para nossa unidade? 
-              Por favor, preencha as quantidades dos dias anteriores para nosso balanço.
+            <DialogDescription className="space-y-2">
+              <p>
+                A Amazon enviou o relatório de pacotes enviados para nossa unidade? 
+                <a 
+                  href={`https://logistics.amazon.com.br/performance?pageId=station_dsp_metrics&station=${(unitSession?.name || "").split(" — ")[1] || ""}&companyId=b29e6434-b2c8-4762-a224-a1411126ca29&tabId=station-dsp-metrics-daily-tab&timeFrame=Daily&to=${format(subDays(new Date(), 1), "yyyy-MM-dd")}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mx-1 text-orange-600 font-bold underline hover:text-orange-700 decoration-orange-600/30"
+                >
+                  Clique aqui
+                </a>
+                para conferir no portal a quantidade dos dias anteriores para o nosso balanço.
+              </p>
             </DialogDescription>
           </DialogHeader>
 

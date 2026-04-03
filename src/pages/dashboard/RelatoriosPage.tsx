@@ -717,13 +717,15 @@ const RelatoriosPage = () => {
         let minPkgApplied = false;
         let minPkgDifference: number | undefined = undefined;
         
-        let completed = tbrCount - returns; // actual completed
+        let completed = tbrCount - returns; // actual completed físico
         
         if (minPkg > 0 && tbrCount < minPkg) {
-          if (date >= "2026-04-03") {
+          // A partir de 01/04/2026, usamos a nova lógica de separar Real e Diferença
+          if (date >= "2026-04-01") {
             minPkgDifference = minPkg - tbrCount;
             minPkgApplied = true;
           } else {
+            // Lógica antiga (legado) que força o valor no tbrCount
             tbrCount = minPkg;
             completed = tbrCount - returns;
             minPkgApplied = true;

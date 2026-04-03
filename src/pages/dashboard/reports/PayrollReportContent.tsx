@@ -479,11 +479,14 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <table style={{ width: "100%", borderCollapse: "collapse" }}>
                   <thead>
                     <tr>
-                      <th style={headerCellStyle({ textAlign: "left", width: "100px" })}>Data</th>
+                      <th style={headerCellStyle({ textAlign: "left", width: "85px" })}>Data</th>
                       <th style={headerCellStyle()}>Login</th>
-                      <th style={headerCellStyle()}>Pacotes</th>
+                      <th style={headerCellStyle()}>TBRs</th>
                       <th style={headerCellStyle()}>Retornos</th>
                       <th style={headerCellStyle()}>Concluídos</th>
+                      <th style={headerCellStyle()}>Adicional</th>
+                      <th style={headerCellStyle()}>Valor</th>
+                      <th style={headerCellStyle()}>Valor+</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -505,6 +508,13 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                             <td style={cellStyle({ background: altRowBg(idx) })}>{day.tbrCount}</td>
                             <td style={cellStyle({ background: day.returns > 0 ? "#fee2e2" : altRowBg(idx) })}>{day.returns}</td>
                             <td style={cellStyle({ background: completed > 0 ? COLORS.green : altRowBg(idx), fontWeight: 600 })}>{completed}</td>
+                            <td style={cellStyle({ background: (day as any).minPkgDifference ? "#fff7ed" : altRowBg(idx), color: (day as any).minPkgDifference ? "#c2410c" : undefined, fontWeight: 600 })}>
+                              {(day as any).minPkgDifference ? `+${(day as any).minPkgDifference}` : "—"}
+                            </td>
+                            <td style={cellStyle({ background: altRowBg(idx) })}>{formatCurrency(completed * tbrVal)}</td>
+                            <td style={cellStyle({ background: (day as any).minPkgDifference ? "#fff7ed" : altRowBg(idx), color: (day as any).minPkgDifference ? "#16a34a" : undefined, fontWeight: 600 })}>
+                              {(day as any).minPkgDifference ? `+${formatCurrency((day as any).minPkgDifference * tbrVal)}` : "—"}
+                            </td>
                           </tr>
                         );
                       })
@@ -518,6 +528,19 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                       <td style={cellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{d.totalTbrs}</td>
                       <td style={cellStyle({ fontWeight: 700, background: "#fee2e2" })}>{d.totalReturns}</td>
                       <td style={cellStyle({ fontWeight: 800, background: COLORS.teal, color: COLORS.white })}>{d.totalCompleted}</td>
+                      <td style={cellStyle({ fontWeight: 700, background: "#fff7ed" })}>
+                        {(() => {
+                          const totalDiff = d.days.reduce((sum, day) => sum + ((day as any).minPkgDifference || 0), 0);
+                          return totalDiff > 0 ? `+${totalDiff}` : "—";
+                        })()}
+                      </td>
+                      <td style={cellStyle({ fontWeight: 700, background: COLORS.tealLight })}>{formatCurrency(d.totalCompleted * tbrVal)}</td>
+                      <td style={cellStyle({ fontWeight: 700, background: "#fff7ed" })}>
+                        {(() => {
+                          const totalDiffVal = d.days.reduce((sum, day) => sum + (((day as any).minPkgDifference || 0) * tbrVal), 0);
+                          return totalDiffVal > 0 ? `+${formatCurrency(totalDiffVal)}` : "—";
+                        })()}
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -540,17 +563,19 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                 <table style={{ width: "100%", borderCollapse: "collapse", maxWidth: "400px" }}>
                   <tbody>
                     <tr>
-                      <td style={cellStyle({ textAlign: "left", fontWeight: 600 })}>Total Pacotes Concluídos</td>
-                      <td style={cellStyle({ fontWeight: 700 })}>{d.totalCompleted}</td>
+                      <td style={cellStyle({ textAlign: "left", fontWeight: 600 })}>Subtotal Pacotes Reais</td>
+                      <td style={cellStyle({ fontWeight: 700 })}>{formatCurrency(d.totalCompleted * tbrVal)}</td>
                     </tr>
-                    <tr>
-                      <td style={cellStyle({ textAlign: "left", fontWeight: 600, background: COLORS.grayLight })}>Valor por Pacote</td>
-                      <td style={cellStyle({ background: COLORS.grayLight })}>{formatCurrency(tbrVal)}</td>
-                    </tr>
-                    <tr>
-                      <td style={cellStyle({ textAlign: "left", fontWeight: 600 })}>Subtotal (Pacotes × Valor)</td>
-                      <td style={cellStyle({ fontWeight: 700 })}>{formatCurrency(subtotal)}</td>
-                    </tr>
+                    {(() => {
+                      const totalDiffVal = d.days.reduce((sum, day) => sum + (((day as any).minPkgDifference || 0) * tbrVal), 0);
+                      if (totalDiffVal <= 0) return null;
+                      return (
+                        <tr>
+                          <td style={cellStyle({ textAlign: "left", fontWeight: 600, background: "#fff7ed" })}>Ajuste Mínimo Garantido</td>
+                          <td style={cellStyle({ background: "#fff7ed", color: "#c2410c", fontWeight: 700 })}>+{formatCurrency(totalDiffVal)}</td>
+                        </tr>
+                      );
+                    })()}
                     <tr>
                       <td style={cellStyle({ textAlign: "left", fontWeight: 600, background: "#fee2e2" })}>Descontos (DNR)</td>
                       <td style={cellStyle({ background: "#fee2e2", color: (d.dnrDiscount ?? 0) > 0 ? "#dc2626" : undefined, fontWeight: 600 })}>
