@@ -478,7 +478,7 @@ const RelatoriosPage = () => {
     const rideIds = rides.map(r => r.id);
 
     const { fetchAllRowsWithIn } = await import("@/lib/supabase-helpers");
-    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes, dnrRes, reativoRes] = await Promise.all([
+    const [driversRes, allPisoRaw, allPs, allRto, customValuesRes, bonusRes, minPkgRes, fixedValuesRes, dnrRes, reativoRes, amazonPackagesRes] = await Promise.all([
       supabase.from("drivers_public").select("id, name, cpf, car_plate, car_model, car_color").in("id", driverIds),
       fetchAllRowsWithIn<{ ride_id: string; tbr_code: string; reason: string | null }>(
         (ids) => (from, to) => supabase.from("piso_entries").select("ride_id, tbr_code, reason").in("ride_id", ids).order("id").range(from, to),
