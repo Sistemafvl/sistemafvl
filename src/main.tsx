@@ -3,7 +3,7 @@ import { ThemeProvider } from "next-themes";
 import App from "./App.tsx";
 import "./index.css";
 
-// Auto-clear cache once per day on first load
+// Daily maintenance: clear SW, Cache API, and IndexedDB once per day
 (async () => {
   const today = new Date().toISOString().slice(0, 10);
   const lastClear = localStorage.getItem("fvl-last-cache-clear");
@@ -18,10 +18,21 @@ import "./index.css";
       const keys = await caches.keys();
       for (const k of keys) await caches.delete(k);
     }
+    // Clear IndexedDB
+    try {
+      const dbs = await indexedDB.databases?.();
+      if (dbs) {
+        for (const db of dbs) { if (db.name) indexedDB.deleteDatabase(db.name); }
+      } else {
+        indexedDB.deleteDatabase("fvl-offline");
+      }
+    } catch {
+      indexedDB.deleteDatabase("fvl-offline");
+    }
+
     localStorage.setItem("fvl-last-cache-clear", today);
     console.log("[cache] Daily auto-clear completed:", today);
 
-    // If there was a previous clear date, reload to ensure fresh assets
     if (lastClear) {
       window.location.reload();
       return;
