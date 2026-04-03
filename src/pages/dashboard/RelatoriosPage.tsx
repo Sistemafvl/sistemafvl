@@ -1102,7 +1102,7 @@ const RelatoriosPage = () => {
         open={formatChoiceOpen}
         onClose={() => { if (!isProcessingModal) { setFormatChoiceOpen(false); setFormatChoiceAction(null); } }}
         loading={isProcessingModal}
-        options={["pdf_resumo", "excel", "pdf_completo"]}
+        options={["pdf_completo", "excel"]}
         onChoose={async (fmt) => {
           setIsProcessingModal(true);
           try {

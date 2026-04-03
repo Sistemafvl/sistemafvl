@@ -237,8 +237,7 @@ export function generatePayrollExcel(
     const vehicleType = tbrVal <= 2.5 ? "MOTO" : "CARRO";
     const descontos = d.dnrDiscount ?? 0;
     const adicionalManual = (d.bonus ?? 0) + (d.reativoTotal ?? 0);
-    const totalDiffVal = d.days.reduce((sum, day) => sum + (((day as any).minPkgDifference || 0) * tbrVal), 0);
-    const adicionalTotal = adicionalManual + totalDiffVal;
+    const adicionalTotal = adicionalManual;
 
     const dailyValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
@@ -323,8 +322,8 @@ export function generatePayrollExcel(
     
     const minPkgValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
-      if (day?.minPkgDifference) return day.minPkgDifference;
-      if (day?.minPkgApplied && !day.minPkgDifference) return day.completed;
+      // Solo mostramos la DIFERENCIA (ajuste) en la Tabla 2
+      if (day?.minPkgDifference && day.minPkgDifference > 0) return day.minPkgDifference;
       return "";
     });
 
