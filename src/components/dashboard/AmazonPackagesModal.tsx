@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { Loader2, Package, AlertCircle, X } from "lucide-react";
-import { format, subDays, startOfDay, parseISO } from "date-fns";
+import { format, subDays, addDays, startOfDay, getDate, getMonth, getYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface PendingDate {
@@ -25,9 +25,6 @@ const AmazonPackagesModal = () => {
   const [dates, setDates] = useState<PendingDate[]>([]);
   const [dismissed, setDismissed] = useState(false);
 
-  // We look back 7 days, excluding today (since we report the previous day's packages)
-  const LOOKBACK_DAYS = 7;
-
   useEffect(() => {
     if (!unitId || unitSession?.sessionType === "matriz") return;
 
@@ -35,17 +32,50 @@ const AmazonPackagesModal = () => {
       setLoading(true);
       
       const today = startOfDay(new Date());
+      const currentDay = getDate(today);
+      const currentMonth = getMonth(today);
+      const currentYear = getYear(today);
+
+      let qStart: Date;
+      let qEnd: Date;
+
+      if (currentDay === 1) {
+        // Dia 1: Mostra a quinzena anterior inteira (16 ao fim do mês anterior)
+        const prevMonthDate = subDays(today, 1);
+        qStart = new Date(getYear(prevMonthDate), getMonth(prevMonthDate), 16);
+        qEnd = prevMonthDate;
+      } else if (currentDay === 16) {
+        // Dia 16: Mostra a quinzena anterior inteira (1 ao 15 do mês atual)
+        qStart = new Date(currentYear, currentMonth, 1);
+        qEnd = new Date(currentYear, currentMonth, 15);
+      } else if (currentDay > 1 && currentDay < 16) {
+        // Quinzena atual 1 a 15 (até ontem)
+        qStart = new Date(currentYear, currentMonth, 1);
+        qEnd = subDays(today, 1);
+      } else {
+        // Quinzena atual 16 ao fim do mês (até ontem)
+        qStart = new Date(currentYear, currentMonth, 16);
+        qEnd = subDays(today, 1);
+      }
+
       const dateList: PendingDate[] = [];
-      
-      // Generate the last 7 days
-      for (let i = 1; i <= LOOKBACK_DAYS; i++) {
-        const d = subDays(today, i);
+      let iterDate = qStart;
+      while (iterDate <= qEnd) {
         dateList.push({
-          date: format(d, "yyyy-MM-dd"),
-          formattedText: format(d, "dd/MM (EEEE)", { locale: ptBR }),
+          date: format(iterDate, "yyyy-MM-dd"),
+          formattedText: format(iterDate, "dd/MM (EEEE)", { locale: ptBR }),
           value: "",
           isFilled: false
         });
+        iterDate = addDays(iterDate, 1);
+      }
+
+      // Ordena de forma decrescente para mostrar os mais recentes primeiro
+      dateList.sort((a, b) => b.date.localeCompare(a.date));
+
+      if (dateList.length === 0) {
+        setLoading(false);
+        return;
       }
 
       const minDate = dateList[dateList.length - 1].date;
