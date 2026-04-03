@@ -37,7 +37,7 @@ const FinanceiroPage = () => {
   const [reports, setReports] = useState<PayrollReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedReport, setSelectedReport] = useState<PayrollReport | null>(null);
-  const [invoices, setInvoices] = useState<Record<string, { file_url: string; file_name: string } | null>>({});
+  const [invoices, setInvoices] = useState<Record<string, { common?: any; minimum?: any }>>({});
   const [allInvoiceCounts, setAllInvoiceCounts] = useState<Record<string, number>>({});
   const [searchFilter, setSearchFilter] = useState("");
   const [filterStart, setFilterStart] = useState<Date | undefined>(undefined);
@@ -103,9 +103,17 @@ const FinanceiroPage = () => {
       .from("driver_invoices" as any)
       .select("driver_id, file_url, file_name")
       .eq("payroll_report_id", reportId);
-    const map: Record<string, { file_url: string; file_name: string } | null> = {};
+    
+    const map: Record<string, { common?: any; minimum?: any }> = {};
     ((data as any[]) ?? []).forEach((inv: any) => {
-      if (inv.file_url) map[inv.driver_id] = { file_url: inv.file_url, file_name: inv.file_name };
+      if (!inv.file_url) return;
+      const existing = map[inv.driver_id] || {};
+      if (inv.file_name?.startsWith("MIN_")) {
+        existing.minimum = inv;
+      } else {
+        existing.common = inv;
+      }
+      map[inv.driver_id] = existing;
     });
     setInvoices(map);
   };
@@ -115,10 +123,10 @@ const FinanceiroPage = () => {
     loadInvoices(report.id);
   };
 
-  const handleDownload = async (driverId: string) => {
-    const inv = invoices[driverId];
+  const handleDownload = async (driverId: string, inv: any) => {
     if (!inv) return;
-    setDownloading(driverId);
+    const downloadKey = `${driverId}_${inv.file_name?.startsWith("MIN_") ? "min" : "com"}`;
+    setDownloading(downloadKey);
     try {
       let storagePath = inv.file_url;
       if (storagePath.startsWith("http")) {
@@ -154,40 +162,50 @@ const FinanceiroPage = () => {
       const driverEntries = selectedReport.report_data as any[];
       let addedFilesCount = 0;
       
-      const downloadPromises = driverEntries.map(async (d) => {
-        const inv = invoices[d.driver?.id];
-        if (!inv) return;
+      const downloadTasks: Promise<void>[] = [];
 
-        let storagePath = inv.file_url;
-        if (storagePath.startsWith("http")) {
-          const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
-          if (match) {
-            storagePath = decodeURIComponent(match[1]);
-          } else {
-            return;
-          }
-        }
+      driverEntries.forEach((d) => {
+        const invs = invoices[d.driver?.id];
+        if (!invs) return;
 
-        const { data, error } = await supabase.functions.invoke("get-signed-url", {
-          body: { bucket: "driver-documents", path: storagePath, driver_id: d.driver?.id },
+        ["common", "minimum"].forEach((type) => {
+          const inv = (invs as any)[type];
+          if (!inv) return;
+
+          downloadTasks.push((async () => {
+            let storagePath = inv.file_url;
+            if (storagePath.startsWith("http")) {
+              const match = storagePath.match(/driver-documents\/(.+?)(\?|$)/);
+              if (match) {
+                storagePath = decodeURIComponent(match[1]);
+              } else {
+                return;
+              }
+            }
+
+            const { data, error } = await supabase.functions.invoke("get-signed-url", {
+              body: { bucket: "driver-documents", path: storagePath, driver_id: d.driver?.id },
+            });
+
+            if (data?.signedUrl) {
+              try {
+                const response = await fetch(data.signedUrl);
+                if (!response.ok) throw new Error("Fetch failed");
+                const blob = await response.blob();
+                const cleanName = d.driver?.name?.replace(/[^a-z0-9]/gi, '_') || "motorista";
+                const typeLabel = type === "minimum" ? "NF_Minimo" : "NF_Comum";
+                const fileName = `${cleanName}_${typeLabel}_${inv.file_name?.replace(/^(MIN_|COM_)/, "")}`;
+                zip.file(fileName, blob);
+                addedFilesCount++;
+              } catch (fetchErr) {
+                console.error(`Failed to fetch ${type} invoice for ${d.driver?.name}:`, fetchErr);
+              }
+            }
+          })());
         });
-
-        if (data?.signedUrl) {
-          try {
-            const response = await fetch(data.signedUrl);
-            if (!response.ok) throw new Error("Fetch failed");
-            const blob = await response.blob();
-            const cleanName = d.driver?.name?.replace(/[^a-z0-9]/gi, '_') || "motorista";
-            const fileName = `${cleanName}_${inv.file_name}`;
-            zip.file(fileName, blob);
-            addedFilesCount++;
-          } catch (fetchErr) {
-            console.error(`Failed to fetch invoice for ${d.driver?.name}:`, fetchErr);
-          }
-        }
       });
 
-      await Promise.all(downloadPromises);
+      await Promise.all(downloadTasks);
 
       if (addedFilesCount === 0) {
         toast({ title: "Aviso", description: "Nenhuma NF encontrada para baixar.", variant: "destructive" });
@@ -392,31 +410,79 @@ const FinanceiroPage = () => {
                     {d.dnrDiscount > 0 && <div className="text-destructive">DNR: <strong>-{formatCurrency(d.dnrDiscount)}</strong></div>}
                     {d.bonus > 0 && <div className="text-primary">Bônus: <strong>+{formatCurrency(d.bonus)}</strong></div>}
                   </div>
-                  <div className="flex items-center gap-2 pt-2 border-t">
-                    {inv ? (
-                      <>
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                        <span className="text-xs text-green-600 font-semibold">NF Anexada</span>
-                        <Button 
-                          variant="outline" 
-                          size="sm" 
-                          className="ml-auto"
-                          disabled={downloading === d.driver?.id}
-                          onClick={() => handleDownload(d.driver?.id)}
-                        >
-                          {downloading === d.driver?.id ? (
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                          ) : (
-                            <Download className="h-3 w-3 mr-1" />
-                          )}
-                          Baixar
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Clock className="h-4 w-4 text-yellow-500" />
-                        <span className="text-xs text-yellow-600 font-semibold">NF Pendente</span>
-                      </>
+                  <div className="flex flex-col gap-2 pt-2 border-t mt-auto">
+                    {/* Common Invoice */}
+                    {((d.days?.reduce((s: number, day: any) => {
+                      const tbrVal = d.tbrValueUsed || 0;
+                      if (day.completed !== undefined) return s + (day.completed * tbrVal);
+                      return s + (day.minPkgApplied ? 0 : day.value);
+                    }, 0) + (d.bonus || 0) + (d.reativoTotal || 0)) > 0) && (
+                      <div className="flex items-center gap-2">
+                        {inv?.common ? (
+                          <>
+                            <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                            <span className="text-[10px] text-green-600 font-bold truncate">NF Comum</span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="ml-auto h-6 text-[10px] px-2"
+                              disabled={downloading === `${d.driver?.id}_com`}
+                              onClick={() => handleDownload(d.driver?.id, inv.common)}
+                            >
+                              {downloading === `${d.driver?.id}_com` ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Baixar
+                                </>
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="h-3 w-3 text-yellow-500 shrink-0" />
+                            <span className="text-[10px] text-yellow-600 font-bold">NF Comum Pendente</span>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Minimum Invoice */}
+                    {((d.days?.reduce((s: number, day: any) => {
+                      const tbrVal = d.tbrValueUsed || 0;
+                      if (day.minPkgDifference !== undefined) return s + (day.minPkgDifference * tbrVal);
+                      return s + (day.minPkgApplied ? day.value : 0);
+                    }, 0)) > 0) && (
+                      <div className="flex items-center gap-2">
+                        {inv?.minimum ? (
+                          <>
+                            <CheckCircle className="h-3 w-3 text-green-500 shrink-0" />
+                            <span className="text-[10px] text-green-600 font-bold truncate">NF Mínimo</span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="ml-auto h-6 text-[10px] px-2"
+                              disabled={downloading === `${d.driver?.id}_min`}
+                              onClick={() => handleDownload(d.driver?.id, inv.minimum)}
+                            >
+                              {downloading === `${d.driver?.id}_min` ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Download className="h-3 w-3 mr-1" />
+                                  Baixar
+                                </>
+                              )}
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Clock className="h-3 w-3 text-yellow-500 shrink-0" />
+                            <span className="text-[10px] text-yellow-600 font-bold">NF Mínimo Pendente</span>
+                          </>
+                        )}
+                      </div>
                     )}
                   </div>
                 </CardContent>

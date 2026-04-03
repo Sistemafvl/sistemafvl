@@ -96,8 +96,25 @@ const DriverRecebiveis = () => {
         const invs = invoiceMap.get(r.id);
         
         // Calculate split totals
-        const totalCommon = myData.days.reduce((s: number, day: any) => s + (day.minPkgApplied ? 0 : day.value), 0);
-        const totalMinimum = myData.days.reduce((s: number, day: any) => s + (day.minPkgApplied ? day.value : 0), 0);
+        const totalCommon = myData.days.reduce((s: number, day: any) => {
+          const tbrVal = myData.tbrValueUsed || 0;
+          // New logic (from 01/04/2026): completed is physical, minPkgDifference is adjustment
+          if (day.completed !== undefined) {
+             return s + (day.completed * tbrVal);
+          }
+          // Old logic: minPkgApplied meant the whole day was minimum
+          return s + (day.minPkgApplied ? 0 : day.value);
+        }, 0) + (myData.bonus || 0) + (myData.reativoTotal || 0);
+
+        const totalMinimum = myData.days.reduce((s: number, day: any) => {
+          const tbrVal = myData.tbrValueUsed || 0;
+          // New logic: minPkgDifference is the adjustment value to be shown in the second card
+          if (day.minPkgDifference !== undefined) {
+            return s + (day.minPkgDifference * tbrVal);
+          }
+          // Old logic: minPkgApplied meant the whole day was minimum
+          return s + (day.minPkgApplied ? day.value : 0);
+        }, 0);
 
         result.push({
           reportId: r.id,

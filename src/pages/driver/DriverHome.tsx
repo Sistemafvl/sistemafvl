@@ -68,9 +68,26 @@ const DriverHome = () => {
     fetchBd();
   }, [driverId]);
 
-  const [startDate, setStartDate] = useState(() => getBrazilTodayStr());
-  const [endDate, setEndDate] = useState(() => getBrazilTodayStr());
-  const [notifPermission, setNotifPermission] = useState(() => "Notification" in window ? Notification.permission : "granted");
+  const [startDate, setStartDate] = useState<string>(() => {
+    const br = getBrazilNow();
+    const day = br.getDate();
+    const year = br.getFullYear();
+    const month = String(br.getMonth() + 1).padStart(2, "0");
+    const qStartDay = day <= 15 ? "01" : "16";
+    return `${year}-${month}-${qStartDay}`;
+  });
+
+  const [endDate, setEndDate] = useState<string>(() => {
+    const br = getBrazilNow();
+    const day = br.getDate();
+    const year = br.getFullYear();
+    const month = String(br.getMonth() + 1).padStart(2, "0");
+    if (day <= 15) return `${year}-${month}-15`;
+    const lastDay = new Date(year, br.getMonth() + 1, 0).getDate();
+    return `${year}-${month}-${lastDay}`;
+  });
+
+  const [notifPermission, setNotifPermission] = useState<string>(() => "Notification" in window ? Notification.permission : "granted");
   const [rides, setRides] = useState<any[]>([]);
   const [tbrs, setTbrs] = useState<any[]>([]);
   const [pisoEntries, setPisoEntries] = useState<any[]>([]);
