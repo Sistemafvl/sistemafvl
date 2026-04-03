@@ -51,6 +51,7 @@ const RelatoriosPage = () => {
   const [tbrValue, setTbrValue] = useState(0);
   const [logoBase64, setLogoBase64] = useState("");
   const [minPackageDrivers, setMinPackageDrivers] = useState<MinPackageDriver[]>([]);
+  const [amazonPackages, setAmazonPackages] = useState<Record<string, number>>({});
   const payrollRef = useRef<HTMLDivElement>(null);
 
   // Daily summary state
@@ -507,7 +508,18 @@ const RelatoriosPage = () => {
         .eq("status", "active")
         .gte("activated_at", startDate.toISOString())
         .lte("activated_at", endDate.toISOString()),
+      supabase.from("amazon_daily_packages" as any)
+        .select("reference_date, package_count")
+        .eq("unit_id", unitId!)
+        .gte("reference_date", format(startDate, "yyyy-MM-dd"))
+        .lte("reference_date", format(endDate, "yyyy-MM-dd")),
     ]);
+
+    const amazonDict: Record<string, number> = {};
+    (amazonPackagesRes?.data || []).forEach((row: any) => {
+      amazonDict[row.reference_date] = row.package_count;
+    });
+    setAmazonPackages(amazonDict);
 
     const dnrData = dnrRes.data ?? [];
     const reativoData = reativoRes.data ?? [];
@@ -703,14 +715,26 @@ const RelatoriosPage = () => {
         const returns = netReturns.size;
         const minPkg = getMinPkgForDay(driverId, date);
         let minPkgApplied = false;
+        let minPkgDifference: number | undefined = undefined;
+        
+        let completed = tbrCount - returns; // actual completed
         
         if (minPkg > 0 && tbrCount < minPkg) {
-          tbrCount = minPkg;
-          minPkgApplied = true;
+          if (date >= "2026-04-03") {
+            minPkgDifference = minPkg - tbrCount;
+            minPkgApplied = true;
+          } else {
+            tbrCount = minPkg;
+            completed = tbrCount - returns;
+            minPkgApplied = true;
+          }
         }
-        const completed = tbrCount - returns;
+        
         const fixedKey = `${driverId}_${date}`;
         const fixedVal = fixedValueMap.get(fixedKey);
+        
+        const calculatedValue = (completed + (minPkgDifference || 0)) * tbrVal;
+        
         return { 
           date, 
           login: info.login, 
@@ -719,7 +743,8 @@ const RelatoriosPage = () => {
           returns, 
           completed, 
           minPkgApplied,
-          value: fixedVal !== undefined ? fixedVal : completed * tbrVal 
+          minPkgDifference,
+          value: fixedVal !== undefined ? fixedVal : calculatedValue 
         };
       });
 
@@ -900,7 +925,7 @@ const RelatoriosPage = () => {
         {payrollData && (
           <PayrollReportContent ref={payrollRef} data={payrollData} unitName={unitName} tbrValue={tbrValue}
             startDate={startDate} endDate={endDate} generatedBy={generatedBy} logoBase64={logoBase64} 
-            summaryOnly={summaryOnlyPdf}
+            summaryOnly={summaryOnlyPdf} amazonPackages={amazonPackages}
           />
         )}
         {dailyData && (
@@ -1064,14 +1089,14 @@ const RelatoriosPage = () => {
         open={formatChoiceOpen}
         onClose={() => { if (!isProcessingModal) { setFormatChoiceOpen(false); setFormatChoiceAction(null); } }}
         loading={isProcessingModal}
-        options={["pdf_resumo", "excel"]}
+        options={["pdf_resumo", "excel", "pdf_completo"]}
         onChoose={async (fmt) => {
           setIsProcessingModal(true);
           try {
             if (fmt === "excel" && payrollData) {
               // Wrap in timeout to allow loading spinner to render before heavy work
               await new Promise(r => setTimeout(r, 100));
-              generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers);
+              generatePayrollExcel(payrollData, unitName, startDate, endDate, generatedBy, minPackageDrivers, amazonPackages);
               toast({ title: "Excel gerado!", description: "Planilha baixada com sucesso." });
               if (formatChoiceAction === "gerar") {
                 await handleConfirmAndGenerateDB();

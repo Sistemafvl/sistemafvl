@@ -33,6 +33,7 @@ export interface DriverPayrollData {
     completed: number;
     value: number;
     minPkgApplied?: boolean;
+    minPkgDifference?: number;
     actualTbrCount?: number;
   }[];
   totalTbrs: number;
@@ -60,6 +61,7 @@ interface Props {
   generatedBy: string;
   logoBase64: string;
   summaryOnly?: boolean;
+  amazonPackages?: Record<string, number>;
 }
 
 // Compact cell styles for summary table
@@ -101,7 +103,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     const getVehicleType = (tbrVal: number) => (tbrVal <= 2.5 ? "MOTO" : "CARRO");
 
     const standardPackages = data.reduce((sum, d) => sum + d.days.filter(day => !day.minPkgApplied).reduce((a, b) => a + (b.completed || 0), 0), 0);
-    const minPackagesCount = data.reduce((sum, d) => sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => a + (b.completed || 0), 0), 0);
+    const minPackagesCount = data.reduce((sum, d) => sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => {
+      if (b.minPkgDifference) return a + b.minPkgDifference;
+      return a + (b.minPkgApplied && !b.minPkgDifference ? (b.completed || 0) : 0);
+    }, 0), 0);
     
     const standardValue = data.reduce((sum, d) => {
       const tbrVal = d.tbrValueUsed ?? tbrValue;
@@ -109,7 +114,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
     }, 0);
     const minPackagesValue = data.reduce((sum, d) => {
       const tbrVal = d.tbrValueUsed ?? tbrValue;
-      return sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => a + ((b.completed || 0) * tbrVal), 0);
+      return sum + d.days.filter(day => day.minPkgApplied).reduce((a, b) => {
+        const val = b.minPkgDifference ? b.minPkgDifference : (b.minPkgApplied && !b.minPkgDifference ? (b.completed || 0) : 0);
+        return a + (val * tbrVal);
+      }, 0);
     }, 0);
 
     return (
@@ -258,7 +266,8 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                       const tbrVal = d.tbrValueUsed ?? tbrValue;
                       const dayValues = allDates.map(date => {
                         const day = d.days.find(day => day.date === date);
-                        return day?.minPkgApplied ? day.completed : 0;
+                        if (day?.minPkgDifference) return day.minPkgDifference;
+                        return day?.minPkgApplied && !day.minPkgDifference ? day.completed : 0;
                       });
                       const rowTotalMin = dayValues.reduce((a, b) => a + b, 0);
                       if (rowTotalMin === 0) return null;
@@ -273,7 +282,10 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                           <td style={compactCellStyle({ background: altRowBg(idx) })}>{getVehicleType(tbrVal)}</td>
                           {allDates.map((date) => {
                             const day = d.days.find((day) => day.date === date);
-                            const val = day?.minPkgApplied ? day.completed : 0;
+                            let val = 0;
+                            if (day?.minPkgDifference) val = day.minPkgDifference;
+                            else if (day?.minPkgApplied && !day.minPkgDifference) val = day.completed ?? 0;
+                            
                             return (
                               <td key={date} style={compactCellStyle({ background: val > 0 ? COLORS.green : altRowBg(idx) })}>
                                 {val || "—"}
@@ -294,12 +306,18 @@ const PayrollReportContent = forwardRef<HTMLDivElement, Props>(
                       {allDates.map((date) => {
                         const dayTotal = data.reduce((s, d) => {
                           const day = d.days.find((day) => day.date === date);
-                          return s + (day?.minPkgApplied ? day.completed : 0);
+                          let v = 0;
+                          if (day?.minPkgDifference) v = day.minPkgDifference;
+                          else if (day?.minPkgApplied && !day.minPkgDifference) v = day.completed ?? 0;
+                          return s + v;
                         }, 0);
                         return <td key={date} style={compactCellStyle({ fontWeight: 700, background: "#dcfce7", color: "#15803d" })}>{dayTotal || "—"}</td>;
                       })}
                       <td style={compactCellStyle({ fontWeight: 800, background: "#15803d", color: COLORS.white })}>
-                        {data.reduce((s, d) => s + d.days.reduce((a, day) => a + (day.minPkgApplied ? day.completed : 0), 0), 0)}
+                        {data.reduce((s, d) => s + d.days.reduce((a, day) => {
+                          if (day.minPkgDifference) return a + day.minPkgDifference;
+                          return a + (day.minPkgApplied && !day.minPkgDifference ? (day.completed ?? 0) : 0);
+                        }, 0), 0)}
                       </td>
                       <td colSpan={5} style={compactCellStyle({ background: "#dcfce7" })}></td>
                     </tr>

@@ -117,6 +117,7 @@ export function generatePayrollExcel(
   endDate: Date,
   generatedBy?: string,
   minPackageDrivers?: MinPackageDriver[],
+  amazonPackages?: Record<string, number>,
 ) {
   const allDates = [
     ...new Set(data.flatMap((d) => d.days.map((day) => day.date))),
@@ -190,7 +191,6 @@ export function generatePayrollExcel(
 
   // ── Sort data alphabetically ──
   const sortedData = [...data].sort((a, b) => a.driver.name.localeCompare(b.driver.name));
-  const sortedMinPkgData = [...minPkgPayrollData].sort((a, b) => a.driver.name.localeCompare(b.driver.name));
 
   // ══════════════ BUILD MAIN WORKSHEET DATA ══════════════
   const wsData: (string | number)[][] = [];
@@ -238,7 +238,11 @@ export function generatePayrollExcel(
 
     const dailyValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
-      if (!day || day.minPkgApplied) return "";
+      if (!day) return "";
+      
+      // If minPkgDifference is present, it means this day SHOULD be shown in Table 1
+      if (day.minPkgApplied && !day.minPkgDifference) return "";
+      
       return day.completed ?? day.tbrCount - day.returns;
     });
 
@@ -272,18 +276,20 @@ export function generatePayrollExcel(
   ]);
   rowTracker.totalRow = wsData.length - 1;
 
-  // Total Pacotes Amazon (Laranja) - Moved to follow first table
+  const emptyColsEndTable1 = Array(5).fill("");
+
+  // Total Pacotes Amazon (Laranja)
   rowTracker.totalPacotesAmazonRow = wsData.length;
   wsData.push([
     "Total Pacotes Amazon",
     "",
     "",
-    ...allDates.map(() => ""),
+    ...allDates.map((date) => amazonPackages?.[date] ?? ""),
     "",
-    ...Array(5).fill("")
+    ...emptyColsEndTable1
   ]);
 
-  // Diferença (Rosa) - Moved to follow first table
+  // Diferença (Rosa)
   rowTracker.diferencaRow = wsData.length;
   wsData.push([
     "Diferença",
@@ -291,7 +297,7 @@ export function generatePayrollExcel(
     "",
     ...allDates.map(() => 0),
     0,
-    ...Array(5).fill("")
+    ...emptyColsEndTable1
   ]);
 
   wsData.push([]);
@@ -315,7 +321,8 @@ export function generatePayrollExcel(
     
     const minPkgValues = allDates.map((date) => {
       const day = d.days.find((day) => day.date === date);
-      if (day?.minPkgApplied) return day.completed;
+      if (day?.minPkgDifference) return day.minPkgDifference;
+      if (day?.minPkgApplied && !day.minPkgDifference) return day.completed;
       return "";
     });
 
@@ -416,7 +423,6 @@ export function generatePayrollExcel(
   wsData.push([]);
 
   // ── SECTION 4: EXPANDED SUMMARY ──
-  rowTracker.resumoHeaderRow = wsData.length;
   wsData.push([
     "RESUMO",
     "Qtd. Pacotes Entregues",
@@ -637,7 +643,7 @@ export function generatePayrollExcel(
   const diffRow = rowTracker.diferencaRow;
   const amazonExcel = amazonRow + 1;
   const diffExcel = diffRow + 1;
-  for (let c = COL_DATES_START; c <= COL_TOTAL; c++) {
+  for (let c = COL_DATES_START; c < COL_TOTAL; c++) {
     setCellFormula(
       ws,
       diffRow,

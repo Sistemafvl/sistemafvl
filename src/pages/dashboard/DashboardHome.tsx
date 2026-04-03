@@ -16,6 +16,7 @@ import { cn, isValidTbrCode, getBrazilFortnightRange } from "@/lib/utils";
 import DashboardMetrics from "@/components/dashboard/DashboardMetrics";
 import DashboardInsights from "@/components/dashboard/DashboardInsights";
 import InfoButton from "@/components/dashboard/InfoButton";
+import AmazonPackagesModal from "@/components/dashboard/AmazonPackagesModal";
 
 const MAX_TBR_LENGTH = 15;
 
@@ -727,6 +728,8 @@ const DashboardHome = () => {
           </div>
         </div>
       )}
+
+      <AmazonPackagesModal />
     </div>
   );
 };
