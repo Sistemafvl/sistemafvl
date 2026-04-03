@@ -1111,6 +1111,11 @@ export function generatePayrollExcel(
     { wch: 18 }, // Total
   ];
 
+  // Update sheet range for summary sheet
+  const sLastRow = sTotalRow;
+  const sRange = { s: { r: 0, c: 0 }, e: { r: sLastRow, c: COL_S_TOTAL } };
+  wsSummary["!ref"] = XLSX.utils.encode_range(sRange);
+
   // ══════════════ CREATE WORKBOOK ══════════════
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Fechamento");

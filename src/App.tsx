@@ -10,7 +10,6 @@ import PSPage from "./pages/dashboard/PSPage";
 import RTOPage from "./pages/dashboard/RTOPage";
 import ConfiguracoesPage from "./pages/dashboard/ConfiguracoesPage";
 import RetornoPisoPage from "./pages/dashboard/RetornoPisoPage";
-import OperacaoPage from "./pages/dashboard/OperacaoPage";
 import CiclosPage from "./pages/dashboard/CiclosPage";
 import RelatoriosPage from "./pages/dashboard/RelatoriosPage";
 import FeedbacksPage from "./pages/dashboard/FeedbacksPage";
@@ -84,7 +83,6 @@ const App = () => (
             <Route path="ps" element={<PSPage />} />
             <Route path="rto" element={<RTOPage />} />
             <Route path="retorno-piso" element={<RetornoPisoPage />} />
-            <Route path="operacao" element={<OperacaoPage />} />
             <Route path="ciclos" element={<CiclosPage />} />
             <Route path="relatorios" element={<RelatoriosPage />} />
             <Route path="feedbacks" element={<FeedbacksPage />} />

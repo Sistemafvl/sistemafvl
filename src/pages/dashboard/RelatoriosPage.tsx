@@ -1053,22 +1053,33 @@ const RelatoriosPage = () => {
                                 <TableHead className="text-xs h-8 px-2">Data</TableHead>
                                 <TableHead className="text-xs h-8 px-2">Login</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">TBRs</TableHead>
-                                
-                                <TableHead className="text-xs h-8 px-2 text-right">Concluídos</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right text-destructive">Ret.</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right">Concl.</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right text-orange-600">Adj.</TableHead>
                                 <TableHead className="text-xs h-8 px-2 text-right">Valor</TableHead>
+                                <TableHead className="text-xs h-8 px-2 text-right text-green-600">Total</TableHead>
                               </TableRow>
                             </TableHeader>
                             <TableBody>
-                              {d.days.map((day) => (
-                                <TableRow key={day.date}>
-                                  <TableCell className="text-xs px-2 py-1.5">{formatDateFullBR(day.date)}</TableCell>
-                                  <TableCell className="text-xs px-2 py-1.5">{day.login || "—"}</TableCell>
-                                  <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
-                                  
-                                  <TableCell className="text-xs px-2 py-1.5 text-right font-medium">{day.completed}</TableCell>
-                                  <TableCell className="text-xs px-2 py-1.5 text-right">{formatCurrency(day.value)}</TableCell>
-                                </TableRow>
-                              ))}
+                              {d.days.map((day) => {
+                                  const dayMinDiff = (day as any).minPkgDifference || 0;
+                                  const realVal = day.completed * (d.tbrValueUsed || 0);
+                                  const adjVal = dayMinDiff * (d.tbrValueUsed || 0);
+                                  return (
+                                    <TableRow key={day.date} className={dayMinDiff > 0 ? "bg-orange-50/30" : ""}>
+                                      <TableCell className="text-[10px] px-2 py-1.5">{formatDateFullBR(day.date)}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5">{day.login || "—"}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right font-medium">{day.tbrCount}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right text-destructive">{day.returns || 0}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right font-medium">{day.completed}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right text-orange-600">{dayMinDiff > 0 ? `+${dayMinDiff}` : "—"}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right">{formatCurrency(realVal)}</TableCell>
+                                      <TableCell className="text-[10px] px-2 py-1.5 text-right font-bold text-green-700">
+                                        {formatCurrency(realVal + adjVal)}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                             </TableBody>
                           </Table>
                         </div>

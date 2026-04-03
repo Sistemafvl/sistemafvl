@@ -61,7 +61,6 @@ const menuItems = [
 ];
 
 const managerMenuItems = [
-  { title: "Operação", url: "/dashboard/operacao", icon: Activity },
   { title: "Ciclos", url: "/dashboard/ciclos", icon: RefreshCw },
   { title: "Relatórios", url: "/dashboard/relatorios", icon: BarChart3 },
   { title: "Financeiro", url: "/dashboard/financeiro", icon: DollarSign },
