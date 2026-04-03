@@ -1,30 +1,47 @@
 
 
-## Plano: Adicionar 3 campos de foto no PS
+## Diagnóstico do Problema
 
-### Situação atual
-A tabela `ps_entries` possui apenas uma coluna `photo_url`. A interface permite capturar apenas 1 foto por vez.
+Identifiquei **duas causas raiz** para o sistema não atualizar automaticamente:
 
-### Solução
+### Problema 1: Preview do Lovable (área de criação)
+O preview roda em modo `DEV` (`import.meta.env.DEV === true`), o que desabilita TODO o sistema de verificação de versão (`if (IS_DEV) return;` na linha 42 do PWAAutoUpdate). Isso é uma limitação do ambiente de preview — **não existe `version.json` em dev**. Este problema é do próprio Lovable e não tem solução via código. A versão que aparece no preview é a do código atual do editor, não a publicada.
 
-#### 1. Migração SQL — adicionar `photo_url_2` e `photo_url_3`
-```sql
-ALTER TABLE public.ps_entries
-  ADD COLUMN photo_url_2 TEXT,
-  ADD COLUMN photo_url_3 TEXT;
-```
+### Problema 2: Dispositivos em produção não atualizam
+A lógica atual tem uma falha crítica: ela busca `version.json` e guarda o valor remoto como "baseline" na primeira verificação, depois só dispara atualização se o valor **mudar novamente**. Ou seja:
+- Usuário abre o app com JS antigo (ex: versão 100)
+- `version.json` retorna versão 200 (nova)
+- O sistema guarda 200 como baseline e **não faz nada**
+- Só atualizaria se version.json mudasse para 300
 
-#### 2. PSPage.tsx — interface com 3 slots de foto
-- Substituir os estados únicos (`capturedPhoto`, `photoPreview`) por arrays de 3 posições
-- Exibir 3 slots lado a lado (grid 3 colunas), cada um com botão "Tirar Foto" independente
-- Cada slot permite capturar, visualizar e refazer a foto individualmente
-- A câmera é compartilhada — ao clicar "Tirar Foto" em qualquer slot, a captura preenche aquele slot específico
-- No `handleSave`, fazer upload de até 3 fotos e salvar em `photo_url`, `photo_url_2`, `photo_url_3`
-- No modo edição, carregar as 3 previews existentes
-- Na listagem/tabela, o botão de câmera abre as fotos disponíveis
-- No PDF, incluir até 3 fotos por entrada
+Além disso, quando detecta mudança, mostra um modal esperando clique — o usuário nunca clica.
 
-### Arquivos alterados
-- **Nova migração SQL** — adicionar colunas `photo_url_2` e `photo_url_3`
-- `src/pages/dashboard/PSPage.tsx` — interface de 3 fotos e lógica de upload/save/PDF
+---
+
+## Plano de Correção
+
+### 1. Corrigir a lógica de detecção em `PWAAutoUpdate.tsx`
+- Comparar `version.json` diretamente com `__BUILD_VERSION__` (a versão embutida no JS que o navegador carregou)
+- Se forem diferentes → o JS está desatualizado → atualizar imediatamente
+- Remover o conceito de "baseline ref" que causa o bug
+- Remover o modal — fazer reload automático direto com limpeza completa (SW + Cache API + localStorage de versão)
+- Manter polling a cada 2 minutos + verificação ao voltar à aba
+
+### 2. Simplificar `main.tsx`
+- Manter a limpeza diária mas garantir que não conflita com o PWAAutoUpdate
+- Limpar também IndexedDB do app na limpeza diária
+
+### 3. Melhorar `handleUpdate` (limpeza total)
+- Limpar Service Workers, Cache API, localStorage de versão e IndexedDB
+- Forçar reload com `location.href` para evitar cache do navegador
+
+### 4. Manter o `VersionUpdateModal` disponível mas não usado
+- O modal continua existindo caso queira usar futuramente, mas o fluxo padrão será auto-reload
+
+### Arquivos a editar
+- `src/components/PWAAutoUpdate.tsx` — reescrever lógica de detecção + auto-reload
+- `src/main.tsx` — ajustar limpeza diária para incluir IndexedDB
+
+### Resultado esperado
+Ao publicar uma nova versão, qualquer dispositivo com o app aberto detectará automaticamente em até 2 minutos (ou ao voltar à aba) e recarregará sozinho, limpando todo o cache, sem necessidade de clique.
 
